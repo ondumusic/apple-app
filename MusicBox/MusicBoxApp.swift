@@ -47,6 +47,13 @@ struct MusicBoxApp: App {
             }
             #endif
         }
+
+        #if os(macOS)
+        Settings {
+            SettingsView()
+                .environment(settings)
+        }
+        #endif
     }
 }
 
