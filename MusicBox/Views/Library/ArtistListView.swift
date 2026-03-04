@@ -1,71 +1,37 @@
 import SwiftUI
 
 struct ArtistListView: View {
-    @Environment(AuthService.self) private var auth
-
-    @State private var artists: [Artist] = []
-    @State private var currentPage = 1
-    @State private var totalPages = 1
-    @State private var isLoading = false
-    @State private var error: String?
+    @Environment(LibraryViewModel.self) private var library
 
     var body: some View {
-        List {
-            ForEach(artists) { artist in
+        let list = library.artists
+        List(list.identifiableItems) { item in
+            if let artist = item.value {
                 NavigationLink(value: artist) {
                     ArtistCard(artist: artist)
                 }
-                .onAppear {
-                    if artist == artists.last {
-                        loadMore()
+                .onAppear { list.itemAppeared(at: item.index) }
+            } else {
+                HStack(spacing: 12) {
+                    Circle().fill(.quaternary).frame(width: 44, height: 44)
+                    VStack(alignment: .leading, spacing: 4) {
+                        RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 120, height: 14)
+                        RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 60, height: 12)
                     }
+                    Spacer()
                 }
-            }
-
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .listRowSeparator(.hidden)
+                .onAppear { list.itemAppeared(at: item.index) }
             }
         }
         .navigationTitle("Artists")
         .navigationDestination(for: Artist.self) { artist in
             ArtistDetailView(artist: artist)
         }
-        .task {
-            if artists.isEmpty {
-                await fetchPage(1)
+        .onAppear { list.loadInitialIfNeeded() }
+        .overlay {
+            if let error = list.error, list.isEmpty {
+                Text(error).foregroundStyle(.red)
             }
-        }
-        .refreshable {
-            artists = []
-            currentPage = 1
-            totalPages = 1
-            await fetchPage(1)
-        }
-    }
-
-    private func loadMore() {
-        guard currentPage < totalPages, !isLoading else { return }
-        Task { await fetchPage(currentPage + 1) }
-    }
-
-    private func fetchPage(_ page: Int) async {
-        guard let api = auth.apiService, !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            let result = try await api.fetchArtists(page: page)
-            if page == 1 {
-                artists = result.entries
-            } else {
-                artists.append(contentsOf: result.entries)
-            }
-            currentPage = result.pageNumber
-            totalPages = result.totalPages
-        } catch {
-            self.error = error.localizedDescription
         }
     }
 }

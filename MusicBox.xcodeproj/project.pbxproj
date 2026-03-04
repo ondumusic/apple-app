@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		50AFC93F2F585EA700056DCC /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001AAAA000000000001 /* NukeUI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		50AFC7DE2F58594300056DCC /* MusicBox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MusicBox.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				50AFC93F2F585EA700056DCC /* NukeUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -370,7 +375,6 @@
 			productName = NukeUI;
 		};
 /* End XCSwiftPackageProductDependency section */
-
 	};
 	rootObject = 50AFC7D62F58594300056DCC /* Project object */;
 }

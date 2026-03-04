@@ -1,78 +1,50 @@
 import SwiftUI
 
 struct ArtistDetailView: View {
-    @Environment(AuthService.self) private var auth
+    @Environment(LibraryViewModel.self) private var library
 
     let artist: Artist
 
-    @State private var albums: [Album] = []
-    @State private var currentPage = 1
-    @State private var totalPages = 1
-    @State private var isLoading = false
-    @State private var error: String?
+    @State private var list: PaginatedList<Album>?
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 20) {
-                ForEach(albums) { album in
-                    NavigationLink(value: album) {
-                        AlbumCard(album: album)
-                    }
-                    .buttonStyle(.plain)
-                    .onAppear {
-                        if album == albums.last {
-                            loadMore()
+            if let list {
+                LazyVGrid(columns: columns, spacing: 20) {
+                    ForEach(list.identifiableItems) { item in
+                        if let album = item.value {
+                            NavigationLink(value: album) {
+                                AlbumCard(album: album)
+                            }
+                            .buttonStyle(.plain)
+                            .onAppear { list.itemAppeared(at: item.index) }
+                        } else {
+                            AlbumCardPlaceholder()
+                                .onAppear { list.itemAppeared(at: item.index) }
                         }
                     }
                 }
-            }
-            .padding()
+                .padding()
 
-            if isLoading {
-                ProgressView()
-                    .padding()
-            }
-
-            if let error {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .padding()
+                if let error = list.error {
+                    Text(error).foregroundStyle(.red).padding()
+                }
+            } else {
+                ProgressView().padding()
             }
         }
         .navigationTitle(artist.name)
         .navigationDestination(for: Album.self) { album in
             AlbumDetailView(album: album)
         }
-        .task {
-            if albums.isEmpty {
-                await fetchPage(1)
+        .onAppear {
+            if list == nil {
+                let l = library.albumList(for: artist)
+                list = l
+                l.loadInitialIfNeeded()
             }
-        }
-    }
-
-    private func loadMore() {
-        guard currentPage < totalPages, !isLoading else { return }
-        Task { await fetchPage(currentPage + 1) }
-    }
-
-    private func fetchPage(_ page: Int) async {
-        guard let api = auth.apiService, !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            let result = try await api.fetchAlbums(for: artist.id, page: page)
-            if page == 1 {
-                albums = result.entries
-            } else {
-                albums.append(contentsOf: result.entries)
-            }
-            currentPage = result.pageNumber
-            totalPages = result.totalPages
-        } catch {
-            self.error = error.localizedDescription
         }
     }
 }
