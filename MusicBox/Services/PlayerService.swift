@@ -120,6 +120,12 @@ final class PlayerService {
         }
     }
 
+    func skipTo(queueIndex: Int) {
+        guard queueIndex >= 0 && queueIndex < queue.count else { return }
+        currentIndex = queueIndex
+        Task { await loadAndPlayCurrent() }
+    }
+
     func back() {
         guard !queue.isEmpty else { return }
         if progress > 3 {

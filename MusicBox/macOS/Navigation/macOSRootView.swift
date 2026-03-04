@@ -41,5 +41,10 @@ struct macOSRootView: View {
                 }
             }
         }
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                MacOSPlayerToolbar()
+            }
+        }
     }
 }

@@ -1,0 +1,50 @@
+import SwiftUI
+
+struct MiniPlayerView: View {
+    @Environment(PlayerService.self) private var player
+    var onTap: () -> Void
+
+    var body: some View {
+        if let track = player.currentTrack {
+            VStack(spacing: 0) {
+                Divider()
+                HStack(spacing: 12) {
+                    let artworkURL = player.queue.indices.contains(player.effectiveIndex)
+                        ? player.queue[player.effectiveIndex].artworkURL : nil
+
+                    ArtworkView(url: artworkURL, cornerRadius: 6)
+                        .frame(width: 48, height: 48)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(track.name)
+                            .font(.callout.weight(.medium))
+                            .lineLimit(1)
+                        Text(track.artist.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Button { player.togglePlayPause() } label: {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.title2)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button { player.skip() } label: {
+                        Image(systemName: "forward.fill")
+                            .font(.body)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+                .onTapGesture { onTap() }
+            }
+            .background(.ultraThinMaterial)
+        }
+    }
+}

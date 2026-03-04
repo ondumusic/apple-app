@@ -26,6 +26,7 @@ struct iOSRootView: View {
                 }
             }
         }
+        .nowPlayingBar()
         .sheet(isPresented: $showSettings) {
             NavigationStack {
                 SettingsView()
