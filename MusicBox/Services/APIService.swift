@@ -40,7 +40,18 @@ final class APIService: Sendable {
         }
 
         let decoder = JSONDecoder()
-        return try decoder.decode(T.self, from: data)
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch let DecodingError.keyNotFound(key, context) {
+            throw APIError.decoding("Missing key '\(key.stringValue)' at \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+        } catch let DecodingError.typeMismatch(type, context) {
+            throw APIError.decoding("Type mismatch for \(type) at \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+        } catch let DecodingError.valueNotFound(type, context) {
+            throw APIError.decoding("Null value for \(type) at \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+        } catch {
+            throw APIError.decoding(error.localizedDescription)
+        }
     }
 
     // MARK: - Auth
@@ -65,19 +76,25 @@ final class APIService: Sendable {
     }
 
     func fetchArtist(_ artistId: UUID) async throws -> Artist {
-        try await fetch("/artists/\(artistId)")
+        try await fetch("/artists/\(artistId.uuidString.lowercased())")
     }
 
     func fetchAlbums(for artistId: UUID, page: Int = 1) async throws -> Page<Album> {
-        try await fetch("/artists/\(artistId)/albums", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
+        var result: Page<Album> = try await fetch("/artists/\(artistId.uuidString.lowercased())/albums", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
+        result.resolveAlbumURLs(against: baseURL)
+        return result
     }
 
     func fetchAlbum(_ albumId: UUID) async throws -> Album {
-        try await fetch("/albums/\(albumId)")
+        var album: Album = try await fetch("/albums/\(albumId.uuidString.lowercased())")
+        album.resolveURLs(against: baseURL)
+        return album
     }
 
     func fetchAllAlbums(page: Int = 1) async throws -> Page<Album> {
-        try await fetch("/albums", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
+        var result: Page<Album> = try await fetch("/albums", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
+        result.resolveAlbumURLs(against: baseURL)
+        return result
     }
 
     func fetchTracks(page: Int = 1) async throws -> Page<Track> {
@@ -85,7 +102,7 @@ final class APIService: Sendable {
     }
 
     func fetchTrack(_ trackId: UUID) async throws -> Track {
-        try await fetch("/tracks/\(trackId)")
+        try await fetch("/tracks/\(trackId.uuidString.lowercased())")
     }
 
     // MARK: - Static Auth (no token needed)
@@ -124,7 +141,9 @@ final class APIService: Sendable {
             throw APIError.httpError(http.statusCode)
         }
 
-        return try JSONDecoder().decode(LoginResponse.self, from: data)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(LoginResponse.self, from: data)
     }
 }
 
@@ -132,12 +151,14 @@ nonisolated enum APIError: LocalizedError, Sendable {
     case invalidResponse
     case unauthorized
     case httpError(Int)
+    case decoding(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse: "Invalid server response"
         case .unauthorized: "Session expired. Please log in again."
         case .httpError(let code): "Server error (\(code))"
+        case .decoding(let detail): "Decoding error: \(detail)"
         }
     }
 }

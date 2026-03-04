@@ -65,6 +65,7 @@
 			);
 			name = MusicBox;
 			packageProductDependencies = (
+				AA000001AAAA000000000001 /* NukeUI */,
 			);
 			productName = MusicBox;
 			productReference = 50AFC7DE2F58594300056DCC /* MusicBox.app */;
@@ -94,6 +95,9 @@
 			);
 			mainGroup = 50AFC7D52F58594300056DCC;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA000002AAAA000000000002 /* XCRemoteSwiftPackageReference "Nuke" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 50AFC7DF2F58594300056DCC /* Products */;
 			projectDirPath = "";
@@ -347,6 +351,26 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA000002AAAA000000000002 /* XCRemoteSwiftPackageReference "Nuke" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kean/Nuke.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA000001AAAA000000000001 /* NukeUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000002AAAA000000000002 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = NukeUI;
+		};
+/* End XCSwiftPackageProductDependency section */
+
 	};
 	rootObject = 50AFC7D62F58594300056DCC /* Project object */;
 }
