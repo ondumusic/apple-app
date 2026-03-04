@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MacOSPlayerToolbar: View {
     @Environment(PlayerService.self) private var player
+    @Environment(\.openWindow) private var openWindow
     @State private var showQueue = false
 
     var body: some View {
@@ -12,6 +13,7 @@ struct MacOSPlayerToolbar: View {
 
                 ArtworkView(url: artworkURL, cornerRadius: 4)
                     .frame(width: 28, height: 28)
+                    .onTapGesture { openWindow(id: "mini-player") }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(track.name)
@@ -53,6 +55,13 @@ struct MacOSPlayerToolbar: View {
                     QueueView()
                         .frame(width: 300, height: 400)
                 }
+
+                Button { openWindow(id: "mini-player") } label: {
+                    Image(systemName: "pip")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .help("Open Mini Player")
             }
         }
     }

@@ -53,6 +53,16 @@ struct MusicBoxApp: App {
             SettingsView()
                 .environment(settings)
         }
+
+        Window("Mini Player", id: "mini-player") {
+            if let player {
+                MacOSMiniPlayerView()
+                    .environment(player)
+            }
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
         #endif
     }
 }

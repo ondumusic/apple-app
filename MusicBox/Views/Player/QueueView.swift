@@ -17,14 +17,7 @@ struct QueueView: View {
                     ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, item in
                         queueRow(track: item.track, artworkURL: item.artworkURL, isActive: false)
                             .onTapGesture {
-                                let targetIndex: Int
-                                if let shuffled = player.shuffledIndices {
-                                    // Find the position in the shuffled order
-                                    targetIndex = player.currentIndex + 1 + offset
-                                } else {
-                                    targetIndex = player.currentIndex + 1 + offset
-                                }
-                                player.skipTo(queueIndex: targetIndex)
+                                player.skipTo(queueIndex: player.currentIndex + 1 + offset)
                             }
                     }
                 }
