@@ -2,13 +2,16 @@ import SwiftUI
 
 struct SongListView: View {
     @Environment(LibraryViewModel.self) private var library
+    @Environment(PlayerService.self) private var player
 
     var body: some View {
         let list = library.tracks
         List(list.identifiableItems) { item in
             if let track = item.value {
-                TrackRow(track: track, showArtist: true, showNumber: false)
-                    .onAppear { list.itemAppeared(at: item.index) }
+                TrackRow(track: track, showArtist: true, showNumber: false) {
+                    player.playNow(tracks: [track])
+                }
+                .onAppear { list.itemAppeared(at: item.index) }
             } else {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {

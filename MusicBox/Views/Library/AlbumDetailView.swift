@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AlbumDetailView: View {
     @Environment(AuthService.self) private var auth
+    @Environment(PlayerService.self) private var player
 
     let album: Album
 
@@ -32,6 +33,28 @@ struct AlbumDetailView: View {
                         Text("\(tracks.count) \(tracks.count == 1 ? "song" : "songs")")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+
+                        if !tracks.isEmpty {
+                            HStack(spacing: 12) {
+                                Button {
+                                    player.playNow(tracks: tracks)
+                                } label: {
+                                    Label("Play", systemImage: "play.fill")
+                                }
+
+                                Button {
+                                    player.playNow(tracks: tracks)
+                                    if !player.isShuffled {
+                                        player.toggleShuffle()
+                                    }
+                                } label: {
+                                    Label("Shuffle", systemImage: "shuffle")
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .padding(.top, 4)
+                        }
                     }
                 }
                 .listRowSeparator(.hidden)
@@ -42,7 +65,11 @@ struct AlbumDetailView: View {
                 Section {
                     let discTracks = tracks.filter { $0.disc == disc }
                     ForEach(discTracks) { track in
-                        TrackRow(track: track)
+                        TrackRow(track: track) {
+                            if let index = tracks.firstIndex(where: { $0.id == track.id }) {
+                                player.playNow(tracks: tracks, startingAt: index)
+                            }
+                        }
                     }
                 } header: {
                     if hasMultipleDiscs {

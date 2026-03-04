@@ -4,6 +4,7 @@ struct TrackRow: View {
     let track: Track
     var showArtist = false
     var showNumber = true
+    var onTap: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -35,5 +36,8 @@ struct TrackRow: View {
                 .monospacedDigit()
         }
         .contentShape(Rectangle())
+        .onTapGesture {
+            onTap?()
+        }
     }
 }
