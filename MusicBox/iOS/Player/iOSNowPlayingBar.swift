@@ -14,8 +14,11 @@ struct NowPlayingBarModifier: ViewModifier {
                     }
                 }
             }
-            .fullScreenCover(isPresented: $showFullPlayer) {
+            .sheet(isPresented: $showFullPlayer) {
                 FullPlayerView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
+                    .presentationCornerRadius(20)
             }
     }
 }

@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct TrackRow: View {
+    @Environment(PlayerService.self) private var player
+
     let track: Track
     var showArtist = false
     var showNumber = true
@@ -38,6 +40,19 @@ struct TrackRow: View {
         .contentShape(Rectangle())
         .onTapGesture {
             onTap?()
+        }
+        .contextMenu {
+            Button {
+                player.playNext(tracks: [track])
+            } label: {
+                Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+
+            Button {
+                player.addToEnd(tracks: [track])
+            } label: {
+                Label("Add to Queue", systemImage: "text.append")
+            }
         }
     }
 }

@@ -8,6 +8,17 @@ struct MiniPlayerView: View {
         if let track = player.currentTrack {
             VStack(spacing: 0) {
                 Divider()
+
+                // Progress bar
+                GeometryReader { geo in
+                    let fraction = player.duration > 0 ? player.progress / player.duration : 0
+                    Rectangle()
+                        .fill(.tint)
+                        .frame(width: geo.size.width * min(fraction, 1))
+                }
+                .frame(height: 2)
+                .background(.quaternary)
+
                 HStack(spacing: 12) {
                     let artworkURL = player.queue.indices.contains(player.effectiveIndex)
                         ? player.queue[player.effectiveIndex].artworkURL : nil

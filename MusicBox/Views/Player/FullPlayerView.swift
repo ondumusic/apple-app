@@ -111,10 +111,9 @@ struct FullPlayerView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .fontWeight(.semibold)
-                    }
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(.secondary.opacity(0.5))
+                        .frame(width: 36, height: 5)
                 }
             }
             .sheet(isPresented: $showQueue) {
