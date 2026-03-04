@@ -34,6 +34,8 @@ final class PlayerService {
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
     @ObservationIgnored private var routeChangeObserver: NSObjectProtocol?
+    @ObservationIgnored private var itemStatusObserver: NSKeyValueObservation?
+    @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
 
     // MARK: - Computed
 
@@ -50,25 +52,33 @@ final class PlayerService {
     init(api: APIService, settings: SettingsStore) {
         self.api = api
         self.settings = settings
-        setupTimeObserver()
-        setupEndObserver()
         setupAudioSession()
         setupRemoteCommands()
     }
 
     deinit {
-        if let timeObserver { primaryPlayer.removeTimeObserver(timeObserver) }
-        if let crossfadeObserver { primaryPlayer.removeTimeObserver(crossfadeObserver) }
+        cleanUpPlayerObservers()
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
         if let routeChangeObserver { NotificationCenter.default.removeObserver(routeChangeObserver) }
         crossfadeTimer?.invalidate()
     }
 
+    private func cleanUpPlayerObservers() {
+        if let timeObserver { primaryPlayer.removeTimeObserver(timeObserver) }
+        timeObserver = nil
+        if let crossfadeObserver { primaryPlayer.removeTimeObserver(crossfadeObserver) }
+        crossfadeObserver = nil
+        itemStatusObserver?.invalidate()
+        itemStatusObserver = nil
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = nil
+    }
+
     // MARK: - Queue Operations
 
-    func playNow(tracks: [Track], startingAt index: Int = 0) {
-        queue = tracks.map { QueueItem(track: $0) }
+    func playNow(tracks: [Track], startingAt index: Int = 0, artworkURL: URL? = nil) {
+        queue = tracks.map { QueueItem(track: $0, artworkURL: artworkURL) }
         shuffledIndices = nil
         currentIndex = index
         Task { await loadAndPlayCurrent() }
@@ -190,22 +200,85 @@ final class PlayerService {
         currentTrack = track
         progress = 0
         duration = track.duration
+        nowPlayingArtwork = nil
 
-        // Tear down crossfade state
+        // Stop current playback and tear down all observers
+        primaryPlayer.pause()
+        cleanUpPlayerObservers()
         tearDownCrossfade()
 
         do {
-            let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
-            queue[idx].playbackURL = url
-            let item = AVPlayerItem(url: url)
-            primaryPlayer.replaceCurrentItem(with: item)
+            let localURL: URL
+            if let prefetched = queue[idx].playbackURL, prefetched.isFileURL {
+                // Already prefetched to disk
+                localURL = prefetched
+            } else {
+                let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
+                localURL = try await downloadToTempFile(url: url)
+                queue[idx].playbackURL = localURL
+            }
+
+            let item = AVPlayerItem(url: localURL)
+            let newPlayer = AVPlayer(playerItem: item)
+
+            primaryPlayer = newPlayer
             primaryPlayer.volume = 1.0
             primaryPlayer.play()
             isPlaying = true
+
+            setupTimeObserver()
+            setupEndObserver()
             updateNowPlayingInfo()
             setupCrossfadeObserverIfNeeded()
+            prefetchNextTrack()
         } catch {
-            print("PlayerService: failed to resolve stream URL: \(error)")
+            print("PlayerService: failed to load track: \(error)")
+        }
+    }
+
+    private func downloadToTempFile(url: URL) async throws -> URL {
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + "." + ext)
+        try data.write(to: tempURL)
+        return tempURL
+    }
+
+    /// Prefetch the next track in the queue so skip is instant
+    private func prefetchNextTrack() {
+        let nextIdx: Int
+        let next = currentIndex + 1
+        if next < queue.count {
+            nextIdx = next
+        } else if repeatMode == .all && !queue.isEmpty {
+            nextIdx = 0
+        } else {
+            return
+        }
+        let nextEffective: Int
+        if let shuffled = shuffledIndices, nextIdx < shuffled.count {
+            nextEffective = shuffled[nextIdx]
+        } else {
+            nextEffective = nextIdx
+        }
+        guard nextEffective < queue.count, queue[nextEffective].playbackURL == nil else { return }
+        let track = queue[nextEffective].track
+        Task {
+            do {
+                let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
+                let localURL = try await downloadToTempFile(url: url)
+                // Store the local URL so loadAndPlayCurrent can use it
+                await MainActor.run {
+                    guard nextEffective < self.queue.count else { return }
+                    self.queue[nextEffective].playbackURL = localURL
+                }
+            } catch {
+                // Prefetch failure is non-critical
+            }
         }
     }
 
@@ -302,22 +375,27 @@ final class PlayerService {
         guard nextEffective < queue.count else { return }
 
         let nextTrack = queue[nextEffective].track
-        let secondary = AVPlayer()
-        secondary.volume = 0
-        secondaryPlayer = secondary
 
         Task {
             do {
-                let url = try await tokenManager.resolvedStreamURL(for: nextTrack, using: api)
+                let localURL: URL
+                if let prefetched = queue[nextEffective].playbackURL, prefetched.isFileURL {
+                    localURL = prefetched
+                } else {
+                    let url = try await tokenManager.resolvedStreamURL(for: nextTrack, using: api)
+                    localURL = try await downloadToTempFile(url: url)
+                    await MainActor.run { self.queue[nextEffective].playbackURL = localURL }
+                }
                 await MainActor.run {
-                    queue[nextEffective].playbackURL = url
-                    let item = AVPlayerItem(url: url)
-                    secondary.replaceCurrentItem(with: item)
-                    secondary.play()
+                    let item = AVPlayerItem(url: localURL)
+                    let crossfadePlayer = AVPlayer(playerItem: item)
+                    self.secondaryPlayer = crossfadePlayer
+                    crossfadePlayer.volume = 0
+                    crossfadePlayer.play()
                     self.startVolumeRamp(fadeDuration: min(fadeDuration, remaining), nextIndex: nextIdx, nextTrack: nextTrack)
                 }
             } catch {
-                print("PlayerService: crossfade URL resolution failed: \(error)")
+                print("PlayerService: crossfade failed: \(error)")
                 await MainActor.run { self.tearDownCrossfade() }
             }
         }
@@ -344,8 +422,11 @@ final class PlayerService {
     }
 
     private func completeCrossfade(nextIndex: Int, nextTrack: Track) {
-        primaryPlayer.pause()
-        primaryPlayer.replaceCurrentItem(with: nil)
+        // Clean up old primary
+        let oldPlayer = primaryPlayer
+        cleanUpPlayerObservers()
+        oldPlayer.pause()
+        oldPlayer.replaceCurrentItem(with: nil)
 
         if let secondary = secondaryPlayer {
             primaryPlayer = secondary
@@ -358,8 +439,7 @@ final class PlayerService {
         duration = nextTrack.duration
         isPlaying = true
 
-        // Re-setup observers for the new primary player
-        if let timeObserver { primaryPlayer.removeTimeObserver(timeObserver) }
+        // Setup observers on the new primary player
         setupTimeObserver()
         setupEndObserver()
         updateNowPlayingInfo()
@@ -448,7 +528,33 @@ final class PlayerService {
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
         ]
         info[MPMediaItemPropertyAlbumTrackNumber] = track.number
+        if let artwork = nowPlayingArtwork {
+            info[MPMediaItemPropertyArtwork] = artwork
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+
+        // Load artwork in background
+        let idx = effectiveIndex
+        guard idx >= 0 && idx < queue.count, let artworkURL = queue[idx].artworkURL else { return }
+        let trackId = track.id
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: artworkURL)
+                #if os(macOS)
+                guard let image = NSImage(data: data) else { return }
+                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                #else
+                guard let image = UIImage(data: data) else { return }
+                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                #endif
+                await MainActor.run {
+                    // Only set if we're still on the same track
+                    guard self.currentTrack?.id == trackId else { return }
+                    self.nowPlayingArtwork = artwork
+                    MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork
+                }
+            } catch {}
+        }
     }
 
     private func updateNowPlayingElapsed() {
@@ -496,3 +602,4 @@ final class PlayerService {
         }
     }
 }
+

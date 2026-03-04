@@ -37,13 +37,13 @@ struct AlbumDetailView: View {
                         if !tracks.isEmpty {
                             HStack(spacing: 12) {
                                 Button {
-                                    player.playNow(tracks: tracks)
+                                    player.playNow(tracks: tracks, artworkURL: displayAlbum.artworkUrl)
                                 } label: {
                                     Label("Play", systemImage: "play.fill")
                                 }
 
                                 Button {
-                                    player.playNow(tracks: tracks)
+                                    player.playNow(tracks: tracks, artworkURL: displayAlbum.artworkUrl)
                                     if !player.isShuffled {
                                         player.toggleShuffle()
                                     }
@@ -67,7 +67,7 @@ struct AlbumDetailView: View {
                     ForEach(discTracks) { track in
                         TrackRow(track: track) {
                             if let index = tracks.firstIndex(where: { $0.id == track.id }) {
-                                player.playNow(tracks: tracks, startingAt: index)
+                                player.playNow(tracks: tracks, startingAt: index, artworkURL: displayAlbum.artworkUrl)
                             }
                         }
                     }
