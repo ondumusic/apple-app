@@ -1,24 +1,26 @@
-//
-//  ContentView.swift
-//  MusicBox
-//
-//  Created by Max van Wezel on 04/03/2026.
-//
-
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
+    @Environment(AuthService.self) private var auth
 
-#Preview {
-    ContentView()
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                Image(systemName: "music.note")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.tint)
+
+                Text("Welcome, \(auth.currentUser?.username ?? "")!")
+                    .font(.title)
+
+                Text("Logged in successfully.")
+                    .foregroundStyle(.secondary)
+
+                Button("Log Out", role: .destructive) {
+                    auth.logout()
+                }
+            }
+            .navigationTitle("MusicBox")
+        }
+    }
 }
