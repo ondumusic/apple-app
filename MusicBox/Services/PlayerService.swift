@@ -34,7 +34,6 @@ final class PlayerService {
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
     @ObservationIgnored private var routeChangeObserver: NSObjectProtocol?
-    @ObservationIgnored private var itemStatusObserver: NSKeyValueObservation?
     @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
 
     // MARK: - Computed
@@ -52,27 +51,19 @@ final class PlayerService {
     init(api: APIService, settings: SettingsStore) {
         self.api = api
         self.settings = settings
+        setupTimeObserver()
+        setupEndObserver()
         setupAudioSession()
         setupRemoteCommands()
     }
 
     deinit {
-        cleanUpPlayerObservers()
+        if let timeObserver { primaryPlayer.removeTimeObserver(timeObserver) }
+        if let crossfadeObserver { primaryPlayer.removeTimeObserver(crossfadeObserver) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
         if let routeChangeObserver { NotificationCenter.default.removeObserver(routeChangeObserver) }
         crossfadeTimer?.invalidate()
-    }
-
-    private func cleanUpPlayerObservers() {
-        if let timeObserver { primaryPlayer.removeTimeObserver(timeObserver) }
-        timeObserver = nil
-        if let crossfadeObserver { primaryPlayer.removeTimeObserver(crossfadeObserver) }
-        crossfadeObserver = nil
-        itemStatusObserver?.invalidate()
-        itemStatusObserver = nil
-        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-        endObserver = nil
     }
 
     // MARK: - Queue Operations
@@ -202,32 +193,27 @@ final class PlayerService {
         duration = track.duration
         nowPlayingArtwork = nil
 
-        // Stop current playback and tear down all observers
+        // Stop current playback
         primaryPlayer.pause()
-        cleanUpPlayerObservers()
         tearDownCrossfade()
 
         do {
+            let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
+
             let localURL: URL
-            if let prefetched = queue[idx].playbackURL, prefetched.isFileURL {
-                // Already prefetched to disk
-                localURL = prefetched
+            if let cached = queue[idx].playbackURL, cached.isFileURL {
+                localURL = cached
             } else {
-                let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
                 localURL = try await downloadToTempFile(url: url)
                 queue[idx].playbackURL = localURL
             }
 
             let item = AVPlayerItem(url: localURL)
-            let newPlayer = AVPlayer(playerItem: item)
-
-            primaryPlayer = newPlayer
+            primaryPlayer.replaceCurrentItem(with: item)
             primaryPlayer.volume = 1.0
             primaryPlayer.play()
             isPlaying = true
 
-            setupTimeObserver()
-            setupEndObserver()
             updateNowPlayingInfo()
             setupCrossfadeObserverIfNeeded()
             prefetchNextTrack()
@@ -248,7 +234,6 @@ final class PlayerService {
         return tempURL
     }
 
-    /// Prefetch the next track in the queue so skip is instant
     private func prefetchNextTrack() {
         let nextIdx: Int
         let next = currentIndex + 1
@@ -271,14 +256,11 @@ final class PlayerService {
             do {
                 let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
                 let localURL = try await downloadToTempFile(url: url)
-                // Store the local URL so loadAndPlayCurrent can use it
                 await MainActor.run {
                     guard nextEffective < self.queue.count else { return }
                     self.queue[nextEffective].playbackURL = localURL
                 }
-            } catch {
-                // Prefetch failure is non-critical
-            }
+            } catch {}
         }
     }
 
@@ -334,8 +316,10 @@ final class PlayerService {
         crossfadeObserver = primaryPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self else { return }
             guard let item = self.primaryPlayer.currentItem else { return }
+            
             let dur = item.duration.seconds
             let current = time.seconds
+                        
             guard dur.isFinite && current.isFinite else { return }
             let remaining = dur - current
             if remaining <= fadeDuration && remaining > 0 {
@@ -379,8 +363,8 @@ final class PlayerService {
         Task {
             do {
                 let localURL: URL
-                if let prefetched = queue[nextEffective].playbackURL, prefetched.isFileURL {
-                    localURL = prefetched
+                if let cached = queue[nextEffective].playbackURL, cached.isFileURL {
+                    localURL = cached
                 } else {
                     let url = try await tokenManager.resolvedStreamURL(for: nextTrack, using: api)
                     localURL = try await downloadToTempFile(url: url)
@@ -422,11 +406,16 @@ final class PlayerService {
     }
 
     private func completeCrossfade(nextIndex: Int, nextTrack: Track) {
-        // Clean up old primary
-        let oldPlayer = primaryPlayer
-        cleanUpPlayerObservers()
-        oldPlayer.pause()
-        oldPlayer.replaceCurrentItem(with: nil)
+        // Clean up old primary — remove its observers first
+        if let timeObserver { primaryPlayer.removeTimeObserver(timeObserver) }
+        timeObserver = nil
+        if let crossfadeObserver { primaryPlayer.removeTimeObserver(crossfadeObserver) }
+        crossfadeObserver = nil
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = nil
+
+        primaryPlayer.pause()
+        primaryPlayer.replaceCurrentItem(with: nil)
 
         if let secondary = secondaryPlayer {
             primaryPlayer = secondary
@@ -439,7 +428,7 @@ final class PlayerService {
         duration = nextTrack.duration
         isPlaying = true
 
-        // Setup observers on the new primary player
+        // Re-attach observers to the new primary player
         setupTimeObserver()
         setupEndObserver()
         updateNowPlayingInfo()
