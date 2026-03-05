@@ -4,6 +4,7 @@ struct TrackRow: View {
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
+    @Environment(APIService.self) private var api
 
     let track: Track
     var album: Album? = nil
@@ -88,9 +89,19 @@ struct TrackRow: View {
                 } label: {
                     Label("Cancel Download", systemImage: "xmark.circle")
                 }
-            } else if let album {
+            } else {
                 Button {
-                    downloadService.download(track: track, album: album, artist: artist ?? track.artist)
+                    Task {
+                        let resolvedAlbum: Album
+                        if let album {
+                            resolvedAlbum = album
+                        } else if let fetched = try? await api.fetchAlbum(track.albumId) {
+                            resolvedAlbum = fetched
+                        } else {
+                            return
+                        }
+                        downloadService.download(track: track, album: resolvedAlbum, artist: artist ?? track.artist)
+                    }
                 } label: {
                     Label("Download", systemImage: "arrow.down.circle")
                 }

@@ -33,6 +33,7 @@ struct MusicBoxApp: App {
                         .environment(offlineStore)
                         .optionalEnvironment(player)
                         .optionalEnvironment(downloadService)
+                        .optionalEnvironment(auth.apiService)
                 } else {
                     NavigationStack {
                         LoginView()
@@ -91,6 +92,15 @@ extension View {
     func optionalEnvironment(_ service: DownloadService?) -> some View {
         if let service {
             self.environment(service)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func optionalEnvironment(_ api: APIService?) -> some View {
+        if let api {
+            self.environment(api)
         } else {
             self
         }

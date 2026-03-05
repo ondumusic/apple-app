@@ -99,6 +99,39 @@ final class APIService: Sendable {
         try await fetch("/tracks/\(trackId.uuidString.lowercased())")
     }
 
+    /// Fetch all tracks matching filters, paging through all results.
+    func fetchAllTracks(artistId: UUID? = nil, albumId: UUID? = nil) async throws -> [Track] {
+        var all: [Track] = []
+        var page = 1
+        while true {
+            var queryItems = [URLQueryItem(name: "page", value: "\(page)")]
+            if let artistId {
+                queryItems.append(URLQueryItem(name: "artist_id", value: artistId.uuidString.lowercased()))
+            }
+            if let albumId {
+                queryItems.append(URLQueryItem(name: "album_id", value: albumId.uuidString.lowercased()))
+            }
+            let result: Page<Track> = try await fetch("/tracks", queryItems: queryItems)
+            all.append(contentsOf: result.entries)
+            if page >= result.totalPages { break }
+            page += 1
+        }
+        return all
+    }
+
+    /// Fetch all albums for an artist, paging through all results.
+    func fetchAllAlbums(for artistId: UUID) async throws -> [Album] {
+        var all: [Album] = []
+        var page = 1
+        while true {
+            let result = try await fetchAlbums(for: artistId, page: page)
+            all.append(contentsOf: result.entries)
+            if page >= result.totalPages { break }
+            page += 1
+        }
+        return all
+    }
+
     // MARK: - Static Auth (no token needed)
 
     nonisolated struct LoginResponse: Decodable, Sendable {
