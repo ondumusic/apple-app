@@ -3,6 +3,7 @@ import SwiftUI
 struct SongListView: View {
     @Environment(LibraryViewModel.self) private var library
     @Environment(PlayerService.self) private var player
+    @State private var scrollPosition = ScrollPosition()
 
     var body: some View {
         let list = library.tracks
@@ -24,8 +25,12 @@ struct SongListView: View {
                 .onAppear { list.itemAppeared(at: item.index) }
             }
         }
+        .scrollPosition($scrollPosition)
         .navigationTitle("Songs")
         .onAppear { list.loadInitialIfNeeded() }
+        .onReceive(NotificationCenter.default.publisher(for: .scrollToTop)) { _ in
+            withAnimation { scrollPosition.scrollTo(edge: .top) }
+        }
         .overlay {
             if let error = list.error, list.isEmpty {
                 Text(error).foregroundStyle(.red)

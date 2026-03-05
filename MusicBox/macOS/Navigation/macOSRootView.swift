@@ -20,10 +20,11 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 
 struct macOSRootView: View {
     @State private var selection: SidebarItem? = .artists
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
         NavigationSplitView {
-            List(SidebarItem.allCases, selection: $selection) { item in
+            List(SidebarItem.allCases, selection: sidebarSelection) { item in
                 if item == .downloads {
                     DownloadSidebarRow()
                         .tag(item)
@@ -34,7 +35,7 @@ struct macOSRootView: View {
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         } detail: {
-            NavigationStack {
+            NavigationStack(path: $navigationPath) {
                 switch selection {
                 case .artists:
                     ArtistListView()
@@ -54,6 +55,17 @@ struct macOSRootView: View {
             ToolbarItem(placement: .principal) {
                 MacOSPlayerToolbar()
             }
+        }
+    }
+
+    private var sidebarSelection: Binding<SidebarItem?> {
+        Binding {
+            selection
+        } set: { newValue in
+            if newValue == selection {
+                navigationPath = NavigationPath()
+            }
+            selection = newValue
         }
     }
 }

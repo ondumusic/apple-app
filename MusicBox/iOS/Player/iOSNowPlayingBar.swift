@@ -4,14 +4,19 @@ import SwiftUI
 struct NowPlayingBarModifier: ViewModifier {
     @Environment(PlayerService.self) private var player
     @State private var showFullPlayer = false
+    @State private var barHeight: CGFloat = 60
+
+    private var showBar: Bool { player.currentTrack != nil }
 
     func body(content: Content) -> some View {
         content
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if player.currentTrack != nil {
+            .padding(.bottom, showBar ? barHeight : 0)
+            .overlay(alignment: .bottom) {
+                if showBar {
                     MiniPlayerView {
                         showFullPlayer = true
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barHeight = $0 }
                 }
             }
             .sheet(isPresented: $showFullPlayer) {

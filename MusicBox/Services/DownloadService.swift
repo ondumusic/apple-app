@@ -108,7 +108,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
         // Mark as paused immediately in UI
         activeDownloads[trackId]?.isPaused = true
-
+        
+        
         // Clean up active tracking
         taskDownloads.removeValue(forKey: taskId)
         trackIdToTaskId.removeValue(forKey: trackId)
