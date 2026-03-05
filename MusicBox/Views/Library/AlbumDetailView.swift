@@ -53,11 +53,16 @@ struct AlbumDetailView: View {
                                     Label("Shuffle", systemImage: "shuffle")
                                 }
 
-                                Button {
-                                    let artist = tracks.first?.artist ?? Artist(id: displayAlbum.artistId, name: "", slug: "")
-                                    downloadService.download(album: displayAlbum, artist: artist)
-                                } label: {
-                                    Label("Download", systemImage: "arrow.down.circle")
+                                if offlineStore.isAlbumDownloaded(albumId: displayAlbum.id) {
+                                    Label("Downloaded", systemImage: "arrow.down.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Button {
+                                        let artist = tracks.first?.artist ?? Artist(id: displayAlbum.artistId, name: "", slug: "")
+                                        downloadService.download(album: displayAlbum, artist: artist)
+                                    } label: {
+                                        Label("Download", systemImage: "arrow.down.circle")
+                                    }
                                 }
                             }
                             .labelStyle(.iconOnly)
