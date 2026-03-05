@@ -27,9 +27,6 @@ struct iOSRootView: View {
                 NavigationStack {
                     ArtistListView()
                         .toolbar { settingsButton }
-                        #if os(iOS)
-                        .onNavigationBarTap { postScrollToTop() }
-                        #endif
                 }
                 .nowPlayingBar()
             }
@@ -38,9 +35,6 @@ struct iOSRootView: View {
                 NavigationStack {
                     AlbumListView()
                         .toolbar { settingsButton }
-                        #if os(iOS)
-                        .onNavigationBarTap { postScrollToTop() }
-                        #endif
                 }
                 .nowPlayingBar()
             }
@@ -49,9 +43,6 @@ struct iOSRootView: View {
                 NavigationStack {
                     SongListView()
                         .toolbar { settingsButton }
-                        #if os(iOS)
-                        .onNavigationBarTap { postScrollToTop() }
-                        #endif
                 }
                 .nowPlayingBar()
             }

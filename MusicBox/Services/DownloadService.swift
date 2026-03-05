@@ -44,8 +44,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var trackIdToTaskId: [UUID: Int] = [:]
     /// Maps track ID → active URLSessionDownloadTask (for pause support)
     @ObservationIgnored private var activeTasks: [UUID: URLSessionDownloadTask] = [:]
-    /// Stores resume data for paused downloads: track ID → (resumeData, DownloadInfo)
-    @ObservationIgnored private var pausedDownloads: [UUID: (Data, DownloadInfo)] = [:]
+    /// Stores info for paused downloads: track ID → DownloadInfo
+    @ObservationIgnored private var pausedDownloads: [UUID: DownloadInfo] = [:]
 
     // MARK: - Init
 
@@ -105,35 +105,23 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
               let info = taskDownloads[task.taskIdentifier] else { return }
 
         let taskId = task.taskIdentifier
+        task.cancel()
 
-        // Mark as paused immediately in UI
-        activeDownloads[trackId]?.isPaused = true
-        
-        
         // Clean up active tracking
         taskDownloads.removeValue(forKey: taskId)
         trackIdToTaskId.removeValue(forKey: trackId)
 
-        // Cancel and capture resume data
-        task.cancel(byProducingResumeData: { [weak self] resumeData in
-            DispatchQueue.main.async {
-                guard let self, let resumeData else { return }
-                self.pausedDownloads[trackId] = (resumeData, info)
-            }
-        })
+        // Store info for later restart and mark paused in UI
+        pausedDownloads[trackId] = info
+        activeDownloads[trackId]?.isPaused = true
     }
 
     func resumeDownload(trackId: UUID) {
-        guard let (resumeData, info) = pausedDownloads.removeValue(forKey: trackId) else { return }
+        guard let info = pausedDownloads.removeValue(forKey: trackId) else { return }
 
-            print(resumeData, info)
-        
-        let task = downloadSession.downloadTask(withResumeData: resumeData)
-        taskDownloads[task.taskIdentifier] = info
-        trackIdToTaskId[trackId] = task.taskIdentifier
-        activeTasks[trackId] = task
-        activeDownloads[trackId]?.isPaused = false
-        task.resume()
+        // Remove old paused state and start fresh
+        activeDownloads.removeValue(forKey: trackId)
+        startDownload(info)
     }
 
     // MARK: - Bulk controls
