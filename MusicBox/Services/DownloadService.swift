@@ -33,10 +33,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private let settings: SettingsStore
     @ObservationIgnored private let tokenManager = PlayTokenManager()
 
-    @ObservationIgnored private lazy var backgroundSession: URLSession = {
-        let config = URLSessionConfiguration.background(withIdentifier: "com.musicbox.downloads")
-        config.isDiscretionary = false
-        config.sessionSendsLaunchEvents = true
+    @ObservationIgnored private lazy var downloadSession: URLSession = {
+        let config = URLSessionConfiguration.default
         return URLSession(configuration: config, delegate: self, delegateQueue: .main)
     }()
 
@@ -44,6 +42,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var taskDownloads: [Int: DownloadInfo] = [:]
     /// Maps track ID → URLSession task identifier
     @ObservationIgnored private var trackIdToTaskId: [UUID: Int] = [:]
+    /// Maps track ID → active URLSessionDownloadTask (for pause support)
+    @ObservationIgnored private var activeTasks: [UUID: URLSessionDownloadTask] = [:]
     /// Stores resume data for paused downloads: track ID → (resumeData, DownloadInfo)
     @ObservationIgnored private var pausedDownloads: [UUID: (Data, DownloadInfo)] = [:]
 
@@ -54,7 +54,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         self.offlineStore = offlineStore
         self.settings = settings
         super.init()
-        _ = backgroundSession
+        _ = downloadSession
     }
 
     // MARK: - Public API
@@ -89,11 +89,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         // Remove from paused
         pausedDownloads.removeValue(forKey: trackId)
 
-        // Cancel active download
-        if let taskId = trackIdToTaskId[trackId] {
-            backgroundSession.getTask(taskId: taskId) { task in
-                task?.cancel()
-            }
+        // Cancel active download using stored task reference
+        if let task = activeTasks.removeValue(forKey: trackId) {
+            let taskId = task.taskIdentifier
+            task.cancel()
             taskDownloads.removeValue(forKey: taskId)
             trackIdToTaskId.removeValue(forKey: trackId)
         }
@@ -102,28 +101,34 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     func pauseDownload(trackId: UUID) {
-        guard let taskId = trackIdToTaskId[trackId],
-              let info = taskDownloads[taskId] else { return }
+        guard let task = activeTasks.removeValue(forKey: trackId),
+              let info = taskDownloads[task.taskIdentifier] else { return }
 
-        backgroundSession.getTask(taskId: taskId) { [weak self] task in
-            guard let task = task as? URLSessionDownloadTask else { return }
-            task.cancel(byProducingResumeData: { resumeData in
-                guard let self, let resumeData else { return }
-                self.pausedDownloads[trackId] = (resumeData, info)
-                self.activeDownloads[trackId]?.isPaused = true
-            })
-        }
+        let taskId = task.taskIdentifier
 
+        // Mark as paused immediately in UI
+        activeDownloads[trackId]?.isPaused = true
+
+        // Clean up active tracking
         taskDownloads.removeValue(forKey: taskId)
         trackIdToTaskId.removeValue(forKey: trackId)
+
+        // Cancel and capture resume data
+        task.cancel(byProducingResumeData: { [weak self] resumeData in
+            DispatchQueue.main.async {
+                guard let self, let resumeData else { return }
+                self.pausedDownloads[trackId] = (resumeData, info)
+            }
+        })
     }
 
     func resumeDownload(trackId: UUID) {
         guard let (resumeData, info) = pausedDownloads.removeValue(forKey: trackId) else { return }
 
-        let task = backgroundSession.downloadTask(withResumeData: resumeData)
+        let task = downloadSession.downloadTask(withResumeData: resumeData)
         taskDownloads[task.taskIdentifier] = info
         trackIdToTaskId[trackId] = task.taskIdentifier
+        activeTasks[trackId] = task
         activeDownloads[trackId]?.isPaused = false
         task.resume()
     }
@@ -149,12 +154,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func cancelAll() {
         isPaused = false
-        let activeIds = Array(trackIdToTaskId.keys)
-        for trackId in activeIds {
-            if let taskId = trackIdToTaskId[trackId] {
-                backgroundSession.getTask(taskId: taskId) { $0?.cancel() }
-            }
+        for (_, task) in activeTasks {
+            task.cancel()
         }
+        activeTasks.removeAll()
         taskDownloads.removeAll()
         trackIdToTaskId.removeAll()
         activeDownloads.removeAll()
@@ -185,12 +188,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             progress: 0
         )
 
-        Task {
+        Task { @MainActor in
             do {
                 let url = try await tokenManager.resolvedStreamURL(for: info.track, using: api)
-                let task = backgroundSession.downloadTask(with: url)
+                let task = downloadSession.downloadTask(with: url)
                 taskDownloads[task.taskIdentifier] = info
                 trackIdToTaskId[info.track.id] = task.taskIdentifier
+                activeTasks[info.track.id] = task
                 task.resume()
             } catch {
                 print("DownloadService: failed to resolve URL for \(info.track.name): \(error)")
@@ -250,6 +254,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             print("DownloadService: download failed for \(info.track.name): \(error)")
             activeDownloads.removeValue(forKey: info.track.id)
             trackIdToTaskId.removeValue(forKey: info.track.id)
+            activeTasks.removeValue(forKey: info.track.id)
             taskDownloads.removeValue(forKey: task.taskIdentifier)
             startNextIfNeeded()
         }
@@ -287,6 +292,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
         activeDownloads.removeValue(forKey: info.track.id)
         trackIdToTaskId.removeValue(forKey: info.track.id)
+        activeTasks.removeValue(forKey: info.track.id)
         taskDownloads.removeValue(forKey: taskId)
         startNextIfNeeded()
     }
@@ -301,14 +307,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         case "audio/ogg", "audio/vorbis": "ogg"
         case "audio/wav", "audio/x-wav": "wav"
         default: "mp3"
-        }
-    }
-}
-
-extension URLSession {
-    func getTask(taskId: Int, completion: @escaping (URLSessionTask?) -> Void) {
-        getAllTasks { tasks in
-            completion(tasks.first { $0.taskIdentifier == taskId })
         }
     }
 }

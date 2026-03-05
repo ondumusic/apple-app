@@ -19,19 +19,18 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 }
 
 struct macOSRootView: View {
-    @Environment(DownloadService.self) private var downloadService
     @State private var selection: SidebarItem? = .artists
-
-    private var downloadCount: Int {
-        downloadService.activeDownloads.count + downloadService.pendingQueue.count
-    }
 
     var body: some View {
         NavigationSplitView {
             List(SidebarItem.allCases, selection: $selection) { item in
-                Label(item.rawValue, systemImage: item.icon)
-                    .tag(item)
-                    .badge(item == .downloads && downloadCount > 0 ? downloadCount : 0)
+                if item == .downloads {
+                    DownloadSidebarRow()
+                        .tag(item)
+                } else {
+                    Label(item.rawValue, systemImage: item.icon)
+                        .tag(item)
+                }
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         } detail: {
@@ -56,5 +55,18 @@ struct macOSRootView: View {
                 MacOSPlayerToolbar()
             }
         }
+    }
+}
+
+private struct DownloadSidebarRow: View {
+    @Environment(DownloadService.self) private var downloadService
+
+    private var count: Int {
+        downloadService.activeDownloads.count + downloadService.pendingQueue.count
+    }
+
+    var body: some View {
+        Label("Downloads", systemImage: "arrow.down.circle")
+            .badge(count)
     }
 }
