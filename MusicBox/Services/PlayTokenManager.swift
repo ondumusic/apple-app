@@ -19,28 +19,13 @@ nonisolated actor PlayTokenManager {
         guard let streamURL = URL(string: track.streamUrl) else {
             throw PlayTokenError.invalidStreamURL
         }
-        // Resolve relative URL against baseURL scheme+host+port
-        let resolved: URL
-        if streamURL.host == nil {
-            var components = URLComponents()
-            components.scheme = api.baseURL.scheme
-            components.host = api.baseURL.host
-            components.port = api.baseURL.port
-            components.path = streamURL.path
-            guard let built = components.url else {
-                throw PlayTokenError.invalidStreamURL
-            }
-            resolved = built
-        } else {
-            resolved = streamURL
-        }
-        guard var finalComponents = URLComponents(url: resolved, resolvingAgainstBaseURL: false) else {
+        guard var components = URLComponents(url: streamURL, resolvingAgainstBaseURL: false) else {
             throw PlayTokenError.invalidStreamURL
         }
-        var queryItems = finalComponents.queryItems ?? []
+        var queryItems = components.queryItems ?? []
         queryItems.append(URLQueryItem(name: "token", value: token))
-        finalComponents.queryItems = queryItems
-        guard let finalURL = finalComponents.url else {
+        components.queryItems = queryItems
+        guard let finalURL = components.url else {
             throw PlayTokenError.invalidStreamURL
         }
         return finalURL

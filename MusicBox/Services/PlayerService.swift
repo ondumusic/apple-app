@@ -213,19 +213,19 @@ final class PlayerService {
         tearDownCrossfade()
 
         do {
-            let localURL: URL
-            if let cached = queue[idx].playbackURL, cached.isFileURL {
-                localURL = cached
+            let playbackURL: URL
+            if let cached = queue[idx].playbackURL {
+                playbackURL = cached
             } else if let offlineURL = offlineStore?.localURL(for: track.id) {
-                localURL = offlineURL
+                playbackURL = offlineURL
                 queue[idx].playbackURL = offlineURL
             } else {
                 let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
-                localURL = try await downloadToTempFile(url: url)
-                queue[idx].playbackURL = localURL
+                playbackURL = url
+                queue[idx].playbackURL = url
             }
 
-            let item = AVPlayerItem(url: localURL)
+            let item = AVPlayerItem(url: playbackURL)
             primaryPlayer.replaceCurrentItem(with: item)
             primaryPlayer.volume = 1.0
             primaryPlayer.play()
@@ -237,18 +237,6 @@ final class PlayerService {
         } catch {
             print("PlayerService: failed to load track: \(error)")
         }
-    }
-
-    private func downloadToTempFile(url: URL) async throws -> URL {
-        let (data, response) = try await URLSession.shared.data(from: url)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
-        }
-        let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + "." + ext)
-        try data.write(to: tempURL)
-        return tempURL
     }
 
     private func prefetchNextTrack() {
@@ -277,10 +265,9 @@ final class PlayerService {
         Task {
             do {
                 let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
-                let localURL = try await downloadToTempFile(url: url)
                 await MainActor.run {
                     guard nextEffective < self.queue.count else { return }
-                    self.queue[nextEffective].playbackURL = localURL
+                    self.queue[nextEffective].playbackURL = url
                 }
             } catch {}
         }
@@ -384,19 +371,19 @@ final class PlayerService {
 
         Task {
             do {
-                let localURL: URL
-                if let cached = queue[nextEffective].playbackURL, cached.isFileURL {
-                    localURL = cached
+                let playbackURL: URL
+                if let cached = queue[nextEffective].playbackURL {
+                    playbackURL = cached
                 } else if let offlineURL = offlineStore?.localURL(for: nextTrack.id) {
-                    localURL = offlineURL
+                    playbackURL = offlineURL
                     await MainActor.run { self.queue[nextEffective].playbackURL = offlineURL }
                 } else {
                     let url = try await tokenManager.resolvedStreamURL(for: nextTrack, using: api)
-                    localURL = try await downloadToTempFile(url: url)
-                    await MainActor.run { self.queue[nextEffective].playbackURL = localURL }
+                    playbackURL = url
+                    await MainActor.run { self.queue[nextEffective].playbackURL = url }
                 }
                 await MainActor.run {
-                    let item = AVPlayerItem(url: localURL)
+                    let item = AVPlayerItem(url: playbackURL)
                     let crossfadePlayer = AVPlayer(playerItem: item)
                     self.secondaryPlayer = crossfadePlayer
                     crossfadePlayer.volume = 0

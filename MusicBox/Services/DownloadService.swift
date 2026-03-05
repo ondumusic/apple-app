@@ -125,6 +125,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     func resumeDownload(trackId: UUID) {
         guard let (resumeData, info) = pausedDownloads.removeValue(forKey: trackId) else { return }
 
+            print(resumeData, info)
+        
         let task = downloadSession.downloadTask(withResumeData: resumeData)
         taskDownloads[task.taskIdentifier] = info
         trackIdToTaskId[trackId] = task.taskIdentifier

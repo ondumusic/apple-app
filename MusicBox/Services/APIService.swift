@@ -80,21 +80,15 @@ final class APIService: Sendable {
     }
 
     func fetchAlbums(for artistId: UUID, page: Int = 1) async throws -> Page<Album> {
-        var result: Page<Album> = try await fetch("/artists/\(artistId.uuidString.lowercased())/albums", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
-        result.resolveAlbumURLs(against: baseURL)
-        return result
+        try await fetch("/artists/\(artistId.uuidString.lowercased())/albums", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
     }
 
     func fetchAlbum(_ albumId: UUID) async throws -> Album {
-        var album: Album = try await fetch("/albums/\(albumId.uuidString.lowercased())")
-        album.resolveURLs(against: baseURL)
-        return album
+        try await fetch("/albums/\(albumId.uuidString.lowercased())")
     }
 
     func fetchAllAlbums(page: Int = 1) async throws -> Page<Album> {
-        var result: Page<Album> = try await fetch("/albums", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
-        result.resolveAlbumURLs(against: baseURL)
-        return result
+        try await fetch("/albums", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
     }
 
     func fetchTracks(page: Int = 1) async throws -> Page<Track> {
