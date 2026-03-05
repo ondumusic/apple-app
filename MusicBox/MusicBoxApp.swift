@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct MusicBoxApp: App {
@@ -6,15 +7,20 @@ struct MusicBoxApp: App {
     @State private var library: LibraryViewModel?
     @State private var settings = SettingsStore()
     @State private var player: PlayerService?
+    @State private var offlineStore = try! OfflineStore()
+    @State private var downloadService: DownloadService?
 
     init() {
         let auth = AuthService()
         auth.restoreSession()
         let settings = SettingsStore()
+        let offlineStore = try! OfflineStore()
         _auth = State(initialValue: auth)
         _settings = State(initialValue: settings)
+        _offlineStore = State(initialValue: offlineStore)
         _library = State(initialValue: auth.apiService.map { LibraryViewModel(api: $0) })
-        _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings) })
+        _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, offlineStore: offlineStore) })
+        _downloadService = State(initialValue: auth.apiService.map { DownloadService(api: $0, offlineStore: offlineStore, settings: settings) })
     }
 
     var body: some Scene {
@@ -24,7 +30,9 @@ struct MusicBoxApp: App {
                     ContentView()
                         .environment(library)
                         .environment(settings)
+                        .environment(offlineStore)
                         .optionalEnvironment(player)
+                        .optionalEnvironment(downloadService)
                 } else {
                     NavigationStack {
                         LoginView()
@@ -32,9 +40,11 @@ struct MusicBoxApp: App {
                 }
             }
             .environment(auth)
+            .modelContainer(offlineStore.modelContainer)
             .onChange(of: auth.apiService.map(ObjectIdentifier.init)) { _, _ in
                 library = auth.apiService.map { LibraryViewModel(api: $0) }
-                player = auth.apiService.map { PlayerService(api: $0, settings: settings) }
+                player = auth.apiService.map { PlayerService(api: $0, settings: settings, offlineStore: offlineStore) }
+                downloadService = auth.apiService.map { DownloadService(api: $0, offlineStore: offlineStore, settings: settings) }
             }
             #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
@@ -72,6 +82,15 @@ extension View {
     func optionalEnvironment(_ player: PlayerService?) -> some View {
         if let player {
             self.environment(player)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func optionalEnvironment(_ service: DownloadService?) -> some View {
+        if let service {
+            self.environment(service)
         } else {
             self
         }

@@ -7,7 +7,7 @@ struct NowPlayingBarModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .safeAreaInset(edge: .bottom) {
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 if player.currentTrack != nil {
                     MiniPlayerView {
                         showFullPlayer = true

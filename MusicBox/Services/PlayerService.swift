@@ -26,6 +26,7 @@ final class PlayerService {
     @ObservationIgnored private let api: APIService
     @ObservationIgnored private let settings: SettingsStore
     @ObservationIgnored private let tokenManager = PlayTokenManager()
+    @ObservationIgnored private let offlineStore: OfflineStore?
     @ObservationIgnored private var primaryPlayer = AVPlayer()
     @ObservationIgnored private var secondaryPlayer: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
@@ -48,9 +49,10 @@ final class PlayerService {
 
     // MARK: - Init
 
-    init(api: APIService, settings: SettingsStore) {
+    init(api: APIService, settings: SettingsStore, offlineStore: OfflineStore? = nil) {
         self.api = api
         self.settings = settings
+        self.offlineStore = offlineStore
         setupTimeObserver()
         setupEndObserver()
         setupAudioSession()
@@ -70,6 +72,13 @@ final class PlayerService {
 
     func playNow(tracks: [Track], startingAt index: Int = 0, artworkURL: URL? = nil) {
         queue = tracks.map { QueueItem(track: $0, artworkURL: artworkURL) }
+        shuffledIndices = nil
+        currentIndex = index
+        Task { await loadAndPlayCurrent() }
+    }
+
+    func playNow(queue items: [QueueItem], startingAt index: Int = 0) {
+        queue = items
         shuffledIndices = nil
         currentIndex = index
         Task { await loadAndPlayCurrent() }
@@ -204,12 +213,14 @@ final class PlayerService {
         tearDownCrossfade()
 
         do {
-            let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
-
             let localURL: URL
             if let cached = queue[idx].playbackURL, cached.isFileURL {
                 localURL = cached
+            } else if let offlineURL = offlineStore?.localURL(for: track.id) {
+                localURL = offlineURL
+                queue[idx].playbackURL = offlineURL
             } else {
+                let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
                 localURL = try await downloadToTempFile(url: url)
                 queue[idx].playbackURL = localURL
             }
@@ -258,6 +269,11 @@ final class PlayerService {
         }
         guard nextEffective < queue.count, queue[nextEffective].playbackURL == nil else { return }
         let track = queue[nextEffective].track
+        // Check offline store first
+        if let offlineURL = offlineStore?.localURL(for: track.id) {
+            queue[nextEffective].playbackURL = offlineURL
+            return
+        }
         Task {
             do {
                 let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
@@ -371,6 +387,9 @@ final class PlayerService {
                 let localURL: URL
                 if let cached = queue[nextEffective].playbackURL, cached.isFileURL {
                     localURL = cached
+                } else if let offlineURL = offlineStore?.localURL(for: nextTrack.id) {
+                    localURL = offlineURL
+                    await MainActor.run { self.queue[nextEffective].playbackURL = offlineURL }
                 } else {
                     let url = try await tokenManager.resolvedStreamURL(for: nextTrack, using: api)
                     localURL = try await downloadToTempFile(url: url)

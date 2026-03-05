@@ -3,6 +3,8 @@ import SwiftUI
 struct AlbumDetailView: View {
     @Environment(AuthService.self) private var auth
     @Environment(PlayerService.self) private var player
+    @Environment(DownloadService.self) private var downloadService
+    @Environment(OfflineStore.self) private var offlineStore
 
     let album: Album
 
@@ -50,7 +52,15 @@ struct AlbumDetailView: View {
                                 } label: {
                                     Label("Shuffle", systemImage: "shuffle")
                                 }
+
+                                Button {
+                                    let artist = tracks.first?.artist ?? Artist(id: displayAlbum.artistId, name: "", slug: "")
+                                    downloadService.download(album: displayAlbum, artist: artist)
+                                } label: {
+                                    Label("Download", systemImage: "arrow.down.circle")
+                                }
                             }
+                            .labelStyle(.iconOnly)
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .padding(.top, 4)
@@ -65,7 +75,7 @@ struct AlbumDetailView: View {
                 Section {
                     let discTracks = tracks.filter { $0.disc == disc }
                     ForEach(discTracks) { track in
-                        TrackRow(track: track) {
+                        TrackRow(track: track, album: displayAlbum) {
                             if let index = tracks.firstIndex(where: { $0.id == track.id }) {
                                 player.playNow(tracks: tracks, startingAt: index, artworkURL: displayAlbum.artworkUrl)
                             }

@@ -2,8 +2,12 @@ import SwiftUI
 
 struct TrackRow: View {
     @Environment(PlayerService.self) private var player
+    @Environment(DownloadService.self) private var downloadService
+    @Environment(OfflineStore.self) private var offlineStore
 
     let track: Track
+    var album: Album? = nil
+    var artist: Artist? = nil
     var showArtist = false
     var showNumber = true
     var onTap: (() -> Void)? = nil
@@ -52,6 +56,44 @@ struct TrackRow: View {
                 player.addToEnd(tracks: [track])
             } label: {
                 Label("Add to Queue", systemImage: "text.append")
+            }
+
+            Divider()
+
+            if offlineStore.isDownloaded(trackId: track.id) {
+                Label("Downloaded", systemImage: "checkmark.circle.fill")
+            } else if downloadService.isDownloading(trackId: track.id) {
+                if let state = downloadService.activeDownloads[track.id], state.isPaused {
+                    Button {
+                        downloadService.resumeDownload(trackId: track.id)
+                    } label: {
+                        Label("Resume Download", systemImage: "play.circle")
+                    }
+                } else {
+                    Button {
+                        downloadService.pauseDownload(trackId: track.id)
+                    } label: {
+                        Label("Pause Download", systemImage: "pause.circle")
+                    }
+                }
+
+                Button(role: .destructive) {
+                    downloadService.cancelDownload(trackId: track.id)
+                } label: {
+                    Label("Cancel Download", systemImage: "xmark.circle")
+                }
+            } else if downloadService.isQueued(trackId: track.id) {
+                Button(role: .destructive) {
+                    downloadService.cancelDownload(trackId: track.id)
+                } label: {
+                    Label("Cancel Download", systemImage: "xmark.circle")
+                }
+            } else if let album {
+                Button {
+                    downloadService.download(track: track, album: album, artist: artist ?? track.artist)
+                } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
             }
         }
     }

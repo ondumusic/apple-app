@@ -24,6 +24,18 @@ struct SettingsView: View {
             } footer: {
                 Text("Smoothly transition between tracks by overlapping the end of one with the start of the next.")
             }
+
+            Section {
+                Picker("Concurrent Downloads", selection: $settings.maxConcurrentDownloads) {
+                    ForEach([1, 2, 3, 4, 6, 8], id: \.self) { count in
+                        Text("\(count)").tag(count)
+                    }
+                }
+            } header: {
+                Text("Downloads")
+            } footer: {
+                Text("Number of tracks to download simultaneously. Higher values use more bandwidth.")
+            }
         }
         .navigationTitle("Settings")
         #if os(macOS)
