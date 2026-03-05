@@ -85,6 +85,11 @@ final class PlayerService {
     }
 
     func playNext(tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        if queue.isEmpty {
+            playNow(tracks: tracks)
+            return
+        }
         let items = tracks.map { QueueItem(track: $0) }
         let insertIndex = min(effectiveIndex + 1, queue.count)
         queue.insert(contentsOf: items, at: insertIndex)
@@ -96,6 +101,11 @@ final class PlayerService {
     }
 
     func addToEnd(tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        if queue.isEmpty {
+            playNow(tracks: tracks)
+            return
+        }
         let startIndex = queue.count
         let items = tracks.map { QueueItem(track: $0) }
         queue.append(contentsOf: items)
