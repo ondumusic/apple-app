@@ -10,18 +10,31 @@ struct TrackRow: View {
     var showNumber = true
     var onTap: (() -> Void)? = nil
 
+    private var isCurrentTrack: Bool {
+        player.currentTrack?.id == track.id
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             if showNumber {
-                Text("\(track.number)")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, alignment: .trailing)
-                    .monospacedDigit()
+                Group {
+                    if isCurrentTrack {
+                        Image(systemName: "speaker.fill")
+                            .font(.caption)
+                            .foregroundStyle(.tint)
+                    } else {
+                        Text("\(track.number)")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+                .frame(width: 28, alignment: .trailing)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.name)
+                    .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
                     .lineLimit(1)
 
                 if showArtist {
