@@ -14,6 +14,7 @@ nonisolated struct SyncResponse: Decodable, Sendable {
 nonisolated struct SyncArtist: Decodable, Sendable {
     var id: UUID
     var name: String
+    var sortName: String
     var slug: String
     var albumCount: Int
 }
@@ -22,6 +23,7 @@ nonisolated struct SyncAlbum: Decodable, Sendable {
     var id: UUID
     var artistId: UUID
     var name: String
+    var sortName: String
     var slug: String
     var releaseYear: Int?
     var artworkUrl: URL?

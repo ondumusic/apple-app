@@ -59,12 +59,13 @@ struct AlbumDetailView: View {
                                 } else {
                                     Button {
                                         let artist = musicLibrary.artist(album.artistId)
-                                            ?? Artist(id: album.artistId, name: "", slug: "")
+                                            ?? Artist(id: album.artistId, name: "", sortName: "", slug: "")
                                         let fullAlbum = Album(
                                             id: album.id, artistId: album.artistId,
-                                            name: album.name, slug: album.slug,
-                                            releaseYear: album.releaseYear, tracks: tracks,
-                                            isUnknown: album.isUnknown, artworkUrl: album.artworkUrl)
+                                            name: album.name, sortName: album.sortName,
+                                            slug: album.slug, releaseYear: album.releaseYear,
+                                            tracks: tracks, isUnknown: album.isUnknown,
+                                            artworkUrl: album.artworkUrl)
                                         downloadService.download(album: fullAlbum, artist: artist)
                                     } label: {
                                         Label("Download", systemImage: "arrow.down.circle")

@@ -54,16 +54,16 @@ struct MusicBoxApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if auth.isLoggedIn {
+                if auth.isLoggedIn, let syncService, let player {
                     ContentView()
                         .environment(musicLibrary)
                         .environment(settings)
                         .environment(offlineStore)
-                        .optionalEnvironment(player)
+                        .environment(player)
                         .optionalEnvironment(downloadService)
-                        .optionalEnvironment(syncService)
+                        .environment(syncService)
                         .optionalEnvironment(auth.apiService)
-                } else {
+                } else if !auth.isLoggedIn {
                     NavigationStack {
                         LoginView()
                     }

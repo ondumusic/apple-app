@@ -74,7 +74,7 @@ struct SongListView: View {
     private func buildLetterMap(from tracks: [Track]) -> [String: UUID] {
         var map: [String: UUID] = [:]
         for track in tracks {
-            let first = track.artist.name.prefix(1).uppercased()
+            let first = track.albumArtistSortName.prefix(1).uppercased()
             let letter = first.first?.isLetter == true ? first : "#"
             if map[letter] == nil {
                 map[letter] = track.id

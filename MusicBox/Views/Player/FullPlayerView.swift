@@ -43,10 +43,8 @@ struct FullPlayerView: View {
                                         id: trackAlbum.id,
                                         artistId: track.artistId,
                                         name: trackAlbum.name,
+                                        sortName: trackAlbum.name,
                                         slug: "",
-                                        releaseYear: nil,
-                                        tracks: nil,
-                                        isUnknown: false,
                                         artworkUrl: trackAlbum.artworkUrl
                                     )
                                     dismiss()
