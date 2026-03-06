@@ -110,4 +110,23 @@ final class OfflineStore {
         modelContext.delete(artist)
         try? modelContext.save()
     }
+
+    func deleteAll() {
+        let artists = (try? modelContext.fetch(FetchDescriptor<DownloadedArtist>())) ?? []
+        for artist in artists {
+            for album in artist.albums {
+                for track in album.tracks {
+                    try? FileManager.default.removeItem(at: track.localFileURL)
+                }
+            }
+            modelContext.delete(artist)
+        }
+        // Clean up the entire Downloads directory
+        let fm = FileManager.default
+        if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let downloadsDir = appSupport.appendingPathComponent("MusicBox/Downloads", isDirectory: true)
+            try? fm.removeItem(at: downloadsDir)
+        }
+        try? modelContext.save()
+    }
 }

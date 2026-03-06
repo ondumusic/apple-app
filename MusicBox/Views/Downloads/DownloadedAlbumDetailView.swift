@@ -3,6 +3,7 @@ import SwiftUI
 struct DownloadedAlbumDetailView: View {
     @Environment(PlayerService.self) private var player
     @Environment(OfflineStore.self) private var offlineStore
+    @Environment(\.dismiss) private var dismiss
 
     let album: DownloadedAlbum
 
@@ -89,6 +90,21 @@ struct DownloadedAlbumDetailView: View {
                                 Label("Delete", systemImage: "trash")
                             }
                         }
+                        .contextMenu {
+                            Button {
+                                if let index = sortedTracks.firstIndex(where: { $0.id == track.id }) {
+                                    playAll(startingAt: index)
+                                }
+                            } label: {
+                                Label("Play", systemImage: "play.fill")
+                            }
+
+                            Button(role: .destructive) {
+                                offlineStore.deleteTrack(trackId: track.id)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
                 } header: {
                     if hasMultipleDiscs {
@@ -102,6 +118,16 @@ struct DownloadedAlbumDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .destructiveAction) {
+                Button(role: .destructive) {
+                    offlineStore.deleteAlbum(albumId: album.id)
+                    dismiss()
+                } label: {
+                    Label("Delete Album", systemImage: "trash")
+                }
+            }
+        }
     }
 
     private func playAll(startingAt index: Int) {

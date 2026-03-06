@@ -36,6 +36,13 @@ struct DownloadedArtistDetailView: View {
                         Label("Delete", systemImage: "trash")
                     }
                 }
+                .contextMenu {
+                    Button(role: .destructive) {
+                        offlineStore.deleteAlbum(albumId: album.id)
+                    } label: {
+                        Label("Delete Album", systemImage: "trash")
+                    }
+                }
             }
         }
         .navigationTitle(artist.name)
