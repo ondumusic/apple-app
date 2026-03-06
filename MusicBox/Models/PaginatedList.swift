@@ -78,6 +78,17 @@ final class PaginatedList<T: Decodable & Sendable> {
         Task { await loadPage(page) }
     }
 
+    /// Loads all remaining pages sequentially after the initial page.
+    func loadAllPages() {
+        guard hasLoaded, totalPages > 1 else { return }
+        Task {
+            for page in 2...totalPages {
+                guard !loadedPages.contains(page) else { continue }
+                await loadPage(page)
+            }
+        }
+    }
+
     private func loadPage(_ page: Int) async {
         guard !loadingPages.contains(page) else { return }
         loadingPages.insert(page)
