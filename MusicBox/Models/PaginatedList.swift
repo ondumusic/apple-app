@@ -3,9 +3,16 @@ import Foundation
 nonisolated struct PaginatedItem<T: Sendable>: Identifiable, Sendable {
     let index: Int
     let value: T?
+    let isLoaded: Bool
 
     // ID changes when item loads, forcing SwiftUI to re-render the row
-    var id: String { "\(index):\(value == nil ? "p" : "v")" }
+    var id: Int { isLoaded ? index : -(index + 1) }
+
+    init(index: Int, value: T?) {
+        self.index = index
+        self.value = value
+        self.isLoaded = value != nil
+    }
 }
 
 // Shared mutable box to pass the page number to the closure
@@ -40,8 +47,10 @@ final class PaginatedList<T: Decodable & Sendable> {
     var isEmpty: Bool { items.isEmpty }
     var hasLoaded: Bool { !loadedPages.isEmpty }
 
-    var identifiableItems: [PaginatedItem<T>] {
-        items.enumerated().map { PaginatedItem(index: $0.offset, value: $0.element) }
+    private(set) var identifiableItems: [PaginatedItem<T>] = []
+
+    private func rebuildIdentifiableItems() {
+        identifiableItems = items.enumerated().map { PaginatedItem(index: $0.offset, value: $0.element) }
     }
 
     func loadInitialIfNeeded() {
@@ -53,6 +62,7 @@ final class PaginatedList<T: Decodable & Sendable> {
         loadedPages.removeAll()
         loadingPages.removeAll()
         items = []
+        identifiableItems = []
         totalEntries = 0
         pageSize = 0
         error = nil
@@ -97,6 +107,7 @@ final class PaginatedList<T: Decodable & Sendable> {
             }
 
             items = newItems
+            rebuildIdentifiableItems()
 
             loadedPages.insert(page)
             loadingPages.remove(page)
