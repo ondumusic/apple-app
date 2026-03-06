@@ -16,6 +16,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     nonisolated struct DownloadState: Sendable {
         let trackName: String
         let artistName: String
+        let albumId: UUID
         var progress: Double
         var isPaused: Bool = false
     }
@@ -166,6 +167,11 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         pendingQueue.contains { $0.track.id == trackId }
     }
 
+    func isAlbumDownloading(albumId: UUID) -> Bool {
+        activeDownloads.values.contains { $0.albumId == albumId } ||
+        pendingQueue.contains { $0.album.id == albumId }
+    }
+
     var hasActivity: Bool {
         !activeDownloads.isEmpty || !pendingQueue.isEmpty
     }
@@ -176,6 +182,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         activeDownloads[info.track.id] = DownloadState(
             trackName: info.track.name,
             artistName: info.artist.name,
+            albumId: info.album.id,
             progress: 0
         )
 

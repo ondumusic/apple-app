@@ -53,7 +53,10 @@ struct AlbumDetailView: View {
                                     Label("Shuffle", systemImage: "shuffle")
                                 }
 
-                                if offlineStore.isAlbumDownloaded(albumId: displayAlbum.id) {
+                                if downloadService.isAlbumDownloading(albumId: displayAlbum.id) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else if offlineStore.downloadedTrackCount(albumId: displayAlbum.id) == tracks.count && !tracks.isEmpty {
                                     Label("Downloaded", systemImage: "arrow.down.circle.fill")
                                         .foregroundStyle(.secondary)
                                 } else {

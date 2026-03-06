@@ -22,6 +22,11 @@ final class OfflineStore {
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
+    func downloadedTrackCount(albumId: UUID) -> Int {
+        let descriptor = FetchDescriptor<DownloadedTrack>(predicate: #Predicate { $0.albumId == albumId })
+        return (try? modelContext.fetchCount(descriptor)) ?? 0
+    }
+
     func localURL(for trackId: UUID) -> URL? {
         var descriptor = FetchDescriptor<DownloadedTrack>(predicate: #Predicate { $0.id == trackId })
         descriptor.fetchLimit = 1
