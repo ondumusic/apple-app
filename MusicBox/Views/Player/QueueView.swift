@@ -20,6 +20,12 @@ struct QueueView: View {
                                 player.skipTo(queueIndex: player.currentIndex + 1 + offset)
                             }
                     }
+                    .onDelete { offsets in
+                        player.removeFromQueue(at: offsets)
+                    }
+                    .onMove { source, destination in
+                        player.moveQueueItems(from: source, to: destination)
+                    }
                 }
             }
         }
@@ -27,6 +33,13 @@ struct QueueView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            #if os(iOS)
+            ToolbarItem(placement: .topBarLeading) {
+                EditButton()
+            }
+            #endif
+        }
     }
 
     private var currentArtworkURL: URL? {

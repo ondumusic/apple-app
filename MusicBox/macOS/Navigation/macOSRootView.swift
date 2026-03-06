@@ -56,6 +56,22 @@ struct macOSRootView: View {
                 MacOSPlayerToolbar()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
+            guard let artist = notification.object as? Artist else { return }
+            navigationPath = NavigationPath()
+            selection = .artists
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                navigationPath.append(artist)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
+            guard let album = notification.object as? Album else { return }
+            navigationPath = NavigationPath()
+            selection = .albums
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                navigationPath.append(album)
+            }
+        }
     }
 
     private var sidebarSelection: Binding<SidebarItem?> {

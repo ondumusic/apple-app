@@ -4,14 +4,13 @@ nonisolated enum iOSTab: String, Hashable, Sendable {
     case artists, albums, songs, downloads
 }
 
-extension Notification.Name {
-    static let scrollToTop = Notification.Name("MusicBox.scrollToTop")
-}
 
 struct iOSRootView: View {
     @Environment(DownloadService.self) private var downloadService
     @State private var showSettings = false
     @State private var selectedTab: iOSTab = .artists
+    @State private var artistsPath = NavigationPath()
+    @State private var albumsPath = NavigationPath()
 
     private var downloadCount: Int {
         downloadService.activeDownloads.count + downloadService.pendingQueue.count
@@ -24,7 +23,7 @@ struct iOSRootView: View {
     var body: some View {
         TabView(selection: tabSelection) {
             Tab("Artists", systemImage: "music.mic", value: .artists) {
-                NavigationStack {
+                NavigationStack(path: $artistsPath) {
                     ArtistListView()
                         .toolbar { settingsButton }
                 }
@@ -32,7 +31,7 @@ struct iOSRootView: View {
             }
 
             Tab("Albums", systemImage: "square.stack", value: .albums) {
-                NavigationStack {
+                NavigationStack(path: $albumsPath) {
                     AlbumListView()
                         .toolbar { settingsButton }
                 }
@@ -55,6 +54,23 @@ struct iOSRootView: View {
                 .nowPlayingBar()
             }
             .badge(downloadCount > 0 ? downloadCount : 0)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
+            guard let artist = notification.object as? Artist else { return }
+            artistsPath = NavigationPath()
+            selectedTab = .artists
+            // Delay slightly so tab switch completes before push
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                artistsPath.append(artist)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
+            guard let album = notification.object as? Album else { return }
+            albumsPath = NavigationPath()
+            selectedTab = .albums
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                albumsPath.append(album)
+            }
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack {

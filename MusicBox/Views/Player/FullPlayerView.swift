@@ -24,10 +24,52 @@ struct FullPlayerView: View {
                     Text(player.currentTrack?.name ?? "")
                         .font(.title2.bold())
                         .lineLimit(1)
-                    Text(player.currentTrack?.artist.name ?? "")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+
+                    if let track = player.currentTrack {
+                        Menu {
+                            Button {
+                                let artist = track.artist
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    NotificationCenter.default.post(name: .navigateToArtist, object: artist)
+                                }
+                            } label: {
+                                Label("Go to Artist", systemImage: "music.mic")
+                            }
+
+                            if let trackAlbum = track.album {
+                                Button {
+                                    let album = Album(
+                                        id: trackAlbum.id,
+                                        artistId: track.artistId,
+                                        name: trackAlbum.name,
+                                        slug: "",
+                                        releaseYear: nil,
+                                        tracks: nil,
+                                        isUnknown: false,
+                                        artworkUrl: trackAlbum.artworkUrl
+                                    )
+                                    dismiss()
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                        NotificationCenter.default.post(name: .navigateToAlbum, object: album)
+                                    }
+                                } label: {
+                                    Label("Go to Album", systemImage: "square.stack")
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(track.artist.name)
+                                    .font(.title3)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.horizontal)
 

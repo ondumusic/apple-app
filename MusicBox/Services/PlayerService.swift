@@ -200,6 +200,52 @@ final class PlayerService {
         updateNowPlayingElapsed()
     }
 
+    func removeFromQueue(at offsets: IndexSet) {
+        // Convert offsets from "up next" offsets (relative to currentIndex+1) to real queue indices
+        let upNextStart = currentIndex + 1
+        let realOffsets = IndexSet(offsets.map { upNextStart + $0 })
+
+        // Map through shuffled indices if needed
+        let effectiveOffsets: [Int]
+        if let shuffled = shuffledIndices {
+            effectiveOffsets = realOffsets.compactMap { idx in
+                idx < shuffled.count ? shuffled[idx] : nil
+            }
+        } else {
+            effectiveOffsets = Array(realOffsets)
+        }
+
+        // Remove from queue in reverse order to preserve indices
+        for idx in effectiveOffsets.sorted().reversed() {
+            guard idx < queue.count else { continue }
+            queue.remove(at: idx)
+            // Adjust shuffled indices
+            if shuffledIndices != nil {
+                shuffledIndices = shuffledIndices!.compactMap { i in
+                    if i == idx { return nil }
+                    return i > idx ? i - 1 : i
+                }
+            }
+        }
+    }
+
+    func moveQueueItems(from source: IndexSet, to destination: Int) {
+        // These offsets are relative to the "up next" list
+        let upNextStart = currentIndex + 1
+
+        if let shuffled = shuffledIndices {
+            // Move within the shuffled indices array (after currentIndex)
+            var upNextIndices = Array(shuffled[upNextStart...])
+            upNextIndices.move(fromOffsets: source, toOffset: destination)
+            shuffledIndices = Array(shuffled[..<upNextStart]) + upNextIndices
+        } else {
+            // Move within the actual queue (after currentIndex)
+            let sourceReal = IndexSet(source.map { $0 + upNextStart })
+            let destReal = destination + upNextStart
+            queue.move(fromOffsets: sourceReal, toOffset: destReal)
+        }
+    }
+
     // MARK: - Shuffle
 
     func toggleShuffle() {
