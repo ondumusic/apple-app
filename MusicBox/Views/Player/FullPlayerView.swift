@@ -109,13 +109,6 @@ struct FullPlayerView: View {
 
                 Spacer()
             }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(.secondary.opacity(0.5))
-                        .frame(width: 36, height: 5)
-                }
-            }
             .sheet(isPresented: $showQueue) {
                 NavigationStack {
                     QueueView()

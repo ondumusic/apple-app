@@ -4,6 +4,7 @@ struct ArtistListView: View {
     @Environment(LibraryViewModel.self) private var library
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
+    @Environment(OfflineStore.self) private var offlineStore
     @Environment(APIService.self) private var api
     @State private var scrollPosition = ScrollPosition()
 
@@ -43,16 +44,24 @@ struct ArtistListView: View {
 
                     Divider()
 
-                    Button {
-                        Task {
-                            let albums = try? await api.fetchArtistAlbumsWithTracks(artistId: artist.id)
-                            guard let albums else { return }
-                            for album in albums {
-                                downloadService.download(album: album, artist: artist)
-                            }
+                    if offlineStore.isArtistDownloaded(artistId: artist.id) {
+                        Button(role: .destructive) {
+                            offlineStore.deleteArtist(artistId: artist.id)
+                        } label: {
+                            Label("Remove Download", systemImage: "trash")
                         }
-                    } label: {
-                        Label("Download", systemImage: "arrow.down.circle")
+                    } else {
+                        Button {
+                            Task {
+                                let albums = try? await api.fetchArtistAlbumsWithTracks(artistId: artist.id)
+                                guard let albums else { return }
+                                for album in albums {
+                                    downloadService.download(album: album, artist: artist)
+                                }
+                            }
+                        } label: {
+                            Label("Download", systemImage: "arrow.down.circle")
+                        }
                     }
                 }
                 .onAppear { list.itemAppeared(at: item.index) }

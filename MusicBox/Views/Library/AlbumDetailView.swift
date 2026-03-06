@@ -57,8 +57,11 @@ struct AlbumDetailView: View {
                                     ProgressView()
                                         .controlSize(.small)
                                 } else if offlineStore.downloadedTrackCount(albumId: displayAlbum.id) == tracks.count && !tracks.isEmpty {
-                                    Label("Downloaded", systemImage: "arrow.down.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                    Button {
+                                        offlineStore.deleteAlbum(albumId: displayAlbum.id)
+                                    } label: {
+                                        Label("Remove", systemImage: "arrow.down.circle.fill")
+                                    }
                                 } else {
                                     Button {
                                         let artist = tracks.first?.artist ?? Artist(id: displayAlbum.artistId, name: "", slug: "")

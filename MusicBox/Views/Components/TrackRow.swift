@@ -88,7 +88,11 @@ private struct TrackDownloadMenuItems: View {
 
     var body: some View {
         if offlineStore.isDownloaded(trackId: track.id) {
-            Label("Downloaded", systemImage: "checkmark.circle.fill")
+            Button(role: .destructive) {
+                offlineStore.deleteTrack(trackId: track.id)
+            } label: {
+                Label("Remove Download", systemImage: "trash")
+            }
         } else if downloadService.isDownloading(trackId: track.id) {
             if let state = downloadService.activeDownloads[track.id], state.isPaused {
                 Button {

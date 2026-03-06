@@ -5,6 +5,9 @@ import SwiftData
 final class OfflineStore {
     @ObservationIgnored let modelContainer: ModelContainer
 
+    /// Incremented on every insert/delete so views that read it re-evaluate.
+    private(set) var revision: UInt = 0
+
     init() throws {
         let schema = Schema([DownloadedArtist.self, DownloadedAlbum.self, DownloadedTrack.self])
         modelContainer = try ModelContainer(for: schema)
@@ -13,27 +16,38 @@ final class OfflineStore {
     var modelContext: ModelContext { modelContainer.mainContext }
 
     func isDownloaded(trackId: UUID) -> Bool {
+        _ = revision
         let descriptor = FetchDescriptor<DownloadedTrack>(predicate: #Predicate { $0.id == trackId })
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
     func isAlbumDownloaded(albumId: UUID) -> Bool {
+        _ = revision
         let descriptor = FetchDescriptor<DownloadedAlbum>(predicate: #Predicate { $0.id == albumId })
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
+    func isArtistDownloaded(artistId: UUID) -> Bool {
+        _ = revision
+        let descriptor = FetchDescriptor<DownloadedArtist>(predicate: #Predicate { $0.id == artistId })
+        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+    }
+
     func downloadedTrackCount(albumId: UUID) -> Int {
+        _ = revision
         let descriptor = FetchDescriptor<DownloadedTrack>(predicate: #Predicate { $0.albumId == albumId })
         return (try? modelContext.fetchCount(descriptor)) ?? 0
     }
 
     func localURL(for trackId: UUID) -> URL? {
+        _ = revision
         var descriptor = FetchDescriptor<DownloadedTrack>(predicate: #Predicate { $0.id == trackId })
         descriptor.fetchLimit = 1
         return try? modelContext.fetch(descriptor).first?.localFileURL
     }
 
     func downloadedArtists() -> [DownloadedArtist] {
+        _ = revision
         let descriptor = FetchDescriptor<DownloadedArtist>(sortBy: [SortDescriptor(\.name)])
         return (try? modelContext.fetch(descriptor)) ?? []
     }
@@ -67,6 +81,7 @@ final class OfflineStore {
         downloaded.album = album
         modelContext.insert(downloaded)
         try? modelContext.save()
+        revision += 1
     }
 
     func deleteTrack(trackId: UUID) {
@@ -84,6 +99,7 @@ final class OfflineStore {
             }
         }
         try? modelContext.save()
+        revision += 1
     }
 
     func deleteAlbum(albumId: UUID) {
@@ -100,6 +116,7 @@ final class OfflineStore {
             modelContext.delete(artist)
         }
         try? modelContext.save()
+        revision += 1
     }
 
     func deleteArtist(artistId: UUID) {
@@ -114,6 +131,7 @@ final class OfflineStore {
         }
         modelContext.delete(artist)
         try? modelContext.save()
+        revision += 1
     }
 
     func deleteAll() {
@@ -133,5 +151,6 @@ final class OfflineStore {
             try? fm.removeItem(at: downloadsDir)
         }
         try? modelContext.save()
+        revision += 1
     }
 }
