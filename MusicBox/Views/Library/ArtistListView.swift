@@ -5,6 +5,7 @@ struct ArtistListView: View {
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
+    @Environment(SyncService.self) private var syncService
     @State private var scrollPosition = ScrollPosition()
 
     var body: some View {
@@ -55,6 +56,7 @@ struct ArtistListView: View {
             }
         }
         .scrollPosition($scrollPosition)
+        .refreshable { await syncService.sync() }
         .navigationTitle("Artists")
         .navigationDestination(for: Artist.self) { artist in
             ArtistDetailView(artist: artist)

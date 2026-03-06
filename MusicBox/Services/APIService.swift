@@ -69,71 +69,6 @@ final class APIService: Sendable {
         return response.playToken
     }
 
-    // MARK: - Browsing
-
-    func fetchArtists(page: Int = 1) async throws -> Page<Artist> {
-        try await fetch("/artists", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
-    }
-
-    func fetchArtist(_ artistId: UUID) async throws -> Artist {
-        try await fetch("/artists/\(artistId.uuidString.lowercased())")
-    }
-
-    func fetchAlbums(for artistId: UUID, page: Int = 1) async throws -> Page<Album> {
-        try await fetch("/artists/\(artistId.uuidString.lowercased())/albums", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
-    }
-
-    func fetchAlbum(_ albumId: UUID) async throws -> Album {
-        try await fetch("/albums/\(albumId.uuidString.lowercased())")
-    }
-
-    func fetchAllAlbums(page: Int = 1) async throws -> Page<Album> {
-        try await fetch("/albums", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
-    }
-
-    func fetchTracks(page: Int = 1) async throws -> Page<Track> {
-        try await fetch("/tracks", queryItems: [URLQueryItem(name: "page", value: "\(page)")])
-    }
-
-    func fetchTrack(_ trackId: UUID) async throws -> Track {
-        try await fetch("/tracks/\(trackId.uuidString.lowercased())")
-    }
-
-    /// Fetch all tracks matching filters, paging through all results.
-    func fetchAllTracks(artistId: UUID? = nil, albumId: UUID? = nil) async throws -> [Track] {
-        var all: [Track] = []
-        var page = 1
-        while true {
-            var queryItems = [URLQueryItem(name: "page", value: "\(page)")]
-            if let artistId {
-                queryItems.append(URLQueryItem(name: "artist_id", value: artistId.uuidString.lowercased()))
-            }
-            if let albumId {
-                queryItems.append(URLQueryItem(name: "album_id", value: albumId.uuidString.lowercased()))
-            }
-            let result: Page<Track> = try await fetch("/tracks", queryItems: queryItems)
-            all.append(contentsOf: result.entries)
-            if page >= result.totalPages { break }
-            page += 1
-        }
-        return all
-    }
-
-    /// Fetch all albums for an artist (with tracks loaded), paging through all results.
-    func fetchArtistAlbumsWithTracks(artistId: UUID) async throws -> [Album] {
-        let stubs = try await fetchAllAlbums(for: artistId)
-        return try await withThrowingTaskGroup(of: Album.self) { group in
-            for stub in stubs {
-                group.addTask { try await self.fetchAlbum(stub.id) }
-            }
-            var albums: [Album] = []
-            for try await album in group {
-                albums.append(album)
-            }
-            return albums
-        }
-    }
-
     // MARK: - Sync
 
     func fetchSync(cursor: String? = nil) async throws -> SyncResponse {
@@ -142,19 +77,6 @@ final class APIService: Sendable {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
         return try await fetch("/sync", queryItems: queryItems)
-    }
-
-    /// Fetch all albums for an artist, paging through all results.
-    func fetchAllAlbums(for artistId: UUID) async throws -> [Album] {
-        var all: [Album] = []
-        var page = 1
-        while true {
-            let result = try await fetchAlbums(for: artistId, page: page)
-            all.append(contentsOf: result.entries)
-            if page >= result.totalPages { break }
-            page += 1
-        }
-        return all
     }
 
     // MARK: - Static Auth (no token needed)

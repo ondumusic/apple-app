@@ -55,7 +55,7 @@ struct SettingsView: View {
                 }
 
                 Button {
-                    Task { try? await syncService.sync() }
+                    Task { await syncService.sync() }
                 } label: {
                     HStack {
                         Text("Sync Now")
@@ -67,6 +67,12 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(syncService.isSyncing)
+
+                if let error = syncService.syncError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.footnote)
+                }
             } header: {
                 Text("Library")
             }

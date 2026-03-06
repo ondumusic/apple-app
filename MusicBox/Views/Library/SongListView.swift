@@ -3,6 +3,7 @@ import SwiftUI
 struct SongListView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
+    @Environment(SyncService.self) private var syncService
 
     @State private var scrollTarget: UUID?
 
@@ -60,6 +61,7 @@ struct SongListView: View {
                 onSelect: { scrollTarget = $0 }
             )
         }
+        .refreshable { await syncService.sync() }
         .navigationTitle("Songs")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

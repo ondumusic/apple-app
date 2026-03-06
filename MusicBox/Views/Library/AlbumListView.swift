@@ -5,6 +5,7 @@ struct AlbumListView: View {
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
+    @Environment(SyncService.self) private var syncService
     @State private var scrollPosition = ScrollPosition()
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
@@ -56,6 +57,7 @@ struct AlbumListView: View {
             .padding()
         }
         .scrollPosition($scrollPosition)
+        .refreshable { await syncService.sync() }
         .navigationTitle("Albums")
         .navigationDestination(for: Album.self) { album in
             AlbumDetailView(album: album)
