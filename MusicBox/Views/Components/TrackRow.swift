@@ -7,6 +7,7 @@ struct TrackRow: View {
     var album: Album? = nil
     var artist: Artist? = nil
     var showArtist = false
+    var showArtwork = false
     var showNumber = true
     var onTap: (() -> Void)? = nil
 
@@ -14,8 +15,17 @@ struct TrackRow: View {
         player.currentTrack?.id == track.id
     }
 
+    private var artworkUrl: URL? {
+        album?.artworkUrl ?? track.album?.artworkUrl
+    }
+
     var body: some View {
         HStack(spacing: 12) {
+            if showArtwork {
+                ArtworkView(url: artworkUrl, cornerRadius: 4)
+                    .frame(width: 40, height: 40)
+            }
+
             if showNumber {
                 Group {
                     if isCurrentTrack {

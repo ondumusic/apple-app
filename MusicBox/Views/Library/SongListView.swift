@@ -12,14 +12,15 @@ struct SongListView: View {
             ScrollViewReader { proxy in
                 List(list.identifiableItems) { item in
                     if let track = item.value {
-                        TrackRow(track: track, showArtist: true, showNumber: false) {
+                        TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
                             player.playNow(tracks: [track], artworkURL: track.album?.artworkUrl)
                         }
                         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
                         .id(item.index)
                         .onAppear { list.itemAppeared(at: item.index) }
                     } else {
-                        HStack {
+                        HStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 40, height: 40)
                             VStack(alignment: .leading, spacing: 4) {
                                 RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 140, height: 14)
                                 RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 80, height: 12)
