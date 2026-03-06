@@ -1,4 +1,5 @@
 import Foundation
+import Nuke
 
 // MARK: - Sync Response Types
 
@@ -11,7 +12,7 @@ nonisolated struct SyncResponse: Decodable, Sendable {
     var complete: Bool
 }
 
-nonisolated struct SyncArtist: Decodable, Sendable {
+nonisolated struct SyncArtist: Sendable {
     var id: UUID
     var name: String
     var sortName: String
@@ -19,7 +20,22 @@ nonisolated struct SyncArtist: Decodable, Sendable {
     var albumCount: Int
 }
 
-nonisolated struct SyncAlbum: Decodable, Sendable {
+extension SyncArtist: Decodable {
+    nonisolated enum CodingKeys: String, CodingKey {
+        case id, name, sortName, slug, albumCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        sortName = try container.decodeIfPresent(String.self, forKey: .sortName) ?? name
+        slug = try container.decode(String.self, forKey: .slug)
+        albumCount = try container.decode(Int.self, forKey: .albumCount)
+    }
+}
+
+nonisolated struct SyncAlbum: Sendable {
     var id: UUID
     var artistId: UUID
     var name: String
@@ -29,6 +45,25 @@ nonisolated struct SyncAlbum: Decodable, Sendable {
     var artworkUrl: URL?
     var isUnknown: Bool
     var trackCount: Int
+}
+
+extension SyncAlbum: Decodable {
+    nonisolated enum CodingKeys: String, CodingKey {
+        case id, artistId, name, sortName, slug, releaseYear, artworkUrl, isUnknown, trackCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        artistId = try container.decode(UUID.self, forKey: .artistId)
+        name = try container.decode(String.self, forKey: .name)
+        sortName = try container.decodeIfPresent(String.self, forKey: .sortName) ?? name
+        slug = try container.decode(String.self, forKey: .slug)
+        releaseYear = try container.decodeIfPresent(Int.self, forKey: .releaseYear)
+        artworkUrl = try container.decodeIfPresent(URL.self, forKey: .artworkUrl)
+        isUnknown = try container.decode(Bool.self, forKey: .isUnknown)
+        trackCount = try container.decode(Int.self, forKey: .trackCount)
+    }
 }
 
 nonisolated struct SyncTrack: Decodable, Sendable {
@@ -97,14 +132,22 @@ final class SyncService {
 
         var cursor = syncCursor
 
+        var artworkURLs: [URL] = []
+
         do {
+            var pageCount = 0
             while true {
+                pageCount += 1
                 let response = try await api.fetchSync(cursor: cursor)
+
+                print("SyncService: page \(pageCount) — \(response.artists.count) artists, \(response.albums.count) albums, \(response.tracks.count) tracks, \(response.deletions.count) deletions, complete: \(response.complete)")
 
                 musicLibrary.upsertArtists(response.artists)
                 musicLibrary.upsertAlbums(response.albums)
                 musicLibrary.upsertTracks(response.tracks)
                 musicLibrary.applyDeletions(response.deletions)
+
+                artworkURLs += response.albums.compactMap(\.artworkUrl)
 
                 syncProgress?.artistCount += response.artists.count
                 syncProgress?.albumCount += response.albums.count
@@ -117,12 +160,18 @@ final class SyncService {
                     lastSyncDate = Date()
                     UserDefaults.standard.set(lastSyncDate, forKey: "lastSyncDate")
                     hasCompletedInitialSync = true
+                    print("SyncService: sync complete — \(syncProgress?.artistCount ?? 0) artists, \(syncProgress?.albumCount ?? 0) albums, \(syncProgress?.trackCount ?? 0) tracks total")
                     break
                 }
             }
         } catch {
             syncError = error.localizedDescription
             print("SyncService: sync failed: \(error)")
+        }
+
+        if !artworkURLs.isEmpty {
+            let prefetcher = ImagePrefetcher()
+            prefetcher.startPrefetching(with: artworkURLs)
         }
     }
 
