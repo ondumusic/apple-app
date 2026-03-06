@@ -303,6 +303,7 @@ final class PlayerService {
                 queue[idx].playbackURL = url
             }
 
+            activateAudioSession()
             let item = AVPlayerItem(url: playbackURL)
             primaryPlayer.replaceCurrentItem(with: item)
             primaryPlayer.volume = 1.0
@@ -543,14 +544,19 @@ final class PlayerService {
 
     // MARK: - Audio Session (iOS)
 
-    private func setupAudioSession() {
+    private func activateAudioSession() {
         #if os(iOS)
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("PlayerService: audio session setup failed: \(error)")
+            print("PlayerService: audio session activation failed: \(error)")
         }
+        #endif
+    }
+
+    private func setupAudioSession() {
+        #if os(iOS)
 
         interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
