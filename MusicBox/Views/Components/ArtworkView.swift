@@ -1,4 +1,5 @@
 import SwiftUI
+import Nuke
 import NukeUI
 
 struct ArtworkView: View {
@@ -20,6 +21,8 @@ struct ArtworkView: View {
                     }
             }
         }
+        .processors([.resize(width: 300)])
+        .priority(.normal)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 }

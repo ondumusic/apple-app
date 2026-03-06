@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Nuke
 
 @main
 struct MusicBoxApp: App {
@@ -11,6 +12,9 @@ struct MusicBoxApp: App {
     @State private var downloadService: DownloadService?
 
     init() {
+        // Configure Nuke with disk cache for artwork
+        ImagePipeline.shared = ImagePipeline(configuration: .withDataCache)
+
         let auth = AuthService()
         auth.restoreSession()
         let settings = SettingsStore()
