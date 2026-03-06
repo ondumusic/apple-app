@@ -2,8 +2,32 @@ import SwiftUI
 import SwiftData
 import Nuke
 
+#if os(iOS)
+class BackgroundSessionDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        guard identifier == "com.musicbox.downloads" else {
+            completionHandler()
+            return
+        }
+        // Store completion handler; DownloadService will call it
+        // when urlSessionDidFinishEvents fires
+        BackgroundSessionDelegate.pendingCompletionHandler = completionHandler
+    }
+
+    static var pendingCompletionHandler: (() -> Void)?
+}
+#endif
+
 @main
 struct MusicBoxApp: App {
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(BackgroundSessionDelegate.self) private var appDelegate
+    #endif
+
     @State private var auth: AuthService
     @State private var library: LibraryViewModel?
     @State private var settings = SettingsStore()

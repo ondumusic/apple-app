@@ -35,7 +35,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private let tokenManager = PlayTokenManager()
 
     @ObservationIgnored private lazy var downloadSession: URLSession = {
-        let config = URLSessionConfiguration.default
+        let config = URLSessionConfiguration.background(withIdentifier: "com.musicbox.downloads")
+        config.isDiscretionary = false
+        config.sessionSendsLaunchEvents = true
         return URLSession(configuration: config, delegate: self, delegateQueue: .main)
     }()
 
@@ -255,6 +257,16 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             activeTasks.removeValue(forKey: info.track.id)
             taskDownloads.removeValue(forKey: task.taskIdentifier)
             startNextIfNeeded()
+        }
+    }
+
+    nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        MainActor.assumeIsolated {
+            #if os(iOS)
+            let handler = BackgroundSessionDelegate.pendingCompletionHandler
+            BackgroundSessionDelegate.pendingCompletionHandler = nil
+            handler?()
+            #endif
         }
     }
 
