@@ -13,7 +13,7 @@ struct SongListView: View {
                 List(list.identifiableItems) { item in
                     if let track = item.value {
                         TrackRow(track: track, showArtist: true, showNumber: false) {
-                            player.playNow(tracks: [track])
+                            player.playNow(tracks: [track], artworkURL: track.album?.artworkUrl)
                         }
                         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
                         .id(item.index)

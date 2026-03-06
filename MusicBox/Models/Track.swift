@@ -6,12 +6,19 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
     var albumArtistId: UUID
     var albumId: UUID
     var artist: Artist
+    var album: TrackAlbum?
     var name: String
     var disc: Int
     var number: Int
     var duration: Double
     var mimetype: String
     var streamUrl: String
+
+    nonisolated struct TrackAlbum: Codable, Sendable, Hashable {
+        var id: UUID
+        var name: String
+        var artworkUrl: URL?
+    }
 
     var formattedDuration: String {
         let minutes = Int(duration) / 60
