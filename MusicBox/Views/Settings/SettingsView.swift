@@ -48,7 +48,7 @@ struct SettingsView: View {
     private func crossfadeEnabled(settings: SettingsStore) -> Binding<Bool> {
         Binding(
             get: { settings.crossfadeDuration > 0 },
-            set: { settings.crossfadeDuration = $0 ? 5.0 : 0.0 }
+            set: { settings.crossfadeDuration = $0 ? 1.0 : 0.0 }
         )
     }
 }
