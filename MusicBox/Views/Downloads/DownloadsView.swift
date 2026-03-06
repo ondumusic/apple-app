@@ -6,6 +6,7 @@ struct DownloadsView: View {
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
     @State private var showDeleteAllConfirmation = false
+    @State private var artistToDelete: DownloadedArtist?
 
     var body: some View {
         List {
@@ -138,14 +139,14 @@ struct DownloadsView: View {
                         }
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
-                                offlineStore.deleteArtist(artistId: artist.id)
+                                artistToDelete = artist
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
                         }
                         .contextMenu {
                             Button(role: .destructive) {
-                                offlineStore.deleteArtist(artistId: artist.id)
+                                artistToDelete = artist
                             } label: {
                                 Label("Delete Artist", systemImage: "trash")
                             }
@@ -180,6 +181,21 @@ struct DownloadsView: View {
             }
         } message: {
             Text("This will remove all downloaded music from this device. This cannot be undone.")
+        }
+        .confirmationDialog(
+            "Delete Artist",
+            isPresented: Binding(get: { artistToDelete != nil }, set: { if !$0 { artistToDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let artist = artistToDelete {
+                    offlineStore.deleteArtist(artistId: artist.id)
+                }
+            }
+        } message: {
+            if let artist = artistToDelete {
+                Text("Remove all downloaded music by \(artist.name)?")
+            }
         }
     }
 }

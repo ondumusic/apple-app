@@ -6,6 +6,8 @@ struct DownloadedAlbumDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let album: DownloadedAlbum
+    @State private var showDeleteAlbumConfirmation = false
+    @State private var trackToDelete: DownloadedTrack?
 
     private var sortedTracks: [DownloadedTrack] {
         album.tracks.sorted { ($0.disc, $0.number) < ($1.disc, $1.number) }
@@ -85,7 +87,7 @@ struct DownloadedAlbumDetailView: View {
                         }
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
-                                offlineStore.deleteTrack(trackId: track.id)
+                                trackToDelete = track
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -100,7 +102,7 @@ struct DownloadedAlbumDetailView: View {
                             }
 
                             Button(role: .destructive) {
-                                offlineStore.deleteTrack(trackId: track.id)
+                                trackToDelete = track
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -121,11 +123,37 @@ struct DownloadedAlbumDetailView: View {
         .toolbar {
             ToolbarItem(placement: .destructiveAction) {
                 Button(role: .destructive) {
-                    offlineStore.deleteAlbum(albumId: album.id)
-                    dismiss()
+                    showDeleteAlbumConfirmation = true
                 } label: {
                     Label("Delete Album", systemImage: "trash")
                 }
+            }
+        }
+        .confirmationDialog(
+            "Delete Album",
+            isPresented: $showDeleteAlbumConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                offlineStore.deleteAlbum(albumId: album.id)
+                dismiss()
+            }
+        } message: {
+            Text("Remove the downloaded album \"\(album.name)\"?")
+        }
+        .confirmationDialog(
+            "Delete Track",
+            isPresented: Binding(get: { trackToDelete != nil }, set: { if !$0 { trackToDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let track = trackToDelete {
+                    offlineStore.deleteTrack(trackId: track.id)
+                }
+            }
+        } message: {
+            if let track = trackToDelete {
+                Text("Remove the downloaded track \"\(track.name)\"?")
             }
         }
     }

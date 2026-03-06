@@ -4,6 +4,7 @@ struct DownloadedArtistDetailView: View {
     @Environment(OfflineStore.self) private var offlineStore
 
     let artist: DownloadedArtist
+    @State private var albumToDelete: DownloadedAlbum?
 
     var body: some View {
         List {
@@ -31,14 +32,14 @@ struct DownloadedArtistDetailView: View {
                 }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
-                        offlineStore.deleteAlbum(albumId: album.id)
+                        albumToDelete = album
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
                 }
                 .contextMenu {
                     Button(role: .destructive) {
-                        offlineStore.deleteAlbum(albumId: album.id)
+                        albumToDelete = album
                     } label: {
                         Label("Delete Album", systemImage: "trash")
                     }
@@ -48,6 +49,21 @@ struct DownloadedArtistDetailView: View {
         .navigationTitle(artist.name)
         .navigationDestination(for: DownloadedAlbum.self) { album in
             DownloadedAlbumDetailView(album: album)
+        }
+        .confirmationDialog(
+            "Delete Album",
+            isPresented: Binding(get: { albumToDelete != nil }, set: { if !$0 { albumToDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let album = albumToDelete {
+                    offlineStore.deleteAlbum(albumId: album.id)
+                }
+            }
+        } message: {
+            if let album = albumToDelete {
+                Text("Remove the downloaded album \"\(album.name)\"?")
+            }
         }
     }
 }
