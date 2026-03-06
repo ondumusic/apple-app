@@ -24,7 +24,7 @@ struct AlbumListView: View {
                                 Task {
                                     guard let full = try? await api.fetchAlbum(album.id),
                                           let tracks = full.tracks, !tracks.isEmpty else { return }
-                                    player.playNext(tracks: tracks)
+                                    player.playNext(tracks: tracks, artworkURL: full.artworkUrl)
                                 }
                             } label: {
                                 Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
@@ -34,7 +34,7 @@ struct AlbumListView: View {
                                 Task {
                                     guard let full = try? await api.fetchAlbum(album.id),
                                           let tracks = full.tracks, !tracks.isEmpty else { return }
-                                    player.addToEnd(tracks: tracks)
+                                    player.addToEnd(tracks: tracks, artworkURL: full.artworkUrl)
                                 }
                             } label: {
                                 Label("Add to Queue", systemImage: "text.append")

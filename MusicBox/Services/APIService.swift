@@ -119,6 +119,21 @@ final class APIService: Sendable {
         return all
     }
 
+    /// Fetch all albums for an artist (with tracks loaded), paging through all results.
+    func fetchArtistAlbumsWithTracks(artistId: UUID) async throws -> [Album] {
+        let stubs = try await fetchAllAlbums(for: artistId)
+        return try await withThrowingTaskGroup(of: Album.self) { group in
+            for stub in stubs {
+                group.addTask { try await self.fetchAlbum(stub.id) }
+            }
+            var albums: [Album] = []
+            for try await album in group {
+                albums.append(album)
+            }
+            return albums
+        }
+    }
+
     /// Fetch all albums for an artist, paging through all results.
     func fetchAllAlbums(for artistId: UUID) async throws -> [Album] {
         var all: [Album] = []

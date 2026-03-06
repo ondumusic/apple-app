@@ -17,8 +17,12 @@ struct ArtistListView: View {
                 .contextMenu {
                     Button {
                         Task {
-                            let tracks = try? await api.fetchAllTracks(artistId: artist.id)
-                            if let tracks, !tracks.isEmpty { player.playNext(tracks: tracks) }
+                            let albums = try? await api.fetchArtistAlbumsWithTracks(artistId: artist.id)
+                            guard let albums else { return }
+                            let items = albums.flatMap { album in
+                                (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
+                            }
+                            player.playNext(queue: items)
                         }
                     } label: {
                         Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
@@ -26,8 +30,12 @@ struct ArtistListView: View {
 
                     Button {
                         Task {
-                            let tracks = try? await api.fetchAllTracks(artistId: artist.id)
-                            if let tracks, !tracks.isEmpty { player.addToEnd(tracks: tracks) }
+                            let albums = try? await api.fetchArtistAlbumsWithTracks(artistId: artist.id)
+                            guard let albums else { return }
+                            let items = albums.flatMap { album in
+                                (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
+                            }
+                            player.addToEnd(queue: items)
                         }
                     } label: {
                         Label("Add to Queue", systemImage: "text.append")
@@ -37,9 +45,9 @@ struct ArtistListView: View {
 
                     Button {
                         Task {
-                            guard let albumStubs = try? await api.fetchAllAlbums(for: artist.id) else { return }
-                            for stub in albumStubs {
-                                guard let album = try? await api.fetchAlbum(stub.id) else { continue }
+                            let albums = try? await api.fetchArtistAlbumsWithTracks(artistId: artist.id)
+                            guard let albums else { return }
+                            for album in albums {
                                 downloadService.download(album: album, artist: artist)
                             }
                         }

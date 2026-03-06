@@ -7,6 +7,7 @@ final class AuthService {
     var apiService: APIService?
     var isLoggedIn: Bool { apiService != nil }
     var isLoading = false
+    var isOffline = false
     var errorMessage: String?
 
     // MARK: - Storage Keys
@@ -98,8 +99,12 @@ final class AuthService {
         do {
             let user = try await api.fetchCurrentUser()
             self.currentUser = user
-        } catch {
+            self.isOffline = false
+        } catch APIError.unauthorized {
             clearSession()
+        } catch {
+            // Network error or other failure — stay logged in for offline playback
+            self.isOffline = true
         }
     }
 

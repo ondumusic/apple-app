@@ -48,13 +48,13 @@ struct TrackRow: View {
         }
         .contextMenu {
             Button {
-                player.playNext(tracks: [track])
+                player.playNext(tracks: [track], artworkURL: album?.artworkUrl)
             } label: {
                 Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
             }
 
             Button {
-                player.addToEnd(tracks: [track])
+                player.addToEnd(tracks: [track], artworkURL: album?.artworkUrl)
             } label: {
                 Label("Add to Queue", systemImage: "text.append")
             }

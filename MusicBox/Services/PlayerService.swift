@@ -84,30 +84,37 @@ final class PlayerService {
         Task { await loadAndPlayCurrent() }
     }
 
-    func playNext(tracks: [Track]) {
-        guard !tracks.isEmpty else { return }
+    func playNext(tracks: [Track], artworkURL: URL? = nil) {
+        let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL) }
+        playNext(queue: items)
+    }
+
+    func playNext(queue items: [QueueItem]) {
+        guard !items.isEmpty else { return }
         if queue.isEmpty {
-            playNow(tracks: tracks)
+            playNow(queue: items)
             return
         }
-        let items = tracks.map { QueueItem(track: $0) }
         let insertIndex = min(effectiveIndex + 1, queue.count)
         queue.insert(contentsOf: items, at: insertIndex)
         if let shuffled = shuffledIndices {
             let newIndices = items.indices.map { insertIndex + $0 }
-            // Adjust existing indices that shifted
             shuffledIndices = shuffled.map { $0 >= insertIndex ? $0 + items.count : $0 } + newIndices
         }
     }
 
-    func addToEnd(tracks: [Track]) {
-        guard !tracks.isEmpty else { return }
+    func addToEnd(tracks: [Track], artworkURL: URL? = nil) {
+        let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL) }
+        addToEnd(queue: items)
+    }
+
+    func addToEnd(queue items: [QueueItem]) {
+        guard !items.isEmpty else { return }
         if queue.isEmpty {
-            playNow(tracks: tracks)
+            playNow(queue: items)
             return
         }
         let startIndex = queue.count
-        let items = tracks.map { QueueItem(track: $0) }
         queue.append(contentsOf: items)
         if shuffledIndices != nil {
             let newIndices = items.indices.map { startIndex + $0 }
