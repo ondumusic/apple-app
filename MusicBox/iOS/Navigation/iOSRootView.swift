@@ -1,7 +1,7 @@
 import SwiftUI
 
 nonisolated enum iOSTab: String, Hashable, Sendable {
-    case artists, albums, songs, downloads
+    case artists, albums, songs, search, downloads
 }
 
 
@@ -11,6 +11,7 @@ struct iOSRootView: View {
     @State private var selectedTab: iOSTab = .artists
     @State private var artistsPath = NavigationPath()
     @State private var albumsPath = NavigationPath()
+    @State private var searchText = ""
 
     private var downloadCount: Int {
         downloadService.activeDownloads.count + downloadService.pendingQueue.count
@@ -41,6 +42,16 @@ struct iOSRootView: View {
             Tab("Songs", systemImage: "music.note", value: .songs) {
                 NavigationStack {
                     SongListView()
+                        .toolbar { settingsButton }
+                }
+                .nowPlayingBar()
+            }
+
+            Tab("Search", systemImage: "magnifyingglass", value: .search) {
+                NavigationStack {
+                    SearchView(query: searchText)
+                        .navigationTitle("Search")
+                        .searchable(text: $searchText, prompt: "Artists, albums, or songs")
                         .toolbar { settingsButton }
                 }
                 .nowPlayingBar()

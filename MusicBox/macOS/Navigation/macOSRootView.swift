@@ -4,6 +4,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case artists = "Artists"
     case albums = "Albums"
     case songs = "Songs"
+    case search = "Search"
     case downloads = "Downloads"
 
     var id: String { rawValue }
@@ -13,6 +14,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .artists: "music.mic"
         case .albums: "square.stack"
         case .songs: "music.note"
+        case .search: "magnifyingglass"
         case .downloads: "arrow.down.circle"
         }
     }
@@ -21,6 +23,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 struct macOSRootView: View {
     @State private var selection: SidebarItem? = .artists
     @State private var navigationPath = NavigationPath()
+    @State private var searchText = ""
 
     var body: some View {
         NavigationSplitView {
@@ -43,6 +46,9 @@ struct macOSRootView: View {
                     AlbumListView()
                 case .songs:
                     SongListView()
+                case .search:
+                    SearchView(query: searchText)
+                        .searchable(text: $searchText, prompt: "Artists, albums, or songs")
                 case .downloads:
                     DownloadsView()
                 case nil:

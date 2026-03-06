@@ -202,6 +202,39 @@ final class MusicLibrary {
             }
     }
 
+    // MARK: - Search
+
+    func search(_ query: String) -> (artists: [Artist], albums: [Album], tracks: [Track]) {
+        _ = revision
+        let query = query.lowercased()
+        guard !query.isEmpty else { return ([], [], []) }
+
+        let artistMap = buildArtistMap()
+
+        let artists = fetchAllArtists()
+            .filter { $0.name.localizedCaseInsensitiveContains(query) }
+            .sorted { $0.sortName < $1.sortName }
+            .map { Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount) }
+
+        let albums = fetchAllAlbums()
+            .filter { $0.name.localizedCaseInsensitiveContains(query) }
+            .sorted { a, b in
+                let aSortName = artistMap[a.artistId]?.sortName ?? ""
+                let bSortName = artistMap[b.artistId]?.sortName ?? ""
+                if aSortName != bSortName { return aSortName < bSortName }
+                return a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
+            }
+            .map { toAlbum($0) }
+
+        let albumMap = buildAlbumMap()
+        let tracks = fetchAllTracks()
+            .filter { $0.name.localizedCaseInsensitiveContains(query) }
+            .map { buildTrack($0, artistMap: artistMap, album: albumMap[$0.albumId]) }
+            .sorted { ($0.artist.sortName, $0.name) < ($1.artist.sortName, $1.name) }
+
+        return (artists, albums, tracks)
+    }
+
     // MARK: - Mutations (called by SyncService)
 
     func upsertArtists(_ syncArtists: [SyncArtist]) {
