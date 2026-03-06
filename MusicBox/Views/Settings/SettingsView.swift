@@ -3,6 +3,18 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(SyncService.self) private var syncService
+    @Environment(PlaybackCache.self) private var playbackCache
+
+    @State private var showClearCacheConfirmation = false
+
+    private static let cacheLimitOptions: [(String, Int64)] = [
+        ("500 MB", 500 * 1024 * 1024),
+        ("1 GB", 1024 * 1024 * 1024),
+        ("2 GB", 2 * 1024 * 1024 * 1024),
+        ("5 GB", 5 * 1024 * 1024 * 1024),
+        ("10 GB", 10 * 1024 * 1024 * 1024),
+        ("Unlimited", 0),
+    ]
 
     var body: some View {
         @Bindable var settings = settings
@@ -24,6 +36,30 @@ struct SettingsView: View {
                 Text("Playback")
             } footer: {
                 Text("Smoothly transition between tracks by overlapping the end of one with the start of the next.")
+            }
+
+            Section {
+                Picker("Cache Limit", selection: $settings.playbackCacheLimit) {
+                    ForEach(Self.cacheLimitOptions, id: \.1) { label, value in
+                        Text(label).tag(value)
+                    }
+                }
+
+                HStack {
+                    Text("Cache Size")
+                    Spacer()
+                    Text("\(playbackCache.formattedSize) (\(playbackCache.trackCount) tracks)")
+                        .foregroundStyle(.secondary)
+                }
+
+                Button("Clear Cache", role: .destructive) {
+                    showClearCacheConfirmation = true
+                }
+                .disabled(playbackCache.trackCount == 0)
+            } header: {
+                Text("Playback Cache")
+            } footer: {
+                Text("Recently played tracks are cached locally to avoid re-streaming. Set a limit or choose Unlimited.")
             }
 
             Section {
@@ -78,6 +114,13 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .confirmationDialog("Clear Playback Cache?", isPresented: $showClearCacheConfirmation) {
+            Button("Clear Cache", role: .destructive) {
+                playbackCache.clearCache()
+            }
+        } message: {
+            Text("This will remove \(playbackCache.formattedSize) of cached audio. Tracks will be re-streamed on next play.")
+        }
         #if os(macOS)
         .formStyle(.grouped)
         .frame(width: 400)

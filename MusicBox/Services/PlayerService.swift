@@ -2,7 +2,7 @@ import AVFoundation
 import MediaPlayer
 import SwiftUI
 
-nonisolated enum RepeatMode: Sendable {
+nonisolated enum RepeatMode: String, Sendable {
     case off, one, all
 }
 
@@ -27,6 +27,7 @@ final class PlayerService {
     @ObservationIgnored private let settings: SettingsStore
     @ObservationIgnored private let tokenManager = PlayTokenManager()
     @ObservationIgnored private let offlineStore: OfflineStore?
+    @ObservationIgnored private let playbackCache: PlaybackCache?
     @ObservationIgnored private var primaryPlayer = AVPlayer()
     @ObservationIgnored private var secondaryPlayer: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
@@ -49,10 +50,13 @@ final class PlayerService {
 
     // MARK: - Init
 
-    init(api: APIService, settings: SettingsStore, offlineStore: OfflineStore? = nil) {
+    init(api: APIService, settings: SettingsStore, offlineStore: OfflineStore? = nil, playbackCache: PlaybackCache? = nil) {
         self.api = api
         self.settings = settings
         self.offlineStore = offlineStore
+        self.playbackCache = playbackCache
+        // Restore persisted shuffle/repeat state
+        self.repeatMode = settings.repeatMode
         setupTimeObserver()
         setupEndObserver()
         setupAudioSession()
@@ -264,6 +268,7 @@ final class PlayerService {
             shuffledIndices = indices
             currentIndex = 0
         }
+        settings.isShuffled = isShuffled
     }
 
     func cycleRepeatMode() {
@@ -272,6 +277,7 @@ final class PlayerService {
         case .all: repeatMode = .one
         case .one: repeatMode = .off
         }
+        settings.repeatMode = repeatMode
     }
 
     // MARK: - Playback Engine
@@ -297,10 +303,18 @@ final class PlayerService {
             } else if let offlineURL = offlineStore?.localURL(for: track.id) {
                 playbackURL = offlineURL
                 queue[idx].playbackURL = offlineURL
+            } else if let cachedURL = playbackCache?.cachedURL(for: track.id) {
+                playbackURL = cachedURL
+                queue[idx].playbackURL = cachedURL
             } else {
-                let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
-                playbackURL = url
-                queue[idx].playbackURL = url
+                let streamURL = try await tokenManager.resolvedStreamURL(for: track, using: api)
+                // Cache the stream for future plays
+                if let localURL = await playbackCache?.cacheTrack(trackId: track.id, from: streamURL) {
+                    playbackURL = localURL
+                } else {
+                    playbackURL = streamURL
+                }
+                queue[idx].playbackURL = playbackURL
             }
 
             activateAudioSession()
@@ -341,12 +355,23 @@ final class PlayerService {
             queue[nextEffective].playbackURL = offlineURL
             return
         }
+        // Check playback cache
+        if let cachedURL = playbackCache?.cachedURL(for: track.id) {
+            queue[nextEffective].playbackURL = cachedURL
+            return
+        }
         Task {
             do {
-                let url = try await tokenManager.resolvedStreamURL(for: track, using: api)
+                let streamURL = try await tokenManager.resolvedStreamURL(for: track, using: api)
+                let finalURL: URL
+                if let localURL = await self.playbackCache?.cacheTrack(trackId: track.id, from: streamURL) {
+                    finalURL = localURL
+                } else {
+                    finalURL = streamURL
+                }
                 await MainActor.run {
                     guard nextEffective < self.queue.count else { return }
-                    self.queue[nextEffective].playbackURL = url
+                    self.queue[nextEffective].playbackURL = finalURL
                 }
             } catch {}
         }
@@ -456,10 +481,19 @@ final class PlayerService {
                 } else if let offlineURL = offlineStore?.localURL(for: nextTrack.id) {
                     playbackURL = offlineURL
                     await MainActor.run { self.queue[nextEffective].playbackURL = offlineURL }
+                } else if let cachedURL = playbackCache?.cachedURL(for: nextTrack.id) {
+                    playbackURL = cachedURL
+                    await MainActor.run { self.queue[nextEffective].playbackURL = cachedURL }
                 } else {
-                    let url = try await tokenManager.resolvedStreamURL(for: nextTrack, using: api)
-                    playbackURL = url
-                    await MainActor.run { self.queue[nextEffective].playbackURL = url }
+                    let streamURL = try await tokenManager.resolvedStreamURL(for: nextTrack, using: api)
+                    let finalURL: URL
+                    if let localURL = await self.playbackCache?.cacheTrack(trackId: nextTrack.id, from: streamURL) {
+                        finalURL = localURL
+                    } else {
+                        finalURL = streamURL
+                    }
+                    playbackURL = finalURL
+                    await MainActor.run { self.queue[nextEffective].playbackURL = finalURL }
                 }
                 await MainActor.run {
                     let item = AVPlayerItem(url: playbackURL)

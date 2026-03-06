@@ -33,6 +33,7 @@ struct MusicBoxApp: App {
     @State private var offlineStore = try! OfflineStore()
     @State private var downloadService: DownloadService?
     @State private var syncService: SyncService?
+    @State private var playbackCache: PlaybackCache
 
     init() {
         ImagePipeline.shared = ImagePipeline(configuration: .withDataCache)
@@ -42,11 +43,13 @@ struct MusicBoxApp: App {
         let settings = SettingsStore()
         let offlineStore = try! OfflineStore()
         let musicLibrary = MusicLibrary(modelContainer: offlineStore.modelContainer)
+        let playbackCache = PlaybackCache(settings: settings)
         _auth = State(initialValue: auth)
         _settings = State(initialValue: settings)
         _offlineStore = State(initialValue: offlineStore)
         _musicLibrary = State(initialValue: musicLibrary)
-        _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, offlineStore: offlineStore) })
+        _playbackCache = State(initialValue: playbackCache)
+        _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, offlineStore: offlineStore, playbackCache: playbackCache) })
         _downloadService = State(initialValue: auth.apiService.map { DownloadService(api: $0, offlineStore: offlineStore, settings: settings) })
         _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary) })
     }
@@ -60,6 +63,7 @@ struct MusicBoxApp: App {
                         .environment(settings)
                         .environment(offlineStore)
                         .environment(player)
+                        .environment(playbackCache)
                         .optionalEnvironment(downloadService)
                         .environment(syncService)
                         .optionalEnvironment(auth.apiService)
@@ -76,7 +80,7 @@ struct MusicBoxApp: App {
                     SyncService.clearSyncState()
                     musicLibrary.clearAll()
                 }
-                player = auth.apiService.map { PlayerService(api: $0, settings: settings, offlineStore: offlineStore) }
+                player = auth.apiService.map { PlayerService(api: $0, settings: settings, offlineStore: offlineStore, playbackCache: playbackCache) }
                 downloadService = auth.apiService.map { DownloadService(api: $0, offlineStore: offlineStore, settings: settings) }
                 syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary) }
             }
@@ -102,6 +106,7 @@ struct MusicBoxApp: App {
         Settings {
             SettingsView()
                 .environment(settings)
+                .environment(playbackCache)
                 .optionalEnvironment(syncService)
         }
 
