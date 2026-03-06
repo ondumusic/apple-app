@@ -6,31 +6,69 @@ struct SongListView: View {
 
     @State private var scrollTarget: Int?
 
+    /// All loaded tracks in order, for building the play queue.
+    private var loadedTracks: [Track] {
+        library.tracks.items.compactMap { $0 }
+    }
+
     var body: some View {
         let list = library.tracks
         ZStack(alignment: .trailing) {
             ScrollViewReader { proxy in
-                List(list.identifiableItems) { item in
-                    if let track = item.value {
-                        TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
-                            player.playNow(tracks: [track], artworkURL: track.album?.artworkUrl)
-                        }
-                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
-                        .id(item.index)
-                        .onAppear { list.itemAppeared(at: item.index) }
-                    } else {
+                List {
+                    // Play All / Shuffle buttons
+                    if !loadedTracks.isEmpty {
                         HStack(spacing: 12) {
-                            RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 40, height: 40)
-                            VStack(alignment: .leading, spacing: 4) {
-                                RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 140, height: 14)
-                                RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 80, height: 12)
+                            Button {
+                                let tracks = loadedTracks
+                                let items = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+                                player.playNow(queue: items)
+                            } label: {
+                                Label("Play All", systemImage: "play.fill")
+                                    .frame(maxWidth: .infinity)
                             }
-                            Spacer()
-                            RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 36, height: 14)
+
+                            Button {
+                                let tracks = loadedTracks
+                                let items = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+                                player.playShuffled(queue: items)
+                            } label: {
+                                Label("Shuffle All", systemImage: "shuffle")
+                                    .frame(maxWidth: .infinity)
+                            }
                         }
-                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
-                        .id(item.index)
-                        .onAppear { list.itemAppeared(at: item.index) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 36))
+                        .listRowSeparator(.hidden)
+                    }
+
+                    ForEach(list.identifiableItems) { item in
+                        if let track = item.value {
+                            TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
+                                let tracks = loadedTracks
+                                let items = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+                                if let idx = items.firstIndex(where: { $0.track.id == track.id }) {
+                                    player.playNow(queue: items, startingAt: idx)
+                                }
+                            }
+                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
+                            .id(item.index)
+                            .onAppear { list.itemAppeared(at: item.index) }
+                        } else {
+                            HStack(spacing: 12) {
+                                RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 40, height: 40)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 140, height: 14)
+                                    RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 80, height: 12)
+                                }
+                                Spacer()
+                                RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 36, height: 14)
+                            }
+                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
+                            .id(item.index)
+                            .onAppear { list.itemAppeared(at: item.index) }
+                        }
                     }
                 }
                 .listStyle(.plain)
@@ -59,7 +97,11 @@ struct SongListView: View {
         }
         .overlay {
             if let error = library.tracks.error, library.tracks.isEmpty {
-                Text(error).foregroundStyle(.red)
+                ContentUnavailableView {
+                    Label("Unable to Load Songs", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(error)
+                }
             }
         }
     }

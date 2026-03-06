@@ -72,7 +72,12 @@ struct AlbumListView: View {
             .padding()
 
             if let error = list.error, list.isEmpty {
-                Text(error).foregroundStyle(.red).padding()
+                ContentUnavailableView {
+                    Label("Unable to Load Albums", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(error)
+                }
+                .padding()
             }
         }
         .scrollPosition($scrollPosition)

@@ -88,7 +88,11 @@ struct ArtistListView: View {
         }
         .overlay {
             if let error = list.error, list.isEmpty {
-                Text(error).foregroundStyle(.red)
+                ContentUnavailableView {
+                    Label("Unable to Load Artists", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(error)
+                }
             }
         }
     }

@@ -9,6 +9,7 @@ struct AlbumDetailView: View {
     let album: Album
 
     @State private var fullAlbum: Album?
+    @State private var fetchError: String?
 
     private var displayAlbum: Album { fullAlbum ?? album }
     private var tracks: [Track] { displayAlbum.tracks ?? [] }
@@ -45,10 +46,7 @@ struct AlbumDetailView: View {
                                 }
 
                                 Button {
-                                    player.playNow(tracks: tracks, artworkURL: displayAlbum.artworkUrl)
-                                    if !player.isShuffled {
-                                        player.toggleShuffle()
-                                    }
+                                    player.playShuffled(tracks: tracks, artworkURL: displayAlbum.artworkUrl)
                                 } label: {
                                     Label("Shuffle", systemImage: "shuffle")
                                 }
@@ -104,8 +102,24 @@ struct AlbumDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .overlay {
+            if tracks.isEmpty {
+                if let fetchError {
+                    ContentUnavailableView {
+                        Label("Unable to Load", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(fetchError)
+                    } actions: {
+                        Button("Retry") {
+                            Task { await fetchAlbum() }
+                        }
+                    }
+                } else if fullAlbum == nil {
+                    ProgressView()
+                }
+            }
+        }
         .task {
-            // Fetch full album to get tracks if not already included
             if album.tracks == nil || album.tracks?.isEmpty == true {
                 await fetchAlbum()
             }
@@ -116,6 +130,9 @@ struct AlbumDetailView: View {
         guard let api = auth.apiService else { return }
         do {
             fullAlbum = try await api.fetchAlbum(album.id)
-        } catch {}
+            fetchError = nil
+        } catch {
+            fetchError = error.localizedDescription
+        }
     }
 }

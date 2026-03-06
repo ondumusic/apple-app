@@ -84,6 +84,21 @@ final class PlayerService {
         Task { await loadAndPlayCurrent() }
     }
 
+    func playShuffled(tracks: [Track], artworkURL: URL? = nil) {
+        let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL) }
+        playShuffled(queue: items)
+    }
+
+    func playShuffled(queue items: [QueueItem]) {
+        guard !items.isEmpty else { return }
+        queue = items
+        var indices = Array(items.indices)
+        indices.shuffle()
+        shuffledIndices = indices
+        currentIndex = 0
+        Task { await loadAndPlayCurrent() }
+    }
+
     func playNext(tracks: [Track], artworkURL: URL? = nil) {
         let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL) }
         playNext(queue: items)
