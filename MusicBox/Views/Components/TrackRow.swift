@@ -90,7 +90,7 @@ struct TrackRow: View {
 private struct TrackDownloadMenuItems: View {
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
-    @Environment(APIService.self) private var api
+    @Environment(MusicLibrary.self) private var musicLibrary
 
     let track: Track
     let album: Album?
@@ -131,17 +131,9 @@ private struct TrackDownloadMenuItems: View {
             }
         } else {
             Button {
-                Task {
-                    let resolvedAlbum: Album
-                    if let album {
-                        resolvedAlbum = album
-                    } else if let fetched = try? await api.fetchAlbum(track.albumId) {
-                        resolvedAlbum = fetched
-                    } else {
-                        return
-                    }
-                    downloadService.download(track: track, album: resolvedAlbum, artist: artist ?? track.artist)
-                }
+                let resolvedAlbum = album ?? musicLibrary.album(track.albumId)
+                guard let resolvedAlbum else { return }
+                downloadService.download(track: track, album: resolvedAlbum, artist: artist ?? track.artist)
             } label: {
                 Label("Download", systemImage: "arrow.down.circle")
             }

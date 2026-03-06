@@ -13,8 +13,6 @@ class BackgroundSessionDelegate: NSObject, UIApplicationDelegate {
             completionHandler()
             return
         }
-        // Store completion handler; DownloadService will call it
-        // when urlSessionDidFinishEvents fires
         BackgroundSessionDelegate.pendingCompletionHandler = completionHandler
     }
 
@@ -29,38 +27,41 @@ struct MusicBoxApp: App {
     #endif
 
     @State private var auth: AuthService
-    @State private var library: LibraryViewModel?
+    @State private var musicLibrary: MusicLibrary
     @State private var settings = SettingsStore()
     @State private var player: PlayerService?
     @State private var offlineStore = try! OfflineStore()
     @State private var downloadService: DownloadService?
+    @State private var syncService: SyncService?
 
     init() {
-        // Configure Nuke with disk cache for artwork
         ImagePipeline.shared = ImagePipeline(configuration: .withDataCache)
 
         let auth = AuthService()
         auth.restoreSession()
         let settings = SettingsStore()
         let offlineStore = try! OfflineStore()
+        let musicLibrary = MusicLibrary(modelContainer: offlineStore.modelContainer)
         _auth = State(initialValue: auth)
         _settings = State(initialValue: settings)
         _offlineStore = State(initialValue: offlineStore)
-        _library = State(initialValue: auth.apiService.map { LibraryViewModel(api: $0) })
+        _musicLibrary = State(initialValue: musicLibrary)
         _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, offlineStore: offlineStore) })
         _downloadService = State(initialValue: auth.apiService.map { DownloadService(api: $0, offlineStore: offlineStore, settings: settings) })
+        _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary) })
     }
 
     var body: some Scene {
         WindowGroup {
             Group {
-                if auth.isLoggedIn, let library {
+                if auth.isLoggedIn {
                     ContentView()
-                        .environment(library)
+                        .environment(musicLibrary)
                         .environment(settings)
                         .environment(offlineStore)
                         .optionalEnvironment(player)
                         .optionalEnvironment(downloadService)
+                        .optionalEnvironment(syncService)
                         .optionalEnvironment(auth.apiService)
                 } else {
                     NavigationStack {
@@ -71,18 +72,28 @@ struct MusicBoxApp: App {
             .environment(auth)
             .modelContainer(offlineStore.modelContainer)
             .onChange(of: auth.apiService.map(ObjectIdentifier.init)) { _, _ in
-                library = auth.apiService.map { LibraryViewModel(api: $0) }
+                if auth.apiService == nil {
+                    SyncService.clearSyncState()
+                    musicLibrary.clearAll()
+                }
                 player = auth.apiService.map { PlayerService(api: $0, settings: settings, offlineStore: offlineStore) }
                 downloadService = auth.apiService.map { DownloadService(api: $0, offlineStore: offlineStore, settings: settings) }
+                syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary) }
             }
             #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                Task { await auth.validateSession() }
+                Task {
+                    await auth.validateSession()
+                    await syncService?.syncIfNeeded()
+                }
             }
             #endif
             #if os(macOS)
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.willBecomeActiveNotification)) { _ in
-                Task { await auth.validateSession() }
+                Task {
+                    await auth.validateSession()
+                    await syncService?.syncIfNeeded()
+                }
             }
             #endif
         }
@@ -91,6 +102,7 @@ struct MusicBoxApp: App {
         Settings {
             SettingsView()
                 .environment(settings)
+                .optionalEnvironment(syncService)
         }
 
         Window("Mini Player", id: "mini-player") {
@@ -129,6 +141,15 @@ extension View {
     func optionalEnvironment(_ api: APIService?) -> some View {
         if let api {
             self.environment(api)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func optionalEnvironment(_ sync: SyncService?) -> some View {
+        if let sync {
+            self.environment(sync)
         } else {
             self
         }

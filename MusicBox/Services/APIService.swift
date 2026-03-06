@@ -134,6 +134,16 @@ final class APIService: Sendable {
         }
     }
 
+    // MARK: - Sync
+
+    func fetchSync(cursor: String? = nil) async throws -> SyncResponse {
+        var queryItems: [URLQueryItem] = []
+        if let cursor {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        return try await fetch("/sync", queryItems: queryItems)
+    }
+
     /// Fetch all albums for an artist, paging through all results.
     func fetchAllAlbums(for artistId: UUID) async throws -> [Album] {
         var all: [Album] = []

@@ -1,18 +1,14 @@
 import SwiftUI
 
 struct AlbumDetailView: View {
-    @Environment(AuthService.self) private var auth
+    @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
 
     let album: Album
 
-    @State private var fullAlbum: Album?
-    @State private var fetchError: String?
-
-    private var displayAlbum: Album { fullAlbum ?? album }
-    private var tracks: [Track] { displayAlbum.tracks ?? [] }
+    private var tracks: [Track] { musicLibrary.tracksForAlbum(album.id) }
     private var discs: [Int] { Array(Set(tracks.map(\.disc))).sorted() }
     private var hasMultipleDiscs: Bool { discs.count > 1 }
 
@@ -21,14 +17,14 @@ struct AlbumDetailView: View {
             // Album header
             Section {
                 HStack(spacing: 16) {
-                    ArtworkView(url: displayAlbum.artworkUrl)
+                    ArtworkView(url: album.artworkUrl)
                         .frame(width: 120, height: 120)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(displayAlbum.name)
+                        Text(album.name)
                             .font(.title2.bold())
 
-                        if let year = displayAlbum.releaseYear {
+                        if let year = album.releaseYear {
                             Text(String(year))
                                 .foregroundStyle(.secondary)
                         }
@@ -40,30 +36,36 @@ struct AlbumDetailView: View {
                         if !tracks.isEmpty {
                             HStack(spacing: 12) {
                                 Button {
-                                    player.playNow(tracks: tracks, artworkURL: displayAlbum.artworkUrl)
+                                    player.playNow(tracks: tracks, artworkURL: album.artworkUrl)
                                 } label: {
                                     Label("Play", systemImage: "play.fill")
                                 }
 
                                 Button {
-                                    player.playShuffled(tracks: tracks, artworkURL: displayAlbum.artworkUrl)
+                                    player.playShuffled(tracks: tracks, artworkURL: album.artworkUrl)
                                 } label: {
                                     Label("Shuffle", systemImage: "shuffle")
                                 }
 
-                                if downloadService.isAlbumDownloading(albumId: displayAlbum.id) {
+                                if downloadService.isAlbumDownloading(albumId: album.id) {
                                     ProgressView()
                                         .controlSize(.small)
-                                } else if offlineStore.downloadedTrackCount(albumId: displayAlbum.id) == tracks.count && !tracks.isEmpty {
+                                } else if offlineStore.downloadedTrackCount(albumId: album.id) == tracks.count && !tracks.isEmpty {
                                     Button {
-                                        offlineStore.deleteAlbum(albumId: displayAlbum.id)
+                                        offlineStore.deleteAlbum(albumId: album.id)
                                     } label: {
                                         Label("Remove", systemImage: "arrow.down.circle.fill")
                                     }
                                 } else {
                                     Button {
-                                        let artist = tracks.first?.artist ?? Artist(id: displayAlbum.artistId, name: "", slug: "")
-                                        downloadService.download(album: displayAlbum, artist: artist)
+                                        let artist = musicLibrary.artist(album.artistId)
+                                            ?? Artist(id: album.artistId, name: "", slug: "")
+                                        let fullAlbum = Album(
+                                            id: album.id, artistId: album.artistId,
+                                            name: album.name, slug: album.slug,
+                                            releaseYear: album.releaseYear, tracks: tracks,
+                                            isUnknown: album.isUnknown, artworkUrl: album.artworkUrl)
+                                        downloadService.download(album: fullAlbum, artist: artist)
                                     } label: {
                                         Label("Download", systemImage: "arrow.down.circle")
                                     }
@@ -84,9 +86,9 @@ struct AlbumDetailView: View {
                 Section {
                     let discTracks = tracks.filter { $0.disc == disc }
                     ForEach(discTracks) { track in
-                        TrackRow(track: track, album: displayAlbum) {
+                        TrackRow(track: track, album: album) {
                             if let index = tracks.firstIndex(where: { $0.id == track.id }) {
-                                player.playNow(tracks: tracks, startingAt: index, artworkURL: displayAlbum.artworkUrl)
+                                player.playNow(tracks: tracks, startingAt: index, artworkURL: album.artworkUrl)
                             }
                         }
                     }
@@ -98,41 +100,14 @@ struct AlbumDetailView: View {
             }
         }
         .listStyle(.plain)
-        .navigationTitle(displayAlbum.name)
+        .navigationTitle(album.name)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .overlay {
             if tracks.isEmpty {
-                if let fetchError {
-                    ContentUnavailableView {
-                        Label("Unable to Load", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(fetchError)
-                    } actions: {
-                        Button("Retry") {
-                            Task { await fetchAlbum() }
-                        }
-                    }
-                } else if fullAlbum == nil {
-                    ProgressView()
-                }
+                ContentUnavailableView("No Tracks", systemImage: "music.note")
             }
-        }
-        .task {
-            if album.tracks == nil || album.tracks?.isEmpty == true {
-                await fetchAlbum()
-            }
-        }
-    }
-
-    private func fetchAlbum() async {
-        guard let api = auth.apiService else { return }
-        do {
-            fullAlbum = try await api.fetchAlbum(album.id)
-            fetchError = nil
-        } catch {
-            fetchError = error.localizedDescription
         }
     }
 }

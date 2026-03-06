@@ -1,93 +1,72 @@
 import SwiftUI
 
 struct AlbumListView: View {
-    @Environment(LibraryViewModel.self) private var library
+    @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
-    @Environment(APIService.self) private var api
     @State private var scrollPosition = ScrollPosition()
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
 
     var body: some View {
-        let list = library.albums
+        let albums = musicLibrary.allAlbums()
         ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
-                ForEach(list.identifiableItems) { item in
-                    if let album = item.value {
-                        NavigationLink(value: album) {
-                            AlbumCard(album: album)
+                ForEach(albums) { album in
+                    NavigationLink(value: album) {
+                        AlbumCard(album: album)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            let tracks = musicLibrary.tracksForAlbum(album.id)
+                            player.playNext(tracks: tracks, artworkURL: album.artworkUrl)
+                        } label: {
+                            Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
                         }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button {
-                                Task {
-                                    guard let full = try? await api.fetchAlbum(album.id),
-                                          let tracks = full.tracks, !tracks.isEmpty else { return }
-                                    player.playNext(tracks: tracks, artworkURL: full.artworkUrl)
-                                }
+
+                        Button {
+                            let tracks = musicLibrary.tracksForAlbum(album.id)
+                            player.addToEnd(tracks: tracks, artworkURL: album.artworkUrl)
+                        } label: {
+                            Label("Add to Queue", systemImage: "text.append")
+                        }
+
+                        Divider()
+
+                        if offlineStore.isAlbumDownloaded(albumId: album.id) {
+                            Button(role: .destructive) {
+                                offlineStore.deleteAlbum(albumId: album.id)
                             } label: {
-                                Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+                                Label("Remove Download", systemImage: "trash")
                             }
-
+                        } else {
                             Button {
-                                Task {
-                                    guard let full = try? await api.fetchAlbum(album.id),
-                                          let tracks = full.tracks, !tracks.isEmpty else { return }
-                                    player.addToEnd(tracks: tracks, artworkURL: full.artworkUrl)
-                                }
+                                guard let fullAlbum = musicLibrary.albumWithTracks(album.id),
+                                      let artistObj = musicLibrary.artist(album.artistId) else { return }
+                                downloadService.download(album: fullAlbum, artist: artistObj)
                             } label: {
-                                Label("Add to Queue", systemImage: "text.append")
-                            }
-
-                            Divider()
-
-                            if offlineStore.isAlbumDownloaded(albumId: album.id) {
-                                Button(role: .destructive) {
-                                    offlineStore.deleteAlbum(albumId: album.id)
-                                } label: {
-                                    Label("Remove Download", systemImage: "trash")
-                                }
-                            } else {
-                                Button {
-                                    Task {
-                                        guard let full = try? await api.fetchAlbum(album.id),
-                                              let tracks = full.tracks,
-                                              let artist = tracks.first?.artist else { return }
-                                        downloadService.download(album: full, artist: artist)
-                                    }
-                                } label: {
-                                    Label("Download", systemImage: "arrow.down.circle")
-                                }
+                                Label("Download", systemImage: "arrow.down.circle")
                             }
                         }
-                        .onAppear { list.itemAppeared(at: item.index) }
-                    } else {
-                        AlbumCardPlaceholder()
-                            .onAppear { list.itemAppeared(at: item.index) }
                     }
                 }
             }
             .padding()
-
-            if let error = list.error, list.isEmpty {
-                ContentUnavailableView {
-                    Label("Unable to Load Albums", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error)
-                }
-                .padding()
-            }
         }
         .scrollPosition($scrollPosition)
         .navigationTitle("Albums")
         .navigationDestination(for: Album.self) { album in
             AlbumDetailView(album: album)
         }
-        .onAppear { list.loadInitialIfNeeded() }
         .onReceive(NotificationCenter.default.publisher(for: .scrollToTop)) { _ in
             withAnimation { scrollPosition.scrollTo(edge: .top) }
+        }
+        .overlay {
+            if albums.isEmpty {
+                ContentUnavailableView("No Albums", systemImage: "square.stack")
+            }
         }
     }
 }

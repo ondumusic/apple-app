@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(SettingsStore.self) private var settings
+    @Environment(SyncService.self) private var syncService
 
     var body: some View {
         @Bindable var settings = settings
@@ -35,6 +36,39 @@ struct SettingsView: View {
                 Text("Downloads")
             } footer: {
                 Text("Number of tracks to download simultaneously. Higher values use more bandwidth.")
+            }
+
+            Section {
+                HStack {
+                    Text("Last Synced")
+                    Spacer()
+                    if syncService.isSyncing {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else if let date = syncService.lastSyncDate {
+                        Text(date, style: .relative)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Never")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Button {
+                    Task { try? await syncService.sync() }
+                } label: {
+                    HStack {
+                        Text("Sync Now")
+                        if syncService.isSyncing {
+                            Spacer()
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
+                }
+                .disabled(syncService.isSyncing)
+            } header: {
+                Text("Library")
             }
         }
         .navigationTitle("Settings")

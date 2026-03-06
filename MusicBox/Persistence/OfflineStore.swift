@@ -9,7 +9,10 @@ final class OfflineStore {
     private(set) var revision: UInt = 0
 
     init() throws {
-        let schema = Schema([DownloadedArtist.self, DownloadedAlbum.self, DownloadedTrack.self])
+        let schema = Schema([
+            DownloadedArtist.self, DownloadedAlbum.self, DownloadedTrack.self,
+            LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self
+        ])
         modelContainer = try ModelContainer(for: schema)
     }
 

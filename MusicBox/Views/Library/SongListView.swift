@@ -1,26 +1,19 @@
 import SwiftUI
 
 struct SongListView: View {
-    @Environment(LibraryViewModel.self) private var library
+    @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
 
-    @State private var scrollTarget: Int?
-
-    /// All loaded tracks in order, for building the play queue.
-    private var loadedTracks: [Track] {
-        library.tracks.items.compactMap { $0 }
-    }
+    @State private var scrollTarget: UUID?
 
     var body: some View {
-        let list = library.tracks
+        let tracks = musicLibrary.allTracks()
         ZStack(alignment: .trailing) {
             ScrollViewReader { proxy in
                 List {
-                    // Play All / Shuffle buttons
-                    if !loadedTracks.isEmpty {
+                    if !tracks.isEmpty {
                         HStack(spacing: 12) {
                             Button {
-                                let tracks = loadedTracks
                                 let items = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
                                 player.playNow(queue: items)
                             } label: {
@@ -29,7 +22,6 @@ struct SongListView: View {
                             }
 
                             Button {
-                                let tracks = loadedTracks
                                 let items = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
                                 player.playShuffled(queue: items)
                             } label: {
@@ -43,32 +35,15 @@ struct SongListView: View {
                         .listRowSeparator(.hidden)
                     }
 
-                    ForEach(list.identifiableItems) { item in
-                        if let track = item.value {
-                            TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
-                                let tracks = loadedTracks
-                                let items = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
-                                if let idx = items.firstIndex(where: { $0.track.id == track.id }) {
-                                    player.playNow(queue: items, startingAt: idx)
-                                }
+                    ForEach(tracks) { track in
+                        TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
+                            let items = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+                            if let idx = items.firstIndex(where: { $0.track.id == track.id }) {
+                                player.playNow(queue: items, startingAt: idx)
                             }
-                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
-                            .id(item.index)
-                            .onAppear { list.itemAppeared(at: item.index) }
-                        } else {
-                            HStack(spacing: 12) {
-                                RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 40, height: 40)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 140, height: 14)
-                                    RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 80, height: 12)
-                                }
-                                Spacer()
-                                RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 36, height: 14)
-                            }
-                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
-                            .id(item.index)
-                            .onAppear { list.itemAppeared(at: item.index) }
                         }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
+                        .id(track.id)
                     }
                 }
                 .listStyle(.plain)
@@ -81,7 +56,7 @@ struct SongListView: View {
             }
 
             SectionIndexBar(
-                letterMap: buildLetterMap(from: list.identifiableItems),
+                letterMap: buildLetterMap(from: tracks),
                 onSelect: { scrollTarget = $0 }
             )
         }
@@ -89,31 +64,20 @@ struct SongListView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .onAppear {
-            library.tracks.loadInitialIfNeeded()
-        }
-        .onChange(of: library.tracks.totalPages) {
-            library.tracks.loadAllPages()
-        }
         .overlay {
-            if let error = library.tracks.error, library.tracks.isEmpty {
-                ContentUnavailableView {
-                    Label("Unable to Load Songs", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error)
-                }
+            if tracks.isEmpty {
+                ContentUnavailableView("No Songs", systemImage: "music.note")
             }
         }
     }
 
-    private func buildLetterMap(from items: [PaginatedItem<Track>]) -> [String: Int] {
-        var map: [String: Int] = [:]
-        for item in items {
-            guard let track = item.value else { continue }
+    private func buildLetterMap(from tracks: [Track]) -> [String: UUID] {
+        var map: [String: UUID] = [:]
+        for track in tracks {
             let first = track.artist.name.prefix(1).uppercased()
             let letter = first.first?.isLetter == true ? first : "#"
             if map[letter] == nil {
-                map[letter] = item.index
+                map[letter] = track.id
             }
         }
         return map
@@ -126,8 +90,8 @@ private struct SectionIndexBar: View {
     static let alphabet = ["#"] + (UnicodeScalar("A").value...UnicodeScalar("Z").value)
         .map { String(UnicodeScalar($0)!) }
 
-    let letterMap: [String: Int]
-    let onSelect: (Int) -> Void
+    let letterMap: [String: UUID]
+    let onSelect: (UUID) -> Void
 
     @State private var activeIndex: Int?
 
@@ -167,7 +131,7 @@ private struct SectionIndexBar: View {
         .padding(.trailing, 2)
     }
 
-    private func nearestTarget(for i: Int) -> Int? {
+    private func nearestTarget(for i: Int) -> UUID? {
         for offset in 0...i {
             let letter = letters[i - offset]
             if let target = letterMap[letter] {
@@ -182,4 +146,3 @@ private struct SectionIndexBar: View {
         return nil
     }
 }
-
