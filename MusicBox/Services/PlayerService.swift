@@ -305,6 +305,7 @@ final class PlayerService {
         let track = queue[idx].track
 
         isLoadingTrack = true
+        isSeeking = false
         currentTrack = track
         progress = 0
         duration = track.duration

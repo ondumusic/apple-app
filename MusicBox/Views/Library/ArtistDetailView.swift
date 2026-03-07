@@ -76,9 +76,6 @@ struct ArtistDetailView: View {
             .padding()
         }
         .navigationTitle(artist.name)
-        .navigationDestination(for: Album.self) { album in
-            AlbumDetailView(album: album)
-        }
         .overlay {
             if albums.isEmpty {
                 ContentUnavailableView("No Albums", systemImage: "square.stack")

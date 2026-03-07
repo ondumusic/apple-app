@@ -7,9 +7,6 @@ struct SearchView: View {
 
     let query: String
 
-    @State private var selectedArtist: Artist?
-    @State private var selectedAlbum: Album?
-
     private var results: (artists: [Artist], albums: [Album], tracks: [Track]) {
         musicLibrary.search(query)
     }
@@ -38,13 +35,7 @@ struct SearchView: View {
             if !results.artists.isEmpty {
                 Section("Artists") {
                     ForEach(results.artists.prefix(5)) { artist in
-                        Button {
-                            searchHistory.add(SearchHistoryItem(
-                                id: artist.id, kind: .artist,
-                                name: artist.name
-                            ))
-                            selectedArtist = artist
-                        } label: {
+                        NavigationLink(value: artist) {
                             ArtistCard(artist: artist)
                         }
                         .tint(.primary)
@@ -55,17 +46,7 @@ struct SearchView: View {
             if !results.albums.isEmpty {
                 Section("Albums") {
                     ForEach(results.albums.prefix(5)) { album in
-                        let artistName = musicLibrary.artist(album.artistId)?.name
-                        Button {
-                            searchHistory.add(SearchHistoryItem(
-                                id: album.id, kind: .album,
-                                name: album.name,
-                                subtitle: artistName,
-                                artworkUrl: album.artworkUrl,
-                                artistId: album.artistId
-                            ))
-                            selectedAlbum = album
-                        } label: {
+                        NavigationLink(value: album) {
                             HStack(spacing: 12) {
                                 ArtworkView(url: album.artworkUrl)
                                     .frame(width: 44, height: 44)
@@ -107,11 +88,24 @@ struct SearchView: View {
             }
         }
         .listStyle(.plain)
-        .navigationDestination(item: $selectedArtist) { artist in
+        .navigationDestination(for: Artist.self) { artist in
             ArtistDetailView(artist: artist)
+                .onAppear {
+                    searchHistory.add(SearchHistoryItem(
+                        id: artist.id, kind: .artist, name: artist.name
+                    ))
+                }
         }
-        .navigationDestination(item: $selectedAlbum) { album in
+        .navigationDestination(for: Album.self) { album in
             AlbumDetailView(album: album)
+                .onAppear {
+                    let artistName = musicLibrary.artist(album.artistId)?.name
+                    searchHistory.add(SearchHistoryItem(
+                        id: album.id, kind: .album, name: album.name,
+                        subtitle: artistName, artworkUrl: album.artworkUrl,
+                        artistId: album.artistId
+                    ))
+                }
         }
     }
 
@@ -122,6 +116,13 @@ struct SearchView: View {
             Section {
                 ForEach(searchHistory.items) { item in
                     searchHistoryRow(item)
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                searchHistory.remove(item)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                 }
             } header: {
                 HStack {
@@ -136,10 +137,10 @@ struct SearchView: View {
             }
         }
         .listStyle(.plain)
-        .navigationDestination(item: $selectedArtist) { artist in
+        .navigationDestination(for: Artist.self) { artist in
             ArtistDetailView(artist: artist)
         }
-        .navigationDestination(item: $selectedAlbum) { album in
+        .navigationDestination(for: Album.self) { album in
             AlbumDetailView(album: album)
         }
     }
@@ -149,18 +150,14 @@ struct SearchView: View {
         switch item.kind {
         case .artist:
             if let artist = musicLibrary.artist(item.id) {
-                Button {
-                    selectedArtist = artist
-                } label: {
+                NavigationLink(value: artist) {
                     historyLabel(item)
                 }
                 .tint(.primary)
             }
         case .album:
             if let album = musicLibrary.album(item.id) {
-                Button {
-                    selectedAlbum = album
-                } label: {
+                NavigationLink(value: album) {
                     historyLabel(item)
                 }
                 .tint(.primary)

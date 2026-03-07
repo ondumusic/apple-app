@@ -20,6 +20,11 @@ final class SearchHistory {
         save()
     }
 
+    func remove(_ item: SearchHistoryItem) {
+        items.removeAll { $0.id == item.id && $0.kind == item.kind }
+        save()
+    }
+
     func clear() {
         items.removeAll()
         save()

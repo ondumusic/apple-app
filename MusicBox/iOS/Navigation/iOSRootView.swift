@@ -31,9 +31,10 @@ struct iOSRootView: View {
                 Text("Offline — only downloaded music is available")
                     .font(.caption)
             }
+            .foregroundStyle(.black)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
-            .background(.ultraThinMaterial)
+            .background(.yellow)
         }
 
         TabView(selection: tabSelection) {

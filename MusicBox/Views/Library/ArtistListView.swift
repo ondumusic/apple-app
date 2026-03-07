@@ -61,6 +61,9 @@ struct ArtistListView: View {
         .navigationDestination(for: Artist.self) { artist in
             ArtistDetailView(artist: artist)
         }
+        .navigationDestination(for: Album.self) { album in
+            AlbumDetailView(album: album)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .scrollToTop)) { _ in
             withAnimation { scrollPosition.scrollTo(edge: .top) }
         }
