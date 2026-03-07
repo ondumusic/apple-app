@@ -35,6 +35,7 @@ struct MusicBoxApp: App {
     @State private var syncService: SyncService?
     @State private var playbackCache: PlaybackCache
     @State private var networkMonitor = NetworkMonitor()
+    @State private var searchHistory = SearchHistory()
 
     init() {
         ImagePipeline.shared = ImagePipeline(configuration: .withDataCache)
@@ -68,6 +69,7 @@ struct MusicBoxApp: App {
                         .optionalEnvironment(downloadService)
                         .environment(syncService)
                         .environment(networkMonitor)
+                        .environment(searchHistory)
                         .optionalEnvironment(auth.apiService)
                 } else if !auth.isLoggedIn {
                     NavigationStack {

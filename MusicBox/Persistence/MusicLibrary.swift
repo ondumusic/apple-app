@@ -148,6 +148,14 @@ final class MusicLibrary {
         return toAlbum(la)
     }
 
+    func track(_ id: UUID) -> Track? {
+        _ = revision
+        guard let lt = fetchAllTracks().first(where: { $0.serverId == id }) else { return nil }
+        let artistMap = buildArtistMap()
+        let albumMap = buildAlbumMap()
+        return buildTrack(lt, artistMap: artistMap, album: albumMap[lt.albumId])
+    }
+
     func albumWithTracks(_ id: UUID) -> Album? {
         _ = revision
         guard let la = fetchAllAlbums().first(where: { $0.serverId == id }) else { return nil }
