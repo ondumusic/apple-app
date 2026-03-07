@@ -37,6 +37,8 @@ final class PlayerService {
     @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
     @ObservationIgnored private var routeChangeObserver: NSObjectProtocol?
     @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
+    @ObservationIgnored private var isSeeking: Bool = false
+    @ObservationIgnored private var isLoadingTrack: Bool = false
 
     // MARK: - Computed
 
@@ -198,9 +200,12 @@ final class PlayerService {
     }
 
     func seek(to time: Double) {
-        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-        primaryPlayer.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        isSeeking = true
         progress = time
+        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+        primaryPlayer.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            self?.isSeeking = false
+        }
         updateNowPlayingElapsed()
     }
 
@@ -299,6 +304,7 @@ final class PlayerService {
         guard idx >= 0 && idx < queue.count else { return }
         let track = queue[idx].track
 
+        isLoadingTrack = true
         currentTrack = track
         progress = 0
         duration = track.duration
@@ -306,6 +312,7 @@ final class PlayerService {
 
         // Stop current playback
         primaryPlayer.pause()
+        primaryPlayer.replaceCurrentItem(with: nil)
         tearDownCrossfade()
 
         do {
@@ -320,13 +327,13 @@ final class PlayerService {
                 queue[idx].playbackURL = cachedURL
             } else {
                 let streamURL = try await tokenManager.resolvedStreamURL(for: track, using: api)
-                // Cache the stream for future plays
-                if let localURL = await playbackCache?.cacheTrack(trackId: track.id, from: streamURL) {
-                    playbackURL = localURL
-                } else {
-                    playbackURL = streamURL
+                // Stream directly, cache in background for next play
+                playbackURL = streamURL
+                if let cache = playbackCache {
+                    Task.detached {
+                        let _ = await cache.cacheTrack(trackId: track.id, from: streamURL)
+                    }
                 }
-                queue[idx].playbackURL = playbackURL
             }
 
             activateAudioSession()
@@ -334,12 +341,14 @@ final class PlayerService {
             primaryPlayer.replaceCurrentItem(with: item)
             primaryPlayer.volume = 1.0
             primaryPlayer.play()
+            isLoadingTrack = false
             isPlaying = true
 
             updateNowPlayingInfo()
             setupCrossfadeObserverIfNeeded()
             prefetchNextTrack()
         } catch {
+            isLoadingTrack = false
             print("PlayerService: failed to load track: \(error)")
         }
     }
@@ -394,7 +403,7 @@ final class PlayerService {
     private func setupTimeObserver() {
         let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
         timeObserver = primaryPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            guard let self else { return }
+            guard let self, !self.isSeeking, !self.isLoadingTrack else { return }
             let seconds = time.seconds
             if seconds.isFinite {
                 self.progress = seconds
