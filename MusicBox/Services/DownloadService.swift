@@ -49,6 +49,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var activeTasks: [UUID: URLSessionDownloadTask] = [:]
     /// Stores info for paused downloads: track ID → DownloadInfo
     @ObservationIgnored private var pausedDownloads: [UUID: DownloadInfo] = [:]
+    /// Last reported progress per track (for throttling UI updates)
+    @ObservationIgnored private var lastReportedProgress: [UUID: Double] = [:]
 
     // MARK: - Init
 
@@ -100,6 +102,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             trackIdToTaskId.removeValue(forKey: trackId)
         }
         activeDownloads.removeValue(forKey: trackId)
+        lastReportedProgress.removeValue(forKey: trackId)
         startNextIfNeeded()
     }
 
@@ -157,6 +160,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         activeDownloads.removeAll()
         pendingQueue.removeAll()
         pausedDownloads.removeAll()
+        lastReportedProgress.removeAll()
     }
 
     // MARK: - Query
@@ -237,6 +241,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             let progress = totalBytesExpectedToWrite > 0
                 ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
                 : 0
+            // Throttle: only update UI when progress changes by ≥1%
+            let lastProgress = lastReportedProgress[info.track.id] ?? 0
+            guard progress - lastProgress >= 0.01 || progress >= 1.0 else { return }
+            lastReportedProgress[info.track.id] = progress
             activeDownloads[info.track.id]?.progress = progress
         }
     }
@@ -303,6 +311,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         activeDownloads.removeValue(forKey: info.track.id)
         trackIdToTaskId.removeValue(forKey: info.track.id)
         activeTasks.removeValue(forKey: info.track.id)
+        lastReportedProgress.removeValue(forKey: info.track.id)
         taskDownloads.removeValue(forKey: taskId)
         startNextIfNeeded()
     }

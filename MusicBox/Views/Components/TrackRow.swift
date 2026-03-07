@@ -22,7 +22,7 @@ struct TrackRow: View {
     var body: some View {
         HStack(spacing: 12) {
             if showArtwork {
-                ArtworkView(url: artworkUrl, cornerRadius: 4)
+                ArtworkView(url: artworkUrl, cornerRadius: 4, thumbnailSize: 40)
                     .frame(width: 40, height: 40)
             }
 

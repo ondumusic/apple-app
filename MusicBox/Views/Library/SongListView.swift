@@ -6,9 +6,10 @@ struct SongListView: View {
     @Environment(SyncService.self) private var syncService
 
     @State private var scrollTarget: UUID?
+    @State private var tracks: [Track] = []
+    @State private var letterMap: [String: UUID] = [:]
 
     var body: some View {
-        let tracks = musicLibrary.allTracks()
         ZStack(alignment: .trailing) {
             ScrollViewReader { proxy in
                 List {
@@ -57,7 +58,7 @@ struct SongListView: View {
             }
 
             SectionIndexBar(
-                letterMap: buildLetterMap(from: tracks),
+                letterMap: letterMap,
                 onSelect: { scrollTarget = $0 }
             )
         }
@@ -71,18 +72,23 @@ struct SongListView: View {
                 ContentUnavailableView("No Songs", systemImage: "music.note")
             }
         }
+        .onChange(of: musicLibrary.revision, initial: true) {
+            reloadTracks()
+        }
     }
 
-    private func buildLetterMap(from tracks: [Track]) -> [String: UUID] {
+    private func reloadTracks() {
+        let allTracks = musicLibrary.allTracks()
+        tracks = allTracks
         var map: [String: UUID] = [:]
-        for track in tracks {
+        for track in allTracks {
             let first = track.albumArtistSortName.prefix(1).uppercased()
             let letter = first.first?.isLetter == true ? first : "#"
             if map[letter] == nil {
                 map[letter] = track.id
             }
         }
-        return map
+        letterMap = map
     }
 }
 

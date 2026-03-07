@@ -5,8 +5,11 @@ import NukeUI
 struct ArtworkView: View {
     let url: URL?
     var cornerRadius: CGFloat = 8
+    var thumbnailSize: CGFloat? = nil
 
     var body: some View {
+        let resizeWidth = thumbnailSize.map { $0 * 2 } ?? 300
+
         LazyImage(url: url) { state in
             if let image = state.image {
                 image
@@ -21,8 +24,8 @@ struct ArtworkView: View {
                     }
             }
         }
-        .processors([.resize(width: 300)])
-        .priority(.normal)
+        .processors([.resize(width: resizeWidth)])
+        .priority(thumbnailSize != nil ? .low : .normal)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 }
