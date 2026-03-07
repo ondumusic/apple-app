@@ -39,6 +39,16 @@ struct QueueView: View {
                 EditButton()
             }
             #endif
+            #if os(iOS)
+            if !upNextItems.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Clear") {
+                        player.clearUpNext()
+                    }
+                    .font(.subheadline)
+                }
+            }
+            #endif
         }
     }
 

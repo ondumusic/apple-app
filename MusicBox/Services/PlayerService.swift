@@ -204,6 +204,18 @@ final class PlayerService {
         updateNowPlayingElapsed()
     }
 
+    func clearUpNext() {
+        let keep = currentIndex + 1
+        if let shuffled = shuffledIndices {
+            // Remove all shuffled indices after current position
+            let keepReal = Set(shuffled.prefix(keep))
+            queue = queue.enumerated().filter { keepReal.contains($0.offset) }.map(\.element)
+            shuffledIndices = Array(0..<queue.count)
+        } else {
+            queue = Array(queue.prefix(keep))
+        }
+    }
+
     func removeFromQueue(at offsets: IndexSet) {
         // Convert offsets from "up next" offsets (relative to currentIndex+1) to real queue indices
         let upNextStart = currentIndex + 1
