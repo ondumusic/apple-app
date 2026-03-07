@@ -21,11 +21,25 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 }
 
 struct macOSRootView: View {
+    @Environment(NetworkMonitor.self) private var network
     @State private var selection: SidebarItem? = .artists
     @State private var navigationPath = NavigationPath()
     @State private var searchText = ""
 
     var body: some View {
+        VStack(spacing: 0) {
+        if !network.isOnline {
+            HStack(spacing: 6) {
+                Image(systemName: "wifi.slash")
+                    .font(.caption)
+                Text("Offline — only downloaded music is available")
+                    .font(.caption)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .background(.ultraThinMaterial)
+        }
+
         NavigationSplitView {
             List(SidebarItem.allCases, selection: sidebarSelection) { item in
                 if item == .downloads {
@@ -78,6 +92,7 @@ struct macOSRootView: View {
                 navigationPath.append(album)
             }
         }
+        } // VStack
     }
 
     private var sidebarSelection: Binding<SidebarItem?> {

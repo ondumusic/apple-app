@@ -5,6 +5,7 @@ struct AlbumDetailView: View {
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
+    @Environment(NetworkMonitor.self) private var network
 
     let album: Album
 
@@ -34,18 +35,22 @@ struct AlbumDetailView: View {
                             .foregroundStyle(.secondary)
 
                         if !tracks.isEmpty {
+                            let hasPlayable = network.isOnline || offlineStore.downloadedTrackCount(albumId: album.id) > 0
+
                             HStack(spacing: 12) {
                                 Button {
                                     player.playNow(tracks: tracks, artworkURL: album.artworkUrl)
                                 } label: {
                                     Label("Play", systemImage: "play.fill")
                                 }
+                                .disabled(!hasPlayable)
 
                                 Button {
                                     player.playShuffled(tracks: tracks, artworkURL: album.artworkUrl)
                                 } label: {
                                     Label("Shuffle", systemImage: "shuffle")
                                 }
+                                .disabled(!hasPlayable)
 
                                 if downloadService.isAlbumDownloading(albumId: album.id) {
                                     ProgressView()

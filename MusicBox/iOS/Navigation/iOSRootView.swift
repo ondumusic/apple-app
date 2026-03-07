@@ -7,6 +7,7 @@ nonisolated enum iOSTab: String, Hashable, Sendable {
 
 struct iOSRootView: View {
     @Environment(DownloadService.self) private var downloadService
+    @Environment(NetworkMonitor.self) private var network
     @State private var showSettings = false
     @State private var selectedTab: iOSTab = .artists
     @State private var artistsPath = NavigationPath()
@@ -22,6 +23,19 @@ struct iOSRootView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+        if !network.isOnline {
+            HStack(spacing: 6) {
+                Image(systemName: "wifi.slash")
+                    .font(.caption)
+                Text("Offline — only downloaded music is available")
+                    .font(.caption)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(.ultraThinMaterial)
+        }
+
         TabView(selection: tabSelection) {
             Tab("Artists", systemImage: "music.mic", value: .artists) {
                 NavigationStack(path: $artistsPath) {
@@ -93,6 +107,7 @@ struct iOSRootView: View {
                     }
             }
         }
+        } // VStack
     }
 
     private var tabSelection: Binding<iOSTab> {

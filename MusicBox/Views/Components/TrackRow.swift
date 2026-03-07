@@ -2,6 +2,8 @@ import SwiftUI
 
 struct TrackRow: View {
     @Environment(PlayerService.self) private var player
+    @Environment(NetworkMonitor.self) private var network
+    @Environment(OfflineStore.self) private var offlineStore
 
     let track: Track
     var album: Album? = nil
@@ -19,11 +21,16 @@ struct TrackRow: View {
         album?.artworkUrl ?? track.album?.artworkUrl
     }
 
+    private var isAvailable: Bool {
+        network.isOnline || offlineStore.isDownloaded(trackId: track.id)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             if showArtwork {
                 ArtworkView(url: artworkUrl, cornerRadius: 4, thumbnailSize: 40)
                     .frame(width: 40, height: 40)
+                    .opacity(isAvailable ? 1 : 0.4)
             }
 
             if showNumber {
@@ -44,13 +51,13 @@ struct TrackRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.name)
-                    .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : isAvailable ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
                     .lineLimit(1)
 
                 if showArtist {
                     Text(track.artist.name)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isAvailable ? .secondary : .tertiary)
                         .lineLimit(1)
                 }
             }
@@ -59,27 +66,30 @@ struct TrackRow: View {
 
             Text(track.formattedDuration)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isAvailable ? .secondary : .tertiary)
                 .monospacedDigit()
         }
         .contentShape(Rectangle())
         .onTapGesture {
+            guard isAvailable else { return }
             onTap?()
         }
         .contextMenu {
-            Button {
-                player.playNext(tracks: [track], artworkURL: album?.artworkUrl)
-            } label: {
-                Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
-            }
+            if isAvailable {
+                Button {
+                    player.playNext(tracks: [track], artworkURL: album?.artworkUrl)
+                } label: {
+                    Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+                }
 
-            Button {
-                player.addToEnd(tracks: [track], artworkURL: album?.artworkUrl)
-            } label: {
-                Label("Add to Queue", systemImage: "text.append")
-            }
+                Button {
+                    player.addToEnd(tracks: [track], artworkURL: album?.artworkUrl)
+                } label: {
+                    Label("Add to Queue", systemImage: "text.append")
+                }
 
-            Divider()
+                Divider()
+            }
 
             TrackDownloadMenuItems(track: track, album: album, artist: artist)
         }

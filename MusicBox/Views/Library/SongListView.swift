@@ -4,6 +4,7 @@ struct SongListView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(SyncService.self) private var syncService
+    @Environment(NetworkMonitor.self) private var network
 
     @State private var sections: [SongSection] = []
     @State private var allQueueItems: [QueueItem] = []
@@ -37,6 +38,7 @@ struct SongListView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.regular)
+                        .disabled(!network.isOnline)
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 36))
                         .listRowSeparator(.hidden)
                     }
