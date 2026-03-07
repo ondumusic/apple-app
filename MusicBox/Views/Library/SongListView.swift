@@ -5,27 +5,31 @@ struct SongListView: View {
     @Environment(PlayerService.self) private var player
     @Environment(SyncService.self) private var syncService
 
-    @State private var scrollTarget: UUID?
-    @State private var tracks: [Track] = []
-    @State private var letterMap: [String: UUID] = [:]
+    @State private var sections: [SongSection] = []
+    @State private var allQueueItems: [QueueItem] = []
+    @State private var availableLetters: [String] = []
+
+    private struct SongSection: Identifiable {
+        let letter: String
+        let tracks: [Track]
+        var id: String { letter }
+    }
 
     var body: some View {
         ZStack(alignment: .trailing) {
             ScrollViewReader { proxy in
                 List {
-                    if !tracks.isEmpty {
+                    if !sections.isEmpty {
                         HStack(spacing: 12) {
                             Button {
-                                let items = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
-                                player.playNow(queue: items)
+                                player.playNow(queue: allQueueItems)
                             } label: {
                                 Label("Play All", systemImage: "play.fill")
                                     .frame(maxWidth: .infinity)
                             }
 
                             Button {
-                                let items = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
-                                player.playShuffled(queue: items)
+                                player.playShuffled(queue: allQueueItems)
                             } label: {
                                 Label("Shuffle All", systemImage: "shuffle")
                                     .frame(maxWidth: .infinity)
@@ -37,29 +41,33 @@ struct SongListView: View {
                         .listRowSeparator(.hidden)
                     }
 
-                    ForEach(tracks) { track in
-                        TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
-                            let items = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
-                            if let idx = items.firstIndex(where: { $0.track.id == track.id }) {
-                                player.playNow(queue: items, startingAt: idx)
+                    ForEach(sections) { section in
+                        Section {
+                            ForEach(section.tracks) { track in
+                                TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
+                                    if let idx = allQueueItems.firstIndex(where: { $0.track.id == track.id }) {
+                                        player.playNow(queue: allQueueItems, startingAt: idx)
+                                    }
+                                }
+                                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
                             }
+                        } header: {
+                            Text(section.letter)
+                                .id(section.letter)
                         }
-                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
-                        .id(track.id)
                     }
                 }
                 .listStyle(.plain)
                 .scrollIndicators(.hidden)
-                .onChange(of: scrollTarget) { _, target in
-                    if let target {
-                        proxy.scrollTo(target, anchor: .top)
+                .onReceive(NotificationCenter.default.publisher(for: .scrollToSectionLetter)) { notification in
+                    if let letter = notification.object as? String {
+                        proxy.scrollTo(letter, anchor: .top)
                     }
                 }
             }
 
             SectionIndexBar(
-                letterMap: letterMap,
-                onSelect: { scrollTarget = $0 }
+                letters: availableLetters
             )
         }
         .refreshable { await syncService.sync() }
@@ -68,7 +76,7 @@ struct SongListView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .overlay {
-            if tracks.isEmpty {
+            if sections.isEmpty {
                 ContentUnavailableView("No Songs", systemImage: "music.note")
             }
         }
@@ -79,78 +87,75 @@ struct SongListView: View {
 
     private func reloadTracks() {
         let allTracks = musicLibrary.allTracks()
-        tracks = allTracks
-        var map: [String: UUID] = [:]
+        var grouped: [(letter: String, tracks: [Track])] = []
+        var currentLetter = ""
+        var currentTracks: [Track] = []
+
         for track in allTracks {
             let first = track.albumArtistSortName.prefix(1).uppercased()
             let letter = first.first?.isLetter == true ? first : "#"
-            if map[letter] == nil {
-                map[letter] = track.id
+            if letter != currentLetter {
+                if !currentTracks.isEmpty {
+                    grouped.append((currentLetter, currentTracks))
+                }
+                currentLetter = letter
+                currentTracks = [track]
+            } else {
+                currentTracks.append(track)
             }
         }
-        letterMap = map
+        if !currentTracks.isEmpty {
+            grouped.append((currentLetter, currentTracks))
+        }
+
+        sections = grouped.map { SongSection(letter: $0.letter, tracks: $0.tracks) }
+        availableLetters = grouped.map(\.letter)
+        allQueueItems = allTracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
     }
+}
+
+extension Notification.Name {
+    static let scrollToSectionLetter = Notification.Name("scrollToSectionLetter")
 }
 
 // MARK: - Section Index Bar
 
 private struct SectionIndexBar: View {
-    static let alphabet = ["#"] + (UnicodeScalar("A").value...UnicodeScalar("Z").value)
-        .map { String(UnicodeScalar($0)!) }
-
-    let letterMap: [String: UUID]
-    let onSelect: (UUID) -> Void
+    let letters: [String]
 
     @State private var activeIndex: Int?
-
-    private let letters = SectionIndexBar.alphabet
 
     private static let letterSize: CGFloat = 11
 
     var body: some View {
-        let totalHeight = Self.letterSize * CGFloat(letters.count)
+        if !letters.isEmpty {
+            let totalHeight = Self.letterSize * CGFloat(letters.count)
 
-        VStack(spacing: 0) {
-            ForEach(Array(letters.enumerated()), id: \.offset) { _, letter in
-                Text(letter)
-                    .font(.system(size: 9.5, weight: .medium))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: Self.letterSize)
+            VStack(spacing: 0) {
+                ForEach(Array(letters.enumerated()), id: \.offset) { _, letter in
+                    Text(letter)
+                        .font(.system(size: 9.5, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: Self.letterSize)
+                }
             }
-        }
-        .foregroundStyle(.tint)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                .onChanged { value in
-                    let raw = Int(value.location.y / Self.letterSize)
-                    let i = Swift.max(0, Swift.min(raw, letters.count - 1))
-                    guard i != activeIndex else { return }
-                    activeIndex = i
-                    if let target = nearestTarget(for: i) {
-                        onSelect(target)
+            .foregroundStyle(.tint)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        let raw = Int(value.location.y / Self.letterSize)
+                        let i = Swift.max(0, Swift.min(raw, letters.count - 1))
+                        guard i != activeIndex else { return }
+                        activeIndex = i
+                        NotificationCenter.default.post(name: .scrollToSectionLetter, object: letters[i])
                     }
-                }
-                .onEnded { _ in
-                    activeIndex = nil
-                }
-        )
-        .frame(width: 16, height: totalHeight)
-        .padding(.trailing, 2)
-    }
-
-    private func nearestTarget(for i: Int) -> UUID? {
-        for offset in 0...i {
-            let letter = letters[i - offset]
-            if let target = letterMap[letter] {
-                return target
-            }
+                    .onEnded { _ in
+                        activeIndex = nil
+                    }
+            )
+            .frame(width: 16, height: totalHeight)
+            .padding(.trailing, 2)
         }
-        for j in (i + 1)..<letters.count {
-            if let target = letterMap[letters[j]] {
-                return target
-            }
-        }
-        return nil
     }
 }
