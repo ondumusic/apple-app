@@ -34,9 +34,12 @@ nonisolated class DownloadedTrack {
         let fm = FileManager.default
         let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let ext = localFileURL.pathExtension
+        // Use album's artist ID for the path — matches the directory structure
+        // created by DownloadService (which uses the album artist, not the track artist)
+        let dirArtistId = album?.artistId ?? artistId
         return appSupport
             .appendingPathComponent("MusicBox/Downloads", isDirectory: true)
-            .appendingPathComponent(artistId.uuidString, isDirectory: true)
+            .appendingPathComponent(dirArtistId.uuidString, isDirectory: true)
             .appendingPathComponent(albumId.uuidString, isDirectory: true)
             .appendingPathComponent("\(id.uuidString).\(ext)")
     }

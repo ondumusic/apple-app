@@ -143,7 +143,8 @@ private struct TrackDownloadMenuItems: View {
             Button {
                 let resolvedAlbum = album ?? musicLibrary.album(track.albumId)
                 guard let resolvedAlbum else { return }
-                downloadService.download(track: track, album: resolvedAlbum, artist: artist ?? track.artist)
+                let albumArtist = artist ?? musicLibrary.artist(resolvedAlbum.artistId) ?? track.artist
+                downloadService.download(track: track, album: resolvedAlbum, artist: albumArtist)
             } label: {
                 Label("Download", systemImage: "arrow.down.circle")
             }

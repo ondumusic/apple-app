@@ -46,7 +46,17 @@ final class OfflineStore {
         _ = revision
         var descriptor = FetchDescriptor<DownloadedTrack>(predicate: #Predicate { $0.id == trackId })
         descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first?.resolvedFileURL
+        guard let track = try? modelContext.fetch(descriptor).first else {
+            print("OfflineStore: no downloaded track found for \(trackId)")
+            return nil
+        }
+        let url = track.resolvedFileURL
+        let exists = FileManager.default.fileExists(atPath: url.path)
+        print("OfflineStore: localURL for \(track.name) → \(url.lastPathComponent), exists=\(exists), trackArtistId=\(track.artistId), albumArtistId=\(track.album?.artistId.uuidString ?? "nil")")
+        if !exists {
+            print("OfflineStore: full path: \(url.path)")
+        }
+        return url
     }
 
     func downloadedArtists() -> [DownloadedArtist] {

@@ -344,6 +344,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 }
                 try fm.moveItem(at: savedURL, to: destURL)
 
+                print("DownloadService: saved \(info.track.name) to \(destURL.path)")
+                print("DownloadService: albumArtistId=\(info.artist.id), trackArtistId=\(info.track.artistId)")
                 let downloadedArtist = offlineStore.ensureArtist(from: info.artist)
                 let downloadedAlbum = offlineStore.ensureAlbum(from: info.album, artist: downloadedArtist)
                 offlineStore.insertTrack(info.track, localFileURL: destURL, album: downloadedAlbum)

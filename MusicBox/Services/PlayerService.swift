@@ -317,11 +317,14 @@ final class PlayerService {
 
         do {
             let playbackURL: URL
-            if let cached = queue[idx].playbackURL {
+            if let cached = queue[idx].playbackURL,
+               !cached.isFileURL || FileManager.default.fileExists(atPath: cached.path) {
                 playbackURL = cached
+                print("PlayerService: using cached playbackURL for \(track.name), url=\(cached)")
             } else if let offlineURL = offlineStore?.localURL(for: track.id) {
                 playbackURL = offlineURL
                 queue[idx].playbackURL = offlineURL
+                print("PlayerService: using offline URL for \(track.name), url=\(offlineURL)")
             } else if let cachedURL = playbackCache?.cachedURL(for: track.id) {
                 playbackURL = cachedURL
                 queue[idx].playbackURL = cachedURL
