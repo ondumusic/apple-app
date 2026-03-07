@@ -33,4 +33,21 @@ nonisolated class DownloadedTrack {
         let seconds = Int(duration) % 60
         return String(format: "%d:%02d", minutes, seconds)
     }
+
+    var asTrack: Track {
+        Track(
+            id: id,
+            artistId: artistId,
+            albumArtistId: artistId,
+            albumId: albumId,
+            artist: Artist(id: artistId, name: artistName, sortName: artistName, slug: ""),
+            albumArtistSortName: artistName,
+            name: name,
+            disc: disc,
+            number: number,
+            duration: duration,
+            mimetype: mimetype,
+            streamUrl: ""
+        )
+    }
 }

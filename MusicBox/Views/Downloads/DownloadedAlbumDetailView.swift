@@ -19,6 +19,16 @@ struct DownloadedAlbumDetailView: View {
 
     private var hasMultipleDiscs: Bool { discs.count > 1 }
 
+    private var queueItems: [QueueItem] {
+        sortedTracks.map { downloaded in
+            QueueItem(
+                track: downloaded.asTrack,
+                playbackURL: downloaded.localFileURL,
+                artworkURL: album.artworkUrl
+            )
+        }
+    }
+
     var body: some View {
         List {
             // Album header
@@ -41,11 +51,20 @@ struct DownloadedAlbumDetailView: View {
                             .foregroundStyle(.secondary)
 
                         if !sortedTracks.isEmpty {
-                            Button {
-                                playAll(startingAt: 0)
-                            } label: {
-                                Label("Play", systemImage: "play.fill")
+                            HStack(spacing: 12) {
+                                Button {
+                                    player.playNow(queue: queueItems)
+                                } label: {
+                                    Label("Play", systemImage: "play.fill")
+                                }
+
+                                Button {
+                                    player.playShuffled(queue: queueItems)
+                                } label: {
+                                    Label("Shuffle", systemImage: "shuffle")
+                                }
                             }
+                            .labelStyle(.iconOnly)
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .padding(.top, 4)
@@ -60,47 +79,12 @@ struct DownloadedAlbumDetailView: View {
                 Section {
                     let discTracks = sortedTracks.filter { $0.disc == disc }
                     ForEach(discTracks) { track in
-                        HStack(spacing: 12) {
-                            Text("\(track.number)")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 28, alignment: .trailing)
-                                .monospacedDigit()
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(track.name)
-                                    .lineLimit(1)
-                            }
-
-                            Spacer()
-
-                            Text(track.formattedDuration)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
+                        TrackRow(track: track.asTrack) {
                             if let index = sortedTracks.firstIndex(where: { $0.id == track.id }) {
-                                playAll(startingAt: index)
+                                player.playNow(queue: queueItems, startingAt: index)
                             }
                         }
                         .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                trackToDelete = track
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                        .contextMenu {
-                            Button {
-                                if let index = sortedTracks.firstIndex(where: { $0.id == track.id }) {
-                                    playAll(startingAt: index)
-                                }
-                            } label: {
-                                Label("Play", systemImage: "play.fill")
-                            }
-
                             Button(role: .destructive) {
                                 trackToDelete = track
                             } label: {
@@ -158,28 +142,4 @@ struct DownloadedAlbumDetailView: View {
         }
     }
 
-    private func playAll(startingAt index: Int) {
-        let queueItems = sortedTracks.map { downloaded -> QueueItem in
-            let track = Track(
-                id: downloaded.id,
-                artistId: downloaded.artistId,
-                albumArtistId: downloaded.artistId,
-                albumId: downloaded.albumId,
-                artist: Artist(id: downloaded.artistId, name: downloaded.artistName, sortName: downloaded.artistName, slug: ""),
-                albumArtistSortName: downloaded.artistName,
-                name: downloaded.name,
-                disc: downloaded.disc,
-                number: downloaded.number,
-                duration: downloaded.duration,
-                mimetype: downloaded.mimetype,
-                streamUrl: ""
-            )
-            return QueueItem(
-                track: track,
-                playbackURL: downloaded.localFileURL,
-                artworkURL: album.artworkUrl
-            )
-        }
-        player.playNow(queue: queueItems, startingAt: index)
-    }
 }
