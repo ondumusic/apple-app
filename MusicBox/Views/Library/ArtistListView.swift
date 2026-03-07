@@ -6,6 +6,7 @@ struct ArtistListView: View {
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
     @Environment(SyncService.self) private var syncService
+    @Environment(NetworkMonitor.self) private var network
     @State private var scrollPosition = ScrollPosition()
 
     var body: some View {
@@ -20,7 +21,9 @@ struct ArtistListView: View {
                     let items = albums.flatMap { album in
                         (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
                     }
-                    player.playNext(queue: items)
+                    let available = offlineStore.availableItems(items, isOnline: network.isOnline)
+                    guard !available.isEmpty else { return }
+                    player.playNext(queue: available)
                 } label: {
                     Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
                 }
@@ -30,7 +33,9 @@ struct ArtistListView: View {
                     let items = albums.flatMap { album in
                         (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
                     }
-                    player.addToEnd(queue: items)
+                    let available = offlineStore.availableItems(items, isOnline: network.isOnline)
+                    guard !available.isEmpty else { return }
+                    player.addToEnd(queue: available)
                 } label: {
                     Label("Add to Queue", systemImage: "text.append")
                 }

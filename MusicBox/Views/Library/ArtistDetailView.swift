@@ -5,6 +5,7 @@ struct ArtistDetailView: View {
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
+    @Environment(NetworkMonitor.self) private var network
 
     let artist: Artist
 
@@ -41,14 +42,16 @@ struct ArtistDetailView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button {
-                            let tracks = musicLibrary.tracksForAlbum(album.id)
+                            let tracks = offlineStore.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
+                            guard !tracks.isEmpty else { return }
                             player.playNext(tracks: tracks, artworkURL: album.artworkUrl)
                         } label: {
                             Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
                         }
 
                         Button {
-                            let tracks = musicLibrary.tracksForAlbum(album.id)
+                            let tracks = offlineStore.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
+                            guard !tracks.isEmpty else { return }
                             player.addToEnd(tracks: tracks, artworkURL: album.artworkUrl)
                         } label: {
                             Label("Add to Queue", systemImage: "text.append")
@@ -85,9 +88,10 @@ struct ArtistDetailView: View {
 
     private func playAll(shuffle: Bool) {
         let albums = musicLibrary.albumsWithTracksForArtist(artist.id)
-        let items = albums.flatMap { album in
+        let allItems = albums.flatMap { album in
             (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
         }
+        let items = offlineStore.availableItems(allItems, isOnline: network.isOnline)
         guard !items.isEmpty else { return }
         if shuffle {
             player.playShuffled(queue: items)

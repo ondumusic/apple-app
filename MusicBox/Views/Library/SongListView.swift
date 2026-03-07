@@ -5,6 +5,7 @@ struct SongListView: View {
     @Environment(PlayerService.self) private var player
     @Environment(SyncService.self) private var syncService
     @Environment(NetworkMonitor.self) private var network
+    @Environment(OfflineStore.self) private var offlineStore
 
     @State private var sections: [SongSection] = []
     @State private var allQueueItems: [QueueItem] = []
@@ -23,14 +24,18 @@ struct SongListView: View {
                     if !sections.isEmpty {
                         HStack(spacing: 12) {
                             Button {
-                                player.playNow(queue: allQueueItems)
+                                let available = offlineStore.availableItems(allQueueItems, isOnline: network.isOnline)
+                                guard !available.isEmpty else { return }
+                                player.playNow(queue: available)
                             } label: {
                                 Label("Play All", systemImage: "play.fill")
                                     .frame(maxWidth: .infinity)
                             }
 
                             Button {
-                                player.playShuffled(queue: allQueueItems)
+                                let available = offlineStore.availableItems(allQueueItems, isOnline: network.isOnline)
+                                guard !available.isEmpty else { return }
+                                player.playShuffled(queue: available)
                             } label: {
                                 Label("Shuffle All", systemImage: "shuffle")
                                     .frame(maxWidth: .infinity)
@@ -38,7 +43,6 @@ struct SongListView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.regular)
-                        .disabled(!network.isOnline)
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 36))
                         .listRowSeparator(.hidden)
                     }
@@ -47,8 +51,9 @@ struct SongListView: View {
                         Section {
                             ForEach(section.tracks) { track in
                                 TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
-                                    if let idx = allQueueItems.firstIndex(where: { $0.track.id == track.id }) {
-                                        player.playNow(queue: allQueueItems, startingAt: idx)
+                                    let available = offlineStore.availableItems(allQueueItems, isOnline: network.isOnline)
+                                    if let idx = available.firstIndex(where: { $0.track.id == track.id }) {
+                                        player.playNow(queue: available, startingAt: idx)
                                     }
                                 }
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))

@@ -59,6 +59,16 @@ final class OfflineStore {
         return url
     }
 
+    func availableTracks(_ tracks: [Track], isOnline: Bool) -> [Track] {
+        if isOnline { return tracks }
+        return tracks.filter { isDownloaded(trackId: $0.id) }
+    }
+
+    func availableItems(_ items: [QueueItem], isOnline: Bool) -> [QueueItem] {
+        if isOnline { return items }
+        return items.filter { isDownloaded(trackId: $0.track.id) }
+    }
+
     func downloadedArtists() -> [DownloadedArtist] {
         _ = revision
         let descriptor = FetchDescriptor<DownloadedArtist>(sortBy: [SortDescriptor(\.name)])

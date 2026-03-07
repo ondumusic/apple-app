@@ -4,6 +4,8 @@ struct SearchView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(SearchHistory.self) private var searchHistory
+    @Environment(NetworkMonitor.self) private var network
+    @Environment(OfflineStore.self) private var offlineStore
 
     let query: String
 
@@ -70,7 +72,8 @@ struct SearchView: View {
                 Section("Songs") {
                     ForEach(results.tracks.prefix(10)) { track in
                         TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
-                            let items = results.tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+                            let allItems = results.tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+                            let items = offlineStore.availableItems(allItems, isOnline: network.isOnline)
                             if let idx = items.firstIndex(where: { $0.track.id == track.id }) {
                                 player.playNow(queue: items, startingAt: idx)
                             }

@@ -6,6 +6,7 @@ struct AlbumListView: View {
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
     @Environment(SyncService.self) private var syncService
+    @Environment(NetworkMonitor.self) private var network
     @State private var scrollPosition = ScrollPosition()
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
@@ -21,14 +22,16 @@ struct AlbumListView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button {
-                            let tracks = musicLibrary.tracksForAlbum(album.id)
+                            let tracks = offlineStore.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
+                            guard !tracks.isEmpty else { return }
                             player.playNext(tracks: tracks, artworkURL: album.artworkUrl)
                         } label: {
                             Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
                         }
 
                         Button {
-                            let tracks = musicLibrary.tracksForAlbum(album.id)
+                            let tracks = offlineStore.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
+                            guard !tracks.isEmpty else { return }
                             player.addToEnd(tracks: tracks, artworkURL: album.artworkUrl)
                         } label: {
                             Label("Add to Queue", systemImage: "text.append")

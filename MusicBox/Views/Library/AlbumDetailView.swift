@@ -39,14 +39,16 @@ struct AlbumDetailView: View {
 
                             HStack(spacing: 12) {
                                 Button {
-                                    player.playNow(tracks: tracks, artworkURL: album.artworkUrl)
+                                    let available = offlineStore.availableTracks(tracks, isOnline: network.isOnline)
+                                    player.playNow(tracks: available, artworkURL: album.artworkUrl)
                                 } label: {
                                     Label("Play", systemImage: "play.fill")
                                 }
                                 .disabled(!hasPlayable)
 
                                 Button {
-                                    player.playShuffled(tracks: tracks, artworkURL: album.artworkUrl)
+                                    let available = offlineStore.availableTracks(tracks, isOnline: network.isOnline)
+                                    player.playShuffled(tracks: available, artworkURL: album.artworkUrl)
                                 } label: {
                                     Label("Shuffle", systemImage: "shuffle")
                                 }
@@ -93,8 +95,9 @@ struct AlbumDetailView: View {
                     let discTracks = tracks.filter { $0.disc == disc }
                     ForEach(discTracks) { track in
                         TrackRow(track: track, album: album) {
-                            if let index = tracks.firstIndex(where: { $0.id == track.id }) {
-                                player.playNow(tracks: tracks, startingAt: index, artworkURL: album.artworkUrl)
+                            let available = offlineStore.availableTracks(tracks, isOnline: network.isOnline)
+                            if let index = available.firstIndex(where: { $0.id == track.id }) {
+                                player.playNow(tracks: available, startingAt: index, artworkURL: album.artworkUrl)
                             }
                         }
                     }
