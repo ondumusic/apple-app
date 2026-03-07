@@ -28,6 +28,19 @@ nonisolated class DownloadedTrack {
         self.localFileURL = localFileURL
     }
 
+    /// Resolves the file URL at runtime from the known path structure,
+    /// since the absolute container path can change between builds/launches on iOS.
+    var resolvedFileURL: URL {
+        let fm = FileManager.default
+        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let ext = localFileURL.pathExtension
+        return appSupport
+            .appendingPathComponent("MusicBox/Downloads", isDirectory: true)
+            .appendingPathComponent(artistId.uuidString, isDirectory: true)
+            .appendingPathComponent(albumId.uuidString, isDirectory: true)
+            .appendingPathComponent("\(id.uuidString).\(ext)")
+    }
+
     var formattedDuration: String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60

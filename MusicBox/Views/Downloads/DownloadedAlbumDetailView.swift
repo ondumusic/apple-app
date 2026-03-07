@@ -23,7 +23,7 @@ struct DownloadedAlbumDetailView: View {
         sortedTracks.map { downloaded in
             QueueItem(
                 track: downloaded.asTrack,
-                playbackURL: downloaded.localFileURL,
+                playbackURL: downloaded.resolvedFileURL,
                 artworkURL: album.artworkUrl
             )
         }

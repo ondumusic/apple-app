@@ -46,7 +46,7 @@ final class OfflineStore {
         _ = revision
         var descriptor = FetchDescriptor<DownloadedTrack>(predicate: #Predicate { $0.id == trackId })
         descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first?.localFileURL
+        return try? modelContext.fetch(descriptor).first?.resolvedFileURL
     }
 
     func downloadedArtists() -> [DownloadedArtist] {
@@ -91,7 +91,7 @@ final class OfflineStore {
         var descriptor = FetchDescriptor<DownloadedTrack>(predicate: #Predicate { $0.id == trackId })
         descriptor.fetchLimit = 1
         guard let track = try? modelContext.fetch(descriptor).first else { return }
-        try? FileManager.default.removeItem(at: track.localFileURL)
+        try? FileManager.default.removeItem(at: track.resolvedFileURL)
         let album = track.album
         modelContext.delete(track)
         if let album, album.tracks.count <= 1 {
@@ -111,7 +111,7 @@ final class OfflineStore {
         descriptor.fetchLimit = 1
         guard let album = try? modelContext.fetch(descriptor).first else { return }
         for track in album.tracks {
-            try? FileManager.default.removeItem(at: track.localFileURL)
+            try? FileManager.default.removeItem(at: track.resolvedFileURL)
         }
         let artist = album.artist
         modelContext.delete(album)
@@ -129,7 +129,7 @@ final class OfflineStore {
         guard let artist = try? modelContext.fetch(descriptor).first else { return }
         for album in artist.albums {
             for track in album.tracks {
-                try? FileManager.default.removeItem(at: track.localFileURL)
+                try? FileManager.default.removeItem(at: track.resolvedFileURL)
             }
         }
         modelContext.delete(artist)
@@ -142,7 +142,7 @@ final class OfflineStore {
         for artist in artists {
             for album in artist.albums {
                 for track in album.tracks {
-                    try? FileManager.default.removeItem(at: track.localFileURL)
+                    try? FileManager.default.removeItem(at: track.resolvedFileURL)
                 }
             }
             modelContext.delete(artist)
