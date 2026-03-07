@@ -126,6 +126,9 @@ final class MusicLibrary {
                 let aSortName = artistMap[a.artistId]?.sortName ?? ""
                 let bSortName = artistMap[b.artistId]?.sortName ?? ""
                 if aSortName != bSortName { return aSortName < bSortName }
+                let aYear = a.releaseYear ?? 0
+                let bYear = b.releaseYear ?? 0
+                if aYear != bYear { return aYear > bYear }
                 return a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
             }
             .map { toAlbum($0) }
@@ -135,7 +138,7 @@ final class MusicLibrary {
         _ = revision
         return fetchAllAlbums()
             .filter { $0.artistId == artistId }
-            .sorted { ($0.releaseYear ?? 0) < ($1.releaseYear ?? 0) }
+            .sorted { ($0.releaseYear ?? 0) > ($1.releaseYear ?? 0) }
             .map { toAlbum($0) }
     }
 
@@ -158,7 +161,7 @@ final class MusicLibrary {
         _ = revision
         let libAlbums = fetchAllAlbums()
             .filter { $0.artistId == artistId }
-            .sorted { ($0.releaseYear ?? 0) < ($1.releaseYear ?? 0) }
+            .sorted { ($0.releaseYear ?? 0) > ($1.releaseYear ?? 0) }
         let libTracks = fetchAllTracks().filter { $0.albumArtistId == artistId }
 
         let artistMap = buildArtistMap()
@@ -222,6 +225,9 @@ final class MusicLibrary {
                 let aSortName = artistMap[a.artistId]?.sortName ?? ""
                 let bSortName = artistMap[b.artistId]?.sortName ?? ""
                 if aSortName != bSortName { return aSortName < bSortName }
+                let aYear = a.releaseYear ?? 0
+                let bYear = b.releaseYear ?? 0
+                if aYear != bYear { return aYear > bYear }
                 return a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
             }
             .map { toAlbum($0) }
