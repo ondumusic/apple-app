@@ -13,11 +13,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Whether all downloads are paused
     var isPaused: Bool = false
 
+    /// Progress snapshot updated on a timer (~2x/sec) for UI display only
+    var progressSnapshot: [UUID: Double] = [:]
+
     nonisolated struct DownloadState: Sendable {
         let trackName: String
         let artistName: String
         let albumId: UUID
-        var progress: Double
         var isPaused: Bool = false
     }
 
@@ -34,11 +36,18 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private let settings: SettingsStore
     @ObservationIgnored private let tokenManager = PlayTokenManager()
 
+    @ObservationIgnored private let delegateQueue: OperationQueue = {
+        let q = OperationQueue()
+        q.name = "com.musicbox.downloads.delegate"
+        q.maxConcurrentOperationCount = 1
+        return q
+    }()
+
     @ObservationIgnored private lazy var downloadSession: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: "com.musicbox.downloads")
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
-        return URLSession(configuration: config, delegate: self, delegateQueue: .main)
+        return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
     }()
 
     /// Maps URLSession task identifier → download info
@@ -49,8 +58,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var activeTasks: [UUID: URLSessionDownloadTask] = [:]
     /// Stores info for paused downloads: track ID → DownloadInfo
     @ObservationIgnored private var pausedDownloads: [UUID: DownloadInfo] = [:]
-    /// Last reported progress per track (for throttling UI updates)
-    @ObservationIgnored private var lastReportedProgress: [UUID: Double] = [:]
+    /// Raw progress values — not observable, updated on every delegate callback
+    @ObservationIgnored private var progressValues: [UUID: Double] = [:]
+    /// Timer that batches progress into the observable snapshot
+    @ObservationIgnored private var progressTimer: Timer?
 
     // MARK: - Init
 
@@ -102,7 +113,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             trackIdToTaskId.removeValue(forKey: trackId)
         }
         activeDownloads.removeValue(forKey: trackId)
-        lastReportedProgress.removeValue(forKey: trackId)
+        progressValues.removeValue(forKey: trackId)
+        stopProgressTimerIfIdle()
         startNextIfNeeded()
     }
 
@@ -160,7 +172,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         activeDownloads.removeAll()
         pendingQueue.removeAll()
         pausedDownloads.removeAll()
-        lastReportedProgress.removeAll()
+        progressValues.removeAll()
+        progressSnapshot.removeAll()
+        stopProgressTimerIfIdle()
     }
 
     // MARK: - Query
@@ -188,9 +202,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         activeDownloads[info.track.id] = DownloadState(
             trackName: info.track.name,
             artistName: info.artist.name,
-            albumId: info.album.id,
-            progress: 0
+            albumId: info.album.id
         )
+        progressValues[info.track.id] = 0
+        startProgressTimerIfNeeded()
 
         Task { @MainActor in
             do {
@@ -224,8 +239,11 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        MainActor.assumeIsolated {
-            handleDownloadComplete(taskId: downloadTask.taskIdentifier, location: location)
+        // Must move file immediately — location is deleted after this method returns.
+        let taskId = downloadTask.taskIdentifier
+        let savedURL = moveDownloadToFinalLocation(taskId: taskId, tempLocation: location)
+        Task { @MainActor in
+            finalizeDownload(taskId: taskId, savedURL: savedURL)
         }
     }
 
@@ -236,16 +254,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         totalBytesWritten: Int64,
         totalBytesExpectedToWrite: Int64
     ) {
-        MainActor.assumeIsolated {
-            guard let info = taskDownloads[downloadTask.taskIdentifier] else { return }
-            let progress = totalBytesExpectedToWrite > 0
-                ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-                : 0
-            // Throttle: only update UI when progress changes by ≥1%
-            let lastProgress = lastReportedProgress[info.track.id] ?? 0
-            guard progress - lastProgress >= 0.01 || progress >= 1.0 else { return }
-            lastReportedProgress[info.track.id] = progress
-            activeDownloads[info.track.id]?.progress = progress
+        let taskId = downloadTask.taskIdentifier
+        let progress = totalBytesExpectedToWrite > 0
+            ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+            : 0
+        Task { @MainActor in
+            guard let info = taskDownloads[taskId] else { return }
+            progressValues[info.track.id] = progress
         }
     }
 
@@ -254,22 +269,22 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         task: URLSessionTask,
         didCompleteWithError error: (any Error)?
     ) {
-        MainActor.assumeIsolated {
-            guard let error else { return }
-            // Ignore cancellation errors from pause (resume data handled separately)
-            if (error as NSError).code == NSURLErrorCancelled { return }
-            guard let info = taskDownloads[task.taskIdentifier] else { return }
+        guard let error else { return }
+        if (error as NSError).code == NSURLErrorCancelled { return }
+        let taskId = task.taskIdentifier
+        Task { @MainActor in
+            guard let info = taskDownloads[taskId] else { return }
             print("DownloadService: download failed for \(info.track.name): \(error)")
             activeDownloads.removeValue(forKey: info.track.id)
             trackIdToTaskId.removeValue(forKey: info.track.id)
             activeTasks.removeValue(forKey: info.track.id)
-            taskDownloads.removeValue(forKey: task.taskIdentifier)
+            taskDownloads.removeValue(forKey: taskId)
             startNextIfNeeded()
         }
     }
 
     nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-        MainActor.assumeIsolated {
+        Task { @MainActor in
             #if os(iOS)
             let handler = BackgroundSessionDelegate.pendingCompletionHandler
             BackgroundSessionDelegate.pendingCompletionHandler = nil
@@ -280,40 +295,87 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     // MARK: - Private
 
-    private func handleDownloadComplete(taskId: Int, location: URL) {
-        guard let info = taskDownloads[taskId] else { return }
-
+    /// Moves the downloaded file to its final location. Called on the delegate queue (background thread)
+    /// because the temp file at `location` is deleted after `didFinishDownloadingTo` returns.
+    nonisolated private func moveDownloadToFinalLocation(taskId: Int, tempLocation: URL) -> URL? {
+        // Read taskDownloads directly — safe because delegateQueue is serial
+        // and taskDownloads is only mutated on MainActor before the task starts.
+        // We capture the info we need synchronously.
         let fm = FileManager.default
         let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport
+        let tempDest = appSupport
             .appendingPathComponent("MusicBox/Downloads", isDirectory: true)
-            .appendingPathComponent(info.artist.id.uuidString, isDirectory: true)
-            .appendingPathComponent(info.album.id.uuidString, isDirectory: true)
-
+            .appendingPathComponent("tmp-\(taskId)")
         do {
-            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-
-            let ext = extensionFromMimetype(info.track.mimetype)
-            let destURL = dir.appendingPathComponent("\(info.track.id.uuidString).\(ext)")
-
-            if fm.fileExists(atPath: destURL.path) {
-                try fm.removeItem(at: destURL)
+            try fm.createDirectory(
+                at: appSupport.appendingPathComponent("MusicBox/Downloads", isDirectory: true),
+                withIntermediateDirectories: true)
+            if fm.fileExists(atPath: tempDest.path) {
+                try fm.removeItem(at: tempDest)
             }
-            try fm.moveItem(at: location, to: destURL)
-
-            let downloadedArtist = offlineStore.ensureArtist(from: info.artist)
-            let downloadedAlbum = offlineStore.ensureAlbum(from: info.album, artist: downloadedArtist)
-            offlineStore.insertTrack(info.track, localFileURL: destURL, album: downloadedAlbum)
+            try fm.moveItem(at: tempLocation, to: tempDest)
+            return tempDest
         } catch {
-            print("DownloadService: failed to save \(info.track.name): \(error)")
+            print("DownloadService: failed to save temp file: \(error)")
+            return nil
+        }
+    }
+
+    /// Finalizes the download on the main actor: moves to final path, inserts into store.
+    private func finalizeDownload(taskId: Int, savedURL: URL?) {
+        guard let info = taskDownloads[taskId] else { return }
+
+        if let savedURL {
+            let fm = FileManager.default
+            let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            let dir = appSupport
+                .appendingPathComponent("MusicBox/Downloads", isDirectory: true)
+                .appendingPathComponent(info.artist.id.uuidString, isDirectory: true)
+                .appendingPathComponent(info.album.id.uuidString, isDirectory: true)
+
+            do {
+                try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+                let ext = extensionFromMimetype(info.track.mimetype)
+                let destURL = dir.appendingPathComponent("\(info.track.id.uuidString).\(ext)")
+
+                if fm.fileExists(atPath: destURL.path) {
+                    try fm.removeItem(at: destURL)
+                }
+                try fm.moveItem(at: savedURL, to: destURL)
+
+                let downloadedArtist = offlineStore.ensureArtist(from: info.artist)
+                let downloadedAlbum = offlineStore.ensureAlbum(from: info.album, artist: downloadedArtist)
+                offlineStore.insertTrack(info.track, localFileURL: destURL, album: downloadedAlbum)
+            } catch {
+                print("DownloadService: failed to save \(info.track.name): \(error)")
+                try? fm.removeItem(at: savedURL)
+            }
         }
 
         activeDownloads.removeValue(forKey: info.track.id)
         trackIdToTaskId.removeValue(forKey: info.track.id)
         activeTasks.removeValue(forKey: info.track.id)
-        lastReportedProgress.removeValue(forKey: info.track.id)
+        progressValues.removeValue(forKey: info.track.id)
         taskDownloads.removeValue(forKey: taskId)
+        stopProgressTimerIfIdle()
         startNextIfNeeded()
+    }
+
+    private func startProgressTimerIfNeeded() {
+        guard progressTimer == nil else { return }
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.progressSnapshot = self?.progressValues ?? [:]
+            }
+        }
+    }
+
+    private func stopProgressTimerIfIdle() {
+        guard activeDownloads.isEmpty else { return }
+        progressTimer?.invalidate()
+        progressTimer = nil
+        progressSnapshot.removeAll()
     }
 
     private func extensionFromMimetype(_ mimetype: String) -> String {

@@ -31,10 +31,12 @@ struct DownloadsView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
-                                ProgressView(value: state.progress)
+                                let progress = downloadService.progressSnapshot[trackId] ?? 0
+
+                                ProgressView(value: progress)
                                     .frame(width: 60)
 
-                                Text("\(Int(state.progress * 100))%")
+                                Text("\(Int(progress * 100))%")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .monospacedDigit()
