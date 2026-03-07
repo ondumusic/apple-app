@@ -224,11 +224,13 @@ final class MusicLibrary {
 
         let artists = fetchAllArtists()
             .filter { $0.name.localizedCaseInsensitiveContains(query) || $0.sortName.localizedCaseInsensitiveContains(query) }
+            .filter { $0.albumCount > 0 }
             .sorted { $0.sortName < $1.sortName }
             .map { Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount) }
 
         let albums = fetchAllAlbums()
             .filter { $0.name.localizedCaseInsensitiveContains(query) || $0.sortName.localizedCaseInsensitiveContains(query) }
+            .filter { $0.trackCount > 0 }
             .sorted { a, b in
                 let aSortName = artistMap[a.artistId]?.sortName ?? ""
                 let bSortName = artistMap[b.artistId]?.sortName ?? ""
