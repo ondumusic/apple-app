@@ -155,6 +155,9 @@ private struct SectionIndexBar: View {
                         let i = Swift.max(0, Swift.min(raw, letters.count - 1))
                         guard i != activeIndex else { return }
                         activeIndex = i
+                        #if os(iOS)
+                        UISelectionFeedbackGenerator().selectionChanged()
+                        #endif
                         NotificationCenter.default.post(name: .scrollToSectionLetter, object: letters[i])
                     }
                     .onEnded { _ in
