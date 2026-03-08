@@ -111,19 +111,19 @@ struct DownloadedAlbumDetailView: View {
                 } label: {
                     Label("Delete Album", systemImage: "trash")
                 }
+                .confirmationDialog(
+                    "Delete Album",
+                    isPresented: $showDeleteAlbumConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete", role: .destructive) {
+                        offlineStore.deleteAlbum(albumId: album.id)
+                        dismiss()
+                    }
+                } message: {
+                    Text("Remove the downloaded album \"\(album.name)\"?")
+                }
             }
-        }
-        .confirmationDialog(
-            "Delete Album",
-            isPresented: $showDeleteAlbumConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                offlineStore.deleteAlbum(albumId: album.id)
-                dismiss()
-            }
-        } message: {
-            Text("Remove the downloaded album \"\(album.name)\"?")
         }
         .confirmationDialog(
             "Delete Track",

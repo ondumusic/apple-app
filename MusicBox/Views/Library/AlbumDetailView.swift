@@ -9,6 +9,8 @@ struct AlbumDetailView: View {
 
     let album: Album
 
+    @State private var showRemoveDownloadConfirmation = false
+
     private var tracks: [Track] { musicLibrary.tracksForAlbum(album.id) }
     private var discs: [Int] { Array(Set(tracks.map(\.disc))).sorted() }
     private var hasMultipleDiscs: Bool { discs.count > 1 }
@@ -59,9 +61,20 @@ struct AlbumDetailView: View {
                                         .controlSize(.small)
                                 } else if offlineStore.downloadedTrackCount(albumId: album.id) == tracks.count && !tracks.isEmpty {
                                     Button {
-                                        offlineStore.deleteAlbum(albumId: album.id)
+                                        showRemoveDownloadConfirmation = true
                                     } label: {
                                         Label("Remove", systemImage: "arrow.down.circle.fill")
+                                    }
+                                    .confirmationDialog(
+                                        "Remove Download",
+                                        isPresented: $showRemoveDownloadConfirmation,
+                                        titleVisibility: .visible
+                                    ) {
+                                        Button("Remove", role: .destructive) {
+                                            offlineStore.deleteAlbum(albumId: album.id)
+                                        }
+                                    } message: {
+                                        Text("Remove the downloaded album \"\(album.name)\"?")
                                     }
                                 } else {
                                     Button {

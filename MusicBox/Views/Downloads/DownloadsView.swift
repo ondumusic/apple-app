@@ -170,6 +170,17 @@ struct DownloadsView: View {
                 } label: {
                     Label("Download All", systemImage: "arrow.down.circle")
                 }
+                .confirmationDialog(
+                    "Download All Songs",
+                    isPresented: $showDownloadAllConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Download All") {
+                        downloadService.downloadAll(library: musicLibrary)
+                    }
+                } message: {
+                    Text("This will download your entire music library for offline playback.")
+                }
             }
             if !artists.isEmpty {
                 ToolbarItem(placement: .destructiveAction) {
@@ -178,31 +189,20 @@ struct DownloadsView: View {
                     } label: {
                         Label("Delete All", systemImage: "trash")
                     }
+                    .confirmationDialog(
+                        "Delete All Downloads",
+                        isPresented: $showDeleteAllConfirmation,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete All", role: .destructive) {
+                            downloadService.cancelAll()
+                            offlineStore.deleteAll()
+                        }
+                    } message: {
+                        Text("This will remove all downloaded music from this device. This cannot be undone.")
+                    }
                 }
             }
-        }
-        .confirmationDialog(
-            "Download All Songs",
-            isPresented: $showDownloadAllConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Download All") {
-                downloadService.downloadAll(library: musicLibrary)
-            }
-        } message: {
-            Text("This will download your entire music library for offline playback.")
-        }
-        .confirmationDialog(
-            "Delete All Downloads",
-            isPresented: $showDeleteAllConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Delete All", role: .destructive) {
-                downloadService.cancelAll()
-                offlineStore.deleteAll()
-            }
-        } message: {
-            Text("This will remove all downloaded music from this device. This cannot be undone.")
         }
         .confirmationDialog(
             "Delete Artist",

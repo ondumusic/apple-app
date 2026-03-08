@@ -56,6 +56,13 @@ struct SettingsView: View {
                     showClearCacheConfirmation = true
                 }
                 .disabled(playbackCache.trackCount == 0)
+                .confirmationDialog("Clear Playback Cache?", isPresented: $showClearCacheConfirmation) {
+                    Button("Clear Cache", role: .destructive) {
+                        playbackCache.clearCache()
+                    }
+                } message: {
+                    Text("This will remove \(playbackCache.formattedSize) of cached audio. Tracks will be re-streamed on next play.")
+                }
             } header: {
                 Text("Playback Cache")
             } footer: {
@@ -114,13 +121,6 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
-        .confirmationDialog("Clear Playback Cache?", isPresented: $showClearCacheConfirmation) {
-            Button("Clear Cache", role: .destructive) {
-                playbackCache.clearCache()
-            }
-        } message: {
-            Text("This will remove \(playbackCache.formattedSize) of cached audio. Tracks will be re-streamed on next play.")
-        }
         #if os(macOS)
         .formStyle(.grouped)
         .frame(width: 400)
