@@ -41,26 +41,24 @@ struct MiniPlayerView: View {
                     Button { player.togglePlayPause() } label: {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                             .font(.title2)
-                            .frame(width: 44, height: 44)
+                            .frame(width: 48, height: 48)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
 
                     Button { player.skip() } label: {
                         Image(systemName: "forward.fill")
                             .font(.body)
-                            .frame(width: 44, height: 44)
+                            .frame(width: 48, height: 48)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(!player.canSkip)
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 4)
-                .background {
-                    Rectangle()
-                        .fill(.clear)
-                        .contentShape(Rectangle())
-                        .onTapGesture { onTap() }
-                }
+                .contentShape(Rectangle())
+                .onTapGesture { onTap() }
             }
             .background(.ultraThinMaterial)
         }
