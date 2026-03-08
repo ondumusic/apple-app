@@ -118,6 +118,7 @@ struct FullPlayerView: View {
                             .font(.title2)
                     }
                     .buttonStyle(.plain)
+                    .disabled(!player.canGoBack)
 
                     Button { player.togglePlayPause() } label: {
                         Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
@@ -130,6 +131,7 @@ struct FullPlayerView: View {
                             .font(.title2)
                     }
                     .buttonStyle(.plain)
+                    .disabled(!player.canSkip)
 
                     Button { player.cycleRepeatMode() } label: {
                         Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")

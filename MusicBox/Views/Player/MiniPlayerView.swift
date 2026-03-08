@@ -51,6 +51,7 @@ struct MiniPlayerView: View {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
+                    .disabled(!player.canSkip)
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 4)

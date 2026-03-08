@@ -67,6 +67,7 @@ struct MacOSMiniPlayerView: View {
                                 .font(.body)
                         }
                         .buttonStyle(.plain)
+                        .disabled(!player.canGoBack)
 
                         Button { player.togglePlayPause() } label: {
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
@@ -79,6 +80,7 @@ struct MacOSMiniPlayerView: View {
                                 .font(.body)
                         }
                         .buttonStyle(.plain)
+                        .disabled(!player.canSkip)
 
                         Button { showQueue.toggle() } label: {
                             Image(systemName: "list.bullet")

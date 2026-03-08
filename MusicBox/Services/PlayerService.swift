@@ -50,6 +50,19 @@ final class PlayerService {
         return currentIndex
     }
 
+    var canSkip: Bool {
+        guard !queue.isEmpty else { return false }
+        if repeatMode == .one || repeatMode == .all { return true }
+        return currentIndex + 1 < queue.count
+    }
+
+    var canGoBack: Bool {
+        guard !queue.isEmpty else { return false }
+        // Always allow back if we're past 3s (will seek to start)
+        if progress > 3 { return true }
+        return currentIndex > 0
+    }
+
     // MARK: - Init
 
     init(api: APIService, settings: SettingsStore, offlineStore: OfflineStore? = nil, playbackCache: PlaybackCache? = nil) {
@@ -160,9 +173,19 @@ final class PlayerService {
             currentIndex = 0
             Task { await loadAndPlayCurrent() }
         } else {
-            // End of queue, repeat off
+            // End of queue, repeat off — show first track, stopped
             isPlaying = false
             primaryPlayer.pause()
+            primaryPlayer.replaceCurrentItem(with: nil)
+            tearDownCrossfade()
+            currentIndex = 0
+            let idx = effectiveIndex
+            if idx < queue.count {
+                currentTrack = queue[idx].track
+                duration = queue[idx].track.duration
+            }
+            progress = 0
+            updateNowPlayingInfo()
             updateNowPlayingPlaybackState()
         }
     }
@@ -192,6 +215,10 @@ final class PlayerService {
         if isPlaying {
             primaryPlayer.pause()
             isPlaying = false
+        } else if primaryPlayer.currentItem == nil && !queue.isEmpty {
+            // Stopped at end of queue — reload and play from current position
+            Task { await loadAndPlayCurrent() }
+            return
         } else {
             primaryPlayer.play()
             isPlaying = true

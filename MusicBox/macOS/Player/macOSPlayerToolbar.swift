@@ -32,6 +32,7 @@ struct MacOSPlayerToolbar: View {
                             .font(.caption)
                     }
                     .buttonStyle(.plain)
+                    .disabled(!player.canGoBack)
 
                     Button { player.togglePlayPause() } label: {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
@@ -44,6 +45,7 @@ struct MacOSPlayerToolbar: View {
                             .font(.caption)
                     }
                     .buttonStyle(.plain)
+                    .disabled(!player.canSkip)
                 }
 
                 Button { showQueue.toggle() } label: {
