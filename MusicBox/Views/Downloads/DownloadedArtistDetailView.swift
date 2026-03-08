@@ -8,7 +8,7 @@ struct DownloadedArtistDetailView: View {
 
     var body: some View {
         List {
-            ForEach(artist.albums.sorted(by: { ($0.releaseYear ?? 0) < ($1.releaseYear ?? 0) })) { album in
+            ForEach(artist.albums.sorted(by: { ($0.releaseYear ?? 0) > ($1.releaseYear ?? 0) })) { album in
                 NavigationLink(value: album) {
                     HStack(spacing: 12) {
                         ArtworkView(url: album.artworkUrl)
