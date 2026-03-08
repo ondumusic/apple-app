@@ -470,6 +470,12 @@ final class PlayerService {
         // Only begin once
         guard secondaryPlayer == nil else { return }
 
+        // Remove the crossfade observer so it can't re-fire while async work is pending
+        if let crossfadeObserver {
+            primaryPlayer.removeTimeObserver(crossfadeObserver)
+            self.crossfadeObserver = nil
+        }
+
         // Remove the end observer temporarily - crossfade handles transition
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
