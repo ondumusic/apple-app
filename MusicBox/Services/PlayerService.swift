@@ -90,7 +90,7 @@ final class PlayerService {
     // MARK: - Queue Operations
 
     func playNow(tracks: [Track], startingAt index: Int = 0, artworkURL: URL? = nil) {
-        queue = tracks.map { QueueItem(track: $0, artworkURL: artworkURL) }
+        queue = tracks.map { QueueItem(track: $0, artworkURL: artworkURL ?? $0.album?.artworkUrl) }
         shuffledIndices = nil
         currentIndex = index
         Task { await loadAndPlayCurrent() }
@@ -104,7 +104,7 @@ final class PlayerService {
     }
 
     func playShuffled(tracks: [Track], artworkURL: URL? = nil) {
-        let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL) }
+        let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL ?? $0.album?.artworkUrl) }
         playShuffled(queue: items)
     }
 
@@ -119,7 +119,7 @@ final class PlayerService {
     }
 
     func playNext(tracks: [Track], artworkURL: URL? = nil) {
-        let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL) }
+        let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL ?? $0.album?.artworkUrl) }
         playNext(queue: items)
     }
 
@@ -138,7 +138,7 @@ final class PlayerService {
     }
 
     func addToEnd(tracks: [Track], artworkURL: URL? = nil) {
-        let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL) }
+        let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL ?? $0.album?.artworkUrl) }
         addToEnd(queue: items)
     }
 
@@ -607,6 +607,7 @@ final class PlayerService {
 
         currentIndex = nextIndex
         currentTrack = nextTrack
+        nowPlayingArtwork = nil
         progress = 0
         duration = nextTrack.duration
         isPlaying = true
