@@ -5,7 +5,9 @@ struct DownloadsView: View {
     @Query(sort: \DownloadedArtist.name) private var artists: [DownloadedArtist]
     @Environment(DownloadService.self) private var downloadService
     @Environment(OfflineStore.self) private var offlineStore
+    @Environment(MusicLibrary.self) private var musicLibrary
     @State private var showDeleteAllConfirmation = false
+    @State private var showDownloadAllConfirmation = false
     @State private var artistToDelete: DownloadedArtist?
 
     var body: some View {
@@ -162,6 +164,13 @@ struct DownloadsView: View {
             DownloadedArtistDetailView(artist: artist)
         }
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showDownloadAllConfirmation = true
+                } label: {
+                    Label("Download All", systemImage: "arrow.down.circle")
+                }
+            }
             if !artists.isEmpty {
                 ToolbarItem(placement: .destructiveAction) {
                     Button(role: .destructive) {
@@ -171,6 +180,17 @@ struct DownloadsView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            "Download All Songs",
+            isPresented: $showDownloadAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Download All") {
+                downloadService.downloadAll(library: musicLibrary)
+            }
+        } message: {
+            Text("This will download your entire music library for offline playback.")
         }
         .confirmationDialog(
             "Delete All Downloads",

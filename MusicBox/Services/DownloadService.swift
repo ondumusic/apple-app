@@ -96,6 +96,16 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    func downloadAll(library: MusicLibrary) {
+        let artists = library.allArtists()
+        for artist in artists {
+            let albums = library.albumsWithTracksForArtist(artist.id)
+            for album in albums {
+                download(album: album, artist: artist)
+            }
+        }
+    }
+
     // MARK: - Per-track controls
 
     func cancelDownload(trackId: UUID) {
