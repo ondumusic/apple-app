@@ -14,6 +14,11 @@ nonisolated actor PlayTokenManager {
         return token
     }
 
+    func invalidate() {
+        cachedToken = nil
+        fetchedAt = nil
+    }
+
     func resolvedStreamURL(for track: Track, using api: APIService) async throws -> URL {
         let token = try await validToken(using: api)
         guard let streamURL = URL(string: track.streamUrl) else {

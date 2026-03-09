@@ -4,11 +4,14 @@ import Foundation
 final class DownloadService: NSObject, URLSessionDownloadDelegate {
     // MARK: - Public state
 
-    /// Active downloads: track ID → current progress and metadata
+    /// Active downloads (in-flight): track ID → metadata
     var activeDownloads: [UUID: DownloadState] = [:]
 
-    /// Queued downloads waiting to start
-    var pendingQueue: [DownloadInfo] = []
+    /// Ordered list of active download track IDs (for stable UI ordering)
+    var activeDownloadOrder: [UUID] = []
+
+    /// Downloads waiting to start (URL already resolved, ready to go)
+    var pendingQueue: [QueuedDownload] = []
 
     /// Whether all downloads are paused
     var isPaused: Bool = false
@@ -27,6 +30,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let track: Track
         let album: Album
         let artist: Artist
+        var retryCount: Int = 0
+    }
+
+    /// A download with its URL already resolved, ready to submit to URLSession.
+    nonisolated struct QueuedDownload: Sendable {
+        let info: DownloadInfo
+        let resolvedURL: URL
     }
 
     // MARK: - Private
@@ -56,12 +66,17 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var trackIdToTaskId: [UUID: Int] = [:]
     /// Maps track ID → active URLSessionDownloadTask (for pause support)
     @ObservationIgnored private var activeTasks: [UUID: URLSessionDownloadTask] = [:]
-    /// Stores info for paused downloads: track ID → DownloadInfo
-    @ObservationIgnored private var pausedDownloads: [UUID: DownloadInfo] = [:]
+    /// Stores info for paused downloads: track ID → QueuedDownload (URL preserved for restart)
+    @ObservationIgnored private var pausedDownloads: [UUID: QueuedDownload] = [:]
+    /// Downloads that failed due to expired token, to retry when app is active
+    @ObservationIgnored private var retryQueue: [DownloadInfo] = []
     /// Raw progress values — not observable, updated on every delegate callback
     @ObservationIgnored private var progressValues: [UUID: Double] = [:]
     /// Timer that batches progress into the observable snapshot
     @ObservationIgnored private var progressTimer: Timer?
+    /// Number of in-flight downloads — incremented synchronously, so concurrent calls
+    /// to startNextIfNeeded can't exceed the limit.
+    @ObservationIgnored private var inFlightCount: Int = 0
 
     // MARK: - Init
 
@@ -82,10 +97,19 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
         let info = DownloadInfo(track: track, album: album, artist: artist)
 
-        if !isPaused && activeDownloads.count < settings.maxConcurrentDownloads {
-            startDownload(info)
-        } else {
-            pendingQueue.append(info)
+        // Resolve URL then enqueue
+        Task { @MainActor in
+            do {
+                let url = try await tokenManager.resolvedStreamURL(for: info.track, using: api)
+                let queued = QueuedDownload(info: info, resolvedURL: url)
+                if isPaused {
+                    pendingQueue.append(queued)
+                } else {
+                    enqueue(queued)
+                }
+            } catch {
+                print("DownloadService: failed to resolve URL for \(info.track.name): \(error)")
+            }
         }
     }
 
@@ -98,10 +122,23 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func downloadAll(library: MusicLibrary) {
         let artists = library.allArtists()
-        for artist in artists {
-            let albums = library.albumsWithTracksForArtist(artist.id)
-            for album in albums {
-                download(album: album, artist: artist)
+        Task { @MainActor in
+            for artist in artists {
+                let albums = library.albumsWithTracksForArtist(artist.id)
+                var batch: [DownloadInfo] = []
+                for album in albums {
+                    guard let tracks = album.tracks else { continue }
+                    for track in tracks {
+                        guard !offlineStore.isDownloaded(trackId: track.id),
+                              !isDownloading(trackId: track.id),
+                              !isQueued(trackId: track.id) else { continue }
+                        batch.append(DownloadInfo(track: track, album: album, artist: artist))
+                    }
+                }
+                if !batch.isEmpty {
+                    await submitBatch(batch)
+                }
+                await Task.yield()
             }
         }
     }
@@ -110,7 +147,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func cancelDownload(trackId: UUID) {
         // Remove from pending queue
-        pendingQueue.removeAll { $0.track.id == trackId }
+        pendingQueue.removeAll { $0.info.track.id == trackId }
 
         // Remove from paused
         pausedDownloads.removeValue(forKey: trackId)
@@ -121,8 +158,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             task.cancel()
             taskDownloads.removeValue(forKey: taskId)
             trackIdToTaskId.removeValue(forKey: trackId)
+            inFlightCount -= 1
         }
         activeDownloads.removeValue(forKey: trackId)
+        activeDownloadOrder.removeAll { $0 == trackId }
         progressValues.removeValue(forKey: trackId)
         stopProgressTimerIfIdle()
         startNextIfNeeded()
@@ -133,23 +172,29 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
               let info = taskDownloads[task.taskIdentifier] else { return }
 
         let taskId = task.taskIdentifier
+        // Capture the original URL from the task before cancelling
+        let resolvedURL = task.originalRequest?.url
         task.cancel()
 
         // Clean up active tracking
         taskDownloads.removeValue(forKey: taskId)
         trackIdToTaskId.removeValue(forKey: trackId)
+        inFlightCount -= 1
 
         // Store info for later restart and mark paused in UI
-        pausedDownloads[trackId] = info
+        if let resolvedURL {
+            pausedDownloads[trackId] = QueuedDownload(info: info, resolvedURL: resolvedURL)
+        }
         activeDownloads[trackId]?.isPaused = true
     }
 
     func resumeDownload(trackId: UUID) {
-        guard let info = pausedDownloads.removeValue(forKey: trackId) else { return }
+        guard let queued = pausedDownloads.removeValue(forKey: trackId) else { return }
 
         // Remove old paused state and start fresh
         activeDownloads.removeValue(forKey: trackId)
-        startDownload(info)
+        activeDownloadOrder.removeAll { $0 == trackId }
+        enqueue(queued)
     }
 
     // MARK: - Bulk controls
@@ -180,8 +225,11 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         taskDownloads.removeAll()
         trackIdToTaskId.removeAll()
         activeDownloads.removeAll()
+        activeDownloadOrder.removeAll()
         pendingQueue.removeAll()
         pausedDownloads.removeAll()
+        retryQueue.removeAll()
+        inFlightCount = 0
         progressValues.removeAll()
         progressSnapshot.removeAll()
         stopProgressTimerIfIdle()
@@ -194,51 +242,117 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     func isQueued(trackId: UUID) -> Bool {
-        pendingQueue.contains { $0.track.id == trackId }
+        pendingQueue.contains { $0.info.track.id == trackId }
     }
 
     func isAlbumDownloading(albumId: UUID) -> Bool {
         activeDownloads.values.contains { $0.albumId == albumId } ||
-        pendingQueue.contains { $0.album.id == albumId }
+        pendingQueue.contains { $0.info.album.id == albumId }
     }
 
     var hasActivity: Bool {
-        !activeDownloads.isEmpty || !pendingQueue.isEmpty
+        !activeDownloads.isEmpty || !pendingQueue.isEmpty || !retryQueue.isEmpty
     }
 
     // MARK: - Internal queue management
 
-    private func startDownload(_ info: DownloadInfo) {
+    /// Enqueues a download: starts immediately if under the limit, otherwise adds to pending.
+    private func enqueue(_ queued: QueuedDownload) {
+        if inFlightCount < settings.maxConcurrentDownloads {
+            startTask(queued)
+        } else {
+            pendingQueue.append(queued)
+        }
+    }
+
+    /// Creates and resumes a URLSession task. No async work — safe to call from background wake-ups.
+    private func startTask(_ queued: QueuedDownload) {
+        let info = queued.info
+        inFlightCount += 1
+
         activeDownloads[info.track.id] = DownloadState(
             trackName: info.track.name,
             artistName: info.artist.name,
             albumId: info.album.id
         )
+        activeDownloadOrder.append(info.track.id)
         progressValues[info.track.id] = 0
         startProgressTimerIfNeeded()
 
-        Task { @MainActor in
-            do {
-                let url = try await tokenManager.resolvedStreamURL(for: info.track, using: api)
-                let task = downloadSession.downloadTask(with: url)
-                taskDownloads[task.taskIdentifier] = info
-                trackIdToTaskId[info.track.id] = task.taskIdentifier
-                activeTasks[info.track.id] = task
-                task.resume()
-            } catch {
-                print("DownloadService: failed to resolve URL for \(info.track.name): \(error)")
-                activeDownloads.removeValue(forKey: info.track.id)
-                startNextIfNeeded()
-            }
+        let task = downloadSession.downloadTask(with: queued.resolvedURL)
+        taskDownloads[task.taskIdentifier] = info
+        trackIdToTaskId[info.track.id] = task.taskIdentifier
+        activeTasks[info.track.id] = task
+        task.resume()
+    }
+
+    /// Starts queued downloads up to the concurrency limit. Fully synchronous — safe in background.
+    private func startNextIfNeeded() {
+        guard !isPaused else { return }
+        while !pendingQueue.isEmpty, inFlightCount < settings.maxConcurrentDownloads {
+            let next = pendingQueue.removeFirst()
+            if offlineStore.isDownloaded(trackId: next.info.track.id) { continue }
+            startTask(next)
         }
     }
 
-    private func startNextIfNeeded() {
-        guard !isPaused else { return }
-        while activeDownloads.count < settings.maxConcurrentDownloads, !pendingQueue.isEmpty {
-            let next = pendingQueue.removeFirst()
-            if offlineStore.isDownloaded(trackId: next.track.id) { continue }
-            startDownload(next)
+    /// Resolves URLs for a batch (single token fetch) then enqueues them all.
+    private func submitBatch(_ infos: [DownloadInfo]) async {
+        do {
+            let token = try await tokenManager.validToken(using: api)
+            var queued: [QueuedDownload] = []
+            for info in infos {
+                guard let streamURL = URL(string: info.track.streamUrl),
+                      var components = URLComponents(url: streamURL, resolvingAgainstBaseURL: false) else {
+                    continue
+                }
+                var queryItems = components.queryItems ?? []
+                queryItems.append(URLQueryItem(name: "token", value: token))
+                components.queryItems = queryItems
+                guard let url = components.url else { continue }
+                queued.append(QueuedDownload(info: info, resolvedURL: url))
+            }
+            await MainActor.run {
+                for q in queued {
+                    enqueue(q)
+                }
+            }
+        } catch {
+            print("DownloadService: failed to get token for batch download: \(error)")
+        }
+    }
+
+    private func cleanupTask(trackId: UUID, taskId: Int) {
+        activeDownloads.removeValue(forKey: trackId)
+        activeDownloadOrder.removeAll { $0 == trackId }
+        trackIdToTaskId.removeValue(forKey: trackId)
+        activeTasks.removeValue(forKey: trackId)
+        progressValues.removeValue(forKey: trackId)
+        taskDownloads.removeValue(forKey: taskId)
+        inFlightCount -= 1
+        stopProgressTimerIfIdle()
+        startNextIfNeeded()
+    }
+
+    /// Retries downloads that failed due to expired tokens. Call when app becomes active.
+    func retryFailedDownloads() {
+        // Resume pending queue — downloads may have completed in background
+        // without startNextIfNeeded() firing on MainActor
+        startNextIfNeeded()
+
+        guard !retryQueue.isEmpty else { return }
+        let toRetry = retryQueue
+        retryQueue.removeAll()
+        Task {
+            await tokenManager.invalidate()
+            for info in toRetry {
+                guard let url = try? await tokenManager.resolvedStreamURL(for: info.track, using: api) else { continue }
+                await MainActor.run {
+                    if !offlineStore.isDownloaded(trackId: info.track.id) {
+                        enqueue(QueuedDownload(info: info, resolvedURL: url))
+                    }
+                }
+            }
         }
     }
 
@@ -249,6 +363,12 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
+        // Check for HTTP error responses (e.g. expired token) — skip saving
+        if let httpResponse = downloadTask.response as? HTTPURLResponse,
+           !(200...299).contains(httpResponse.statusCode) {
+            // Don't save — didCompleteWithError will handle retry
+            return
+        }
         // Must move file immediately — location is deleted after this method returns.
         let taskId = downloadTask.taskIdentifier
         let savedURL = moveDownloadToFinalLocation(taskId: taskId, tempLocation: location)
@@ -279,22 +399,37 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         task: URLSessionTask,
         didCompleteWithError error: (any Error)?
     ) {
-        guard let error else { return }
-        if (error as NSError).code == NSURLErrorCancelled { return }
         let taskId = task.taskIdentifier
+        let statusCode = (task.response as? HTTPURLResponse)?.statusCode
+
         Task { @MainActor in
             guard let info = taskDownloads[taskId] else { return }
+
+            // Check for token expiry (401/403) — queue for retry with fresh token
+            if let statusCode, (statusCode == 401 || statusCode == 403) {
+                cleanupTask(trackId: info.track.id, taskId: taskId)
+                var retryInfo = info
+                retryInfo.retryCount += 1
+                if retryInfo.retryCount <= 3 {
+                    print("DownloadService: token expired for \(info.track.name), queuing retry (\(retryInfo.retryCount)/3)")
+                    retryQueue.append(retryInfo)
+                } else {
+                    print("DownloadService: giving up on \(info.track.name) after 3 retries")
+                }
+                return
+            }
+
+            guard let error else { return }
+            if (error as NSError).code == NSURLErrorCancelled { return }
             print("DownloadService: download failed for \(info.track.name): \(error)")
-            activeDownloads.removeValue(forKey: info.track.id)
-            trackIdToTaskId.removeValue(forKey: info.track.id)
-            activeTasks.removeValue(forKey: info.track.id)
-            taskDownloads.removeValue(forKey: taskId)
-            startNextIfNeeded()
+            cleanupTask(trackId: info.track.id, taskId: taskId)
         }
     }
 
     nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
         Task { @MainActor in
+            // Start next queued downloads after background events are delivered
+            startNextIfNeeded()
             #if os(iOS)
             let handler = BackgroundSessionDelegate.pendingCompletionHandler
             BackgroundSessionDelegate.pendingCompletionHandler = nil
@@ -308,9 +443,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Moves the downloaded file to its final location. Called on the delegate queue (background thread)
     /// because the temp file at `location` is deleted after `didFinishDownloadingTo` returns.
     nonisolated private func moveDownloadToFinalLocation(taskId: Int, tempLocation: URL) -> URL? {
-        // Read taskDownloads directly — safe because delegateQueue is serial
-        // and taskDownloads is only mutated on MainActor before the task starts.
-        // We capture the info we need synchronously.
         let fm = FileManager.default
         let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let tempDest = appSupport
@@ -366,10 +498,12 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         }
 
         activeDownloads.removeValue(forKey: info.track.id)
+        activeDownloadOrder.removeAll { $0 == info.track.id }
         trackIdToTaskId.removeValue(forKey: info.track.id)
         activeTasks.removeValue(forKey: info.track.id)
         progressValues.removeValue(forKey: info.track.id)
         taskDownloads.removeValue(forKey: taskId)
+        inFlightCount -= 1
         stopProgressTimerIfIdle()
         startNextIfNeeded()
     }

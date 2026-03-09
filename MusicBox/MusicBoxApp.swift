@@ -94,6 +94,7 @@ struct MusicBoxApp: App {
                     await auth.validateSession()
                     await syncService?.syncIfNeeded()
                 }
+                downloadService?.retryFailedDownloads()
             }
             #endif
             #if os(macOS)
@@ -102,6 +103,7 @@ struct MusicBoxApp: App {
                     await auth.validateSession()
                     await syncService?.syncIfNeeded()
                 }
+                downloadService?.retryFailedDownloads()
             }
             #endif
         }
