@@ -216,6 +216,11 @@ final class PlayerService {
         if isPlaying {
             primaryPlayer.pause()
             isPlaying = false
+            // Sync progress to actual player position to avoid lock screen scrubber jump
+            let currentTime = primaryPlayer.currentTime().seconds
+            if currentTime.isFinite {
+                progress = currentTime
+            }
         } else if primaryPlayer.currentItem == nil && !queue.isEmpty {
             // Stopped at end of queue — reload and play from current position
             Task { await loadAndPlayCurrent() }
