@@ -37,6 +37,7 @@ final class PlayerService {
     @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
     @ObservationIgnored private var routeChangeObserver: NSObjectProtocol?
     @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
+    @ObservationIgnored private var nowPlayingArtworkURL: URL?
     @ObservationIgnored private var isSeeking: Bool = false
     @ObservationIgnored private var isLoadingTrack: Bool = false
 
@@ -336,7 +337,8 @@ final class PlayerService {
         currentTrack = track
         progress = 0
         duration = track.duration
-        nowPlayingArtwork = nil
+        // Keep previous artwork as placeholder to avoid lock screen flash;
+        // updateNowPlayingInfo will async-fetch and replace if artwork changed
 
         // Stop current playback
         primaryPlayer.pause()
@@ -607,7 +609,7 @@ final class PlayerService {
 
         currentIndex = nextIndex
         currentTrack = nextTrack
-        nowPlayingArtwork = nil
+        // Keep previous artwork as placeholder to avoid lock screen flash
         progress = 0
         duration = nextTrack.duration
         isPlaying = true
@@ -711,9 +713,10 @@ final class PlayerService {
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 
-        // Load artwork in background
+        // Load artwork in background (skip if same URL already loaded)
         let idx = effectiveIndex
         guard idx >= 0 && idx < queue.count, let artworkURL = queue[idx].artworkURL else { return }
+        guard artworkURL != nowPlayingArtworkURL else { return }
         let trackId = track.id
         Task {
             do {
@@ -729,6 +732,7 @@ final class PlayerService {
                     // Only set if we're still on the same track
                     guard self.currentTrack?.id == trackId else { return }
                     self.nowPlayingArtwork = artwork
+                    self.nowPlayingArtworkURL = artworkURL
                     MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork
                 }
             } catch {}
