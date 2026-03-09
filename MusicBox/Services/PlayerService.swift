@@ -497,6 +497,17 @@ final class PlayerService {
         // Only begin once
         guard secondaryPlayer == nil else { return }
 
+        // Determine next track — bail before touching observers if there's nothing to crossfade into
+        let nextIdx: Int
+        let nextCurrent = currentIndex + 1
+        if nextCurrent < queue.count {
+            nextIdx = nextCurrent
+        } else if repeatMode == .all {
+            nextIdx = 0
+        } else {
+            return
+        }
+
         // Remove the crossfade observer so it can't re-fire while async work is pending
         if let crossfadeObserver {
             primaryPlayer.removeTimeObserver(crossfadeObserver)
@@ -507,17 +518,6 @@ final class PlayerService {
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
             self.endObserver = nil
-        }
-
-        // Determine next track
-        let nextIdx: Int
-        let nextCurrent = currentIndex + 1
-        if nextCurrent < queue.count {
-            nextIdx = nextCurrent
-        } else if repeatMode == .all {
-            nextIdx = 0
-        } else {
-            return
         }
 
         let nextEffective: Int
