@@ -4,7 +4,6 @@ struct ArtistListView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
-    @Environment(OfflineStore.self) private var offlineStore
     @Environment(SyncService.self) private var syncService
     @Environment(NetworkMonitor.self) private var network
     @State private var scrollPosition = ScrollPosition()
@@ -21,7 +20,7 @@ struct ArtistListView: View {
                     let items = albums.flatMap { album in
                         (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
                     }
-                    let available = offlineStore.availableItems(items, isOnline: network.isOnline)
+                    let available = musicLibrary.availableItems(items, isOnline: network.isOnline)
                     guard !available.isEmpty else { return }
                     player.playNext(queue: available)
                 } label: {
@@ -33,7 +32,7 @@ struct ArtistListView: View {
                     let items = albums.flatMap { album in
                         (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
                     }
-                    let available = offlineStore.availableItems(items, isOnline: network.isOnline)
+                    let available = musicLibrary.availableItems(items, isOnline: network.isOnline)
                     guard !available.isEmpty else { return }
                     player.addToEnd(queue: available)
                 } label: {
@@ -42,9 +41,9 @@ struct ArtistListView: View {
 
                 Divider()
 
-                if offlineStore.isArtistDownloaded(artistId: artist.id) {
+                if musicLibrary.isArtistDownloaded(artistId: artist.id) {
                     Button(role: .destructive) {
-                        offlineStore.deleteArtist(artistId: artist.id)
+                        musicLibrary.markArtistUndownloaded(artistId: artist.id)
                     } label: {
                         Label("Remove Download", systemImage: "trash")
                     }

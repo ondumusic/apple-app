@@ -5,7 +5,6 @@ struct SongListView: View {
     @Environment(PlayerService.self) private var player
     @Environment(SyncService.self) private var syncService
     @Environment(NetworkMonitor.self) private var network
-    @Environment(OfflineStore.self) private var offlineStore
 
     @State private var sections: [SongSection] = []
     @State private var allQueueItems: [QueueItem] = []
@@ -24,7 +23,7 @@ struct SongListView: View {
                     if !sections.isEmpty {
                         HStack(spacing: 12) {
                             Button {
-                                let available = offlineStore.availableItems(allQueueItems, isOnline: network.isOnline)
+                                let available = musicLibrary.availableItems(allQueueItems, isOnline: network.isOnline)
                                 guard !available.isEmpty else { return }
                                 player.playNow(queue: available)
                             } label: {
@@ -33,7 +32,7 @@ struct SongListView: View {
                             }
 
                             Button {
-                                let available = offlineStore.availableItems(allQueueItems, isOnline: network.isOnline)
+                                let available = musicLibrary.availableItems(allQueueItems, isOnline: network.isOnline)
                                 guard !available.isEmpty else { return }
                                 player.playShuffled(queue: available)
                             } label: {
@@ -51,7 +50,7 @@ struct SongListView: View {
                         Section {
                             ForEach(section.tracks) { track in
                                 TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
-                                    let available = offlineStore.availableItems(allQueueItems, isOnline: network.isOnline)
+                                    let available = musicLibrary.availableItems(allQueueItems, isOnline: network.isOnline)
                                     if let idx = available.firstIndex(where: { $0.track.id == track.id }) {
                                         player.playNow(queue: available, startingAt: idx)
                                     }

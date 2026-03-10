@@ -3,7 +3,7 @@ import SwiftUI
 struct TrackRow: View {
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
-    @Environment(OfflineStore.self) private var offlineStore
+    @Environment(MusicLibrary.self) private var musicLibrary
 
     let track: Track
     var album: Album? = nil
@@ -22,7 +22,7 @@ struct TrackRow: View {
     }
 
     private var isAvailable: Bool {
-        network.isOnline || offlineStore.isDownloaded(trackId: track.id)
+        network.isOnline || musicLibrary.isDownloaded(trackId: track.id)
     }
 
     var body: some View {
@@ -99,7 +99,6 @@ struct TrackRow: View {
 /// Isolated subview so download/offline observation doesn't invalidate the parent TrackRow.
 private struct TrackDownloadMenuItems: View {
     @Environment(DownloadService.self) private var downloadService
-    @Environment(OfflineStore.self) private var offlineStore
     @Environment(MusicLibrary.self) private var musicLibrary
 
     let track: Track
@@ -107,9 +106,9 @@ private struct TrackDownloadMenuItems: View {
     let artist: Artist?
 
     var body: some View {
-        if offlineStore.isDownloaded(trackId: track.id) {
+        if musicLibrary.isDownloaded(trackId: track.id) {
             Button(role: .destructive) {
-                offlineStore.deleteTrack(trackId: track.id)
+                musicLibrary.markUndownloaded(trackId: track.id)
             } label: {
                 Label("Remove Download", systemImage: "trash")
             }

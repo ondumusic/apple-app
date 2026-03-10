@@ -4,7 +4,6 @@ struct ArtistDetailView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
-    @Environment(OfflineStore.self) private var offlineStore
     @Environment(NetworkMonitor.self) private var network
 
     let artist: Artist
@@ -42,7 +41,7 @@ struct ArtistDetailView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button {
-                            let tracks = offlineStore.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
+                            let tracks = musicLibrary.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
                             guard !tracks.isEmpty else { return }
                             player.playNext(tracks: tracks, artworkURL: album.artworkUrl)
                         } label: {
@@ -50,7 +49,7 @@ struct ArtistDetailView: View {
                         }
 
                         Button {
-                            let tracks = offlineStore.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
+                            let tracks = musicLibrary.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
                             guard !tracks.isEmpty else { return }
                             player.addToEnd(tracks: tracks, artworkURL: album.artworkUrl)
                         } label: {
@@ -59,9 +58,9 @@ struct ArtistDetailView: View {
 
                         Divider()
 
-                        if offlineStore.isAlbumDownloaded(albumId: album.id) {
+                        if musicLibrary.isAlbumDownloaded(albumId: album.id) {
                             Button(role: .destructive) {
-                                offlineStore.deleteAlbum(albumId: album.id)
+                                musicLibrary.markAlbumUndownloaded(albumId: album.id)
                             } label: {
                                 Label("Remove Download", systemImage: "trash")
                             }
@@ -91,7 +90,7 @@ struct ArtistDetailView: View {
         let allItems = albums.flatMap { album in
             (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
         }
-        let items = offlineStore.availableItems(allItems, isOnline: network.isOnline)
+        let items = musicLibrary.availableItems(allItems, isOnline: network.isOnline)
         guard !items.isEmpty else { return }
         if shuffle {
             player.playShuffled(queue: items)

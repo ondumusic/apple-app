@@ -4,7 +4,6 @@ struct AlbumDetailView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
-    @Environment(OfflineStore.self) private var offlineStore
     @Environment(NetworkMonitor.self) private var network
 
     let album: Album
@@ -37,11 +36,11 @@ struct AlbumDetailView: View {
                             .foregroundStyle(.secondary)
 
                         if !tracks.isEmpty {
-                            let hasPlayable = network.isOnline || offlineStore.downloadedTrackCount(albumId: album.id) > 0
+                            let hasPlayable = network.isOnline || musicLibrary.downloadedTrackCount(albumId: album.id) > 0
 
                             HStack(spacing: 12) {
                                 Button {
-                                    let available = offlineStore.availableTracks(tracks, isOnline: network.isOnline)
+                                    let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
                                     player.playNow(tracks: available, artworkURL: album.artworkUrl)
                                 } label: {
                                     Label("Play", systemImage: "play.fill")
@@ -49,7 +48,7 @@ struct AlbumDetailView: View {
                                 .disabled(!hasPlayable)
 
                                 Button {
-                                    let available = offlineStore.availableTracks(tracks, isOnline: network.isOnline)
+                                    let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
                                     player.playShuffled(tracks: available, artworkURL: album.artworkUrl)
                                 } label: {
                                     Label("Shuffle", systemImage: "shuffle")
@@ -59,7 +58,7 @@ struct AlbumDetailView: View {
                                 if downloadService.isAlbumDownloading(albumId: album.id) {
                                     ProgressView()
                                         .controlSize(.small)
-                                } else if offlineStore.downloadedTrackCount(albumId: album.id) == tracks.count && !tracks.isEmpty {
+                                } else if musicLibrary.downloadedTrackCount(albumId: album.id) == tracks.count && !tracks.isEmpty {
                                     Button {
                                         showRemoveDownloadConfirmation = true
                                     } label: {
@@ -71,7 +70,7 @@ struct AlbumDetailView: View {
                                         titleVisibility: .visible
                                     ) {
                                         Button("Remove", role: .destructive) {
-                                            offlineStore.deleteAlbum(albumId: album.id)
+                                            musicLibrary.markAlbumUndownloaded(albumId: album.id)
                                         }
                                     } message: {
                                         Text("Remove the downloaded album \"\(album.name)\"?")
@@ -108,7 +107,7 @@ struct AlbumDetailView: View {
                     let discTracks = tracks.filter { $0.disc == disc }
                     ForEach(discTracks) { track in
                         TrackRow(track: track, album: album) {
-                            let available = offlineStore.availableTracks(tracks, isOnline: network.isOnline)
+                            let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
                             if let index = available.firstIndex(where: { $0.id == track.id }) {
                                 player.playNow(tracks: available, startingAt: index, artworkURL: album.artworkUrl)
                             }

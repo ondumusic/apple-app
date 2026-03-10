@@ -26,7 +26,7 @@ final class PlayerService {
     @ObservationIgnored private let api: APIService
     @ObservationIgnored private let settings: SettingsStore
     @ObservationIgnored private let tokenManager = PlayTokenManager()
-    @ObservationIgnored private let offlineStore: OfflineStore?
+    @ObservationIgnored private let musicLibrary: MusicLibrary?
     @ObservationIgnored private let playbackCache: PlaybackCache?
     @ObservationIgnored private var primaryPlayer = AVPlayer()
     @ObservationIgnored private var secondaryPlayer: AVPlayer?
@@ -66,10 +66,10 @@ final class PlayerService {
 
     // MARK: - Init
 
-    init(api: APIService, settings: SettingsStore, offlineStore: OfflineStore? = nil, playbackCache: PlaybackCache? = nil) {
+    init(api: APIService, settings: SettingsStore, musicLibrary: MusicLibrary? = nil, playbackCache: PlaybackCache? = nil) {
         self.api = api
         self.settings = settings
-        self.offlineStore = offlineStore
+        self.musicLibrary = musicLibrary
         self.playbackCache = playbackCache
         // Restore persisted shuffle/repeat state
         self.repeatMode = settings.repeatMode
@@ -352,7 +352,7 @@ final class PlayerService {
 
         do {
             let playbackURL: URL
-            if let offlineURL = offlineStore?.localURL(for: track.id) {
+            if let offlineURL = musicLibrary?.localURL(for: track.id) {
                 playbackURL = offlineURL
                 queue[idx].playbackURL = offlineURL
                 print("PlayerService: using offline URL for \(track.name), url=\(offlineURL)")
@@ -410,7 +410,7 @@ final class PlayerService {
         guard nextEffective < queue.count, queue[nextEffective].playbackURL == nil else { return }
         let track = queue[nextEffective].track
         // Check offline store first
-        if let offlineURL = offlineStore?.localURL(for: track.id) {
+        if let offlineURL = musicLibrary?.localURL(for: track.id) {
             queue[nextEffective].playbackURL = offlineURL
             return
         }
@@ -541,7 +541,7 @@ final class PlayerService {
         Task {
             do {
                 let playbackURL: URL
-                if let offlineURL = offlineStore?.localURL(for: nextTrack.id) {
+                if let offlineURL = musicLibrary?.localURL(for: nextTrack.id) {
                     playbackURL = offlineURL
                     await MainActor.run { self.queue[nextEffective].playbackURL = offlineURL }
                 } else if let cached = queue[nextEffective].playbackURL {

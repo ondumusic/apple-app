@@ -1,14 +1,13 @@
 import SwiftUI
-import SwiftData
 
 struct DownloadsView: View {
-    @Query(sort: \DownloadedArtist.name) private var artists: [DownloadedArtist]
     @Environment(DownloadService.self) private var downloadService
-    @Environment(OfflineStore.self) private var offlineStore
     @Environment(MusicLibrary.self) private var musicLibrary
     @State private var showDeleteAllConfirmation = false
     @State private var showDownloadAllConfirmation = false
-    @State private var artistToDelete: DownloadedArtist?
+    @State private var artistToDelete: Artist?
+
+    private var artists: [Artist] { musicLibrary.downloadedArtists() }
 
     var body: some View {
         List {
@@ -139,7 +138,7 @@ struct DownloadsView: View {
                                 HStack {
                                     Text(artist.name)
                                     Spacer()
-                                    Text("\(artist.albums.count) \(artist.albums.count == 1 ? "album" : "albums")")
+                                    Text("\(artist.albumCount) \(artist.albumCount == 1 ? "album" : "albums")")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -166,8 +165,8 @@ struct DownloadsView: View {
             }
         }
         .navigationTitle("Downloads")
-        .navigationDestination(for: DownloadedArtist.self) { artist in
-            DownloadedArtistDetailView(artist: artist)
+        .navigationDestination(for: Artist.self) { artist in
+            DownloadedArtistAlbumsView(artist: artist)
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -202,7 +201,7 @@ struct DownloadsView: View {
                     ) {
                         Button("Delete All", role: .destructive) {
                             downloadService.cancelAll()
-                            offlineStore.deleteAll()
+                            musicLibrary.markAllUndownloaded()
                         }
                     } message: {
                         Text("This will remove all downloaded music from this device. This cannot be undone.")
@@ -217,12 +216,83 @@ struct DownloadsView: View {
         ) {
             Button("Delete", role: .destructive) {
                 if let artist = artistToDelete {
-                    offlineStore.deleteArtist(artistId: artist.id)
+                    musicLibrary.markArtistUndownloaded(artistId: artist.id)
                 }
             }
         } message: {
             if let artist = artistToDelete {
                 Text("Remove all downloaded music by \(artist.name)?")
+            }
+        }
+    }
+}
+
+/// Shows downloaded albums for an artist, navigating to the standard AlbumDetailView.
+private struct DownloadedArtistAlbumsView: View {
+    @Environment(MusicLibrary.self) private var musicLibrary
+    @State private var albumToDelete: Album?
+
+    let artist: Artist
+
+    var body: some View {
+        let albums = musicLibrary.downloadedAlbumsForArtist(artist.id)
+        List {
+            ForEach(albums) { album in
+                NavigationLink(value: album) {
+                    HStack(spacing: 12) {
+                        ArtworkView(url: album.artworkUrl)
+                            .frame(width: 48, height: 48)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(album.name)
+                                .lineLimit(1)
+
+                            if let year = album.releaseYear {
+                                Text(String(year))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            let count = musicLibrary.downloadedTrackCount(albumId: album.id)
+                            Text("\(count) \(count == 1 ? "song" : "songs")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        albumToDelete = album
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+                .contextMenu {
+                    Button(role: .destructive) {
+                        albumToDelete = album
+                    } label: {
+                        Label("Delete Album", systemImage: "trash")
+                    }
+                }
+            }
+        }
+        .navigationTitle(artist.name)
+        .navigationDestination(for: Album.self) { album in
+            AlbumDetailView(album: album)
+        }
+        .confirmationDialog(
+            "Delete Album",
+            isPresented: Binding(get: { albumToDelete != nil }, set: { if !$0 { albumToDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let album = albumToDelete {
+                    musicLibrary.markAlbumUndownloaded(albumId: album.id)
+                }
+            }
+        } message: {
+            if let album = albumToDelete {
+                Text("Remove the downloaded album \"\(album.name)\"?")
             }
         }
     }

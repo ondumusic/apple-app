@@ -41,7 +41,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     // MARK: - Private
 
-    @ObservationIgnored private let offlineStore: OfflineStore
+    @ObservationIgnored private let musicLibrary: MusicLibrary
     @ObservationIgnored private let api: APIService
     @ObservationIgnored private let settings: SettingsStore
     @ObservationIgnored private let tokenManager = PlayTokenManager()
@@ -80,9 +80,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     // MARK: - Init
 
-    init(api: APIService, offlineStore: OfflineStore, settings: SettingsStore) {
+    init(api: APIService, musicLibrary: MusicLibrary, settings: SettingsStore) {
         self.api = api
-        self.offlineStore = offlineStore
+        self.musicLibrary = musicLibrary
         self.settings = settings
         super.init()
         _ = downloadSession
@@ -91,7 +91,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     // MARK: - Public API
 
     func download(track: Track, album: Album, artist: Artist) {
-        guard !offlineStore.isDownloaded(trackId: track.id),
+        guard !musicLibrary.isDownloaded(trackId: track.id),
               !isDownloading(trackId: track.id),
               !isQueued(trackId: track.id) else { return }
 
@@ -129,7 +129,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 for album in albums {
                     guard let tracks = album.tracks else { continue }
                     for track in tracks {
-                        guard !offlineStore.isDownloaded(trackId: track.id),
+                        guard !musicLibrary.isDownloaded(trackId: track.id),
                               !isDownloading(trackId: track.id),
                               !isQueued(trackId: track.id) else { continue }
                         batch.append(DownloadInfo(track: track, album: album, artist: artist))
@@ -291,7 +291,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         guard !isPaused else { return }
         while !pendingQueue.isEmpty, inFlightCount < settings.maxConcurrentDownloads {
             let next = pendingQueue.removeFirst()
-            if offlineStore.isDownloaded(trackId: next.info.track.id) { continue }
+            if musicLibrary.isDownloaded(trackId: next.info.track.id) { continue }
             startTask(next)
         }
     }
@@ -348,7 +348,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             for info in toRetry {
                 guard let url = try? await tokenManager.resolvedStreamURL(for: info.track, using: api) else { continue }
                 await MainActor.run {
-                    if !offlineStore.isDownloaded(trackId: info.track.id) {
+                    if !musicLibrary.isDownloaded(trackId: info.track.id) {
                         enqueue(QueuedDownload(info: info, resolvedURL: url))
                     }
                 }
@@ -487,10 +487,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 try fm.moveItem(at: savedURL, to: destURL)
 
                 print("DownloadService: saved \(info.track.name) to \(destURL.path)")
-                print("DownloadService: albumArtistId=\(info.artist.id), trackArtistId=\(info.track.artistId)")
-                let downloadedArtist = offlineStore.ensureArtist(from: info.artist)
-                let downloadedAlbum = offlineStore.ensureAlbum(from: info.album, artist: downloadedArtist)
-                offlineStore.insertTrack(info.track, localFileURL: destURL, album: downloadedAlbum)
+                let relativePath = "MusicBox/Downloads/\(info.artist.id.uuidString)/\(info.album.id.uuidString)/\(info.track.id.uuidString).\(ext)"
+                musicLibrary.markDownloaded(trackId: info.track.id, relativePath: relativePath)
             } catch {
                 print("DownloadService: failed to save \(info.track.name): \(error)")
                 try? fm.removeItem(at: savedURL)
