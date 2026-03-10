@@ -600,11 +600,12 @@ final class PlayerService {
                 return
             }
             let elapsed = Date().timeIntervalSince(startTime)
-            let fraction = min(Float(elapsed / fadeDuration), 1.0)
-            self.primaryPlayer.volume = 1.0 - fraction
-            secondary.volume = fraction
+            let progress = min(Float(elapsed / fadeDuration), 1.0)
+            // Equal-power crossfade curve for smoother perceived volume transition
+            self.primaryPlayer.volume = cos(progress * .pi * 0.5)
+            secondary.volume = sin(progress * .pi * 0.5)
 
-            if fraction >= 1.0 {
+            if progress >= 1.0 {
                 timer.invalidate()
                 self.completeCrossfade(nextIndex: nextIndex, nextTrack: nextTrack)
             }
