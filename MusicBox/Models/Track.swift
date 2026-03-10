@@ -15,6 +15,7 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
     var mimetype: String
     var streamUrl: String
     var fileSize: Int64
+    var isDownloaded: Bool
 
     nonisolated struct TrackAlbum: Codable, Sendable, Hashable {
         var id: UUID
@@ -31,7 +32,8 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
     init(id: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
          artist: Artist, albumArtistSortName: String, album: TrackAlbum? = nil,
          name: String, disc: Int, number: Int, duration: Double,
-         mimetype: String, streamUrl: String, fileSize: Int64 = 0) {
+         mimetype: String, streamUrl: String, fileSize: Int64 = 0,
+         isDownloaded: Bool = false) {
         self.id = id
         self.artistId = artistId
         self.albumArtistId = albumArtistId
@@ -46,6 +48,7 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         self.mimetype = mimetype
         self.streamUrl = streamUrl
         self.fileSize = fileSize
+        self.isDownloaded = isDownloaded
     }
 
     init(from decoder: Decoder) throws {
@@ -64,5 +67,6 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         mimetype = try container.decode(String.self, forKey: .mimetype)
         streamUrl = try container.decode(String.self, forKey: .streamUrl)
         fileSize = try container.decodeIfPresent(Int64.self, forKey: .fileSize) ?? 0
+        isDownloaded = false
     }
 }

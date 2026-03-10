@@ -9,8 +9,8 @@ struct AlbumDetailView: View {
     let album: Album
     var downloadedOnly: Bool = false
 
-    @State private var showRemoveDownloadConfirmation = false
     @State private var tracks: [Track] = []
+    @State private var totalTrackCount: Int = 0
 
     private var discs: [Int] { Array(Set(tracks.map(\.disc))).sorted() }
     private var hasMultipleDiscs: Bool { discs.count > 1 }
@@ -32,9 +32,15 @@ struct AlbumDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        Text("\(tracks.count) \(tracks.count == 1 ? "song" : "songs")")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Group {
+                            if downloadedOnly && tracks.count < totalTrackCount {
+                                Text("\(tracks.count) of \(totalTrackCount) \(totalTrackCount == 1 ? "song" : "songs") downloaded")
+                            } else {
+                                Text("\(totalTrackCount) \(totalTrackCount == 1 ? "song" : "songs")")
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                         if !tracks.isEmpty {
                             let hasPlayable = network.isOnline || musicLibrary.downloadedTrackCount(albumId: album.id) > 0
@@ -59,24 +65,7 @@ struct AlbumDetailView: View {
                                 if downloadService.isAlbumDownloading(albumId: album.id) {
                                     ProgressView()
                                         .controlSize(.small)
-                                } else if musicLibrary.downloadedTrackCount(albumId: album.id) == tracks.count && !tracks.isEmpty {
-                                    Button {
-                                        showRemoveDownloadConfirmation = true
-                                    } label: {
-                                        Label("Remove", systemImage: "arrow.down.circle.fill")
-                                    }
-                                    .confirmationDialog(
-                                        "Remove Download",
-                                        isPresented: $showRemoveDownloadConfirmation,
-                                        titleVisibility: .visible
-                                    ) {
-                                        Button("Remove", role: .destructive) {
-                                            musicLibrary.markAlbumUndownloaded(albumId: album.id)
-                                        }
-                                    } message: {
-                                        Text("Remove the downloaded album \"\(album.name)\"?")
-                                    }
-                                } else {
+                                } else if musicLibrary.downloadedTrackCount(albumId: album.id) < totalTrackCount {
                                     Button {
                                         let artist = musicLibrary.artist(album.artistId)
                                             ?? Artist(id: album.artistId, name: "", sortName: "", slug: "")
@@ -142,8 +131,9 @@ struct AlbumDetailView: View {
         }
         .onChange(of: musicLibrary.revision, initial: true) {
             let allTracks = musicLibrary.tracksForAlbum(album.id)
+            totalTrackCount = allTracks.count
             tracks = downloadedOnly
-                ? allTracks.filter { musicLibrary.isDownloaded(trackId: $0.id) }
+                ? allTracks.filter { $0.isDownloaded }
                 : allTracks
         }
     }

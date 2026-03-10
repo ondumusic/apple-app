@@ -698,7 +698,8 @@ final class MusicLibrary {
             albumId: lt.albumId, artist: artist, albumArtistSortName: albumArtistSortName,
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
-            mimetype: lt.mimetype, streamUrl: lt.streamUrl, fileSize: lt.fileSize
+            mimetype: lt.mimetype, streamUrl: lt.streamUrl, fileSize: lt.fileSize,
+            isDownloaded: lt.isDownloaded
         )
     }
 
@@ -719,7 +720,8 @@ final class MusicLibrary {
             albumId: lt.albumId, artist: artistModel, albumArtistSortName: albumArtistSortName,
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
-            mimetype: lt.mimetype, streamUrl: lt.streamUrl, fileSize: lt.fileSize
+            mimetype: lt.mimetype, streamUrl: lt.streamUrl, fileSize: lt.fileSize,
+            isDownloaded: lt.isDownloaded
         )
     }
 

@@ -3,7 +3,6 @@ import SwiftUI
 struct TrackRow: View {
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
-    @Environment(MusicLibrary.self) private var musicLibrary
 
     let track: Track
     var album: Album? = nil
@@ -22,7 +21,7 @@ struct TrackRow: View {
     }
 
     private var isAvailable: Bool {
-        network.isOnline || musicLibrary.isDownloaded(trackId: track.id)
+        network.isOnline || track.isDownloaded
     }
 
     var body: some View {
@@ -63,6 +62,12 @@ struct TrackRow: View {
             }
 
             Spacer()
+
+            if track.isDownloaded {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
 
             Text(track.formattedDuration)
                 .font(.callout)
