@@ -10,10 +10,14 @@ nonisolated struct Album: Codable, Identifiable, Sendable, Hashable {
     var tracks: [Track]?
     var isUnknown: Bool
     var artworkUrl: URL?
+    var insertedAt: Date?
+    var artistName: String?
+    var artistSortName: String?
 
     init(id: UUID, artistId: UUID, name: String, sortName: String, slug: String,
          releaseYear: Int? = nil, tracks: [Track]? = nil, isUnknown: Bool = false,
-         artworkUrl: URL? = nil) {
+         artworkUrl: URL? = nil, insertedAt: Date? = nil,
+         artistName: String? = nil, artistSortName: String? = nil) {
         self.id = id
         self.artistId = artistId
         self.name = name
@@ -23,6 +27,9 @@ nonisolated struct Album: Codable, Identifiable, Sendable, Hashable {
         self.tracks = tracks
         self.isUnknown = isUnknown
         self.artworkUrl = artworkUrl
+        self.insertedAt = insertedAt
+        self.artistName = artistName
+        self.artistSortName = artistSortName
     }
 
     init(from decoder: Decoder) throws {
@@ -36,5 +43,8 @@ nonisolated struct Album: Codable, Identifiable, Sendable, Hashable {
         tracks = try container.decodeIfPresent([Track].self, forKey: .tracks)
         isUnknown = try container.decode(Bool.self, forKey: .isUnknown)
         artworkUrl = try container.decodeIfPresent(URL.self, forKey: .artworkUrl)
+        insertedAt = try container.decodeIfPresent(Date.self, forKey: .insertedAt)
+        artistName = try container.decodeIfPresent(String.self, forKey: .artistName)
+        artistSortName = try container.decodeIfPresent(String.self, forKey: .artistSortName)
     }
 }

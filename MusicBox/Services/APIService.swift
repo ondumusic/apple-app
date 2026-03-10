@@ -41,6 +41,7 @@ final class APIService: Sendable {
 
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
         do {
             return try decoder.decode(T.self, from: data)
         } catch let DecodingError.keyNotFound(key, context) {

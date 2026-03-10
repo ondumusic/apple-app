@@ -10,13 +10,15 @@ nonisolated class LibraryArtist {
     var sortName: String
     var slug: String
     var albumCount: Int
+    var insertedAt: Date
 
-    init(serverId: UUID, name: String, sortName: String, slug: String, albumCount: Int) {
+    init(serverId: UUID, name: String, sortName: String, slug: String, albumCount: Int, insertedAt: Date) {
         self.serverId = serverId
         self.name = name
         self.sortName = sortName
         self.slug = slug
         self.albumCount = albumCount
+        self.insertedAt = insertedAt
     }
 }
 
@@ -31,9 +33,10 @@ nonisolated class LibraryAlbum {
     var artworkUrl: URL?
     var isUnknown: Bool
     var trackCount: Int
+    var insertedAt: Date
 
     init(serverId: UUID, artistId: UUID, name: String, sortName: String, slug: String,
-         releaseYear: Int?, artworkUrl: URL?, isUnknown: Bool, trackCount: Int) {
+         releaseYear: Int?, artworkUrl: URL?, isUnknown: Bool, trackCount: Int, insertedAt: Date) {
         self.serverId = serverId
         self.artistId = artistId
         self.name = name
@@ -43,6 +46,7 @@ nonisolated class LibraryAlbum {
         self.artworkUrl = artworkUrl
         self.isUnknown = isUnknown
         self.trackCount = trackCount
+        self.insertedAt = insertedAt
     }
 }
 
@@ -58,10 +62,14 @@ nonisolated class LibraryTrack {
     var duration: Double
     var mimetype: String
     var streamUrl: String
+    var insertedAt: Date
+    var fileSize: Int64
+    var fileChecksum: String
 
     init(serverId: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
          name: String, disc: Int, number: Int, duration: Double,
-         mimetype: String, streamUrl: String) {
+         mimetype: String, streamUrl: String, insertedAt: Date,
+         fileSize: Int64, fileChecksum: String) {
         self.serverId = serverId
         self.artistId = artistId
         self.albumArtistId = albumArtistId
@@ -72,6 +80,9 @@ nonisolated class LibraryTrack {
         self.duration = duration
         self.mimetype = mimetype
         self.streamUrl = streamUrl
+        self.insertedAt = insertedAt
+        self.fileSize = fileSize
+        self.fileChecksum = fileChecksum
     }
 }
 
@@ -122,16 +133,7 @@ final class MusicLibrary {
         let artistMap = buildArtistMap()
         return libAlbums
             .filter { $0.trackCount > 0 }
-            .sorted { a, b in
-                let aSortName = artistMap[a.artistId]?.sortName ?? ""
-                let bSortName = artistMap[b.artistId]?.sortName ?? ""
-                if aSortName != bSortName { return aSortName < bSortName }
-                let aYear = a.releaseYear ?? 0
-                let bYear = b.releaseYear ?? 0
-                if aYear != bYear { return aYear > bYear }
-                return a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
-            }
-            .map { toAlbum($0) }
+            .map { toAlbum($0, artistMap: artistMap) }
     }
 
     func albumsForArtist(_ artistId: UUID) -> [Album] {
@@ -263,10 +265,11 @@ final class MusicLibrary {
                 la.sortName = sa.sortName
                 la.slug = sa.slug
                 la.albumCount = sa.albumCount
+                la.insertedAt = sa.insertedAt
             } else {
                 modelContext.insert(LibraryArtist(
                     serverId: sa.id, name: sa.name, sortName: sa.sortName,
-                    slug: sa.slug, albumCount: sa.albumCount))
+                    slug: sa.slug, albumCount: sa.albumCount, insertedAt: sa.insertedAt))
             }
         }
         try? modelContext.save()
@@ -287,12 +290,14 @@ final class MusicLibrary {
                 la.artworkUrl = sa.artworkUrl
                 la.isUnknown = sa.isUnknown
                 la.trackCount = sa.trackCount
+                la.insertedAt = sa.insertedAt
             } else {
                 modelContext.insert(LibraryAlbum(
                     serverId: sa.id, artistId: sa.artistId, name: sa.name,
                     sortName: sa.sortName, slug: sa.slug,
                     releaseYear: sa.releaseYear, artworkUrl: sa.artworkUrl,
-                    isUnknown: sa.isUnknown, trackCount: sa.trackCount))
+                    isUnknown: sa.isUnknown, trackCount: sa.trackCount,
+                    insertedAt: sa.insertedAt))
             }
         }
         try? modelContext.save()
@@ -314,11 +319,15 @@ final class MusicLibrary {
                 lt.duration = st.duration
                 lt.mimetype = st.mimetype
                 lt.streamUrl = st.streamUrl
+                lt.insertedAt = st.insertedAt
+                lt.fileSize = st.file.size
+                lt.fileChecksum = st.file.checksum
             } else {
                 modelContext.insert(LibraryTrack(
                     serverId: st.id, artistId: st.artistId, albumArtistId: st.albumArtistId,
                     albumId: st.albumId, name: st.name, disc: st.disc, number: st.number,
-                    duration: st.duration, mimetype: st.mimetype, streamUrl: st.streamUrl))
+                    duration: st.duration, mimetype: st.mimetype, streamUrl: st.streamUrl,
+                    insertedAt: st.insertedAt, fileSize: st.file.size, fileChecksum: st.file.checksum))
             }
         }
         try? modelContext.save()
@@ -379,10 +388,12 @@ final class MusicLibrary {
 
     // MARK: - Private: Builders
 
-    private func toAlbum(_ la: LibraryAlbum) -> Album {
-        Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
+    private func toAlbum(_ la: LibraryAlbum, artistMap: [UUID: LibraryArtist]? = nil) -> Album {
+        let artist = artistMap?[la.artistId]
+        return Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
               slug: la.slug, releaseYear: la.releaseYear, isUnknown: la.isUnknown,
-              artworkUrl: la.artworkUrl)
+              artworkUrl: la.artworkUrl, insertedAt: la.insertedAt,
+              artistName: artist?.name, artistSortName: artist?.sortName)
     }
 
     private func buildTracks(from libTracks: [LibraryTrack]) -> [Track] {
@@ -409,7 +420,7 @@ final class MusicLibrary {
             albumId: lt.albumId, artist: artist, albumArtistSortName: albumArtistSortName,
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
-            mimetype: lt.mimetype, streamUrl: lt.streamUrl
+            mimetype: lt.mimetype, streamUrl: lt.streamUrl, fileSize: lt.fileSize
         )
     }
 

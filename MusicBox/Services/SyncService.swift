@@ -18,11 +18,12 @@ nonisolated struct SyncArtist: Sendable {
     var sortName: String
     var slug: String
     var albumCount: Int
+    var insertedAt: Date
 }
 
 extension SyncArtist: Decodable {
     nonisolated enum CodingKeys: String, CodingKey {
-        case id, name, sortName, slug, albumCount
+        case id, name, sortName, slug, albumCount, insertedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -32,6 +33,7 @@ extension SyncArtist: Decodable {
         sortName = try container.decodeIfPresent(String.self, forKey: .sortName) ?? name
         slug = try container.decode(String.self, forKey: .slug)
         albumCount = try container.decode(Int.self, forKey: .albumCount)
+        insertedAt = try container.decode(Date.self, forKey: .insertedAt)
     }
 }
 
@@ -45,11 +47,12 @@ nonisolated struct SyncAlbum: Sendable {
     var artworkUrl: URL?
     var isUnknown: Bool
     var trackCount: Int
+    var insertedAt: Date
 }
 
 extension SyncAlbum: Decodable {
     nonisolated enum CodingKeys: String, CodingKey {
-        case id, artistId, name, sortName, slug, releaseYear, artworkUrl, isUnknown, trackCount
+        case id, artistId, name, sortName, slug, releaseYear, artworkUrl, isUnknown, trackCount, insertedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -63,6 +66,7 @@ extension SyncAlbum: Decodable {
         artworkUrl = try container.decodeIfPresent(URL.self, forKey: .artworkUrl)
         isUnknown = try container.decode(Bool.self, forKey: .isUnknown)
         trackCount = try container.decode(Int.self, forKey: .trackCount)
+        insertedAt = try container.decode(Date.self, forKey: .insertedAt)
     }
 }
 
@@ -77,6 +81,13 @@ nonisolated struct SyncTrack: Decodable, Sendable {
     var duration: Double
     var mimetype: String
     var streamUrl: String
+    var insertedAt: Date
+    var file: SyncFile
+
+    nonisolated struct SyncFile: Decodable, Sendable {
+        var size: Int64
+        var checksum: String
+    }
 }
 
 nonisolated struct SyncDeletion: Decodable, Sendable {

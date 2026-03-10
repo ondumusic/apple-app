@@ -13,7 +13,33 @@ final class OfflineStore {
             DownloadedArtist.self, DownloadedAlbum.self, DownloadedTrack.self,
             LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self
         ])
-        modelContainer = try ModelContainer(for: schema)
+        do {
+            modelContainer = try ModelContainer(for: schema)
+        } catch {
+            // Schema changed — delete old store and recreate.
+            // Library data is a sync cache and will be re-fetched.
+            print("OfflineStore: schema migration failed, resetting database: \(error)")
+            let fm = FileManager.default
+            let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            let storeURL = appSupport.appendingPathComponent("default.store")
+            for suffix in ["", "-wal", "-shm"] {
+                try? fm.removeItem(at: storeURL.appendingPathExtension(suffix.isEmpty ? "" : String(suffix.dropFirst())))
+            }
+            // Also clear the file with the actual default name SwiftData uses
+            if let defaultURL = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                let enumerator = fm.enumerator(at: defaultURL, includingPropertiesForKeys: nil)
+                while let fileURL = enumerator?.nextObject() as? URL {
+                    if fileURL.lastPathComponent.hasSuffix(".store") ||
+                       fileURL.lastPathComponent.hasSuffix(".store-wal") ||
+                       fileURL.lastPathComponent.hasSuffix(".store-shm") {
+                        try? fm.removeItem(at: fileURL)
+                    }
+                }
+            }
+            // Clear sync cursor so a full re-sync happens
+            SyncService.clearSyncState()
+            modelContainer = try ModelContainer(for: schema)
+        }
     }
 
     var modelContext: ModelContext { modelContainer.mainContext }
