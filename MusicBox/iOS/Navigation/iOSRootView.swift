@@ -98,6 +98,7 @@ struct iOSRootView: View {
                 albumsPath.append(album)
             }
         }
+        .queueConfirmationOverlay()
         .sheet(isPresented: $showSettings) {
             NavigationStack {
                 SettingsView()

@@ -18,6 +18,12 @@ final class PlayerService {
     var currentTrack: Track? = nil
     var progress: Double = 0
     var duration: Double = 0
+    var queueConfirmation: QueueConfirmation? = nil
+
+    nonisolated enum QueueConfirmation: Equatable, Sendable {
+        case playNext(Int)
+        case addedToQueue(Int)
+    }
 
     var isShuffled: Bool { shuffledIndices != nil }
 
@@ -136,6 +142,7 @@ final class PlayerService {
             let newIndices = items.indices.map { insertIndex + $0 }
             shuffledIndices = shuffled.map { $0 >= insertIndex ? $0 + items.count : $0 } + newIndices
         }
+        queueConfirmation = .playNext(items.count)
     }
 
     func addToEnd(tracks: [Track], artworkURL: URL? = nil) {
@@ -155,6 +162,7 @@ final class PlayerService {
             let newIndices = items.indices.map { startIndex + $0 }
             shuffledIndices! += newIndices
         }
+        queueConfirmation = .addedToQueue(items.count)
     }
 
     func skip() {

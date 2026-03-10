@@ -79,6 +79,7 @@ struct macOSRootView: View {
                 MacOSPlayerToolbar()
             }
         }
+        .queueConfirmationOverlay()
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
             guard let artist = notification.object as? Artist else { return }
             navigationPath = NavigationPath()
