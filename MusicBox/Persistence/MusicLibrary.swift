@@ -113,8 +113,6 @@ final class MusicLibrary {
         do {
             modelContainer = try ModelContainer(for: schema)
         } catch {
-            // Schema changed — delete old store and recreate.
-            // Library data is a sync cache and will be re-fetched.
             print("MusicLibrary: schema migration failed, resetting database: \(error)")
             let fm = FileManager.default
             if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
@@ -141,9 +139,10 @@ final class MusicLibrary {
         let libArtists = (try? modelContext.fetch(
             FetchDescriptor<LibraryArtist>(sortBy: [SortDescriptor(\.sortName)])
         )) ?? []
-        let libAlbums = (try? modelContext.fetch(FetchDescriptor<LibraryAlbum>())) ?? []
-        let albumCounts = Dictionary(grouping: libAlbums.filter { $0.trackCount > 0 }, by: \.artistId)
-            .mapValues(\.count)
+        // Count albums with tracks per artist using a targeted fetch
+        let albumDescriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.trackCount > 0 })
+        let libAlbums = (try? modelContext.fetch(albumDescriptor)) ?? []
+        let albumCounts = Dictionary(grouping: libAlbums, by: \.artistId).mapValues(\.count)
         return libArtists.compactMap {
             let count = albumCounts[$0.serverId] ?? 0
             guard count > 0 else { return nil }
@@ -154,7 +153,9 @@ final class MusicLibrary {
 
     func artist(_ id: UUID) -> Artist? {
         _ = revision
-        guard let la = fetchAllArtists().first(where: { $0.serverId == id }) else { return nil }
+        var descriptor = FetchDescriptor<LibraryArtist>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        guard let la = try? modelContext.fetch(descriptor).first else { return nil }
         return Artist(id: la.serverId, name: la.name, sortName: la.sortName, slug: la.slug, albumCount: la.albumCount)
     }
 
@@ -162,38 +163,45 @@ final class MusicLibrary {
 
     func allAlbums() -> [Album] {
         _ = revision
-        let libAlbums = fetchAllAlbums()
+        let descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.trackCount > 0 })
+        let libAlbums = (try? modelContext.fetch(descriptor)) ?? []
         let artistMap = buildArtistMap()
-        return libAlbums
-            .filter { $0.trackCount > 0 }
-            .map { toAlbum($0, artistMap: artistMap) }
+        return libAlbums.map { toAlbum($0, artistMap: artistMap) }
     }
 
     func albumsForArtist(_ artistId: UUID) -> [Album] {
         _ = revision
-        return fetchAllAlbums()
-            .filter { $0.artistId == artistId }
+        let descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.artistId == artistId })
+        let libAlbums = (try? modelContext.fetch(descriptor)) ?? []
+        return libAlbums
             .sorted { ($0.releaseYear ?? 0) > ($1.releaseYear ?? 0) }
             .map { toAlbum($0) }
     }
 
     func album(_ id: UUID) -> Album? {
         _ = revision
-        guard let la = fetchAllAlbums().first(where: { $0.serverId == id }) else { return nil }
+        var descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        guard let la = try? modelContext.fetch(descriptor).first else { return nil }
         return toAlbum(la)
     }
 
     func track(_ id: UUID) -> Track? {
         _ = revision
-        guard let lt = fetchAllTracks().first(where: { $0.serverId == id }) else { return nil }
-        let artistMap = buildArtistMap()
-        let albumMap = buildAlbumMap()
-        return buildTrack(lt, artistMap: artistMap, album: albumMap[lt.albumId])
+        var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        guard let lt = try? modelContext.fetch(descriptor).first else { return nil }
+        let artist = fetchArtist(lt.artistId)
+        let album = fetchAlbum(lt.albumId)
+        let albumArtist = lt.albumArtistId != lt.artistId ? fetchArtist(lt.albumArtistId) : artist
+        return buildTrack(lt, artist: artist, albumArtist: albumArtist, album: album)
     }
 
     func albumWithTracks(_ id: UUID) -> Album? {
         _ = revision
-        guard let la = fetchAllAlbums().first(where: { $0.serverId == id }) else { return nil }
+        var descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        guard let la = try? modelContext.fetch(descriptor).first else { return nil }
         let tracks = tracksForAlbum(id)
         return Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
                      slug: la.slug, releaseYear: la.releaseYear, tracks: tracks,
@@ -202,12 +210,14 @@ final class MusicLibrary {
 
     func albumsWithTracksForArtist(_ artistId: UUID) -> [Album] {
         _ = revision
-        let libAlbums = fetchAllAlbums()
-            .filter { $0.artistId == artistId }
+        let albumDescriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.artistId == artistId })
+        let libAlbums = ((try? modelContext.fetch(albumDescriptor)) ?? [])
             .sorted { ($0.releaseYear ?? 0) > ($1.releaseYear ?? 0) }
-        let libTracks = fetchAllTracks().filter { $0.albumArtistId == artistId }
 
-        let artistMap = buildArtistMap()
+        let trackDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId })
+        let libTracks = (try? modelContext.fetch(trackDescriptor)) ?? []
+
+        let artistMap = buildArtistMapForIds(Set(libTracks.map(\.artistId) + [artistId]))
         let tracksByAlbum = Dictionary(grouping: libTracks, by: \.albumId)
 
         return libAlbums.map { la in
@@ -224,8 +234,13 @@ final class MusicLibrary {
 
     func tracksForAlbum(_ albumId: UUID) -> [Track] {
         _ = revision
-        let libTracks = fetchAllTracks().filter { $0.albumId == albumId }
-        return buildTracks(from: libTracks)
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId })
+        let libTracks = (try? modelContext.fetch(descriptor)) ?? []
+        let artistIds = Set(libTracks.map(\.artistId) + libTracks.map(\.albumArtistId))
+        let artistMap = buildArtistMapForIds(artistIds)
+        let album = fetchAlbumRecord(albumId)
+        return libTracks
+            .map { buildTrack($0, artistMap: artistMap, album: album) }
             .sorted { ($0.disc, $0.number) < ($1.disc, $1.number) }
     }
 
@@ -257,13 +272,15 @@ final class MusicLibrary {
 
         let artistMap = buildArtistMap()
 
-        let artists = fetchAllArtists()
+        let artists = (try? modelContext.fetch(FetchDescriptor<LibraryArtist>())) ?? []
+        let filteredArtists = artists
             .filter { $0.name.localizedCaseInsensitiveContains(query) || $0.sortName.localizedCaseInsensitiveContains(query) }
             .filter { $0.albumCount > 0 }
             .sorted { $0.sortName < $1.sortName }
             .map { Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount) }
 
-        let albums = fetchAllAlbums()
+        let albums = (try? modelContext.fetch(FetchDescriptor<LibraryAlbum>())) ?? []
+        let filteredAlbums = albums
             .filter { $0.name.localizedCaseInsensitiveContains(query) || $0.sortName.localizedCaseInsensitiveContains(query) }
             .filter { $0.trackCount > 0 }
             .sorted { a, b in
@@ -278,12 +295,13 @@ final class MusicLibrary {
             .map { toAlbum($0) }
 
         let albumMap = buildAlbumMap()
-        let tracks = fetchAllTracks()
+        let allTracks = (try? modelContext.fetch(FetchDescriptor<LibraryTrack>())) ?? []
+        let filteredTracks = allTracks
             .filter { $0.name.localizedCaseInsensitiveContains(query) }
             .map { buildTrack($0, artistMap: artistMap, album: albumMap[$0.albumId]) }
             .sorted { ($0.artist.sortName, $0.name) < ($1.artist.sortName, $1.name) }
 
-        return (artists, albums, tracks)
+        return (filteredArtists, filteredAlbums, filteredTracks)
     }
 
     // MARK: - Downloads
@@ -332,9 +350,10 @@ final class MusicLibrary {
     /// Returns artists that have at least one downloaded track, sorted by sortName.
     func downloadedArtists() -> [Artist] {
         _ = revision
-        let downloaded = fetchAllTracks().filter { $0.isDownloaded }
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
+        let downloaded = (try? modelContext.fetch(descriptor)) ?? []
         let artistIds = Set(downloaded.map(\.albumArtistId))
-        let artistMap = buildArtistMap()
+        let artistMap = buildArtistMapForIds(artistIds)
         return artistIds.compactMap { id in
             guard let la = artistMap[id] else { return nil }
             let downloadedAlbumIds = Set(downloaded.filter { $0.albumArtistId == id }.map(\.albumId))
@@ -346,10 +365,12 @@ final class MusicLibrary {
     /// Returns all albums that have at least one downloaded track.
     func downloadedAlbums() -> [Album] {
         _ = revision
-        let downloaded = fetchAllTracks().filter { $0.isDownloaded }
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
+        let downloaded = (try? modelContext.fetch(descriptor)) ?? []
         let albumIds = Set(downloaded.map(\.albumId))
         let artistMap = buildArtistMap()
-        return fetchAllAlbums()
+        let albumDescriptor = FetchDescriptor<LibraryAlbum>()
+        return ((try? modelContext.fetch(albumDescriptor)) ?? [])
             .filter { albumIds.contains($0.serverId) }
             .map { toAlbum($0, artistMap: artistMap) }
     }
@@ -357,7 +378,8 @@ final class MusicLibrary {
     /// Returns all downloaded tracks, sorted like allTracks().
     func downloadedTracks() -> [Track] {
         _ = revision
-        let libTracks = fetchAllTracks().filter { $0.isDownloaded }
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
+        let libTracks = (try? modelContext.fetch(descriptor)) ?? []
         let artistMap = buildArtistMap()
         let albumMap = buildAlbumMap()
         return libTracks
@@ -377,10 +399,12 @@ final class MusicLibrary {
     /// Returns albums for an artist that have at least one downloaded track.
     func downloadedAlbumsForArtist(_ artistId: UUID) -> [Album] {
         _ = revision
-        let downloaded = fetchAllTracks().filter { $0.isDownloaded && $0.albumArtistId == artistId }
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true && $0.albumArtistId == artistId })
+        let downloaded = (try? modelContext.fetch(descriptor)) ?? []
         let albumIds = Set(downloaded.map(\.albumId))
-        let artistMap = buildArtistMap()
-        return fetchAllAlbums()
+        let artistMap = buildArtistMapForIds([artistId])
+        let albumDescriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.artistId == artistId })
+        return ((try? modelContext.fetch(albumDescriptor)) ?? [])
             .filter { albumIds.contains($0.serverId) }
             .sorted { ($0.releaseYear ?? 0) > ($1.releaseYear ?? 0) }
             .map { toAlbum($0, artistMap: artistMap) }
@@ -447,7 +471,6 @@ final class MusicLibrary {
             track.isDownloaded = false
             track.localFilePath = nil
         }
-        // Clean up the entire Downloads directory
         let fm = FileManager.default
         if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             let downloadsDir = appSupport.appendingPathComponent("MusicBox/Downloads", isDirectory: true)
@@ -457,14 +480,12 @@ final class MusicLibrary {
         revision += 1
     }
 
-    /// Returns file URLs for all downloaded tracks in an album.
     func downloadedFileURLs(albumId: UUID) -> [URL] {
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return [] }
         return tracks.compactMap(\.resolvedFileURL)
     }
 
-    /// Returns file URLs for all downloaded tracks by an artist.
     func downloadedFileURLs(artistId: UUID) -> [URL] {
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return [] }
@@ -473,12 +494,19 @@ final class MusicLibrary {
 
     func availableTracks(_ tracks: [Track], isOnline: Bool) -> [Track] {
         if isOnline { return tracks }
-        return tracks.filter { isDownloaded(trackId: $0.id) }
+        let ids = Set(tracks.map(\.id))
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
+        let downloadedIds = Set(((try? modelContext.fetch(descriptor)) ?? [])
+            .map(\.serverId))
+        return tracks.filter { downloadedIds.contains($0.id) }
     }
 
     func availableItems(_ items: [QueueItem], isOnline: Bool) -> [QueueItem] {
         if isOnline { return items }
-        return items.filter { isDownloaded(trackId: $0.track.id) }
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
+        let downloadedIds = Set(((try? modelContext.fetch(descriptor)) ?? [])
+            .map(\.serverId))
+        return items.filter { downloadedIds.contains($0.track.id) }
     }
 
     // MARK: - Mutations (called by SyncService)
@@ -572,7 +600,8 @@ final class MusicLibrary {
                 deleteAlbumCascade(deletion.entityId)
             case "track":
                 let id = deletion.entityId
-                let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == id })
+                var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == id })
+                descriptor.fetchLimit = 1
                 if let track = try? modelContext.fetch(descriptor).first {
                     if let url = track.resolvedFileURL {
                         try? FileManager.default.removeItem(at: url)
@@ -588,7 +617,6 @@ final class MusicLibrary {
     }
 
     func clearAll() {
-        // Remove downloaded files
         let fm = FileManager.default
         if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             let downloadsDir = appSupport.appendingPathComponent("MusicBox/Downloads", isDirectory: true)
@@ -601,26 +629,51 @@ final class MusicLibrary {
         revision += 1
     }
 
-    // MARK: - Private: Fetches
+    // MARK: - Private: Targeted Fetches
 
-    private func fetchAllArtists() -> [LibraryArtist] {
-        (try? modelContext.fetch(FetchDescriptor<LibraryArtist>())) ?? []
+    private func fetchArtist(_ id: UUID) -> LibraryArtist? {
+        var descriptor = FetchDescriptor<LibraryArtist>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        return try? modelContext.fetch(descriptor).first
     }
 
-    private func fetchAllAlbums() -> [LibraryAlbum] {
-        (try? modelContext.fetch(FetchDescriptor<LibraryAlbum>())) ?? []
+    private func fetchAlbum(_ id: UUID) -> Album? {
+        var descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        guard let la = try? modelContext.fetch(descriptor).first else { return nil }
+        return toAlbum(la)
     }
 
-    private func fetchAllTracks() -> [LibraryTrack] {
-        (try? modelContext.fetch(FetchDescriptor<LibraryTrack>())) ?? []
+    private func fetchAlbumRecord(_ id: UUID) -> LibraryAlbum? {
+        var descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        return try? modelContext.fetch(descriptor).first
     }
 
+    /// Build artist map for a specific set of IDs (avoids full table scan when few IDs needed).
+    private func buildArtistMapForIds(_ ids: Set<UUID>) -> [UUID: LibraryArtist] {
+        // For small sets, targeted fetches; for large sets, full scan is faster
+        if ids.count <= 10 {
+            var map: [UUID: LibraryArtist] = [:]
+            for id in ids {
+                if let artist = fetchArtist(id) {
+                    map[id] = artist
+                }
+            }
+            return map
+        }
+        return buildArtistMap()
+    }
+
+    /// Full artist map — use when you need most/all artists.
     private func buildArtistMap() -> [UUID: LibraryArtist] {
-        Dictionary(uniqueKeysWithValues: fetchAllArtists().map { ($0.serverId, $0) })
+        let artists = (try? modelContext.fetch(FetchDescriptor<LibraryArtist>())) ?? []
+        return Dictionary(uniqueKeysWithValues: artists.map { ($0.serverId, $0) })
     }
 
     private func buildAlbumMap() -> [UUID: LibraryAlbum] {
-        Dictionary(uniqueKeysWithValues: fetchAllAlbums().map { ($0.serverId, $0) })
+        let albums = (try? modelContext.fetch(FetchDescriptor<LibraryAlbum>())) ?? []
+        return Dictionary(uniqueKeysWithValues: albums.map { ($0.serverId, $0) })
     }
 
     // MARK: - Private: Builders
@@ -631,14 +684,6 @@ final class MusicLibrary {
               slug: la.slug, releaseYear: la.releaseYear, isUnknown: la.isUnknown,
               artworkUrl: la.artworkUrl, insertedAt: la.insertedAt,
               artistName: artist?.name, artistSortName: artist?.sortName)
-    }
-
-    private func buildTracks(from libTracks: [LibraryTrack]) -> [Track] {
-        let artistMap = buildArtistMap()
-        let albumMap = buildAlbumMap()
-        return libTracks.map { lt in
-            buildTrack(lt, artistMap: artistMap, album: albumMap[lt.albumId])
-        }
     }
 
     private func buildTrack(_ lt: LibraryTrack, artistMap: [UUID: LibraryArtist], album: LibraryAlbum?) -> Track {
@@ -661,31 +706,55 @@ final class MusicLibrary {
         )
     }
 
+    /// Build a Track from individually-fetched entities (for single-track lookups).
+    private func buildTrack(_ lt: LibraryTrack, artist: LibraryArtist?, albumArtist: LibraryArtist?, album: Album?) -> Track {
+        let artistModel = artist.map {
+            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount)
+        } ?? Artist(id: lt.artistId, name: "Unknown", sortName: "Unknown", slug: "unknown")
+
+        let trackAlbum = album.map {
+            Track.TrackAlbum(id: $0.id, name: $0.name, artworkUrl: $0.artworkUrl)
+        }
+
+        let albumArtistSortName = albumArtist?.sortName ?? artistModel.sortName
+
+        return Track(
+            id: lt.serverId, artistId: lt.artistId, albumArtistId: lt.albumArtistId,
+            albumId: lt.albumId, artist: artistModel, albumArtistSortName: albumArtistSortName,
+            album: trackAlbum, name: lt.name,
+            disc: lt.disc, number: lt.number, duration: lt.duration,
+            mimetype: lt.mimetype, streamUrl: lt.streamUrl, fileSize: lt.fileSize
+        )
+    }
+
     // MARK: - Private: Cascade Deletes
 
     private func deleteArtistCascade(_ artistId: UUID) {
-        for track in fetchAllTracks().filter({ $0.artistId == artistId }) {
+        let trackDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.artistId == artistId })
+        for track in (try? modelContext.fetch(trackDescriptor)) ?? [] {
             if let url = track.resolvedFileURL {
                 try? FileManager.default.removeItem(at: url)
             }
             modelContext.delete(track)
         }
-        for album in fetchAllAlbums().filter({ $0.artistId == artistId }) {
+        let albumDescriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.artistId == artistId })
+        for album in (try? modelContext.fetch(albumDescriptor)) ?? [] {
             modelContext.delete(album)
         }
-        if let artist = fetchAllArtists().first(where: { $0.serverId == artistId }) {
+        if let artist = fetchArtist(artistId) {
             modelContext.delete(artist)
         }
     }
 
     private func deleteAlbumCascade(_ albumId: UUID) {
-        for track in fetchAllTracks().filter({ $0.albumId == albumId }) {
+        let trackDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId })
+        for track in (try? modelContext.fetch(trackDescriptor)) ?? [] {
             if let url = track.resolvedFileURL {
                 try? FileManager.default.removeItem(at: url)
             }
             modelContext.delete(track)
         }
-        if let album = fetchAllAlbums().first(where: { $0.serverId == albumId }) {
+        if let album = fetchAlbumRecord(albumId) {
             modelContext.delete(album)
         }
     }
