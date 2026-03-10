@@ -5,7 +5,7 @@ struct ArtistListView: View {
     @Environment(SyncService.self) private var syncService
     @State private var scrollPosition = ScrollPosition()
 
-    @AppStorage("artistListFilter") private var filterOption: LibraryFilter = .all
+    @AppStorage("libraryFilter") private var filterOption: LibraryFilter = .all
 
     @State private var artists: [Artist] = []
 

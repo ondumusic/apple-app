@@ -32,7 +32,7 @@ struct AlbumListView: View {
 
     @AppStorage("albumListSort") private var sortOption: AlbumSortOption = .artist
     @AppStorage("albumListSortAscending") private var sortAscending: Bool = true
-    @AppStorage("albumListFilter") private var filterOption: LibraryFilter = .all
+    @AppStorage("libraryFilter") private var filterOption: LibraryFilter = .all
 
     @State private var albums: [Album] = []
 

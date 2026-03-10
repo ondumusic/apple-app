@@ -6,7 +6,7 @@ struct SongListView: View {
     @Environment(SyncService.self) private var syncService
     @Environment(NetworkMonitor.self) private var network
 
-    @AppStorage("songListFilter") private var filterOption: LibraryFilter = .all
+    @AppStorage("libraryFilter") private var filterOption: LibraryFilter = .all
 
     @State private var sections: [SongSection] = []
     @State private var allQueueItems: [QueueItem] = []
