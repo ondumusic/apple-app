@@ -8,6 +8,7 @@ struct AlbumContextMenuItems: View {
 
     let album: Album
     var artist: Artist? = nil
+    var downloadedOnly: Bool = false
 
     var body: some View {
         Button {
@@ -28,7 +29,7 @@ struct AlbumContextMenuItems: View {
 
         Divider()
 
-        if musicLibrary.isAlbumFullyDownloaded(albumId: album.id) {
+        if downloadedOnly || musicLibrary.isAlbumFullyDownloaded(albumId: album.id) {
             Button(role: .destructive) {
                 musicLibrary.markAlbumUndownloaded(albumId: album.id)
             } label: {
@@ -92,6 +93,7 @@ struct ArtistContextMenuItems: View {
     @Environment(NetworkMonitor.self) private var network
 
     let artist: Artist
+    var downloadedOnly: Bool = false
 
     var body: some View {
         Button {
@@ -114,7 +116,7 @@ struct ArtistContextMenuItems: View {
 
         Divider()
 
-        if musicLibrary.isArtistFullyDownloaded(artistId: artist.id) {
+        if downloadedOnly || musicLibrary.isArtistFullyDownloaded(artistId: artist.id) {
             Button(role: .destructive) {
                 musicLibrary.markArtistUndownloaded(artistId: artist.id)
             } label: {

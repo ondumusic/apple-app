@@ -5,10 +5,13 @@ struct ArtistDetailView: View {
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
 
+    @Environment(\.dismiss) private var dismiss
+
     let artist: Artist
     var downloadedOnly: Bool = false
 
     @State private var albums: [Album] = []
+    @State private var hasLoadedOnce: Bool = false
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
 
@@ -41,7 +44,7 @@ struct ArtistDetailView: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        AlbumContextMenuItems(album: album, artist: artist)
+                        AlbumContextMenuItems(album: album, artist: artist, downloadedOnly: downloadedOnly)
                     }
                 }
             }
@@ -51,7 +54,7 @@ struct ArtistDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    ArtistContextMenuItems(artist: artist)
+                    ArtistContextMenuItems(artist: artist, downloadedOnly: downloadedOnly)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -66,6 +69,11 @@ struct ArtistDetailView: View {
             albums = downloadedOnly
                 ? musicLibrary.downloadedAlbumsForArtist(artist.id)
                 : musicLibrary.albumsForArtist(artist.id)
+
+            if downloadedOnly && hasLoadedOnce && albums.isEmpty {
+                dismiss()
+            }
+            hasLoadedOnce = true
         }
     }
 

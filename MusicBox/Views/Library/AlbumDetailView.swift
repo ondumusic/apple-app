@@ -6,11 +6,14 @@ struct AlbumDetailView: View {
     @Environment(DownloadService.self) private var downloadService
     @Environment(NetworkMonitor.self) private var network
 
+    @Environment(\.dismiss) private var dismiss
+
     let album: Album
     var downloadedOnly: Bool = false
 
     @State private var tracks: [Track] = []
     @State private var totalTrackCount: Int = 0
+    @State private var hasLoadedOnce: Bool = false
 
     private var discs: [Int] { Array(Set(tracks.map(\.disc))).sorted() }
     private var hasMultipleDiscs: Bool { discs.count > 1 }
@@ -113,7 +116,7 @@ struct AlbumDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    AlbumContextMenuItems(album: album)
+                    AlbumContextMenuItems(album: album, downloadedOnly: downloadedOnly)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -130,6 +133,11 @@ struct AlbumDetailView: View {
             tracks = downloadedOnly
                 ? allTracks.filter { $0.isDownloaded }
                 : allTracks
+
+            if downloadedOnly && hasLoadedOnce && tracks.isEmpty {
+                dismiss()
+            }
+            hasLoadedOnce = true
         }
     }
 }

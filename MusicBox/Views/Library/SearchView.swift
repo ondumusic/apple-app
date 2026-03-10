@@ -43,13 +43,7 @@ struct SearchView: View {
             if !results.artists.isEmpty {
                 Section("Artists") {
                     ForEach(results.artists.prefix(5)) { artist in
-                        NavigationLink(value: artist) {
-                            ArtistCard(artist: artist)
-                        }
-                        .tint(.primary)
-                        .contextMenu {
-                            ArtistContextMenuItems(artist: artist)
-                        }
+                        artistRow(artist)
                     }
                 }
             }
@@ -57,25 +51,7 @@ struct SearchView: View {
             if !results.albums.isEmpty {
                 Section("Albums") {
                     ForEach(results.albums.prefix(5)) { album in
-                        NavigationLink(value: album) {
-                            HStack(spacing: 12) {
-                                ArtworkView(url: album.artworkUrl)
-                                    .frame(width: 44, height: 44)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(album.name)
-                                        .lineLimit(1)
-                                    if let year = album.releaseYear {
-                                        Text(String(year))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                        .tint(.primary)
-                        .contextMenu {
-                            AlbumContextMenuItems(album: album)
-                        }
+                        albumRow(album)
                     }
                 }
             }
@@ -83,21 +59,7 @@ struct SearchView: View {
             if !results.tracks.isEmpty {
                 Section("Songs") {
                     ForEach(results.tracks.prefix(10)) { track in
-                        TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
-                            let allItems = results.tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
-                            let items = musicLibrary.availableItems(allItems, isOnline: network.isOnline)
-                            if let idx = items.firstIndex(where: { $0.track.id == track.id }) {
-                                player.playNow(queue: items, startingAt: idx)
-                            }
-                            searchHistory.add(SearchHistoryItem(
-                                id: track.id, kind: .song,
-                                name: track.name,
-                                subtitle: track.artist.name,
-                                artworkUrl: track.album?.artworkUrl,
-                                artistId: track.artistId,
-                                albumId: track.albumId
-                            ))
-                        }
+                        trackRow(track, allTracks: results.tracks)
                     }
                 }
             }
@@ -165,67 +127,73 @@ struct SearchView: View {
         switch item.kind {
         case .artist:
             if let artist = musicLibrary.artist(item.id) {
-                NavigationLink(value: artist) {
-                    historyLabel(item)
-                }
-                .tint(.primary)
-                .contextMenu {
-                    ArtistContextMenuItems(artist: artist)
-                }
+                artistRow(artist)
             }
         case .album:
             if let album = musicLibrary.album(item.id) {
-                NavigationLink(value: album) {
-                    historyLabel(item)
-                }
-                .tint(.primary)
-                .contextMenu {
-                    AlbumContextMenuItems(album: album)
-                }
+                albumRow(album)
             }
         case .song:
             if let track = musicLibrary.track(item.id) {
-                Button {
-                    let queueItem = QueueItem(track: track, artworkURL: track.album?.artworkUrl)
-                    player.playNow(queue: [queueItem])
-                } label: {
-                    historyLabel(item)
-                }
-                .tint(.primary)
-                .contextMenu {
-                    TrackContextMenuItems(track: track)
-                }
+                trackRow(track, allTracks: [track])
             }
         }
     }
 
-    private func historyLabel(_ item: SearchHistoryItem) -> some View {
-        HStack(spacing: 12) {
-            if item.kind == .artist {
-                ZStack {
-                    Circle()
-                        .fill(.quaternary)
-                    Text(item.name.prefix(1).uppercased())
-                        .font(.title2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(width: 40, height: 40)
-            } else {
-                ArtworkView(url: item.artworkUrl)
-                    .frame(width: 40, height: 40)
-            }
+    // MARK: - Shared row views
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.name)
-                    .lineLimit(1)
-                Text(item.subtitle.map { "\(item.displayKind) · \($0)" } ?? item.displayKind)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
+    private func artistRow(_ artist: Artist) -> some View {
+        NavigationLink(value: artist) {
+            ArtistCard(artist: artist)
         }
-        .contentShape(Rectangle())
+        .tint(.primary)
+        .contextMenu {
+            ArtistContextMenuItems(artist: artist)
+        }
+    }
+
+    private func albumRow(_ album: Album) -> some View {
+        NavigationLink(value: album) {
+            HStack(spacing: 12) {
+                ArtworkView(url: album.artworkUrl)
+                    .frame(width: 44, height: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(album.name)
+                        .lineLimit(1)
+                    if let artistName = album.artistName {
+                        Text(artistName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else if let year = album.releaseYear {
+                        Text(String(year))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .tint(.primary)
+        .contextMenu {
+            AlbumContextMenuItems(album: album)
+        }
+    }
+
+    private func trackRow(_ track: Track, allTracks: [Track]) -> some View {
+        TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
+            let allItems = allTracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+            let items = musicLibrary.availableItems(allItems, isOnline: network.isOnline)
+            if let idx = items.firstIndex(where: { $0.track.id == track.id }) {
+                player.playNow(queue: items, startingAt: idx)
+            }
+            searchHistory.add(SearchHistoryItem(
+                id: track.id, kind: .song,
+                name: track.name,
+                subtitle: track.artist.name,
+                artworkUrl: track.album?.artworkUrl,
+                artistId: track.artistId,
+                albumId: track.albumId
+            ))
+        }
     }
 }
