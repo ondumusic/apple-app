@@ -6,6 +6,7 @@ struct ArtistDetailView: View {
     @Environment(NetworkMonitor.self) private var network
 
     let artist: Artist
+    var downloadedOnly: Bool = false
 
     @State private var albums: [Album] = []
 
@@ -62,7 +63,9 @@ struct ArtistDetailView: View {
             }
         }
         .onChange(of: musicLibrary.revision, initial: true) {
-            albums = musicLibrary.albumsForArtist(artist.id)
+            albums = downloadedOnly
+                ? musicLibrary.downloadedAlbumsForArtist(artist.id)
+                : musicLibrary.albumsForArtist(artist.id)
         }
     }
 

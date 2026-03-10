@@ -7,6 +7,7 @@ struct AlbumDetailView: View {
     @Environment(NetworkMonitor.self) private var network
 
     let album: Album
+    var downloadedOnly: Bool = false
 
     @State private var showRemoveDownloadConfirmation = false
     @State private var tracks: [Track] = []
@@ -140,7 +141,10 @@ struct AlbumDetailView: View {
             }
         }
         .onChange(of: musicLibrary.revision, initial: true) {
-            tracks = musicLibrary.tracksForAlbum(album.id)
+            let allTracks = musicLibrary.tracksForAlbum(album.id)
+            tracks = downloadedOnly
+                ? allTracks.filter { musicLibrary.isDownloaded(trackId: $0.id) }
+                : allTracks
         }
     }
 }

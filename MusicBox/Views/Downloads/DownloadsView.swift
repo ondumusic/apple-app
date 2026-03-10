@@ -165,10 +165,10 @@ struct DownloadsView: View {
         }
         .navigationTitle("Downloads")
         .navigationDestination(for: Artist.self) { artist in
-            ArtistDetailView(artist: artist)
+            ArtistDetailView(artist: artist, downloadedOnly: true)
         }
         .navigationDestination(for: Album.self) { album in
-            AlbumDetailView(album: album)
+            AlbumDetailView(album: album, downloadedOnly: true)
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
