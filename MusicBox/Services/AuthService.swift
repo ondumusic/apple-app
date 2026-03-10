@@ -8,6 +8,7 @@ final class AuthService {
     var isLoggedIn: Bool { apiService != nil }
     var isLoading = false
     var isOffline = false
+    var isSessionExpired = false
     var errorMessage: String?
 
     // MARK: - Storage Keys
@@ -89,6 +90,8 @@ final class AuthService {
         KeychainHelper.deleteAll()
         currentUser = nil
         apiService = nil
+        isSessionExpired = false
+        isOffline = false
     }
 
     // MARK: - Session Validation
@@ -100,8 +103,9 @@ final class AuthService {
             let user = try await api.fetchCurrentUser()
             self.currentUser = user
             self.isOffline = false
+            self.isSessionExpired = false
         } catch APIError.unauthorized {
-            clearSession()
+            self.isSessionExpired = true
         } catch {
             // Network error or other failure — stay logged in for offline playback
             self.isOffline = true

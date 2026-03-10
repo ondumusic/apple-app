@@ -30,23 +30,41 @@ private struct SyncProgressView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            ProgressView()
-                .controlSize(.large)
-            Text("Syncing Library...")
-                .font(.headline)
-            if let progress = syncService.syncProgress {
-                Group {
-                    if progress.trackCount > 0 {
-                        Text("\(progress.artistCount) artists, \(progress.albumCount) albums, \(progress.trackCount) tracks")
-                    } else if progress.albumCount > 0 {
-                        Text("\(progress.artistCount) artists, \(progress.albumCount) albums")
-                    } else if progress.artistCount > 0 {
-                        Text("\(progress.artistCount) artists")
-                    }
+            if let error = syncService.syncError {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+                Text("Sync Failed")
+                    .font(.headline)
+                Text(error)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+
+                Button("Retry") {
+                    Task { await syncService.sync() }
                 }
-                .foregroundStyle(.secondary)
-                .font(.subheadline)
-                .monospacedDigit()
+                .buttonStyle(.bordered)
+            } else {
+                ProgressView()
+                    .controlSize(.large)
+                Text("Syncing Library...")
+                    .font(.headline)
+                if let progress = syncService.syncProgress {
+                    Group {
+                        if progress.trackCount > 0 {
+                            Text("\(progress.artistCount) artists, \(progress.albumCount) albums, \(progress.trackCount) tracks")
+                        } else if progress.albumCount > 0 {
+                            Text("\(progress.artistCount) artists, \(progress.albumCount) albums")
+                        } else if progress.artistCount > 0 {
+                            Text("\(progress.artistCount) artists")
+                        }
+                    }
+                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .monospacedDigit()
+                }
             }
         }
     }

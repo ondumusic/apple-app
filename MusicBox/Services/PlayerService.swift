@@ -253,10 +253,18 @@ final class PlayerService {
     func clearUpNext() {
         let keep = currentIndex + 1
         if let shuffled = shuffledIndices {
-            // Remove all shuffled indices after current position
-            let keepReal = Set(shuffled.prefix(keep))
-            queue = queue.enumerated().filter { keepReal.contains($0.offset) }.map(\.element)
-            shuffledIndices = Array(0..<queue.count)
+            // Keep only queue items at shuffle positions 0..<keep
+            let keptRealIndices = Array(shuffled.prefix(keep))
+            let sortedKept = keptRealIndices.sorted()
+
+            // Build mapping from old queue index to new queue index
+            var oldToNew: [Int: Int] = [:]
+            for (newIdx, oldIdx) in sortedKept.enumerated() {
+                oldToNew[oldIdx] = newIdx
+            }
+
+            queue = sortedKept.map { queue[$0] }
+            shuffledIndices = keptRealIndices.map { oldToNew[$0]! }
         } else {
             queue = Array(queue.prefix(keep))
         }

@@ -136,18 +136,14 @@ final class MusicLibrary {
 
     func allArtists() -> [Artist] {
         _ = revision
-        let libArtists = (try? modelContext.fetch(
-            FetchDescriptor<LibraryArtist>(sortBy: [SortDescriptor(\.sortName)])
-        )) ?? []
-        // Count albums with tracks per artist using a targeted fetch
-        let albumDescriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.trackCount > 0 })
-        let libAlbums = (try? modelContext.fetch(albumDescriptor)) ?? []
-        let albumCounts = Dictionary(grouping: libAlbums, by: \.artistId).mapValues(\.count)
-        return libArtists.compactMap {
-            let count = albumCounts[$0.serverId] ?? 0
-            guard count > 0 else { return nil }
-            return Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName,
-                          slug: $0.slug, albumCount: count)
+        let descriptor = FetchDescriptor<LibraryArtist>(
+            predicate: #Predicate { $0.albumCount > 0 },
+            sortBy: [SortDescriptor(\.sortName)]
+        )
+        let libArtists = (try? modelContext.fetch(descriptor)) ?? []
+        return libArtists.map {
+            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName,
+                   slug: $0.slug, albumCount: $0.albumCount)
         }
     }
 

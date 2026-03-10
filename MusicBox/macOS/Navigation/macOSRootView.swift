@@ -21,6 +21,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 }
 
 struct macOSRootView: View {
+    @Environment(AuthService.self) private var authService
     @Environment(NetworkMonitor.self) private var network
     @AppStorage("selectedSidebarItem") private var selectionRaw: String = SidebarItem.artists.rawValue
 
@@ -30,7 +31,24 @@ struct macOSRootView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-        if !network.isOnline {
+        if authService.isSessionExpired {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                Text("Session expired — please log in again")
+                    .font(.caption)
+                Spacer()
+                Button("Log In") {
+                    authService.logout()
+                }
+                .font(.caption.bold())
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 12)
+            .background(.red)
+        } else if !network.isOnline {
             HStack(spacing: 6) {
                 Image(systemName: "wifi.slash")
                     .font(.caption)

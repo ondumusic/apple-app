@@ -27,9 +27,9 @@ struct SearchView: View {
             }
         }
         .onChange(of: query) {
-            results = musicLibrary.search(query)
+            results = query.isEmpty ? ([], [], []) : musicLibrary.search(query)
         }
-        .onChange(of: musicLibrary.revision, initial: true) {
+        .onChange(of: musicLibrary.revision) {
             if !query.isEmpty {
                 results = musicLibrary.search(query)
             }

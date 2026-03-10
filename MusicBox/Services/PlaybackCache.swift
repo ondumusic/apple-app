@@ -12,6 +12,8 @@ final class PlaybackCache {
     @ObservationIgnored private let fileManager = FileManager.default
     /// Maps trackId -> relative filename. Ordered by last access (most recent last).
     @ObservationIgnored private var entries: [CacheEntry] = []
+    @ObservationIgnored private var metadataDirty = false
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
 
     nonisolated struct CacheEntry: Codable, Sendable {
         var trackId: UUID
@@ -40,14 +42,15 @@ final class PlaybackCache {
             // File disappeared — remove entry
             entries.remove(at: idx)
             recalculateSize()
-            saveMetadata()
+            saveMetadataDebounced()
             return nil
         }
         // Update last accessed (move to end = most recently used)
         entries[idx].lastAccessed = Date()
         let entry = entries.remove(at: idx)
         entries.append(entry)
-        saveMetadata()
+        metadataDirty = true
+        scheduleDeferredSave()
         return url
     }
 
@@ -140,8 +143,28 @@ final class PlaybackCache {
     }
 
     private func saveMetadata() {
+        metadataDirty = false
         guard let data = try? JSONEncoder().encode(entries) else { return }
         try? data.write(to: metadataURL, options: .atomic)
+    }
+
+    /// Save after a short delay — coalesces rapid access updates.
+    private func scheduleDeferredSave() {
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
+            self?.flushMetadataIfNeeded()
+        }
+    }
+
+    private func saveMetadataDebounced() {
+        saveMetadata()
+    }
+
+    func flushMetadataIfNeeded() {
+        guard metadataDirty else { return }
+        saveMetadata()
     }
 
     private func fileExtension(from response: URLResponse, url: URL) -> String {

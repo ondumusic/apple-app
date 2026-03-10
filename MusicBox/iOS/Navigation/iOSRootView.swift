@@ -6,6 +6,7 @@ nonisolated enum iOSTab: String, Hashable, Sendable {
 
 
 struct iOSRootView: View {
+    @Environment(AuthService.self) private var authService
     @Environment(DownloadService.self) private var downloadService
     @Environment(NetworkMonitor.self) private var network
     @State private var showSettings = false
@@ -24,7 +25,24 @@ struct iOSRootView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-        if !network.isOnline {
+        if authService.isSessionExpired {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                Text("Session expired — please log in again")
+                    .font(.caption)
+                Spacer()
+                Button("Log In") {
+                    authService.logout()
+                }
+                .font(.caption.bold())
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .background(.red)
+        } else if !network.isOnline {
             HStack(spacing: 6) {
                 Image(systemName: "wifi.slash")
                     .font(.caption)
