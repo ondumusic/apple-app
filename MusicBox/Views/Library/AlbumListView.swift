@@ -6,6 +6,11 @@ nonisolated enum AlbumSortOption: String, CaseIterable {
     case name = "Name"
 }
 
+nonisolated enum LibraryFilter: String {
+    case all = "All"
+    case downloaded = "Downloaded"
+}
+
 struct AlbumListView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
@@ -16,11 +21,18 @@ struct AlbumListView: View {
 
     @AppStorage("albumListSort") private var sortOption: AlbumSortOption = .artist
     @AppStorage("albumListSortAscending") private var sortAscending: Bool = true
+    @AppStorage("albumListFilter") private var filterOption: LibraryFilter = .all
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
 
+    private var albums: [Album] {
+        let source = filterOption == .downloaded
+            ? musicLibrary.downloadedAlbums()
+            : musicLibrary.allAlbums()
+        return sortedAlbums(source)
+    }
+
     var body: some View {
-        let albums = sortedAlbums(musicLibrary.allAlbums())
         ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(albums) { album in
@@ -75,7 +87,7 @@ struct AlbumListView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                sortMenu
+                toolbarMenu
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .scrollToTop)) { _ in
@@ -83,36 +95,58 @@ struct AlbumListView: View {
         }
         .overlay {
             if albums.isEmpty {
-                ContentUnavailableView("No Albums", systemImage: "square.stack")
+                if filterOption == .downloaded {
+                    ContentUnavailableView("No Downloaded Albums", systemImage: "square.stack")
+                } else {
+                    ContentUnavailableView("No Albums", systemImage: "square.stack")
+                }
             }
         }
     }
 
-    // MARK: - Sort
+    // MARK: - Toolbar Menu
 
-    private var sortMenu: some View {
+    private var toolbarMenu: some View {
         Menu {
-            ForEach(AlbumSortOption.allCases, id: \.self) { option in
+            Section("Filter") {
                 Button {
-                    if sortOption == option {
-                        sortAscending.toggle()
-                    } else {
-                        sortOption = option
-                        sortAscending = option != .dateAdded // date added defaults descending (newest first)
-                    }
+                    filterOption = .all
                 } label: {
-                    HStack {
-                        Text(option.rawValue)
+                    Label("All Music", systemImage: filterOption == .all ? "checkmark" : "")
+                }
+
+                Button {
+                    filterOption = .downloaded
+                } label: {
+                    Label("Downloaded", systemImage: filterOption == .downloaded ? "checkmark" : "")
+                }
+            }
+
+            Section("Sort") {
+                ForEach(AlbumSortOption.allCases, id: \.self) { option in
+                    Button {
                         if sortOption == option {
-                            Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
+                            sortAscending.toggle()
+                        } else {
+                            sortOption = option
+                            sortAscending = option != .dateAdded
+                        }
+                    } label: {
+                        HStack {
+                            Text(option.rawValue)
+                            if sortOption == option {
+                                Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
+                            }
                         }
                     }
                 }
             }
         } label: {
-            Label("Sort", systemImage: "arrow.up.arrow.down")
+            Label("Options", systemImage: filterOption == .downloaded ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
         }
     }
+
+    // MARK: - Sort
 
     private func sortedAlbums(_ albums: [Album]) -> [Album] {
         albums.sorted { a, b in
@@ -149,3 +183,4 @@ struct AlbumListView: View {
 }
 
 extension AlbumSortOption: RawRepresentable {}
+extension LibraryFilter: RawRepresentable {}

@@ -6,6 +6,8 @@ struct SongListView: View {
     @Environment(SyncService.self) private var syncService
     @Environment(NetworkMonitor.self) private var network
 
+    @AppStorage("songListFilter") private var filterOption: LibraryFilter = .all
+
     @State private var sections: [SongSection] = []
     @State private var allQueueItems: [QueueItem] = []
     @State private var availableLetters: [String] = []
@@ -81,18 +83,50 @@ struct SongListView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                filterMenu
+            }
+        }
         .overlay {
             if sections.isEmpty {
-                ContentUnavailableView("No Songs", systemImage: "music.note")
+                if filterOption == .downloaded {
+                    ContentUnavailableView("No Downloaded Songs", systemImage: "music.note")
+                } else {
+                    ContentUnavailableView("No Songs", systemImage: "music.note")
+                }
             }
         }
         .onChange(of: musicLibrary.revision, initial: true) {
             reloadTracks()
         }
+        .onChange(of: filterOption) {
+            reloadTracks()
+        }
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Button {
+                filterOption = .all
+            } label: {
+                Label("All Music", systemImage: filterOption == .all ? "checkmark" : "")
+            }
+
+            Button {
+                filterOption = .downloaded
+            } label: {
+                Label("Downloaded", systemImage: filterOption == .downloaded ? "checkmark" : "")
+            }
+        } label: {
+            Label("Filter", systemImage: filterOption == .downloaded ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+        }
     }
 
     private func reloadTracks() {
-        let allTracks = musicLibrary.allTracks()
+        let allTracks = filterOption == .downloaded
+            ? musicLibrary.downloadedTracks()
+            : musicLibrary.allTracks()
         var grouped: [(letter: String, tracks: [Track])] = []
         var currentLetter = ""
         var currentTracks: [Track] = []

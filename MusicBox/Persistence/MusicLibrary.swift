@@ -343,6 +343,37 @@ final class MusicLibrary {
         }.sorted { $0.sortName.localizedStandardCompare($1.sortName) == .orderedAscending }
     }
 
+    /// Returns all albums that have at least one downloaded track.
+    func downloadedAlbums() -> [Album] {
+        _ = revision
+        let downloaded = fetchAllTracks().filter { $0.isDownloaded }
+        let albumIds = Set(downloaded.map(\.albumId))
+        let artistMap = buildArtistMap()
+        return fetchAllAlbums()
+            .filter { albumIds.contains($0.serverId) }
+            .map { toAlbum($0, artistMap: artistMap) }
+    }
+
+    /// Returns all downloaded tracks, sorted like allTracks().
+    func downloadedTracks() -> [Track] {
+        _ = revision
+        let libTracks = fetchAllTracks().filter { $0.isDownloaded }
+        let artistMap = buildArtistMap()
+        let albumMap = buildAlbumMap()
+        return libTracks
+            .map { buildTrack($0, artistMap: artistMap, album: albumMap[$0.albumId]) }
+            .sorted { a, b in
+                let aSortName = artistMap[a.albumArtistId]?.sortName ?? ""
+                let bSortName = artistMap[b.albumArtistId]?.sortName ?? ""
+                if aSortName != bSortName { return aSortName < bSortName }
+                let aAlbum = albumMap[a.albumId]?.sortName ?? ""
+                let bAlbum = albumMap[b.albumId]?.sortName ?? ""
+                if aAlbum != bAlbum { return aAlbum.localizedStandardCompare(bAlbum) == .orderedAscending }
+                if a.disc != b.disc { return a.disc < b.disc }
+                return a.number < b.number
+            }
+    }
+
     /// Returns albums for an artist that have at least one downloaded track.
     func downloadedAlbumsForArtist(_ artistId: UUID) -> [Album] {
         _ = revision

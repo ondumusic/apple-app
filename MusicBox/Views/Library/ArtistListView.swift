@@ -8,8 +8,15 @@ struct ArtistListView: View {
     @Environment(NetworkMonitor.self) private var network
     @State private var scrollPosition = ScrollPosition()
 
+    @AppStorage("artistListFilter") private var filterOption: LibraryFilter = .all
+
+    private var artists: [Artist] {
+        filterOption == .downloaded
+            ? musicLibrary.downloadedArtists()
+            : musicLibrary.allArtists()
+    }
+
     var body: some View {
-        let artists = musicLibrary.allArtists()
         List(artists) { artist in
             NavigationLink(value: artist) {
                 ArtistCard(artist: artist)
@@ -68,13 +75,40 @@ struct ArtistListView: View {
         .navigationDestination(for: Album.self) { album in
             AlbumDetailView(album: album)
         }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                filterMenu
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .scrollToTop)) { _ in
             withAnimation { scrollPosition.scrollTo(edge: .top) }
         }
         .overlay {
             if artists.isEmpty {
-                ContentUnavailableView("No Artists", systemImage: "music.mic")
+                if filterOption == .downloaded {
+                    ContentUnavailableView("No Downloaded Artists", systemImage: "music.mic")
+                } else {
+                    ContentUnavailableView("No Artists", systemImage: "music.mic")
+                }
             }
+        }
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Button {
+                filterOption = .all
+            } label: {
+                Label("All Music", systemImage: filterOption == .all ? "checkmark" : "")
+            }
+
+            Button {
+                filterOption = .downloaded
+            } label: {
+                Label("Downloaded", systemImage: filterOption == .downloaded ? "checkmark" : "")
+            }
+        } label: {
+            Label("Filter", systemImage: filterOption == .downloaded ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
         }
     }
 }
