@@ -9,7 +9,7 @@ struct iOSRootView: View {
     @Environment(DownloadService.self) private var downloadService
     @Environment(NetworkMonitor.self) private var network
     @State private var showSettings = false
-    @State private var selectedTab: iOSTab = .artists
+    @AppStorage("selectedTab") private var selectedTab: iOSTab = .artists
     @State private var artistsPath = NavigationPath()
     @State private var albumsPath = NavigationPath()
     @State private var searchText = ""

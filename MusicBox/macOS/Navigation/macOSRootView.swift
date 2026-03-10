@@ -22,7 +22,9 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 
 struct macOSRootView: View {
     @Environment(NetworkMonitor.self) private var network
-    @State private var selection: SidebarItem? = .artists
+    @AppStorage("selectedSidebarItem") private var selectionRaw: String = SidebarItem.artists.rawValue
+
+    private var selection: SidebarItem? { SidebarItem(rawValue: selectionRaw) }
     @State private var navigationPath = NavigationPath()
     @State private var searchText = ""
 
@@ -80,7 +82,7 @@ struct macOSRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
             guard let artist = notification.object as? Artist else { return }
             navigationPath = NavigationPath()
-            selection = .artists
+            selectionRaw = SidebarItem.artists.rawValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 navigationPath.append(artist)
             }
@@ -88,7 +90,7 @@ struct macOSRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
             guard let album = notification.object as? Album else { return }
             navigationPath = NavigationPath()
-            selection = .albums
+            selectionRaw = SidebarItem.albums.rawValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 navigationPath.append(album)
             }
@@ -103,7 +105,7 @@ struct macOSRootView: View {
             if newValue == selection {
                 navigationPath = NavigationPath()
             }
-            selection = newValue
+            selectionRaw = newValue?.rawValue ?? SidebarItem.artists.rawValue
         }
     }
 }

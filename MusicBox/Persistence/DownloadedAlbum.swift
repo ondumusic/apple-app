@@ -9,6 +9,7 @@ nonisolated class DownloadedAlbum {
     var releaseYear: Int?
     var artworkUrl: URL?
     var artist: DownloadedArtist?
+    
 
     @Relationship(deleteRule: .cascade, inverse: \DownloadedTrack.album)
     var tracks: [DownloadedTrack] = []
