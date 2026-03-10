@@ -73,12 +73,12 @@ struct DownloadsView: View {
                     }
 
                     // Pending queue
-                    ForEach(downloadService.pendingQueue, id: \.info.track.id) { queued in
+                    ForEach(downloadService.pendingQueue, id: \.track.id) { info in
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(queued.info.track.name)
+                                Text(info.track.name)
                                     .lineLimit(1)
-                                Text(queued.info.artist.name)
+                                Text(info.artist.name)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -92,7 +92,7 @@ struct DownloadsView: View {
                         }
                         .contextMenu {
                             Button(role: .destructive) {
-                                downloadService.cancelDownload(trackId: queued.info.track.id)
+                                downloadService.cancelDownload(trackId: info.track.id)
                             } label: {
                                 Label("Cancel", systemImage: "xmark.circle")
                             }

@@ -65,16 +65,11 @@ struct AlbumDetailView: View {
                                 if downloadService.isAlbumDownloading(albumId: album.id) {
                                     ProgressView()
                                         .controlSize(.small)
-                                } else if musicLibrary.downloadedTrackCount(albumId: album.id) < totalTrackCount {
+                                } else if !musicLibrary.isAlbumFullyDownloaded(albumId: album.id) {
                                     Button {
+                                        guard let fullAlbum = musicLibrary.albumWithTracks(album.id) else { return }
                                         let artist = musicLibrary.artist(album.artistId)
                                             ?? Artist(id: album.artistId, name: "", sortName: "", slug: "")
-                                        let fullAlbum = Album(
-                                            id: album.id, artistId: album.artistId,
-                                            name: album.name, sortName: album.sortName,
-                                            slug: album.slug, releaseYear: album.releaseYear,
-                                            tracks: tracks, isUnknown: album.isUnknown,
-                                            artworkUrl: album.artworkUrl)
                                         downloadService.download(album: fullAlbum, artist: artist)
                                     } label: {
                                         Label("Download", systemImage: "arrow.down.circle")

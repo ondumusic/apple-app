@@ -28,8 +28,7 @@ struct AlbumContextMenuItems: View {
 
         Divider()
 
-        if musicLibrary.downloadedTrackCount(albumId: album.id) == musicLibrary.tracksForAlbum(album.id).count
-            && musicLibrary.tracksForAlbum(album.id).count > 0 {
+        if musicLibrary.isAlbumFullyDownloaded(albumId: album.id) {
             Button(role: .destructive) {
                 musicLibrary.markAlbumUndownloaded(albumId: album.id)
             } label: {
@@ -77,7 +76,7 @@ struct ArtistContextMenuItems: View {
 
         Divider()
 
-        if musicLibrary.isArtistDownloaded(artistId: artist.id) {
+        if musicLibrary.isArtistFullyDownloaded(artistId: artist.id) {
             Button(role: .destructive) {
                 musicLibrary.markArtistUndownloaded(artistId: artist.id)
             } label: {

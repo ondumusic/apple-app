@@ -10,8 +10,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Ordered list of active download track IDs (for stable UI ordering)
     var activeDownloadOrder: [UUID] = []
 
-    /// Downloads waiting to start (URL already resolved, ready to go)
-    var pendingQueue: [QueuedDownload] = []
+    /// Downloads waiting to start (token not yet resolved)
+    var pendingQueue: [DownloadInfo] = []
 
     /// Whether all downloads are paused
     var isPaused: Bool = false
@@ -33,10 +33,19 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         var retryCount: Int = 0
     }
 
-    /// A download with its URL already resolved, ready to submit to URLSession.
-    nonisolated struct QueuedDownload: Sendable {
-        let info: DownloadInfo
-        let resolvedURL: URL
+    /// Metadata stored in URLSessionTask.taskDescription — survives app termination.
+    nonisolated struct TaskMetadata: Codable, Sendable {
+        let trackId: UUID
+        let artistId: UUID
+        let albumId: UUID
+        let mimetype: String
+        let trackName: String
+    }
+
+    /// Written to disk when a download completes in background, processed on foreground.
+    nonisolated struct PendingCompletion: Codable, Sendable {
+        let trackId: UUID
+        let relativePath: String
     }
 
     // MARK: - Private
@@ -60,14 +69,14 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
     }()
 
-    /// Maps URLSession task identifier → download info
+    /// Maps URLSession task identifier → download info (for UI state management)
     @ObservationIgnored private var taskDownloads: [Int: DownloadInfo] = [:]
     /// Maps track ID → URLSession task identifier
     @ObservationIgnored private var trackIdToTaskId: [UUID: Int] = [:]
     /// Maps track ID → active URLSessionDownloadTask (for pause support)
     @ObservationIgnored private var activeTasks: [UUID: URLSessionDownloadTask] = [:]
-    /// Stores info for paused downloads: track ID → QueuedDownload (URL preserved for restart)
-    @ObservationIgnored private var pausedDownloads: [UUID: QueuedDownload] = [:]
+    /// Stores info for paused downloads: track ID → (info + resolved URL for restart)
+    @ObservationIgnored private var pausedDownloads: [UUID: (info: DownloadInfo, resolvedURL: URL)] = [:]
     /// Downloads that failed due to expired token, to retry when app is active
     @ObservationIgnored private var retryQueue: [DownloadInfo] = []
     /// Raw progress values — not observable, updated on every delegate callback
@@ -77,6 +86,19 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Number of in-flight downloads — incremented synchronously, so concurrent calls
     /// to startNextIfNeeded can't exceed the limit.
     @ObservationIgnored private var inFlightCount: Int = 0
+    /// Whether we're currently resolving tokens and starting tasks
+    @ObservationIgnored private var isStartingNext: Bool = false
+
+    // MARK: - Paths
+
+    nonisolated private static var downloadsDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("MusicBox/Downloads", isDirectory: true)
+    }
+
+    nonisolated private static var pendingDirectory: URL {
+        downloadsDirectory.appendingPathComponent(".pending", isDirectory: true)
+    }
 
     // MARK: - Init
 
@@ -86,6 +108,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         self.settings = settings
         super.init()
         _ = downloadSession
+        processPendingCompletions()
     }
 
     // MARK: - Public API
@@ -96,21 +119,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
               !isQueued(trackId: track.id) else { return }
 
         let info = DownloadInfo(track: track, album: album, artist: artist)
-
-        // Resolve URL then enqueue
-        Task { @MainActor in
-            do {
-                let url = try await tokenManager.resolvedStreamURL(for: info.track, using: api)
-                let queued = QueuedDownload(info: info, resolvedURL: url)
-                if isPaused {
-                    pendingQueue.append(queued)
-                } else {
-                    enqueue(queued)
-                }
-            } catch {
-                print("DownloadService: failed to resolve URL for \(info.track.name): \(error)")
-            }
-        }
+        pendingQueue.append(info)
+        startNextIfNeeded()
     }
 
     func download(album: Album, artist: Artist) {
@@ -122,37 +132,27 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func downloadAll(library: MusicLibrary) {
         let artists = library.allArtists()
-        Task { @MainActor in
-            for artist in artists {
-                let albums = library.albumsWithTracksForArtist(artist.id)
-                var batch: [DownloadInfo] = []
-                for album in albums {
-                    guard let tracks = album.tracks else { continue }
-                    for track in tracks {
-                        guard !musicLibrary.isDownloaded(trackId: track.id),
-                              !isDownloading(trackId: track.id),
-                              !isQueued(trackId: track.id) else { continue }
-                        batch.append(DownloadInfo(track: track, album: album, artist: artist))
-                    }
+        for artist in artists {
+            let albums = library.albumsWithTracksForArtist(artist.id)
+            for album in albums {
+                guard let tracks = album.tracks else { continue }
+                for track in tracks {
+                    guard !musicLibrary.isDownloaded(trackId: track.id),
+                          !isDownloading(trackId: track.id),
+                          !isQueued(trackId: track.id) else { continue }
+                    pendingQueue.append(DownloadInfo(track: track, album: album, artist: artist))
                 }
-                if !batch.isEmpty {
-                    await submitBatch(batch)
-                }
-                await Task.yield()
             }
         }
+        startNextIfNeeded()
     }
 
     // MARK: - Per-track controls
 
     func cancelDownload(trackId: UUID) {
-        // Remove from pending queue
-        pendingQueue.removeAll { $0.info.track.id == trackId }
-
-        // Remove from paused
+        pendingQueue.removeAll { $0.track.id == trackId }
         pausedDownloads.removeValue(forKey: trackId)
 
-        // Cancel active download using stored task reference
         if let task = activeTasks.removeValue(forKey: trackId) {
             let taskId = task.taskIdentifier
             task.cancel()
@@ -172,29 +172,30 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
               let info = taskDownloads[task.taskIdentifier] else { return }
 
         let taskId = task.taskIdentifier
-        // Capture the original URL from the task before cancelling
         let resolvedURL = task.originalRequest?.url
         task.cancel()
 
-        // Clean up active tracking
         taskDownloads.removeValue(forKey: taskId)
         trackIdToTaskId.removeValue(forKey: trackId)
         inFlightCount -= 1
 
-        // Store info for later restart and mark paused in UI
         if let resolvedURL {
-            pausedDownloads[trackId] = QueuedDownload(info: info, resolvedURL: resolvedURL)
+            pausedDownloads[trackId] = (info: info, resolvedURL: resolvedURL)
         }
         activeDownloads[trackId]?.isPaused = true
     }
 
     func resumeDownload(trackId: UUID) {
-        guard let queued = pausedDownloads.removeValue(forKey: trackId) else { return }
+        guard let paused = pausedDownloads.removeValue(forKey: trackId) else { return }
 
-        // Remove old paused state and start fresh
         activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
-        enqueue(queued)
+
+        if inFlightCount < settings.maxConcurrentDownloads {
+            startTask(info: paused.info, resolvedURL: paused.resolvedURL)
+        } else {
+            pendingQueue.insert(paused.info, at: 0)
+        }
     }
 
     // MARK: - Bulk controls
@@ -242,12 +243,12 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     func isQueued(trackId: UUID) -> Bool {
-        pendingQueue.contains { $0.info.track.id == trackId }
+        pendingQueue.contains { $0.track.id == trackId }
     }
 
     func isAlbumDownloading(albumId: UUID) -> Bool {
         activeDownloads.values.contains { $0.albumId == albumId } ||
-        pendingQueue.contains { $0.info.album.id == albumId }
+        pendingQueue.contains { $0.album.id == albumId }
     }
 
     var hasActivity: Bool {
@@ -256,18 +257,42 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     // MARK: - Internal queue management
 
-    /// Enqueues a download: starts immediately if under the limit, otherwise adds to pending.
-    private func enqueue(_ queued: QueuedDownload) {
-        if inFlightCount < settings.maxConcurrentDownloads {
-            startTask(queued)
-        } else {
-            pendingQueue.append(queued)
+    /// Resolves token and starts tasks up to the concurrency limit.
+    private func startNextIfNeeded() {
+        guard !isPaused, !isStartingNext else { return }
+        guard !pendingQueue.isEmpty, inFlightCount < settings.maxConcurrentDownloads else { return }
+
+        isStartingNext = true
+
+        var toStart: [DownloadInfo] = []
+        while !pendingQueue.isEmpty, (inFlightCount + toStart.count) < settings.maxConcurrentDownloads {
+            let next = pendingQueue.removeFirst()
+            if musicLibrary.isDownloaded(trackId: next.track.id) { continue }
+            toStart.append(next)
+        }
+
+        guard !toStart.isEmpty else {
+            isStartingNext = false
+            return
+        }
+
+        Task { @MainActor in
+            defer { isStartingNext = false }
+            do {
+                let token = try await tokenManager.validToken(using: api)
+                for info in toStart {
+                    guard let url = self.resolveURL(for: info.track, token: token) else { continue }
+                    self.startTask(info: info, resolvedURL: url)
+                }
+            } catch {
+                print("DownloadService: failed to get token: \(error)")
+                self.pendingQueue.insert(contentsOf: toStart, at: 0)
+            }
         }
     }
 
-    /// Creates and resumes a URLSession task. No async work — safe to call from background wake-ups.
-    private func startTask(_ queued: QueuedDownload) {
-        let info = queued.info
+    /// Creates and resumes a URLSession download task.
+    private func startTask(info: DownloadInfo, resolvedURL: URL) {
         inFlightCount += 1
 
         activeDownloads[info.track.id] = DownloadState(
@@ -279,47 +304,33 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         progressValues[info.track.id] = 0
         startProgressTimerIfNeeded()
 
-        let task = downloadSession.downloadTask(with: queued.resolvedURL)
+        let task = downloadSession.downloadTask(with: resolvedURL)
+
+        // Store metadata in taskDescription — survives app termination + relaunch
+        let metadata = TaskMetadata(
+            trackId: info.track.id,
+            artistId: info.artist.id,
+            albumId: info.album.id,
+            mimetype: info.track.mimetype,
+            trackName: info.track.name
+        )
+        task.taskDescription = try? String(data: JSONEncoder().encode(metadata), encoding: .utf8)
+
         taskDownloads[task.taskIdentifier] = info
         trackIdToTaskId[info.track.id] = task.taskIdentifier
         activeTasks[info.track.id] = task
         task.resume()
     }
 
-    /// Starts queued downloads up to the concurrency limit. Fully synchronous — safe in background.
-    private func startNextIfNeeded() {
-        guard !isPaused else { return }
-        while !pendingQueue.isEmpty, inFlightCount < settings.maxConcurrentDownloads {
-            let next = pendingQueue.removeFirst()
-            if musicLibrary.isDownloaded(trackId: next.info.track.id) { continue }
-            startTask(next)
+    private func resolveURL(for track: Track, token: String) -> URL? {
+        guard let streamURL = URL(string: track.streamUrl),
+              var components = URLComponents(url: streamURL, resolvingAgainstBaseURL: false) else {
+            return nil
         }
-    }
-
-    /// Resolves URLs for a batch (single token fetch) then enqueues them all.
-    private func submitBatch(_ infos: [DownloadInfo]) async {
-        do {
-            let token = try await tokenManager.validToken(using: api)
-            var queued: [QueuedDownload] = []
-            for info in infos {
-                guard let streamURL = URL(string: info.track.streamUrl),
-                      var components = URLComponents(url: streamURL, resolvingAgainstBaseURL: false) else {
-                    continue
-                }
-                var queryItems = components.queryItems ?? []
-                queryItems.append(URLQueryItem(name: "token", value: token))
-                components.queryItems = queryItems
-                guard let url = components.url else { continue }
-                queued.append(QueuedDownload(info: info, resolvedURL: url))
-            }
-            await MainActor.run {
-                for q in queued {
-                    enqueue(q)
-                }
-            }
-        } catch {
-            print("DownloadService: failed to get token for batch download: \(error)")
-        }
+        var queryItems = components.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "token", value: token))
+        components.queryItems = queryItems
+        return components.url
     }
 
     private func cleanupTask(trackId: UUID, taskId: Int) {
@@ -336,23 +347,20 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     /// Retries downloads that failed due to expired tokens. Call when app becomes active.
     func retryFailedDownloads() {
-        // Resume pending queue — downloads may have completed in background
-        // without startNextIfNeeded() firing on MainActor
+        processPendingCompletions()
         startNextIfNeeded()
 
         guard !retryQueue.isEmpty else { return }
         let toRetry = retryQueue
         retryQueue.removeAll()
-        Task {
+        Task { @MainActor in
             await tokenManager.invalidate()
             for info in toRetry {
-                guard let url = try? await tokenManager.resolvedStreamURL(for: info.track, using: api) else { continue }
-                await MainActor.run {
-                    if !musicLibrary.isDownloaded(trackId: info.track.id) {
-                        enqueue(QueuedDownload(info: info, resolvedURL: url))
-                    }
+                if !musicLibrary.isDownloaded(trackId: info.track.id) {
+                    pendingQueue.append(info)
                 }
             }
+            startNextIfNeeded()
         }
     }
 
@@ -363,17 +371,35 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        // Check for HTTP error responses (e.g. expired token) — skip saving
         if let httpResponse = downloadTask.response as? HTTPURLResponse,
            !(200...299).contains(httpResponse.statusCode) {
-            // Don't save — didCompleteWithError will handle retry
             return
         }
-        // Must move file immediately — location is deleted after this method returns.
+
+        // Decode metadata from taskDescription — works even after app relaunch
+        guard let descriptionData = downloadTask.taskDescription?.data(using: .utf8),
+              let metadata = try? JSONDecoder().decode(TaskMetadata.self, from: descriptionData) else {
+            // Fallback: move to tmp (will be cleaned up)
+            print("DownloadService: no metadata for task \(downloadTask.taskIdentifier), skipping")
+            return
+        }
+
+        // Move file directly to final location (nonisolated — runs in background)
+        let relativePath = saveDownloadedFile(metadata: metadata, tempLocation: location)
+
+        if let relativePath {
+            // Write pending completion for SwiftData update on foreground
+            writePendingCompletion(trackId: metadata.trackId, relativePath: relativePath)
+        }
+
+        // Update UI state on MainActor (may not execute if suspended — that's OK)
         let taskId = downloadTask.taskIdentifier
-        let savedURL = moveDownloadToFinalLocation(taskId: taskId, tempLocation: location)
         Task { @MainActor in
-            finalizeDownload(taskId: taskId, savedURL: savedURL)
+            if let relativePath {
+                self.musicLibrary.markDownloaded(trackId: metadata.trackId, relativePath: relativePath)
+                self.removePendingCompletion(trackId: metadata.trackId)
+            }
+            self.cleanupTask(trackId: metadata.trackId, taskId: taskId)
         }
     }
 
@@ -405,7 +431,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         Task { @MainActor in
             guard let info = taskDownloads[taskId] else { return }
 
-            // Check for token expiry (401/403) — queue for retry with fresh token
             if let statusCode, (statusCode == 401 || statusCode == 403) {
                 cleanupTask(trackId: info.track.id, taskId: taskId)
                 var retryInfo = info
@@ -428,7 +453,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
         Task { @MainActor in
-            // Start next queued downloads after background events are delivered
+            processPendingCompletions()
             startNextIfNeeded()
             #if os(iOS)
             let handler = BackgroundSessionDelegate.pendingCompletionHandler
@@ -438,73 +463,72 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    // MARK: - Private
+    // MARK: - File management
 
-    /// Moves the downloaded file to its final location. Called on the delegate queue (background thread)
-    /// because the temp file at `location` is deleted after `didFinishDownloadingTo` returns.
-    nonisolated private func moveDownloadToFinalLocation(taskId: Int, tempLocation: URL) -> URL? {
+    /// Moves downloaded file directly to its final path. Runs on delegate queue (nonisolated).
+    nonisolated private func saveDownloadedFile(metadata: TaskMetadata, tempLocation: URL) -> String? {
         let fm = FileManager.default
-        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let tempDest = appSupport
-            .appendingPathComponent("MusicBox/Downloads", isDirectory: true)
-            .appendingPathComponent("tmp-\(taskId)")
+        let dir = Self.downloadsDirectory
+            .appendingPathComponent(metadata.artistId.uuidString, isDirectory: true)
+            .appendingPathComponent(metadata.albumId.uuidString, isDirectory: true)
+
+        let ext = extensionFromMimetype(metadata.mimetype)
+        let destURL = dir.appendingPathComponent("\(metadata.trackId.uuidString).\(ext)")
+        let relativePath = "MusicBox/Downloads/\(metadata.artistId.uuidString)/\(metadata.albumId.uuidString)/\(metadata.trackId.uuidString).\(ext)"
+
         do {
-            try fm.createDirectory(
-                at: appSupport.appendingPathComponent("MusicBox/Downloads", isDirectory: true),
-                withIntermediateDirectories: true)
-            if fm.fileExists(atPath: tempDest.path) {
-                try fm.removeItem(at: tempDest)
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            if fm.fileExists(atPath: destURL.path) {
+                try fm.removeItem(at: destURL)
             }
-            try fm.moveItem(at: tempLocation, to: tempDest)
-            return tempDest
+            try fm.moveItem(at: tempLocation, to: destURL)
+            return relativePath
         } catch {
-            print("DownloadService: failed to save temp file: \(error)")
+            print("DownloadService: failed to save file for \(metadata.trackName): \(error)")
             return nil
         }
     }
 
-    /// Finalizes the download on the main actor: moves to final path, inserts into store.
-    private func finalizeDownload(taskId: Int, savedURL: URL?) {
-        guard let info = taskDownloads[taskId] else { return }
+    /// Writes a pending completion record to disk. If the app is suspended before
+    /// SwiftData can be updated, this record is processed on next foreground.
+    nonisolated private func writePendingCompletion(trackId: UUID, relativePath: String) {
+        let fm = FileManager.default
+        let dir = Self.pendingDirectory
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        if let savedURL {
-            let fm = FileManager.default
-            let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            let dir = appSupport
-                .appendingPathComponent("MusicBox/Downloads", isDirectory: true)
-                .appendingPathComponent(info.artist.id.uuidString, isDirectory: true)
-                .appendingPathComponent(info.album.id.uuidString, isDirectory: true)
-
-            do {
-                try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-
-                let ext = extensionFromMimetype(info.track.mimetype)
-                let destURL = dir.appendingPathComponent("\(info.track.id.uuidString).\(ext)")
-
-                if fm.fileExists(atPath: destURL.path) {
-                    try fm.removeItem(at: destURL)
-                }
-                try fm.moveItem(at: savedURL, to: destURL)
-
-                print("DownloadService: saved \(info.track.name) to \(destURL.path)")
-                let relativePath = "MusicBox/Downloads/\(info.artist.id.uuidString)/\(info.album.id.uuidString)/\(info.track.id.uuidString).\(ext)"
-                musicLibrary.markDownloaded(trackId: info.track.id, relativePath: relativePath)
-            } catch {
-                print("DownloadService: failed to save \(info.track.name): \(error)")
-                try? fm.removeItem(at: savedURL)
-            }
-        }
-
-        activeDownloads.removeValue(forKey: info.track.id)
-        activeDownloadOrder.removeAll { $0 == info.track.id }
-        trackIdToTaskId.removeValue(forKey: info.track.id)
-        activeTasks.removeValue(forKey: info.track.id)
-        progressValues.removeValue(forKey: info.track.id)
-        taskDownloads.removeValue(forKey: taskId)
-        inFlightCount -= 1
-        stopProgressTimerIfIdle()
-        startNextIfNeeded()
+        let record = PendingCompletion(trackId: trackId, relativePath: relativePath)
+        let file = dir.appendingPathComponent("\(trackId.uuidString).json")
+        try? JSONEncoder().encode(record).write(to: file)
     }
+
+    /// Removes a pending completion record after SwiftData has been updated.
+    private func removePendingCompletion(trackId: UUID) {
+        let file = Self.pendingDirectory.appendingPathComponent("\(trackId.uuidString).json")
+        try? FileManager.default.removeItem(at: file)
+    }
+
+    /// Scans for pending completion records and updates SwiftData.
+    /// Called on init and when returning to foreground.
+    func processPendingCompletions() {
+        let fm = FileManager.default
+        let dir = Self.pendingDirectory
+        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
+
+        for file in files where file.pathExtension == "json" {
+            guard let data = try? Data(contentsOf: file),
+                  let record = try? JSONDecoder().decode(PendingCompletion.self, from: data) else {
+                try? fm.removeItem(at: file)
+                continue
+            }
+
+            if !musicLibrary.isDownloaded(trackId: record.trackId) {
+                musicLibrary.markDownloaded(trackId: record.trackId, relativePath: record.relativePath)
+            }
+            try? fm.removeItem(at: file)
+        }
+    }
+
+    // MARK: - Progress timer
 
     private func startProgressTimerIfNeeded() {
         guard progressTimer == nil else { return }
@@ -522,7 +546,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         progressSnapshot.removeAll()
     }
 
-    private func extensionFromMimetype(_ mimetype: String) -> String {
+    // MARK: - Helpers
+
+    nonisolated private func extensionFromMimetype(_ mimetype: String) -> String {
         switch mimetype.lowercased() {
         case "audio/mpeg", "audio/mp3": "mp3"
         case "audio/flac": "flac"

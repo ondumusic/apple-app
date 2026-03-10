@@ -335,6 +335,15 @@ final class MusicLibrary {
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
+    func isArtistFullyDownloaded(artistId: UUID) -> Bool {
+        _ = revision
+        let allDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId })
+        let downloadedDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
+        let total = (try? modelContext.fetchCount(allDescriptor)) ?? 0
+        let downloaded = (try? modelContext.fetchCount(downloadedDescriptor)) ?? 0
+        return total > 0 && total == downloaded
+    }
+
     func localURL(for trackId: UUID) -> URL? {
         _ = revision
         var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == trackId && $0.isDownloaded == true })
@@ -490,19 +499,12 @@ final class MusicLibrary {
 
     func availableTracks(_ tracks: [Track], isOnline: Bool) -> [Track] {
         if isOnline { return tracks }
-        let ids = Set(tracks.map(\.id))
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
-        let downloadedIds = Set(((try? modelContext.fetch(descriptor)) ?? [])
-            .map(\.serverId))
-        return tracks.filter { downloadedIds.contains($0.id) }
+        return tracks.filter { $0.isDownloaded }
     }
 
     func availableItems(_ items: [QueueItem], isOnline: Bool) -> [QueueItem] {
         if isOnline { return items }
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
-        let downloadedIds = Set(((try? modelContext.fetch(descriptor)) ?? [])
-            .map(\.serverId))
-        return items.filter { downloadedIds.contains($0.track.id) }
+        return items.filter { $0.track.isDownloaded }
     }
 
     // MARK: - Mutations (called by SyncService)
