@@ -47,6 +47,9 @@ struct SearchView: View {
                             ArtistCard(artist: artist)
                         }
                         .tint(.primary)
+                        .contextMenu {
+                            ArtistContextMenuItems(artist: artist)
+                        }
                     }
                 }
             }
@@ -70,6 +73,9 @@ struct SearchView: View {
                             }
                         }
                         .tint(.primary)
+                        .contextMenu {
+                            AlbumContextMenuItems(album: album)
+                        }
                     }
                 }
             }
@@ -163,6 +169,9 @@ struct SearchView: View {
                     historyLabel(item)
                 }
                 .tint(.primary)
+                .contextMenu {
+                    ArtistContextMenuItems(artist: artist)
+                }
             }
         case .album:
             if let album = musicLibrary.album(item.id) {
@@ -170,23 +179,38 @@ struct SearchView: View {
                     historyLabel(item)
                 }
                 .tint(.primary)
+                .contextMenu {
+                    AlbumContextMenuItems(album: album)
+                }
             }
         case .song:
-            Button {
-                if let track = musicLibrary.track(item.id) {
+            if let track = musicLibrary.track(item.id) {
+                Button {
                     let queueItem = QueueItem(track: track, artworkURL: track.album?.artworkUrl)
                     player.playNow(queue: [queueItem])
+                } label: {
+                    historyLabel(item)
                 }
-            } label: {
-                historyLabel(item)
+                .tint(.primary)
+                .contextMenu {
+                    TrackContextMenuItems(track: track)
+                }
             }
-            .tint(.primary)
         }
     }
 
     private func historyLabel(_ item: SearchHistoryItem) -> some View {
         HStack(spacing: 12) {
-            if item.kind != .artist {
+            if item.kind == .artist {
+                ZStack {
+                    Circle()
+                        .fill(.quaternary)
+                    Text(item.name.prefix(1).uppercased())
+                        .font(.title2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: 40, height: 40)
+            } else {
                 ArtworkView(url: item.artworkUrl)
                     .frame(width: 40, height: 40)
             }

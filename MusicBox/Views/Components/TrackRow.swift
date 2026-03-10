@@ -80,78 +80,7 @@ struct TrackRow: View {
             onTap?()
         }
         .contextMenu {
-            if isAvailable {
-                Button {
-                    player.playNext(tracks: [track], artworkURL: album?.artworkUrl)
-                } label: {
-                    Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
-                }
-
-                Button {
-                    player.addToEnd(tracks: [track], artworkURL: album?.artworkUrl)
-                } label: {
-                    Label("Add to Queue", systemImage: "text.append")
-                }
-
-                Divider()
-            }
-
-            TrackDownloadMenuItems(track: track, album: album, artist: artist)
-        }
-    }
-}
-
-/// Isolated subview so download/offline observation doesn't invalidate the parent TrackRow.
-private struct TrackDownloadMenuItems: View {
-    @Environment(DownloadService.self) private var downloadService
-    @Environment(MusicLibrary.self) private var musicLibrary
-
-    let track: Track
-    let album: Album?
-    let artist: Artist?
-
-    var body: some View {
-        if musicLibrary.isDownloaded(trackId: track.id) {
-            Button(role: .destructive) {
-                musicLibrary.markUndownloaded(trackId: track.id)
-            } label: {
-                Label("Remove Download", systemImage: "trash")
-            }
-        } else if downloadService.isDownloading(trackId: track.id) {
-            if let state = downloadService.activeDownloads[track.id], state.isPaused {
-                Button {
-                    downloadService.resumeDownload(trackId: track.id)
-                } label: {
-                    Label("Resume Download", systemImage: "play.circle")
-                }
-            } else {
-                Button {
-                    downloadService.pauseDownload(trackId: track.id)
-                } label: {
-                    Label("Pause Download", systemImage: "pause.circle")
-                }
-            }
-
-            Button(role: .destructive) {
-                downloadService.cancelDownload(trackId: track.id)
-            } label: {
-                Label("Cancel Download", systemImage: "xmark.circle")
-            }
-        } else if downloadService.isQueued(trackId: track.id) {
-            Button(role: .destructive) {
-                downloadService.cancelDownload(trackId: track.id)
-            } label: {
-                Label("Cancel Download", systemImage: "xmark.circle")
-            }
-        } else {
-            Button {
-                let resolvedAlbum = album ?? musicLibrary.album(track.albumId)
-                guard let resolvedAlbum else { return }
-                let albumArtist = artist ?? musicLibrary.artist(resolvedAlbum.artistId) ?? track.artist
-                downloadService.download(track: track, album: resolvedAlbum, artist: albumArtist)
-            } label: {
-                Label("Download", systemImage: "arrow.down.circle")
-            }
+            TrackContextMenuItems(track: track, album: album, artist: artist)
         }
     }
 }

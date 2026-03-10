@@ -47,6 +47,44 @@ struct AlbumContextMenuItems: View {
     }
 }
 
+struct TrackContextMenuItems: View {
+    @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(PlayerService.self) private var player
+    @Environment(NetworkMonitor.self) private var network
+
+    let track: Track
+    var album: Album? = nil
+    var artist: Artist? = nil
+
+    private var artworkURL: URL? {
+        album?.artworkUrl ?? track.album?.artworkUrl
+    }
+
+    private var isAvailable: Bool {
+        network.isOnline || track.isDownloaded
+    }
+
+    var body: some View {
+        if isAvailable {
+            Button {
+                player.playNext(tracks: [track], artworkURL: artworkURL)
+            } label: {
+                Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+
+            Button {
+                player.addToEnd(tracks: [track], artworkURL: artworkURL)
+            } label: {
+                Label("Add to Queue", systemImage: "text.append")
+            }
+
+            Divider()
+        }
+
+        TrackDownloadMenuItems(track: track, album: album, artist: artist)
+    }
+}
+
 struct ArtistContextMenuItems: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
@@ -97,6 +135,61 @@ struct ArtistContextMenuItems: View {
     private func buildQueueItems() -> [QueueItem] {
         musicLibrary.albumsWithTracksForArtist(artist.id).flatMap { album in
             (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
+        }
+    }
+}
+
+/// Isolated subview so download/offline observation doesn't invalidate the parent view.
+struct TrackDownloadMenuItems: View {
+    @Environment(DownloadService.self) private var downloadService
+    @Environment(MusicLibrary.self) private var musicLibrary
+
+    let track: Track
+    var album: Album? = nil
+    var artist: Artist? = nil
+
+    var body: some View {
+        if musicLibrary.isDownloaded(trackId: track.id) {
+            Button(role: .destructive) {
+                musicLibrary.markUndownloaded(trackId: track.id)
+            } label: {
+                Label("Remove Download", systemImage: "trash")
+            }
+        } else if downloadService.isDownloading(trackId: track.id) {
+            if let state = downloadService.activeDownloads[track.id], state.isPaused {
+                Button {
+                    downloadService.resumeDownload(trackId: track.id)
+                } label: {
+                    Label("Resume Download", systemImage: "play.circle")
+                }
+            } else {
+                Button {
+                    downloadService.pauseDownload(trackId: track.id)
+                } label: {
+                    Label("Pause Download", systemImage: "pause.circle")
+                }
+            }
+
+            Button(role: .destructive) {
+                downloadService.cancelDownload(trackId: track.id)
+            } label: {
+                Label("Cancel Download", systemImage: "xmark.circle")
+            }
+        } else if downloadService.isQueued(trackId: track.id) {
+            Button(role: .destructive) {
+                downloadService.cancelDownload(trackId: track.id)
+            } label: {
+                Label("Cancel Download", systemImage: "xmark.circle")
+            }
+        } else {
+            Button {
+                let resolvedAlbum = album ?? musicLibrary.album(track.albumId)
+                guard let resolvedAlbum else { return }
+                let albumArtist = artist ?? musicLibrary.artist(resolvedAlbum.artistId) ?? track.artist
+                downloadService.download(track: track, album: resolvedAlbum, artist: albumArtist)
+            } label: {
+                Label("Download", systemImage: "arrow.down.circle")
+            }
         }
     }
 }
