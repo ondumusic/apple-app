@@ -574,6 +574,9 @@ final class MusicLibrary {
                 let id = deletion.entityId
                 let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == id })
                 if let track = try? modelContext.fetch(descriptor).first {
+                    if let url = track.resolvedFileURL {
+                        try? FileManager.default.removeItem(at: url)
+                    }
                     modelContext.delete(track)
                 }
             default:
@@ -662,6 +665,9 @@ final class MusicLibrary {
 
     private func deleteArtistCascade(_ artistId: UUID) {
         for track in fetchAllTracks().filter({ $0.artistId == artistId }) {
+            if let url = track.resolvedFileURL {
+                try? FileManager.default.removeItem(at: url)
+            }
             modelContext.delete(track)
         }
         for album in fetchAllAlbums().filter({ $0.artistId == artistId }) {
@@ -674,6 +680,9 @@ final class MusicLibrary {
 
     private func deleteAlbumCascade(_ albumId: UUID) {
         for track in fetchAllTracks().filter({ $0.albumId == albumId }) {
+            if let url = track.resolvedFileURL {
+                try? FileManager.default.removeItem(at: url)
+            }
             modelContext.delete(track)
         }
         if let album = fetchAllAlbums().first(where: { $0.serverId == albumId }) {
