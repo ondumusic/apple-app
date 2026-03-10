@@ -123,7 +123,7 @@ struct iOSRootView: View {
     }
 
     private var settingsButton: some ToolbarContent {
-        ToolbarItem(placement: .automatic) {
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 showSettings = true
             } label: {

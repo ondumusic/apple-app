@@ -106,9 +106,12 @@ final class SyncService {
     var syncError: String?
 
     nonisolated struct SyncProgress: Sendable {
-        var artistCount: Int = 0
-        var albumCount: Int = 0
-        var trackCount: Int = 0
+        var artistIds: Set<UUID> = []
+        var albumIds: Set<UUID> = []
+        var trackIds: Set<UUID> = []
+        var artistCount: Int { artistIds.count }
+        var albumCount: Int { albumIds.count }
+        var trackCount: Int { trackIds.count }
     }
 
     @ObservationIgnored private let api: APIService
@@ -160,9 +163,9 @@ final class SyncService {
 
                 artworkURLs += response.albums.compactMap(\.artworkUrl)
 
-                syncProgress?.artistCount += response.artists.count
-                syncProgress?.albumCount += response.albums.count
-                syncProgress?.trackCount += response.tracks.count
+                syncProgress?.artistIds.formUnion(response.artists.map(\.id))
+                syncProgress?.albumIds.formUnion(response.albums.map(\.id))
+                syncProgress?.trackIds.formUnion(response.tracks.map(\.id))
 
                 cursor = response.cursor
 

@@ -12,11 +12,9 @@ struct AlbumCard: View {
                 .font(.callout)
                 .lineLimit(1)
 
-            if let year = album.releaseYear {
-                Text(String(year))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Text(album.releaseYear.map(String.init) ?? " ")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

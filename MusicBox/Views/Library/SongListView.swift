@@ -84,7 +84,7 @@ struct SongListView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .automatic) {
                 filterMenu
             }
         }
@@ -107,16 +107,9 @@ struct SongListView: View {
 
     private var filterMenu: some View {
         Menu {
-            Button {
-                filterOption = .all
-            } label: {
-                Label("All Music", systemImage: filterOption == .all ? "checkmark" : "")
-            }
-
-            Button {
-                filterOption = .downloaded
-            } label: {
-                Label("Downloaded", systemImage: filterOption == .downloaded ? "checkmark" : "")
+            Picker("Filter", selection: $filterOption) {
+                Text("All Music").tag(LibraryFilter.all)
+                Text("Downloaded").tag(LibraryFilter.downloaded)
             }
         } label: {
             Label("Filter", systemImage: filterOption == .downloaded ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")

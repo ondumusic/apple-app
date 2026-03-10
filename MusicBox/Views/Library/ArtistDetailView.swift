@@ -8,10 +8,11 @@ struct ArtistDetailView: View {
 
     let artist: Artist
 
+    @State private var albums: [Album] = []
+
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
 
     var body: some View {
-        let albums = musicLibrary.albumsForArtist(artist.id)
         ScrollView {
             HStack(spacing: 12) {
                 Button {
@@ -82,6 +83,9 @@ struct ArtistDetailView: View {
             if albums.isEmpty {
                 ContentUnavailableView("No Albums", systemImage: "square.stack")
             }
+        }
+        .onChange(of: musicLibrary.revision, initial: true) {
+            albums = musicLibrary.albumsForArtist(artist.id)
         }
     }
 

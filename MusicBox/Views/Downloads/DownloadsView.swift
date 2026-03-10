@@ -6,8 +6,7 @@ struct DownloadsView: View {
     @State private var showDeleteAllConfirmation = false
     @State private var showDownloadAllConfirmation = false
     @State private var artistToDelete: Artist?
-
-    private var artists: [Artist] { musicLibrary.downloadedArtists() }
+    @State private var artists: [Artist] = []
 
     var body: some View {
         List {
@@ -138,7 +137,7 @@ struct DownloadsView: View {
                                 HStack {
                                     Text(artist.name)
                                     Spacer()
-                                    Text("\(artist.albumCount) \(artist.albumCount == 1 ? "album" : "albums")")
+                                    Text("\(artist.albumCount ?? 0) \(artist.albumCount == 1 ? "album" : "albums")")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -211,6 +210,9 @@ struct DownloadsView: View {
                     }
                 }
             }
+        }
+        .onChange(of: musicLibrary.revision, initial: true) {
+            artists = musicLibrary.downloadedArtists()
         }
         .confirmationDialog(
             "Delete Artist",

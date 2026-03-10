@@ -9,8 +9,8 @@ struct AlbumDetailView: View {
     let album: Album
 
     @State private var showRemoveDownloadConfirmation = false
+    @State private var tracks: [Track] = []
 
-    private var tracks: [Track] { musicLibrary.tracksForAlbum(album.id) }
     private var discs: [Int] { Array(Set(tracks.map(\.disc))).sorted() }
     private var hasMultipleDiscs: Bool { discs.count > 1 }
 
@@ -129,6 +129,9 @@ struct AlbumDetailView: View {
             if tracks.isEmpty {
                 ContentUnavailableView("No Tracks", systemImage: "music.note")
             }
+        }
+        .onChange(of: musicLibrary.revision, initial: true) {
+            tracks = musicLibrary.tracksForAlbum(album.id)
         }
     }
 }

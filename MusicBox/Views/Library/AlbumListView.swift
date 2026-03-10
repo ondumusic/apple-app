@@ -4,6 +4,20 @@ nonisolated enum AlbumSortOption: String, CaseIterable {
     case artist = "Artist"
     case dateAdded = "Date Added"
     case name = "Name"
+
+    var ascendingLabel: String {
+        switch self {
+        case .artist, .name: "A–Z"
+        case .dateAdded: "Oldest First"
+        }
+    }
+
+    var descendingLabel: String {
+        switch self {
+        case .artist, .name: "Z–A"
+        case .dateAdded: "Newest First"
+        }
+    }
 }
 
 nonisolated enum LibraryFilter: String {
@@ -23,14 +37,9 @@ struct AlbumListView: View {
     @AppStorage("albumListSortAscending") private var sortAscending: Bool = true
     @AppStorage("albumListFilter") private var filterOption: LibraryFilter = .all
 
-    private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
+    @State private var albums: [Album] = []
 
-    private var albums: [Album] {
-        let source = filterOption == .downloaded
-            ? musicLibrary.downloadedAlbums()
-            : musicLibrary.allAlbums()
-        return sortedAlbums(source)
-    }
+    private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
 
     var body: some View {
         ScrollView {
@@ -86,7 +95,7 @@ struct AlbumListView: View {
             AlbumDetailView(album: album)
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .automatic) {
                 toolbarMenu
             }
         }
@@ -102,6 +111,25 @@ struct AlbumListView: View {
                 }
             }
         }
+        .onChange(of: musicLibrary.revision, initial: true) {
+            reloadAlbums()
+        }
+        .onChange(of: filterOption) {
+            reloadAlbums()
+        }
+        .onChange(of: sortOption) {
+            reloadAlbums()
+        }
+        .onChange(of: sortAscending) {
+            reloadAlbums()
+        }
+    }
+
+    private func reloadAlbums() {
+        let source = filterOption == .downloaded
+            ? musicLibrary.downloadedAlbums()
+            : musicLibrary.allAlbums()
+        albums = sortedAlbums(source)
     }
 
     // MARK: - Toolbar Menu
@@ -109,35 +137,28 @@ struct AlbumListView: View {
     private var toolbarMenu: some View {
         Menu {
             Section("Filter") {
-                Button {
-                    filterOption = .all
-                } label: {
-                    Label("All Music", systemImage: filterOption == .all ? "checkmark" : "")
-                }
-
-                Button {
-                    filterOption = .downloaded
-                } label: {
-                    Label("Downloaded", systemImage: filterOption == .downloaded ? "checkmark" : "")
+                Picker("Filter", selection: $filterOption) {
+                    Text("All Music").tag(LibraryFilter.all)
+                    Text("Downloaded").tag(LibraryFilter.downloaded)
                 }
             }
 
-            Section("Sort") {
-                ForEach(AlbumSortOption.allCases, id: \.self) { option in
-                    Button {
-                        if sortOption == option {
+            ForEach(AlbumSortOption.allCases, id: \.self) { option in
+                let isActive = sortOption == option
+                Toggle(isOn: Binding(
+                    get: { isActive },
+                    set: { _ in
+                        if isActive {
                             sortAscending.toggle()
                         } else {
                             sortOption = option
                             sortAscending = option != .dateAdded
                         }
-                    } label: {
-                        HStack {
-                            Text(option.rawValue)
-                            if sortOption == option {
-                                Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
-                            }
-                        }
+                    }
+                )) {
+                    Text(option.rawValue)
+                    if isActive {
+                        Text(sortAscending ? option.ascendingLabel : option.descendingLabel)
                     }
                 }
             }

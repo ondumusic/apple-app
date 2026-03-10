@@ -10,11 +10,7 @@ struct ArtistListView: View {
 
     @AppStorage("artistListFilter") private var filterOption: LibraryFilter = .all
 
-    private var artists: [Artist] {
-        filterOption == .downloaded
-            ? musicLibrary.downloadedArtists()
-            : musicLibrary.allArtists()
-    }
+    @State private var artists: [Artist] = []
 
     var body: some View {
         List(artists) { artist in
@@ -76,7 +72,7 @@ struct ArtistListView: View {
             AlbumDetailView(album: album)
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .automatic) {
                 filterMenu
             }
         }
@@ -92,20 +88,25 @@ struct ArtistListView: View {
                 }
             }
         }
+        .onChange(of: musicLibrary.revision, initial: true) {
+            reloadArtists()
+        }
+        .onChange(of: filterOption) {
+            reloadArtists()
+        }
+    }
+
+    private func reloadArtists() {
+        artists = filterOption == .downloaded
+            ? musicLibrary.downloadedArtists()
+            : musicLibrary.allArtists()
     }
 
     private var filterMenu: some View {
         Menu {
-            Button {
-                filterOption = .all
-            } label: {
-                Label("All Music", systemImage: filterOption == .all ? "checkmark" : "")
-            }
-
-            Button {
-                filterOption = .downloaded
-            } label: {
-                Label("Downloaded", systemImage: filterOption == .downloaded ? "checkmark" : "")
+            Picker("Filter", selection: $filterOption) {
+                Text("All Music").tag(LibraryFilter.all)
+                Text("Downloaded").tag(LibraryFilter.downloaded)
             }
         } label: {
             Label("Filter", systemImage: filterOption == .downloaded ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")

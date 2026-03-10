@@ -8,24 +8,31 @@ struct SearchView: View {
 
     let query: String
 
-    private var results: (artists: [Artist], albums: [Album], tracks: [Track]) {
-        musicLibrary.search(query)
-    }
+    @State private var results: (artists: [Artist], albums: [Album], tracks: [Track]) = ([], [], [])
 
     var body: some View {
-        let results = results
         let hasResults = !results.artists.isEmpty || !results.albums.isEmpty || !results.tracks.isEmpty
 
-        if query.isEmpty {
-            if searchHistory.items.isEmpty {
-                ContentUnavailableView("Search", systemImage: "magnifyingglass", description: Text("Search for artists, albums, or songs."))
+        Group {
+            if query.isEmpty {
+                if searchHistory.items.isEmpty {
+                    ContentUnavailableView("Search", systemImage: "magnifyingglass", description: Text("Search for artists, albums, or songs."))
+                } else {
+                    recentsList
+                }
+            } else if !hasResults {
+                ContentUnavailableView.search(text: query)
             } else {
-                recentsList
+                resultsList(results)
             }
-        } else if !hasResults {
-            ContentUnavailableView.search(text: query)
-        } else {
-            resultsList(results)
+        }
+        .onChange(of: query) {
+            results = musicLibrary.search(query)
+        }
+        .onChange(of: musicLibrary.revision, initial: true) {
+            if !query.isEmpty {
+                results = musicLibrary.search(query)
+            }
         }
     }
 
