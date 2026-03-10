@@ -125,6 +125,15 @@ struct AlbumDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    AlbumContextMenuItems(album: album)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
         .overlay {
             if tracks.isEmpty {
                 ContentUnavailableView("No Tracks", systemImage: "music.note")

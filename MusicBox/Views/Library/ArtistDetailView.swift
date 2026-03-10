@@ -47,6 +47,15 @@ struct ArtistDetailView: View {
             .padding()
         }
         .navigationTitle(artist.name)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    ArtistContextMenuItems(artist: artist)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
         .overlay {
             if albums.isEmpty {
                 ContentUnavailableView("No Albums", systemImage: "square.stack")
