@@ -1,5 +1,6 @@
 import AVFoundation
 import MediaPlayer
+import Nuke
 import SwiftUI
 
 nonisolated enum RepeatMode: String, Sendable {
@@ -358,8 +359,9 @@ final class PlayerService {
         currentTrack = track
         progress = 0
         duration = track.duration
-        // Keep previous artwork as placeholder to avoid lock screen flash;
-        // updateNowPlayingInfo will async-fetch and replace if artwork changed
+
+        // Push track metadata to lock screen immediately (before async load)
+        updateNowPlayingInfo()
 
         // Stop current playback
         primaryPlayer.pause()
@@ -398,7 +400,7 @@ final class PlayerService {
             isLoadingTrack = false
             isPlaying = true
 
-            updateNowPlayingInfo()
+            updateNowPlayingPlaybackState()
             setupCrossfadeObserverIfNeeded()
             prefetchNextTrack()
         } catch {
@@ -730,28 +732,32 @@ final class PlayerService {
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
         ]
         info[MPMediaItemPropertyAlbumTrackNumber] = track.number
-        if let artwork = nowPlayingArtwork {
+        // Try synchronous memory cache first for instant artwork
+        let idx = effectiveIndex
+        let artworkURL = (idx >= 0 && idx < queue.count) ? queue[idx].artworkURL : nil
+
+        if let artworkURL, artworkURL == nowPlayingArtworkURL, let artwork = nowPlayingArtwork {
+            info[MPMediaItemPropertyArtwork] = artwork
+        } else if let artworkURL,
+                  let cached = ImagePipeline.shared.cache.cachedImage(for: ImageRequest(url: artworkURL)) {
+            let artwork = MPMediaItemArtwork(boundsSize: cached.image.size) { _ in cached.image }
+            nowPlayingArtwork = artwork
+            nowPlayingArtworkURL = artworkURL
+            info[MPMediaItemPropertyArtwork] = artwork
+        } else if let artwork = nowPlayingArtwork {
+            // Keep previous artwork as placeholder while loading
             info[MPMediaItemPropertyArtwork] = artwork
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 
-        // Load artwork in background (skip if same URL already loaded)
-        let idx = effectiveIndex
-        guard idx >= 0 && idx < queue.count, let artworkURL = queue[idx].artworkURL else { return }
-        guard artworkURL != nowPlayingArtworkURL else { return }
+        // Async fallback for disk cache / network
+        guard let artworkURL, artworkURL != nowPlayingArtworkURL else { return }
         let trackId = track.id
         Task {
             do {
-                let (data, _) = try await URLSession.shared.data(from: artworkURL)
-                #if os(macOS)
-                guard let image = NSImage(data: data) else { return }
+                let image = try await ImagePipeline.shared.image(for: artworkURL)
                 let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                #else
-                guard let image = UIImage(data: data) else { return }
-                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                #endif
                 await MainActor.run {
-                    // Only set if we're still on the same track
                     guard self.currentTrack?.id == trackId else { return }
                     self.nowPlayingArtwork = artwork
                     self.nowPlayingArtworkURL = artworkURL
@@ -766,8 +772,10 @@ final class PlayerService {
     }
 
     private func updateNowPlayingPlaybackState() {
-        MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
-        MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] = progress
+        guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = progress
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
     // MARK: - Remote Commands
