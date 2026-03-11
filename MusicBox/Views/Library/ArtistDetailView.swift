@@ -66,15 +66,23 @@ struct ArtistDetailView: View {
             }
         }
         .onChange(of: musicLibrary.revision, initial: true) {
-            albums = downloadedOnly
-                ? musicLibrary.downloadedAlbumsForArtist(artist.id)
-                : musicLibrary.albumsForArtist(artist.id)
-
-            if downloadedOnly && hasLoadedOnce && albums.isEmpty {
-                dismiss()
-            }
-            hasLoadedOnce = true
+            reloadAlbums()
         }
+        .onChange(of: musicLibrary.downloadChanged) {
+            guard downloadedOnly else { return }
+            reloadAlbums()
+        }
+    }
+
+    private func reloadAlbums() {
+        albums = downloadedOnly
+            ? musicLibrary.downloadedAlbumsForArtist(artist.id)
+            : musicLibrary.albumsForArtist(artist.id)
+
+        if downloadedOnly && hasLoadedOnce && albums.isEmpty {
+            dismiss()
+        }
+        hasLoadedOnce = true
     }
 
     private func playAll(shuffle: Bool) {

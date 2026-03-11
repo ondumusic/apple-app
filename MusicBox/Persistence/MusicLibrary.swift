@@ -105,8 +105,19 @@ nonisolated class LibraryTrack {
 final class MusicLibrary {
     @ObservationIgnored let modelContainer: ModelContainer
 
-    /// Incremented on every mutation so views that read it re-evaluate.
+    /// Incremented on content mutations (sync, clear) so views that read it re-evaluate.
     private(set) var revision: UInt = 0
+
+    /// Track IDs whose download state changed. Views observe this to update in-place
+    /// without re-querying SwiftData.
+    private(set) var downloadChanged: Set<UUID> = []
+
+    /// Updates `isDownloaded` in-place on tracks affected by the latest download change.
+    func applyDownloadChanges(to tracks: inout [Track]) {
+        for i in tracks.indices where downloadChanged.contains(tracks[i].id) {
+            tracks[i].isDownloaded = isDownloaded(trackId: tracks[i].id)
+        }
+    }
 
     init() throws {
         let schema = Schema([LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self])
@@ -303,25 +314,25 @@ final class MusicLibrary {
     // MARK: - Downloads
 
     func isDownloaded(trackId: UUID) -> Bool {
-        _ = revision
+        _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == trackId && $0.isDownloaded == true })
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
     func downloadedTrackCount(albumId: UUID) -> Int {
-        _ = revision
+        _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         return (try? modelContext.fetchCount(descriptor)) ?? 0
     }
 
     func isAlbumDownloaded(albumId: UUID) -> Bool {
-        _ = revision
+        _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
     func isAlbumFullyDownloaded(albumId: UUID) -> Bool {
-        _ = revision
+        _ = downloadChanged
         let allDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId })
         let downloadedDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         let total = (try? modelContext.fetchCount(allDescriptor)) ?? 0
@@ -330,13 +341,13 @@ final class MusicLibrary {
     }
 
     func isArtistDownloaded(artistId: UUID) -> Bool {
-        _ = revision
+        _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
     func isArtistFullyDownloaded(artistId: UUID) -> Bool {
-        _ = revision
+        _ = downloadChanged
         let allDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId })
         let downloadedDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         let total = (try? modelContext.fetchCount(allDescriptor)) ?? 0
@@ -345,7 +356,7 @@ final class MusicLibrary {
     }
 
     func localURL(for trackId: UUID) -> URL? {
-        _ = revision
+        _ = downloadChanged
         var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == trackId && $0.isDownloaded == true })
         descriptor.fetchLimit = 1
         guard let track = try? modelContext.fetch(descriptor).first else { return nil }
@@ -354,7 +365,7 @@ final class MusicLibrary {
 
     /// Returns artists that have at least one downloaded track, sorted by sortName.
     func downloadedArtists() -> [Artist] {
-        _ = revision
+        _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
         let downloaded = (try? modelContext.fetch(descriptor)) ?? []
         let artistIds = Set(downloaded.map(\.albumArtistId))
@@ -369,7 +380,7 @@ final class MusicLibrary {
 
     /// Returns all albums that have at least one downloaded track.
     func downloadedAlbums() -> [Album] {
-        _ = revision
+        _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
         let downloaded = (try? modelContext.fetch(descriptor)) ?? []
         let albumIds = Set(downloaded.map(\.albumId))
@@ -382,7 +393,7 @@ final class MusicLibrary {
 
     /// Returns all downloaded tracks, sorted like allTracks().
     func downloadedTracks() -> [Track] {
-        _ = revision
+        _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
         let libTracks = (try? modelContext.fetch(descriptor)) ?? []
         let artistMap = buildArtistMap()
@@ -403,7 +414,7 @@ final class MusicLibrary {
 
     /// Returns albums for an artist that have at least one downloaded track.
     func downloadedAlbumsForArtist(_ artistId: UUID) -> [Album] {
-        _ = revision
+        _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true && $0.albumArtistId == artistId })
         let downloaded = (try? modelContext.fetch(descriptor)) ?? []
         let albumIds = Set(downloaded.map(\.albumId))
@@ -422,7 +433,7 @@ final class MusicLibrary {
         track.isDownloaded = true
         track.localFilePath = relativePath
         try? modelContext.save()
-        revision += 1
+        downloadChanged = [trackId]
     }
 
     func markUndownloaded(trackId: UUID) {
@@ -435,46 +446,52 @@ final class MusicLibrary {
         track.isDownloaded = false
         track.localFilePath = nil
         try? modelContext.save()
-        revision += 1
+        downloadChanged = [trackId]
     }
 
     func markAlbumUndownloaded(albumId: UUID) {
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return }
+        var changed = Set<UUID>()
         for track in tracks {
             if let url = track.resolvedFileURL {
                 try? FileManager.default.removeItem(at: url)
             }
             track.isDownloaded = false
             track.localFilePath = nil
+            changed.insert(track.serverId)
         }
         try? modelContext.save()
-        revision += 1
+        downloadChanged = changed
     }
 
     func markArtistUndownloaded(artistId: UUID) {
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return }
+        var changed = Set<UUID>()
         for track in tracks {
             if let url = track.resolvedFileURL {
                 try? FileManager.default.removeItem(at: url)
             }
             track.isDownloaded = false
             track.localFilePath = nil
+            changed.insert(track.serverId)
         }
         try? modelContext.save()
-        revision += 1
+        downloadChanged = changed
     }
 
     func markAllUndownloaded() {
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return }
+        var changed = Set<UUID>()
         for track in tracks {
             if let url = track.resolvedFileURL {
                 try? FileManager.default.removeItem(at: url)
             }
             track.isDownloaded = false
             track.localFilePath = nil
+            changed.insert(track.serverId)
         }
         let fm = FileManager.default
         if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
@@ -482,7 +499,7 @@ final class MusicLibrary {
             try? fm.removeItem(at: downloadsDir)
         }
         try? modelContext.save()
-        revision += 1
+        downloadChanged = changed
     }
 
     func downloadedFileURLs(albumId: UUID) -> [URL] {

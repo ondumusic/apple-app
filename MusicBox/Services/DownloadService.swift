@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#else
+import AppKit
+#endif
 
 @Observable
 final class DownloadService: NSObject, URLSessionDownloadDelegate {
@@ -10,7 +15,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Ordered list of active download track IDs (for stable UI ordering)
     var activeDownloadOrder: [UUID] = []
 
-    /// Downloads waiting to start (token not yet resolved)
+    /// Downloads waiting to start
     var pendingQueue: [DownloadInfo] = []
 
     /// Whether all downloads are paused
@@ -30,7 +35,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let track: Track
         let album: Album
         let artist: Artist
-        var retryCount: Int = 0
     }
 
     /// Metadata stored in URLSessionTask.taskDescription — survives app termination.
@@ -51,9 +55,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     // MARK: - Private
 
     @ObservationIgnored private let musicLibrary: MusicLibrary
-    @ObservationIgnored private let api: APIService
     @ObservationIgnored private let settings: SettingsStore
-    @ObservationIgnored private let tokenManager = PlayTokenManager()
 
     @ObservationIgnored private let delegateQueue: OperationQueue = {
         let q = OperationQueue()
@@ -62,12 +64,25 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         return q
     }()
 
-    @ObservationIgnored private lazy var downloadSession: URLSession = {
+    /// Background session — survives app suspension/termination
+    @ObservationIgnored private lazy var backgroundSession: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: "com.musicbox.downloads")
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
+        config.httpAdditionalHeaders = sessionHeaders
         return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
     }()
+
+    /// Foreground session — faster (no IPC overhead), used while app is active
+    @ObservationIgnored private lazy var foregroundSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.httpAdditionalHeaders = sessionHeaders
+        return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
+    }()
+
+    @ObservationIgnored private let sessionHeaders: [String: String]
+    /// Whether the app is currently in the foreground
+    @ObservationIgnored private var isInForeground: Bool = true
 
     /// Maps URLSession task identifier → download info (for UI state management)
     @ObservationIgnored private var taskDownloads: [Int: DownloadInfo] = [:]
@@ -75,10 +90,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var trackIdToTaskId: [UUID: Int] = [:]
     /// Maps track ID → active URLSessionDownloadTask (for pause support)
     @ObservationIgnored private var activeTasks: [UUID: URLSessionDownloadTask] = [:]
-    /// Stores info for paused downloads: track ID → (info + resolved URL for restart)
-    @ObservationIgnored private var pausedDownloads: [UUID: (info: DownloadInfo, resolvedURL: URL)] = [:]
-    /// Downloads that failed due to expired token, to retry when app is active
-    @ObservationIgnored private var retryQueue: [DownloadInfo] = []
+    /// Stores info for paused downloads
+    @ObservationIgnored private var pausedDownloads: [UUID: DownloadInfo] = [:]
     /// Raw progress values — not observable, updated on every delegate callback
     @ObservationIgnored private var progressValues: [UUID: Double] = [:]
     /// Timer that batches progress into the observable snapshot
@@ -86,8 +99,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Number of in-flight downloads — incremented synchronously, so concurrent calls
     /// to startNextIfNeeded can't exceed the limit.
     @ObservationIgnored private var inFlightCount: Int = 0
-    /// Whether we're currently resolving tokens and starting tasks
-    @ObservationIgnored private var isStartingNext: Bool = false
 
     // MARK: - Paths
 
@@ -102,13 +113,14 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     // MARK: - Init
 
-    init(api: APIService, musicLibrary: MusicLibrary, settings: SettingsStore) {
-        self.api = api
+    init(sessionToken: String, musicLibrary: MusicLibrary, settings: SettingsStore) {
         self.musicLibrary = musicLibrary
         self.settings = settings
+        self.sessionHeaders = ["Authorization": "Bearer \(sessionToken)"]
         super.init()
-        _ = downloadSession
+        _ = backgroundSession // reconnect to any in-flight background tasks
         processPendingCompletions()
+        observeAppLifecycle()
     }
 
     // MARK: - Public API
@@ -172,29 +184,26 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
               let info = taskDownloads[task.taskIdentifier] else { return }
 
         let taskId = task.taskIdentifier
-        let resolvedURL = task.originalRequest?.url
         task.cancel()
 
         taskDownloads.removeValue(forKey: taskId)
         trackIdToTaskId.removeValue(forKey: trackId)
         inFlightCount -= 1
 
-        if let resolvedURL {
-            pausedDownloads[trackId] = (info: info, resolvedURL: resolvedURL)
-        }
+        pausedDownloads[trackId] = info
         activeDownloads[trackId]?.isPaused = true
     }
 
     func resumeDownload(trackId: UUID) {
-        guard let paused = pausedDownloads.removeValue(forKey: trackId) else { return }
+        guard let info = pausedDownloads.removeValue(forKey: trackId) else { return }
 
         activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
 
         if inFlightCount < settings.maxConcurrentDownloads {
-            startTask(info: paused.info, resolvedURL: paused.resolvedURL)
+            startTask(info: info)
         } else {
-            pendingQueue.insert(paused.info, at: 0)
+            pendingQueue.insert(info, at: 0)
         }
     }
 
@@ -229,7 +238,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         activeDownloadOrder.removeAll()
         pendingQueue.removeAll()
         pausedDownloads.removeAll()
-        retryQueue.removeAll()
         inFlightCount = 0
         progressValues.removeAll()
         progressSnapshot.removeAll()
@@ -252,47 +260,26 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     var hasActivity: Bool {
-        !activeDownloads.isEmpty || !pendingQueue.isEmpty || !retryQueue.isEmpty
+        !activeDownloads.isEmpty || !pendingQueue.isEmpty
     }
 
     // MARK: - Internal queue management
 
-    /// Resolves token and starts tasks up to the concurrency limit.
+    /// Starts tasks from the pending queue up to the concurrency limit.
     private func startNextIfNeeded() {
-        guard !isPaused, !isStartingNext else { return }
-        guard !pendingQueue.isEmpty, inFlightCount < settings.maxConcurrentDownloads else { return }
+        guard !isPaused else { return }
 
-        isStartingNext = true
-
-        var toStart: [DownloadInfo] = []
-        while !pendingQueue.isEmpty, (inFlightCount + toStart.count) < settings.maxConcurrentDownloads {
+        while !pendingQueue.isEmpty, inFlightCount < settings.maxConcurrentDownloads {
             let next = pendingQueue.removeFirst()
             if musicLibrary.isDownloaded(trackId: next.track.id) { continue }
-            toStart.append(next)
-        }
-
-        guard !toStart.isEmpty else {
-            isStartingNext = false
-            return
-        }
-
-        Task { @MainActor in
-            defer { isStartingNext = false }
-            do {
-                let token = try await tokenManager.validToken(using: api)
-                for info in toStart {
-                    guard let url = self.resolveURL(for: info.track, token: token) else { continue }
-                    self.startTask(info: info, resolvedURL: url)
-                }
-            } catch {
-                print("DownloadService: failed to get token: \(error)")
-                self.pendingQueue.insert(contentsOf: toStart, at: 0)
-            }
+            startTask(info: next)
         }
     }
 
     /// Creates and resumes a URLSession download task.
-    private func startTask(info: DownloadInfo, resolvedURL: URL) {
+    private func startTask(info: DownloadInfo) {
+        guard let url = URL(string: info.track.streamUrl) else { return }
+
         inFlightCount += 1
 
         activeDownloads[info.track.id] = DownloadState(
@@ -304,7 +291,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         progressValues[info.track.id] = 0
         startProgressTimerIfNeeded()
 
-        let task = downloadSession.downloadTask(with: resolvedURL)
+        let session = isInForeground ? foregroundSession : backgroundSession
+        let task = session.downloadTask(with: url)
 
         // Store metadata in taskDescription — survives app termination + relaunch
         let metadata = TaskMetadata(
@@ -322,17 +310,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         task.resume()
     }
 
-    private func resolveURL(for track: Track, token: String) -> URL? {
-        guard let streamURL = URL(string: track.streamUrl),
-              var components = URLComponents(url: streamURL, resolvingAgainstBaseURL: false) else {
-            return nil
-        }
-        var queryItems = components.queryItems ?? []
-        queryItems.append(URLQueryItem(name: "token", value: token))
-        components.queryItems = queryItems
-        return components.url
-    }
-
     private func cleanupTask(trackId: UUID, taskId: Int) {
         activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
@@ -345,23 +322,71 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         startNextIfNeeded()
     }
 
-    /// Retries downloads that failed due to expired tokens. Call when app becomes active.
-    func retryFailedDownloads() {
+    /// Processes any pending completions and resumes queued downloads. Call when app becomes active.
+    func resumeOnForeground() {
         processPendingCompletions()
         startNextIfNeeded()
+    }
 
-        guard !retryQueue.isEmpty else { return }
-        let toRetry = retryQueue
-        retryQueue.removeAll()
-        Task { @MainActor in
-            await tokenManager.invalidate()
-            for info in toRetry {
-                if !musicLibrary.isDownloaded(trackId: info.track.id) {
-                    pendingQueue.append(info)
-                }
+    // MARK: - App lifecycle (foreground ↔ background session switching)
+
+    private func observeAppLifecycle() {
+        #if os(iOS)
+        let backgroundName = UIApplication.willResignActiveNotification
+        let foregroundName = UIApplication.didBecomeActiveNotification
+        #else
+        let backgroundName = NSApplication.willResignActiveNotification
+        let foregroundName = NSApplication.didBecomeActiveNotification
+        #endif
+
+        NotificationCenter.default.addObserver(
+            forName: backgroundName, object: nil, queue: .main
+        ) { [weak self] _ in self?.migrateToBackground() }
+
+        NotificationCenter.default.addObserver(
+            forName: foregroundName, object: nil, queue: .main
+        ) { [weak self] _ in self?.migrateToForeground() }
+    }
+
+    /// App is going to background — move in-flight downloads to background session.
+    private func migrateToBackground() {
+        isInForeground = false
+        let inflight = activeTasks
+        guard !inflight.isEmpty else { return }
+
+        // Cancel foreground tasks and re-queue them for the background session
+        for (trackId, task) in inflight {
+            let taskId = task.taskIdentifier
+            task.cancel()
+            if let info = taskDownloads.removeValue(forKey: taskId) {
+                // Re-insert at front so they start next on the background session
+                pendingQueue.insert(info, at: 0)
             }
-            startNextIfNeeded()
+            trackIdToTaskId.removeValue(forKey: trackId)
+            activeTasks.removeValue(forKey: trackId)
+            inFlightCount -= 1
         }
+        startNextIfNeeded()
+    }
+
+    /// App returned to foreground — move in-flight downloads to foreground session.
+    private func migrateToForeground() {
+        isInForeground = true
+        let inflight = activeTasks
+        guard !inflight.isEmpty else { return }
+
+        // Cancel background tasks and re-queue them for the foreground session
+        for (trackId, task) in inflight {
+            let taskId = task.taskIdentifier
+            task.cancel()
+            if let info = taskDownloads.removeValue(forKey: taskId) {
+                pendingQueue.insert(info, at: 0)
+            }
+            trackIdToTaskId.removeValue(forKey: trackId)
+            activeTasks.removeValue(forKey: trackId)
+            inFlightCount -= 1
+        }
+        startNextIfNeeded()
     }
 
     // MARK: - URLSessionDownloadDelegate
@@ -431,16 +456,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         Task { @MainActor in
             guard let info = taskDownloads[taskId] else { return }
 
-            if let statusCode, (statusCode == 401 || statusCode == 403) {
+            if let statusCode, !(200...299).contains(statusCode) {
+                print("DownloadService: HTTP \(statusCode) for \(info.track.name)")
                 cleanupTask(trackId: info.track.id, taskId: taskId)
-                var retryInfo = info
-                retryInfo.retryCount += 1
-                if retryInfo.retryCount <= 3 {
-                    print("DownloadService: token expired for \(info.track.name), queuing retry (\(retryInfo.retryCount)/3)")
-                    retryQueue.append(retryInfo)
-                } else {
-                    print("DownloadService: giving up on \(info.track.name) after 3 retries")
-                }
                 return
             }
 

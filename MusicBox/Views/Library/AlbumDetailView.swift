@@ -128,16 +128,27 @@ struct AlbumDetailView: View {
             }
         }
         .onChange(of: musicLibrary.revision, initial: true) {
-            let allTracks = musicLibrary.tracksForAlbum(album.id)
-            totalTrackCount = allTracks.count
-            tracks = downloadedOnly
-                ? allTracks.filter { $0.isDownloaded }
-                : allTracks
-
-            if downloadedOnly && hasLoadedOnce && tracks.isEmpty {
-                dismiss()
-            }
-            hasLoadedOnce = true
+            reloadTracks()
         }
+        .onChange(of: musicLibrary.downloadChanged) {
+            if downloadedOnly {
+                reloadTracks()
+            } else {
+                musicLibrary.applyDownloadChanges(to: &tracks)
+            }
+        }
+    }
+
+    private func reloadTracks() {
+        let allTracks = musicLibrary.tracksForAlbum(album.id)
+        totalTrackCount = allTracks.count
+        tracks = downloadedOnly
+            ? allTracks.filter { $0.isDownloaded }
+            : allTracks
+
+        if downloadedOnly && hasLoadedOnce && tracks.isEmpty {
+            dismiss()
+        }
+        hasLoadedOnce = true
     }
 }

@@ -214,6 +214,9 @@ struct DownloadsView: View {
         .onChange(of: musicLibrary.revision, initial: true) {
             artists = musicLibrary.downloadedArtists()
         }
+        .onChange(of: musicLibrary.downloadChanged) {
+            artists = musicLibrary.downloadedArtists()
+        }
         .confirmationDialog(
             "Delete Artist",
             isPresented: Binding(get: { artistToDelete != nil }, set: { if !$0 { artistToDelete = nil } }),

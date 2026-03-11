@@ -34,6 +34,9 @@ struct SearchView: View {
                 results = musicLibrary.search(query)
             }
         }
+        .onChange(of: musicLibrary.downloadChanged) {
+            musicLibrary.applyDownloadChanges(to: &results.tracks)
+        }
     }
 
     // MARK: - Results

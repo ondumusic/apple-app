@@ -49,7 +49,7 @@ struct MusicBoxApp: App {
         _musicLibrary = State(initialValue: musicLibrary)
         _playbackCache = State(initialValue: playbackCache)
         _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) })
-        _downloadService = State(initialValue: auth.apiService.map { DownloadService(api: $0, musicLibrary: musicLibrary, settings: settings) })
+        _downloadService = State(initialValue: auth.apiService.map { DownloadService(sessionToken: $0.sessionToken, musicLibrary: musicLibrary, settings: settings) })
         _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary) })
     }
 
@@ -81,7 +81,7 @@ struct MusicBoxApp: App {
                     musicLibrary.clearAll()
                 }
                 player = auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) }
-                downloadService = auth.apiService.map { DownloadService(api: $0, musicLibrary: musicLibrary, settings: settings) }
+                downloadService = auth.apiService.map { DownloadService(sessionToken: $0.sessionToken, musicLibrary: musicLibrary, settings: settings) }
                 syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary) }
             }
             #if os(iOS)
@@ -90,7 +90,7 @@ struct MusicBoxApp: App {
                     await auth.validateSession()
                     await syncService?.syncIfNeeded()
                 }
-                downloadService?.retryFailedDownloads()
+                downloadService?.resumeOnForeground()
             }
             #endif
             #if os(macOS)
@@ -99,7 +99,7 @@ struct MusicBoxApp: App {
                     await auth.validateSession()
                     await syncService?.syncIfNeeded()
                 }
-                downloadService?.retryFailedDownloads()
+                downloadService?.resumeOnForeground()
             }
             #endif
         }

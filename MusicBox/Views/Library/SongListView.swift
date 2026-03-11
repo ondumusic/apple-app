@@ -14,7 +14,7 @@ struct SongListView: View {
 
     private struct SongSection: Identifiable {
         let letter: String
-        let tracks: [Track]
+        var tracks: [Track]
         var id: String { letter }
     }
 
@@ -99,6 +99,11 @@ struct SongListView: View {
         }
         .onChange(of: musicLibrary.revision, initial: true) {
             reloadTracks()
+        }
+        .onChange(of: musicLibrary.downloadChanged) {
+            for i in sections.indices {
+                musicLibrary.applyDownloadChanges(to: &sections[i].tracks)
+            }
         }
         .onChange(of: filterOption) {
             reloadTracks()
