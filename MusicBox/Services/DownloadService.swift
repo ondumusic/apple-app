@@ -71,6 +71,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
         config.httpAdditionalHeaders = sessionHeaders
+        config.timeoutIntervalForRequest = 300
         return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
     }()
 
@@ -78,6 +79,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private lazy var foregroundSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.httpAdditionalHeaders = sessionHeaders
+        config.timeoutIntervalForRequest = 300
         return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
     }()
 
@@ -304,7 +306,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         startProgressTimerIfNeeded()
 
         let session = isInForeground ? foregroundSession : backgroundSession
-        print("DownloadService: \(info.track.name) using \(isInForeground ? "foreground" : "background") session")
         let task = session.downloadTask(with: url)
 
         // Store metadata in taskDescription — survives app termination + relaunch
@@ -412,13 +413,14 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         // Decode metadata from taskDescription — works even after app relaunch
         guard let descriptionData = downloadTask.taskDescription?.data(using: .utf8),
               let metadata = try? JSONDecoder().decode(TaskMetadata.self, from: descriptionData) else {
-            // Fallback: move to tmp (will be cleaned up)
-            print("DownloadService: no metadata for task \(downloadTask.taskIdentifier), skipping")
             return
         }
 
-        // Move file directly to final location (nonisolated — runs in background)
-        let saved = saveDownloadedFile(metadata: metadata, tempLocation: location)
+        // Use response Content-Type if available (may differ from original when transcoding)
+        let responseMimetype = (downloadTask.response as? HTTPURLResponse)?
+            .value(forHTTPHeaderField: "Content-Type") ?? metadata.mimetype
+
+        let saved = saveDownloadedFile(metadata: metadata, mimetype: responseMimetype, tempLocation: location)
 
         if let saved {
             // Write pending completion for SwiftData update on foreground
@@ -461,8 +463,26 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let taskId = task.taskIdentifier
         let statusCode = (task.response as? HTTPURLResponse)?.statusCode
 
+        let retryAfter: TimeInterval? = if statusCode == 503,
+            let header = (task.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Retry-After"),
+            let seconds = Double(header) { seconds } else { nil }
+
         Task { @MainActor in
             guard let info = taskDownloads[taskId] else { return }
+
+            if statusCode == 503 {
+                let delay = retryAfter ?? 5
+                print("DownloadService: server busy for \(info.track.name), retrying in \(Int(delay))s")
+                let trackId = info.track.id
+                cleanupTask(trackId: trackId, taskId: taskId)
+                // Re-queue after delay
+                Task {
+                    try? await Task.sleep(for: .seconds(delay))
+                    self.pendingQueue.append(info)
+                    self.startNextIfNeeded()
+                }
+                return
+            }
 
             if let statusCode, !(200...299).contains(statusCode) {
                 print("DownloadService: HTTP \(statusCode) for \(info.track.name)")
@@ -492,13 +512,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     // MARK: - File management
 
     /// Moves downloaded file directly to its final path. Returns (relativePath, fileSize) or nil.
-    nonisolated private func saveDownloadedFile(metadata: TaskMetadata, tempLocation: URL) -> (path: String, size: Int64)? {
+    nonisolated private func saveDownloadedFile(metadata: TaskMetadata, mimetype: String, tempLocation: URL) -> (path: String, size: Int64)? {
         let fm = FileManager.default
         let dir = Self.downloadsDirectory
             .appendingPathComponent(metadata.artistId.uuidString, isDirectory: true)
             .appendingPathComponent(metadata.albumId.uuidString, isDirectory: true)
 
-        let ext = extensionFromMimetype(metadata.mimetype)
+        let ext = extensionFromMimetype(mimetype)
         let destURL = dir.appendingPathComponent("\(metadata.trackId.uuidString).\(ext)")
         let relativePath = "MusicBox/Downloads/\(metadata.artistId.uuidString)/\(metadata.albumId.uuidString)/\(metadata.trackId.uuidString).\(ext)"
 

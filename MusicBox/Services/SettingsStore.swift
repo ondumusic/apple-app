@@ -2,14 +2,14 @@ import SwiftUI
 
 nonisolated enum DownloadQuality: String, CaseIterable, Sendable {
     case original
-    case `default` = "default"
-    case mobile
+    case defaultAAC = "default_aac"
+    case mobileAAC = "mobile_aac"
 
     var displayName: String {
         switch self {
         case .original: "Original"
-        case .default: "Default (160kbps)"
-        case .mobile: "Mobile (128kbps)"
+        case .defaultAAC: "Default (192kbps)"
+        case .mobileAAC: "Mobile (160kbps)"
         }
     }
 }
