@@ -355,6 +355,20 @@ final class MusicLibrary {
         return total > 0 && total == downloaded
     }
 
+    func downloadedSize() -> Int64 {
+        _ = downloadChanged
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
+        let tracks = (try? modelContext.fetch(descriptor)) ?? []
+        return tracks.reduce(0) { $0 + $1.fileSize }
+    }
+
+    func downloadedSize(artistId: UUID) -> Int64 {
+        _ = downloadChanged
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
+        let tracks = (try? modelContext.fetch(descriptor)) ?? []
+        return tracks.reduce(0) { $0 + $1.fileSize }
+    }
+
     func localURL(for trackId: UUID) -> URL? {
         _ = downloadChanged
         var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == trackId && $0.isDownloaded == true })

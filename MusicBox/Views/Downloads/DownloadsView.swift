@@ -7,6 +7,8 @@ struct DownloadsView: View {
     @State private var showDownloadAllConfirmation = false
     @State private var artistToDelete: Artist?
     @State private var artists: [Artist] = []
+    @State private var totalSize: Int64 = 0
+    @State private var artistSizes: [UUID: Int64] = [:]
 
     var body: some View {
         List {
@@ -130,16 +132,20 @@ struct DownloadsView: View {
                     description: Text("Downloaded music will appear here.")
                 )
             } else if !artists.isEmpty {
-                Section("Library") {
+                Section {
                     ForEach(artists) { artist in
                         NavigationLink(value: artist) {
                             Label {
-                                HStack {
+                                VStack(alignment: .leading, spacing: 2) {
                                     Text(artist.name)
-                                    Spacer()
-                                    Text("\(artist.albumCount ?? 0) \(artist.albumCount == 1 ? "album" : "albums")")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    HStack(spacing: 8) {
+                                        Text("\(artist.albumCount ?? 0) \(artist.albumCount == 1 ? "album" : "albums")")
+                                        if let size = artistSizes[artist.id], size > 0 {
+                                            Text(formattedSize(size))
+                                        }
+                                    }
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                                 }
                             } icon: {
                                 Image(systemName: "music.mic")
@@ -158,6 +164,15 @@ struct DownloadsView: View {
                             } label: {
                                 Label("Delete Artist", systemImage: "trash")
                             }
+                        }
+                    }
+                } header: {
+                    HStack {
+                        Text("Library")
+                        Spacer()
+                        if totalSize > 0 {
+                            Text(formattedSize(totalSize))
+                                .textCase(nil)
                         }
                     }
                 }
@@ -215,10 +230,10 @@ struct DownloadsView: View {
             }
         }
         .onChange(of: musicLibrary.revision, initial: true) {
-            artists = musicLibrary.downloadedArtists()
+            reloadData()
         }
         .onChange(of: musicLibrary.downloadChanged) {
-            artists = musicLibrary.downloadedArtists()
+            reloadData()
         }
         .confirmationDialog(
             "Delete Artist",
@@ -235,5 +250,19 @@ struct DownloadsView: View {
                 Text("Remove all downloaded music by \(artist.name)?")
             }
         }
+    }
+
+    private func reloadData() {
+        artists = musicLibrary.downloadedArtists()
+        totalSize = musicLibrary.downloadedSize()
+        var sizes: [UUID: Int64] = [:]
+        for artist in artists {
+            sizes[artist.id] = musicLibrary.downloadedSize(artistId: artist.id)
+        }
+        artistSizes = sizes
+    }
+
+    private func formattedSize(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 }
