@@ -171,11 +171,23 @@ struct DownloadsView: View {
             AlbumDetailView(album: album, downloadedOnly: true)
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showDownloadAllConfirmation = true
+            ToolbarItem(placement: .automatic) {
+                Menu {
+                    Button {
+                        showDownloadAllConfirmation = true
+                    } label: {
+                        Label("Download All", systemImage: "arrow.down.circle")
+                    }
+
+                    if !artists.isEmpty {
+                        Button(role: .destructive) {
+                            showDeleteAllConfirmation = true
+                        } label: {
+                            Label("Remove All Downloads", systemImage: "trash")
+                        }
+                    }
                 } label: {
-                    Label("Download All", systemImage: "arrow.down.circle")
+                    Image(systemName: "ellipsis.circle")
                 }
                 .confirmationDialog(
                     "Download All Songs",
@@ -188,26 +200,17 @@ struct DownloadsView: View {
                 } message: {
                     Text("This will download your entire music library for offline playback.")
                 }
-            }
-            if !artists.isEmpty {
-                ToolbarItem(placement: .destructiveAction) {
-                    Button(role: .destructive) {
-                        showDeleteAllConfirmation = true
-                    } label: {
-                        Label("Delete All", systemImage: "trash")
+                .confirmationDialog(
+                    "Remove All Downloads",
+                    isPresented: $showDeleteAllConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Remove All", role: .destructive) {
+                        downloadService.cancelAll()
+                        musicLibrary.markAllUndownloaded()
                     }
-                    .confirmationDialog(
-                        "Delete All Downloads",
-                        isPresented: $showDeleteAllConfirmation,
-                        titleVisibility: .visible
-                    ) {
-                        Button("Delete All", role: .destructive) {
-                            downloadService.cancelAll()
-                            musicLibrary.markAllUndownloaded()
-                        }
-                    } message: {
-                        Text("This will remove all downloaded music from this device. This cannot be undone.")
-                    }
+                } message: {
+                    Text("This will remove all downloaded music from this device.")
                 }
             }
         }
