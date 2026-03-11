@@ -50,6 +50,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     nonisolated struct PendingCompletion: Codable, Sendable {
         let trackId: UUID
         let relativePath: String
+        var downloadedFileSize: Int64 = 0
     }
 
     // MARK: - Private
@@ -417,18 +418,18 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         }
 
         // Move file directly to final location (nonisolated — runs in background)
-        let relativePath = saveDownloadedFile(metadata: metadata, tempLocation: location)
+        let saved = saveDownloadedFile(metadata: metadata, tempLocation: location)
 
-        if let relativePath {
+        if let saved {
             // Write pending completion for SwiftData update on foreground
-            writePendingCompletion(trackId: metadata.trackId, relativePath: relativePath)
+            writePendingCompletion(trackId: metadata.trackId, relativePath: saved.path, downloadedFileSize: saved.size)
         }
 
         // Update UI state on MainActor (may not execute if suspended — that's OK)
         let taskId = downloadTask.taskIdentifier
         Task { @MainActor in
-            if let relativePath {
-                self.musicLibrary.markDownloaded(trackId: metadata.trackId, relativePath: relativePath)
+            if let saved {
+                self.musicLibrary.markDownloaded(trackId: metadata.trackId, relativePath: saved.path, downloadedFileSize: saved.size)
                 self.removePendingCompletion(trackId: metadata.trackId)
             }
             self.cleanupTask(trackId: metadata.trackId, taskId: taskId)
@@ -490,8 +491,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     // MARK: - File management
 
-    /// Moves downloaded file directly to its final path. Runs on delegate queue (nonisolated).
-    nonisolated private func saveDownloadedFile(metadata: TaskMetadata, tempLocation: URL) -> String? {
+    /// Moves downloaded file directly to its final path. Returns (relativePath, fileSize) or nil.
+    nonisolated private func saveDownloadedFile(metadata: TaskMetadata, tempLocation: URL) -> (path: String, size: Int64)? {
         let fm = FileManager.default
         let dir = Self.downloadsDirectory
             .appendingPathComponent(metadata.artistId.uuidString, isDirectory: true)
@@ -507,7 +508,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 try fm.removeItem(at: destURL)
             }
             try fm.moveItem(at: tempLocation, to: destURL)
-            return relativePath
+            let size = (try? fm.attributesOfItem(atPath: destURL.path)[.size] as? Int64) ?? 0
+            return (relativePath, size)
         } catch {
             print("DownloadService: failed to save file for \(metadata.trackName): \(error)")
             return nil
@@ -516,12 +518,12 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     /// Writes a pending completion record to disk. If the app is suspended before
     /// SwiftData can be updated, this record is processed on next foreground.
-    nonisolated private func writePendingCompletion(trackId: UUID, relativePath: String) {
+    nonisolated private func writePendingCompletion(trackId: UUID, relativePath: String, downloadedFileSize: Int64) {
         let fm = FileManager.default
         let dir = Self.pendingDirectory
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        let record = PendingCompletion(trackId: trackId, relativePath: relativePath)
+        let record = PendingCompletion(trackId: trackId, relativePath: relativePath, downloadedFileSize: downloadedFileSize)
         let file = dir.appendingPathComponent("\(trackId.uuidString).json")
         try? JSONEncoder().encode(record).write(to: file)
     }
@@ -547,7 +549,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             }
 
             if !musicLibrary.isDownloaded(trackId: record.trackId) {
-                musicLibrary.markDownloaded(trackId: record.trackId, relativePath: record.relativePath)
+                musicLibrary.markDownloaded(trackId: record.trackId, relativePath: record.relativePath, downloadedFileSize: record.downloadedFileSize)
             }
             try? fm.removeItem(at: file)
         }

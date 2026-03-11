@@ -45,9 +45,8 @@ struct DownloadsView: View {
                                         .monospacedDigit()
                                         .frame(width: 34, alignment: .trailing)
                                 } else {
-                                    Text("Waiting\u{2026}")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    ProgressView()
+                                        .controlSize(.small)
                                 }
                             }
                             .contextMenu {

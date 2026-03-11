@@ -66,6 +66,8 @@ nonisolated class LibraryTrack {
     var fileSize: Int64
     var fileChecksum: String
     var isDownloaded: Bool = false
+    /// Actual size of the downloaded file (may differ from fileSize if transcoded)
+    var downloadedFileSize: Int64 = 0
     /// Relative path from Application Support directory, e.g. "MusicBox/Downloads/{artistId}/{albumId}/{trackId}.flac"
     var localFilePath: String?
 
@@ -359,14 +361,14 @@ final class MusicLibrary {
         _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
         let tracks = (try? modelContext.fetch(descriptor)) ?? []
-        return tracks.reduce(0) { $0 + $1.fileSize }
+        return tracks.reduce(0) { $0 + ($1.downloadedFileSize > 0 ? $1.downloadedFileSize : $1.fileSize) }
     }
 
     func downloadedSize(artistId: UUID) -> Int64 {
         _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         let tracks = (try? modelContext.fetch(descriptor)) ?? []
-        return tracks.reduce(0) { $0 + $1.fileSize }
+        return tracks.reduce(0) { $0 + ($1.downloadedFileSize > 0 ? $1.downloadedFileSize : $1.fileSize) }
     }
 
     func localURL(for trackId: UUID) -> URL? {
@@ -440,12 +442,13 @@ final class MusicLibrary {
             .map { toAlbum($0, artistMap: artistMap) }
     }
 
-    func markDownloaded(trackId: UUID, relativePath: String) {
+    func markDownloaded(trackId: UUID, relativePath: String, downloadedFileSize: Int64 = 0) {
         var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == trackId })
         descriptor.fetchLimit = 1
         guard let track = try? modelContext.fetch(descriptor).first else { return }
         track.isDownloaded = true
         track.localFilePath = relativePath
+        track.downloadedFileSize = downloadedFileSize
         try? modelContext.save()
         downloadChanged = [trackId]
     }
