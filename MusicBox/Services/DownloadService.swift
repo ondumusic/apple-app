@@ -292,6 +292,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         startProgressTimerIfNeeded()
 
         let session = isInForeground ? foregroundSession : backgroundSession
+        print("DownloadService: \(info.track.name) using \(isInForeground ? "foreground" : "background") session")
         let task = session.downloadTask(with: url)
 
         // Store metadata in taskDescription — survives app termination + relaunch
@@ -311,44 +312,57 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     private func cleanupTask(trackId: UUID, taskId: Int) {
+        // Guard: only clean up if this task is still tracked (prevents double-cleanup
+        // when migrateToBackground already cleaned up a cancelled task)
+        guard taskDownloads.removeValue(forKey: taskId) != nil else { return }
         activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
         trackIdToTaskId.removeValue(forKey: trackId)
         activeTasks.removeValue(forKey: trackId)
         progressValues.removeValue(forKey: trackId)
-        taskDownloads.removeValue(forKey: taskId)
         inFlightCount -= 1
         stopProgressTimerIfIdle()
         startNextIfNeeded()
     }
 
-    /// Processes any pending completions and resumes queued downloads. Call when app becomes active.
+    /// Processes any pending completions and migrates downloads to foreground session.
     func resumeOnForeground() {
+        isInForeground = true
         processPendingCompletions()
+
+        // Migrate in-flight background tasks to the faster foreground session
+        let inflight = activeTasks
+        for (trackId, task) in inflight {
+            let taskId = task.taskIdentifier
+            task.cancel()
+            if let info = taskDownloads.removeValue(forKey: taskId) {
+                pendingQueue.insert(info, at: 0)
+            }
+            trackIdToTaskId.removeValue(forKey: trackId)
+            activeTasks.removeValue(forKey: trackId)
+            activeDownloads.removeValue(forKey: trackId)
+            activeDownloadOrder.removeAll { $0 == trackId }
+            progressValues.removeValue(forKey: trackId)
+            inFlightCount -= 1
+        }
         startNextIfNeeded()
     }
 
-    // MARK: - App lifecycle (foreground ↔ background session switching)
+    // MARK: - App lifecycle (foreground → background session switching)
 
     private func observeAppLifecycle() {
         #if os(iOS)
         let backgroundName = UIApplication.willResignActiveNotification
-        let foregroundName = UIApplication.didBecomeActiveNotification
         #else
         let backgroundName = NSApplication.willResignActiveNotification
-        let foregroundName = NSApplication.didBecomeActiveNotification
         #endif
 
         NotificationCenter.default.addObserver(
             forName: backgroundName, object: nil, queue: .main
         ) { [weak self] _ in self?.migrateToBackground() }
-
-        NotificationCenter.default.addObserver(
-            forName: foregroundName, object: nil, queue: .main
-        ) { [weak self] _ in self?.migrateToForeground() }
     }
 
-    /// App is going to background — move in-flight downloads to background session.
+    /// App is going to background — move in-flight foreground tasks to background session.
     private func migrateToBackground() {
         isInForeground = false
         let inflight = activeTasks
@@ -359,31 +373,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             let taskId = task.taskIdentifier
             task.cancel()
             if let info = taskDownloads.removeValue(forKey: taskId) {
-                // Re-insert at front so they start next on the background session
                 pendingQueue.insert(info, at: 0)
             }
             trackIdToTaskId.removeValue(forKey: trackId)
             activeTasks.removeValue(forKey: trackId)
-            inFlightCount -= 1
-        }
-        startNextIfNeeded()
-    }
-
-    /// App returned to foreground — move in-flight downloads to foreground session.
-    private func migrateToForeground() {
-        isInForeground = true
-        let inflight = activeTasks
-        guard !inflight.isEmpty else { return }
-
-        // Cancel background tasks and re-queue them for the foreground session
-        for (trackId, task) in inflight {
-            let taskId = task.taskIdentifier
-            task.cancel()
-            if let info = taskDownloads.removeValue(forKey: taskId) {
-                pendingQueue.insert(info, at: 0)
-            }
-            trackIdToTaskId.removeValue(forKey: trackId)
-            activeTasks.removeValue(forKey: trackId)
+            activeDownloads.removeValue(forKey: trackId)
+            activeDownloadOrder.removeAll { $0 == trackId }
+            progressValues.removeValue(forKey: trackId)
             inFlightCount -= 1
         }
         startNextIfNeeded()
