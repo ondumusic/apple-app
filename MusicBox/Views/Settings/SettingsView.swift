@@ -75,10 +75,22 @@ struct SettingsView: View {
                         Text("\(count)").tag(count)
                     }
                 }
+
+                if SettingsStore.enableDownloadQuality {
+                    Picker("Download Quality", selection: $settings.downloadQuality) {
+                        ForEach(DownloadQuality.allCases, id: \.self) { quality in
+                            Text(quality.displayName).tag(quality)
+                        }
+                    }
+                }
             } header: {
                 Text("Downloads")
             } footer: {
-                Text("Number of tracks to download simultaneously. Higher values use more bandwidth.")
+                if SettingsStore.enableDownloadQuality {
+                    Text("Number of tracks to download simultaneously. Download quality only affects new downloads.")
+                } else {
+                    Text("Number of tracks to download simultaneously. Higher values use more bandwidth.")
+                }
             }
 
             Section {

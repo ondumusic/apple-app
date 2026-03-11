@@ -278,7 +278,18 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     /// Creates and resumes a URLSession download task.
     private func startTask(info: DownloadInfo) {
-        guard let url = URL(string: info.track.streamUrl) else { return }
+        guard var url = URL(string: info.track.streamUrl) else { return }
+
+        // Apply transcode settings if not original quality
+        let quality = settings.downloadQuality
+        if quality != .original,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var queryItems = components.queryItems ?? []
+            queryItems.append(URLQueryItem(name: "transcode", value: "1"))
+            queryItems.append(URLQueryItem(name: "preset", value: quality.rawValue))
+            components.queryItems = queryItems
+            url = components.url ?? url
+        }
 
         inFlightCount += 1
 

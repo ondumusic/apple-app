@@ -1,7 +1,28 @@
 import SwiftUI
 
+nonisolated enum DownloadQuality: String, CaseIterable, Sendable {
+    case original
+    case `default` = "default"
+    case mobile
+
+    var displayName: String {
+        switch self {
+        case .original: "Original"
+        case .default: "Default (160kbps)"
+        case .mobile: "Mobile (128kbps)"
+        }
+    }
+}
+
 @Observable
 final class SettingsStore {
+    // MARK: - Feature flags
+
+    /// Set to true to show the download quality (transcode) option.
+    static let enableDownloadQuality = true
+
+    // MARK: - Settings
+
     var crossfadeDuration: Double {
         didSet { UserDefaults.standard.set(crossfadeDuration, forKey: "crossfadeDuration") }
     }
@@ -23,6 +44,10 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(playbackCacheLimit, forKey: "playbackCacheLimit") }
     }
 
+    var downloadQuality: DownloadQuality {
+        didSet { UserDefaults.standard.set(downloadQuality.rawValue, forKey: "downloadQuality") }
+    }
+
     init() {
         let defaults = UserDefaults.standard
         self.crossfadeDuration = defaults.object(forKey: "crossfadeDuration") as? Double ?? 1.0
@@ -30,5 +55,6 @@ final class SettingsStore {
         self.isShuffled = defaults.bool(forKey: "isShuffled")
         self.repeatMode = RepeatMode(rawValue: defaults.string(forKey: "repeatMode") ?? "") ?? .off
         self.playbackCacheLimit = defaults.object(forKey: "playbackCacheLimit") as? Int64 ?? (2 * 1024 * 1024 * 1024) // 2 GB default
+        self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original
     }
 }
