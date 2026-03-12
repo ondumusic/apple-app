@@ -490,7 +490,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 return
             }
 
-            guard let error else { return }
+            guard let error else {
+                // Successful completion — cleanupTask is usually called from
+                // didFinishDownloadingTo, but for chunked responses it may not fire.
+                // The guard in cleanupTask prevents double-cleanup.
+                cleanupTask(trackId: info.track.id, taskId: taskId)
+                return
+            }
             if (error as NSError).code == NSURLErrorCancelled { return }
             print("DownloadService: download failed for \(info.track.name): \(error)")
             cleanupTask(trackId: info.track.id, taskId: taskId)
