@@ -102,6 +102,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var trackIdToTaskId: [UUID: Int] = [:]
     /// Maps track ID → active URLSessionDownloadTask (for pause support)
     @ObservationIgnored private var activeTasks: [UUID: URLSessionDownloadTask] = [:]
+    /// Maps track ID → active prepare data task (for cancellation during prepare phase)
+    @ObservationIgnored private var prepareTasks: [UUID: URLSessionDataTask] = [:]
     /// Stores info for paused downloads
     @ObservationIgnored private var pausedDownloads: [UUID: DownloadInfo] = [:]
     /// Raw progress values — not observable, updated on every delegate callback
@@ -177,6 +179,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     func cancelDownload(trackId: UUID) {
         pendingQueue.removeAll { $0.track.id == trackId }
         pausedDownloads.removeValue(forKey: trackId)
+        prepareTasks.removeValue(forKey: trackId)?.cancel()
 
         if let task = activeTasks.removeValue(forKey: trackId) {
             let taskId = task.taskIdentifier
@@ -196,6 +199,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     func pauseDownload(trackId: UUID) {
+        // Cancel prepare task if in prepare phase
+        prepareTasks.removeValue(forKey: trackId)?.cancel()
+
         guard let task = activeTasks.removeValue(forKey: trackId),
               let info = taskDownloads[task.taskIdentifier] else { return }
 
@@ -244,9 +250,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func cancelAll() {
         isPaused = false
-        for (_, task) in activeTasks {
-            task.cancel()
-        }
+        for (_, task) in prepareTasks { task.cancel() }
+        prepareTasks.removeAll()
+        for (_, task) in activeTasks { task.cancel() }
         activeTasks.removeAll()
         taskDownloads.removeAll()
         trackIdToTaskId.removeAll()
@@ -339,9 +345,11 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         request.timeoutInterval = 300
 
         // Use a completion-based data task to avoid Task/async entirely
-        session.dataTask(with: request) { [weak self] data, response, error in
+        let dataTask = session.dataTask(with: request) { [weak self] data, response, error in
             Task { @MainActor [weak self] in
-                guard let self, activeDownloads[trackId] != nil else { return }
+                guard let self else { return }
+                prepareTasks.removeValue(forKey: trackId)
+                guard activeDownloads[trackId] != nil else { return }
 
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
                 let body = data.flatMap { String(data: $0, encoding: .utf8) }
@@ -377,7 +385,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 }
                 self.startDownloadTask(info: info, url: url)
             }
-        }.resume()
+        }
+        prepareTasks[trackId] = dataTask
+        dataTask.resume()
     }
 
     /// Starts the actual URLSession download task for a given URL.
@@ -406,6 +416,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     /// Cleans up a download that failed during the prepare/transcode phase (no URLSession task yet).
     private func cleanupPrepare(trackId: UUID) {
+        prepareTasks.removeValue(forKey: trackId)
         activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
         progressValues.removeValue(forKey: trackId)
