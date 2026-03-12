@@ -104,6 +104,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var activeTasks: [UUID: URLSessionDownloadTask] = [:]
     /// Maps track ID → active prepare data task (for cancellation during prepare phase)
     @ObservationIgnored private var prepareTasks: [UUID: URLSessionDataTask] = [:]
+    /// Maps track ID → download info for tracks in the prepare phase (needed for re-queuing)
+    @ObservationIgnored private var prepareInfos: [UUID: DownloadInfo] = [:]
     /// Stores info for paused downloads
     @ObservationIgnored private var pausedDownloads: [UUID: DownloadInfo] = [:]
     /// Raw progress values — not observable, updated on every delegate callback
@@ -180,6 +182,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         pendingQueue.removeAll { $0.track.id == trackId }
         pausedDownloads.removeValue(forKey: trackId)
         prepareTasks.removeValue(forKey: trackId)?.cancel()
+        prepareInfos.removeValue(forKey: trackId)
 
         if let task = activeTasks.removeValue(forKey: trackId) {
             let taskId = task.taskIdentifier
@@ -199,9 +202,18 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     func pauseDownload(trackId: UUID) {
-        // Cancel prepare task if in prepare phase
-        prepareTasks.removeValue(forKey: trackId)?.cancel()
+        // Handle prepare phase
+        if let prepareTask = prepareTasks.removeValue(forKey: trackId) {
+            prepareTask.cancel()
+            if let info = prepareInfos.removeValue(forKey: trackId) {
+                pausedDownloads[trackId] = info
+                activeDownloads[trackId]?.isPaused = true
+                inFlightCount -= 1
+            }
+            return
+        }
 
+        // Handle download phase
         guard let task = activeTasks.removeValue(forKey: trackId),
               let info = taskDownloads[task.taskIdentifier] else { return }
 
@@ -252,6 +264,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         isPaused = false
         for (_, task) in prepareTasks { task.cancel() }
         prepareTasks.removeAll()
+        prepareInfos.removeAll()
         for (_, task) in activeTasks { task.cancel() }
         activeTasks.removeAll()
         taskDownloads.removeAll()
@@ -312,11 +325,25 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         progressValues[info.track.id] = 0
         startProgressTimerIfNeeded()
 
-        if quality != .original {
-            // Two-stage: prepare transcode, then download cached file
+        if quality != .original, isInForeground {
+            // Two-stage: prepare transcode via SSE, then download cached file with progress
             prepareAndDownload(info: info, preset: quality.rawValue)
         } else {
-            guard let url = URL(string: info.track.downloadUrl) else {
+            // Background transcoded or original: download directly (no SSE prepare)
+            guard let downloadURL = URL(string: info.track.downloadUrl),
+                  var comps = URLComponents(url: downloadURL, resolvingAgainstBaseURL: false) else {
+                inFlightCount -= 1
+                activeDownloads.removeValue(forKey: info.track.id)
+                activeDownloadOrder.removeAll { $0 == info.track.id }
+                return
+            }
+            if quality != .original {
+                var queryItems = comps.queryItems ?? []
+                queryItems.append(URLQueryItem(name: "transcode", value: "1"))
+                queryItems.append(URLQueryItem(name: "preset", value: quality.rawValue))
+                comps.queryItems = queryItems
+            }
+            guard let url = comps.url else {
                 inFlightCount -= 1
                 activeDownloads.removeValue(forKey: info.track.id)
                 activeDownloadOrder.removeAll { $0 == info.track.id }
@@ -331,6 +358,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let trackId = info.track.id
         let downloadUrlString = info.track.downloadUrl
         let session = prepareSession
+        prepareInfos[trackId] = info
 
         // Build prepare URL
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
@@ -348,7 +376,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let dataTask = session.dataTask(with: request) { [weak self] data, response, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                prepareTasks.removeValue(forKey: trackId)
+                // If prepareTasks no longer contains this track, the request was cancelled
+                // by migrateToBackground/pause/cancel — ignore this stale callback
+                guard prepareTasks.removeValue(forKey: trackId) != nil else { return }
+                prepareInfos.removeValue(forKey: trackId)
                 guard activeDownloads[trackId] != nil else { return }
 
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -417,6 +448,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Cleans up a download that failed during the prepare/transcode phase (no URLSession task yet).
     private func cleanupPrepare(trackId: UUID) {
         prepareTasks.removeValue(forKey: trackId)
+        prepareInfos.removeValue(forKey: trackId)
         activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
         progressValues.removeValue(forKey: trackId)
@@ -467,20 +499,39 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     private func observeAppLifecycle() {
         #if os(iOS)
         let backgroundName = UIApplication.willResignActiveNotification
+        let foregroundName = UIApplication.didBecomeActiveNotification
         #else
         let backgroundName = NSApplication.willResignActiveNotification
+        let foregroundName = NSApplication.didBecomeActiveNotification
         #endif
 
         NotificationCenter.default.addObserver(
             forName: backgroundName, object: nil, queue: .main
         ) { [weak self] _ in self?.migrateToBackground() }
+
+        NotificationCenter.default.addObserver(
+            forName: foregroundName, object: nil, queue: .main
+        ) { [weak self] _ in self?.resumeOnForeground() }
     }
 
     /// App is going to background — move in-flight foreground tasks to background session.
     private func migrateToBackground() {
         isInForeground = false
+
+        // Cancel any in-flight prepare requests and re-queue them
+        for (trackId, task) in prepareTasks {
+            task.cancel()
+            if let info = prepareInfos.removeValue(forKey: trackId) {
+                pendingQueue.insert(info, at: 0)
+            }
+            activeDownloads.removeValue(forKey: trackId)
+            activeDownloadOrder.removeAll { $0 == trackId }
+            progressValues.removeValue(forKey: trackId)
+            inFlightCount -= 1
+        }
+        prepareTasks.removeAll()
+
         let inflight = activeTasks
-        guard !inflight.isEmpty else { return }
 
         // Cancel foreground tasks and re-queue them for the background session
         for (trackId, task) in inflight {
@@ -575,11 +626,20 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 let delay = retryAfter ?? 5
                 print("DownloadService: server busy for \(info.track.name), retrying in \(Int(delay))s")
                 let trackId = info.track.id
-                cleanupTask(trackId: trackId, taskId: taskId)
-                // Re-queue after delay
+                // Remove task tracking but don't decrement inFlightCount or start next —
+                // this slot stays reserved for the retry
+                taskDownloads.removeValue(forKey: taskId)
+                trackIdToTaskId.removeValue(forKey: trackId)
+                activeTasks.removeValue(forKey: trackId)
+                progressValues.removeValue(forKey: trackId)
+                // Re-queue after delay, then release the slot
                 Task {
                     try? await Task.sleep(for: .seconds(delay))
-                    self.pendingQueue.append(info)
+                    self.activeDownloads.removeValue(forKey: trackId)
+                    self.activeDownloadOrder.removeAll { $0 == trackId }
+                    self.inFlightCount -= 1
+                    self.pendingQueue.insert(info, at: 0)
+                    self.stopProgressTimerIfIdle()
                     self.startNextIfNeeded()
                 }
                 return
