@@ -62,6 +62,7 @@ nonisolated class LibraryTrack {
     var duration: Double
     var mimetype: String
     var streamUrl: String
+    var downloadUrl: String = ""
     var insertedAt: Date
     var fileSize: Int64
     var fileChecksum: String
@@ -73,7 +74,7 @@ nonisolated class LibraryTrack {
 
     init(serverId: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
          name: String, disc: Int, number: Int, duration: Double,
-         mimetype: String, streamUrl: String, insertedAt: Date,
+         mimetype: String, streamUrl: String, downloadUrl: String = "", insertedAt: Date,
          fileSize: Int64, fileChecksum: String,
          isDownloaded: Bool = false, localFilePath: String? = nil) {
         self.serverId = serverId
@@ -86,6 +87,7 @@ nonisolated class LibraryTrack {
         self.duration = duration
         self.mimetype = mimetype
         self.streamUrl = streamUrl
+        self.downloadUrl = downloadUrl
         self.insertedAt = insertedAt
         self.fileSize = fileSize
         self.fileChecksum = fileChecksum
@@ -607,6 +609,7 @@ final class MusicLibrary {
                 lt.duration = st.duration
                 lt.mimetype = st.mimetype
                 lt.streamUrl = st.streamUrl
+                lt.downloadUrl = st.downloadUrl
                 lt.insertedAt = st.insertedAt
                 lt.fileSize = st.file.size
                 lt.fileChecksum = st.file.checksum
@@ -615,7 +618,8 @@ final class MusicLibrary {
                     serverId: st.id, artistId: st.artistId, albumArtistId: st.albumArtistId,
                     albumId: st.albumId, name: st.name, disc: st.disc, number: st.number,
                     duration: st.duration, mimetype: st.mimetype, streamUrl: st.streamUrl,
-                    insertedAt: st.insertedAt, fileSize: st.file.size, fileChecksum: st.file.checksum))
+                    downloadUrl: st.downloadUrl, insertedAt: st.insertedAt,
+                    fileSize: st.file.size, fileChecksum: st.file.checksum))
             }
         }
         try? modelContext.save()
@@ -734,8 +738,8 @@ final class MusicLibrary {
             albumId: lt.albumId, artist: artist, albumArtistSortName: albumArtistSortName,
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
-            mimetype: lt.mimetype, streamUrl: lt.streamUrl, fileSize: lt.fileSize,
-            isDownloaded: lt.isDownloaded
+            mimetype: lt.mimetype, streamUrl: lt.streamUrl, downloadUrl: lt.downloadUrl,
+            fileSize: lt.fileSize, isDownloaded: lt.isDownloaded
         )
     }
 
@@ -756,8 +760,8 @@ final class MusicLibrary {
             albumId: lt.albumId, artist: artistModel, albumArtistSortName: albumArtistSortName,
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
-            mimetype: lt.mimetype, streamUrl: lt.streamUrl, fileSize: lt.fileSize,
-            isDownloaded: lt.isDownloaded
+            mimetype: lt.mimetype, streamUrl: lt.streamUrl, downloadUrl: lt.downloadUrl,
+            fileSize: lt.fileSize, isDownloaded: lt.isDownloaded
         )
     }
 

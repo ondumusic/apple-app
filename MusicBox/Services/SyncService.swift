@@ -81,6 +81,7 @@ nonisolated struct SyncTrack: Decodable, Sendable {
     var duration: Double
     var mimetype: String
     var streamUrl: String
+    var downloadUrl: String
     var insertedAt: Date
     var file: SyncFile
 

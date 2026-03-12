@@ -57,6 +57,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     @ObservationIgnored private let musicLibrary: MusicLibrary
     @ObservationIgnored private let settings: SettingsStore
+    @ObservationIgnored private let baseURL: URL
 
     @ObservationIgnored private let delegateQueue: OperationQueue = {
         let q = OperationQueue()
@@ -81,6 +82,14 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         config.httpAdditionalHeaders = sessionHeaders
         config.timeoutIntervalForRequest = 300
         return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
+    }()
+
+    /// Lightweight session for transcode prepare requests (no delegate needed)
+    @ObservationIgnored private lazy var prepareSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.httpAdditionalHeaders = sessionHeaders
+        config.timeoutIntervalForRequest = 300
+        return URLSession(configuration: config)
     }()
 
     @ObservationIgnored private let sessionHeaders: [String: String]
@@ -116,7 +125,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     // MARK: - Init
 
-    init(sessionToken: String, musicLibrary: MusicLibrary, settings: SettingsStore) {
+    init(baseURL: URL, sessionToken: String, musicLibrary: MusicLibrary, settings: SettingsStore) {
+        self.baseURL = baseURL
         self.musicLibrary = musicLibrary
         self.settings = settings
         self.sessionHeaders = ["Authorization": "Bearer \(sessionToken)"]
@@ -173,6 +183,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             task.cancel()
             taskDownloads.removeValue(forKey: taskId)
             trackIdToTaskId.removeValue(forKey: trackId)
+            inFlightCount -= 1
+        } else if activeDownloads[trackId] != nil {
+            // In prepare phase (no URLSession task yet)
             inFlightCount -= 1
         }
         activeDownloads.removeValue(forKey: trackId)
@@ -281,21 +294,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     /// Creates and resumes a URLSession download task.
     private func startTask(info: DownloadInfo) {
-        guard var url = URL(string: info.track.streamUrl) else { return }
-
-        // Apply transcode settings if not original quality
         let quality = settings.downloadQuality
-        if quality != .original,
-           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            var queryItems = components.queryItems ?? []
-            queryItems.append(URLQueryItem(name: "transcode", value: "1"))
-            queryItems.append(URLQueryItem(name: "preset", value: quality.rawValue))
-            components.queryItems = queryItems
-            url = components.url ?? url
-        }
 
         inFlightCount += 1
-
         activeDownloads[info.track.id] = DownloadState(
             trackName: info.track.name,
             artistName: info.artist.name,
@@ -305,10 +306,85 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         progressValues[info.track.id] = 0
         startProgressTimerIfNeeded()
 
+        if quality != .original {
+            // Two-stage: prepare transcode, then download cached file
+            prepareAndDownload(info: info, preset: quality.rawValue)
+        } else {
+            guard let url = URL(string: info.track.downloadUrl) else {
+                inFlightCount -= 1
+                activeDownloads.removeValue(forKey: info.track.id)
+                activeDownloadOrder.removeAll { $0 == info.track.id }
+                return
+            }
+            startDownloadTask(info: info, url: url)
+        }
+    }
+
+    /// Kicks off an async transcode prepare, then starts the download on completion.
+    private func prepareAndDownload(info: DownloadInfo, preset: String) {
+        let trackId = info.track.id
+        let downloadUrlString = info.track.downloadUrl
+        let session = prepareSession
+
+        // Build prepare URL
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+        components.path = "/transcode/\(trackId.uuidString.lowercased())"
+        components.queryItems = [URLQueryItem(name: "preset", value: preset)]
+        guard let prepareURL = components.url else {
+            cleanupPrepare(trackId: trackId)
+            return
+        }
+
+        var request = URLRequest(url: prepareURL)
+        request.timeoutInterval = 300
+
+        // Use a completion-based data task to avoid Task/async entirely
+        session.dataTask(with: request) { [weak self] data, response, error in
+            Task { @MainActor [weak self] in
+                guard let self, activeDownloads[trackId] != nil else { return }
+
+                let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let body = data.flatMap { String(data: $0, encoding: .utf8) }
+                guard error == nil, (200...299).contains(statusCode), let body else {
+                    self.cleanupPrepare(trackId: trackId)
+                    return
+                }
+
+                // Parse SSE response for file size
+                var fileSize: Int64?
+                for line in body.components(separatedBy: "\n") {
+                    if line.hasPrefix("data: "),
+                       let jsonData = line.dropFirst(6).data(using: .utf8),
+                       let result = try? JSONDecoder().decode(PrepareResult.self, from: jsonData) {
+                        fileSize = result.size
+                        break
+                    }
+                }
+
+                guard let fileSize,
+                      let downloadURL = URL(string: downloadUrlString),
+                      var comps = URLComponents(url: downloadURL, resolvingAgainstBaseURL: false) else {
+                    self.cleanupPrepare(trackId: trackId)
+                    return
+                }
+                var queryItems = comps.queryItems ?? []
+                queryItems.append(URLQueryItem(name: "transcode", value: "1"))
+                queryItems.append(URLQueryItem(name: "preset", value: preset))
+                comps.queryItems = queryItems
+                guard let url = comps.url else {
+                    self.cleanupPrepare(trackId: trackId)
+                    return
+                }
+                self.startDownloadTask(info: info, url: url)
+            }
+        }.resume()
+    }
+
+    /// Starts the actual URLSession download task for a given URL.
+    private func startDownloadTask(info: DownloadInfo, url: URL) {
         let session = isInForeground ? foregroundSession : backgroundSession
         let task = session.downloadTask(with: url)
 
-        // Store metadata in taskDescription — survives app termination + relaunch
         let metadata = TaskMetadata(
             trackId: info.track.id,
             artistId: info.artist.id,
@@ -322,6 +398,20 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         trackIdToTaskId[info.track.id] = task.taskIdentifier
         activeTasks[info.track.id] = task
         task.resume()
+    }
+
+    private nonisolated struct PrepareResult: Decodable {
+        let size: Int64
+    }
+
+    /// Cleans up a download that failed during the prepare/transcode phase (no URLSession task yet).
+    private func cleanupPrepare(trackId: UUID) {
+        activeDownloads.removeValue(forKey: trackId)
+        activeDownloadOrder.removeAll { $0 == trackId }
+        progressValues.removeValue(forKey: trackId)
+        inFlightCount -= 1
+        stopProgressTimerIfIdle()
+        startNextIfNeeded()
     }
 
     private func cleanupTask(trackId: UUID, taskId: Int) {
