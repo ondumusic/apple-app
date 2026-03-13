@@ -97,7 +97,11 @@ struct SongListView: View {
                 }
             }
         }
-        .onChange(of: musicLibrary.revision, initial: true) {
+        .task(id: musicLibrary.revision) {
+            if !sections.isEmpty {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+            }
             reloadTracks()
         }
         .onChange(of: musicLibrary.downloadChanged) {

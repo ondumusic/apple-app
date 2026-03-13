@@ -76,7 +76,11 @@ struct AlbumListView: View {
                 }
             }
         }
-        .onChange(of: musicLibrary.revision, initial: true) {
+        .task(id: musicLibrary.revision) {
+            if !albums.isEmpty {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+            }
             reloadAlbums()
         }
         .onChange(of: filterOption) {

@@ -158,11 +158,14 @@ final class SyncService {
                 print("SyncService: page \(pageCount) — \(response.artists.count) artists, \(response.albums.count) albums, \(response.tracks.count) tracks, \(response.deletions.count) deletions, complete: \(response.complete)")
 
                 musicLibrary.upsertArtists(response.artists)
-                musicLibrary.upsertAlbums(response.albums)
+                let newAlbumIds = musicLibrary.upsertAlbums(response.albums)
                 musicLibrary.upsertTracks(response.tracks)
                 musicLibrary.applyDeletions(response.deletions)
 
-                artworkURLs += response.albums.compactMap(\.artworkUrl)
+                // Only prefetch artwork for newly added albums
+                artworkURLs += response.albums
+                    .filter { newAlbumIds.contains($0.id) }
+                    .compactMap(\.artworkUrl)
 
                 syncProgress?.artistIds.formUnion(response.artists.map(\.id))
                 syncProgress?.albumIds.formUnion(response.albums.map(\.id))
@@ -184,9 +187,16 @@ final class SyncService {
             print("SyncService: sync failed: \(error)")
         }
 
+        // Single revision bump after all pages — triggers view refreshes once
+        musicLibrary.bumpRevision()
+
+        // Prefetch artwork off the main thread
         if !artworkURLs.isEmpty {
-            let prefetcher = ImagePrefetcher()
-            prefetcher.startPrefetching(with: artworkURLs)
+            let urls = artworkURLs
+            Task.detached(priority: .utility) {
+                let prefetcher = ImagePrefetcher()
+                prefetcher.startPrefetching(with: urls)
+            }
         }
     }
 

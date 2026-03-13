@@ -228,7 +228,7 @@ struct DownloadsView: View {
                 }
             }
         }
-        .onChange(of: musicLibrary.revision, initial: true) {
+        .task(id: musicLibrary.revision) {
             reloadData()
         }
         .onChange(of: musicLibrary.downloadChanged) {

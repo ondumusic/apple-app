@@ -112,6 +112,10 @@ final class MusicLibrary {
     /// Incremented on content mutations (sync, clear) so views that read it re-evaluate.
     private(set) var revision: UInt = 0
 
+    /// Cached maps — invalidated on revision bump to avoid repeated full table scans.
+    @ObservationIgnored private var cachedArtistMap: [UUID: LibraryArtist]?
+    @ObservationIgnored private var cachedAlbumMap: [UUID: LibraryAlbum]?
+
     /// Track IDs whose download state changed. Views observe this to update in-place
     /// without re-querying SwiftData.
     private(set) var downloadChanged: Set<UUID> = []
@@ -545,9 +549,17 @@ final class MusicLibrary {
 
     // MARK: - Mutations (called by SyncService)
 
+    func bumpRevision() {
+        cachedArtistMap = nil
+        cachedAlbumMap = nil
+        revision += 1
+    }
+
     func upsertArtists(_ syncArtists: [SyncArtist]) {
         guard !syncArtists.isEmpty else { return }
-        let existing = (try? modelContext.fetch(FetchDescriptor<LibraryArtist>())) ?? []
+        let ids = syncArtists.map(\.id)
+        let descriptor = FetchDescriptor<LibraryArtist>(predicate: #Predicate { ids.contains($0.serverId) })
+        let existing = (try? modelContext.fetch(descriptor)) ?? []
         let map = Dictionary(uniqueKeysWithValues: existing.map { ($0.serverId, $0) })
         for sa in syncArtists {
             if let la = map[sa.id] {
@@ -563,13 +575,17 @@ final class MusicLibrary {
             }
         }
         try? modelContext.save()
-        revision += 1
     }
 
-    func upsertAlbums(_ syncAlbums: [SyncAlbum]) {
-        guard !syncAlbums.isEmpty else { return }
-        let existing = (try? modelContext.fetch(FetchDescriptor<LibraryAlbum>())) ?? []
+    /// Returns the server IDs of newly inserted albums.
+    @discardableResult
+    func upsertAlbums(_ syncAlbums: [SyncAlbum]) -> Set<UUID> {
+        guard !syncAlbums.isEmpty else { return [] }
+        let ids = syncAlbums.map(\.id)
+        let descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { ids.contains($0.serverId) })
+        let existing = (try? modelContext.fetch(descriptor)) ?? []
         let map = Dictionary(uniqueKeysWithValues: existing.map { ($0.serverId, $0) })
+        var inserted = Set<UUID>()
         for sa in syncAlbums {
             if let la = map[sa.id] {
                 la.artistId = sa.artistId
@@ -588,15 +604,18 @@ final class MusicLibrary {
                     releaseYear: sa.releaseYear, artworkUrl: sa.artworkUrl,
                     isUnknown: sa.isUnknown, trackCount: sa.trackCount,
                     insertedAt: sa.insertedAt))
+                inserted.insert(sa.id)
             }
         }
         try? modelContext.save()
-        revision += 1
+        return inserted
     }
 
     func upsertTracks(_ syncTracks: [SyncTrack]) {
         guard !syncTracks.isEmpty else { return }
-        let existing = (try? modelContext.fetch(FetchDescriptor<LibraryTrack>())) ?? []
+        let ids = syncTracks.map(\.id)
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { ids.contains($0.serverId) })
+        let existing = (try? modelContext.fetch(descriptor)) ?? []
         let map = Dictionary(uniqueKeysWithValues: existing.map { ($0.serverId, $0) })
         for st in syncTracks {
             if let lt = map[st.id] {
@@ -623,7 +642,6 @@ final class MusicLibrary {
             }
         }
         try? modelContext.save()
-        revision += 1
     }
 
     func applyDeletions(_ deletions: [SyncDeletion]) {
@@ -649,7 +667,6 @@ final class MusicLibrary {
             }
         }
         try? modelContext.save()
-        revision += 1
     }
 
     func clearAll() {
@@ -662,6 +679,8 @@ final class MusicLibrary {
         try? modelContext.delete(model: LibraryAlbum.self)
         try? modelContext.delete(model: LibraryArtist.self)
         try? modelContext.save()
+        cachedArtistMap = nil
+        cachedAlbumMap = nil
         revision += 1
     }
 
@@ -701,15 +720,22 @@ final class MusicLibrary {
         return buildArtistMap()
     }
 
-    /// Full artist map — use when you need most/all artists.
+    /// Full artist map — cached between revision bumps.
     private func buildArtistMap() -> [UUID: LibraryArtist] {
+        if let cached = cachedArtistMap { return cached }
         let artists = (try? modelContext.fetch(FetchDescriptor<LibraryArtist>())) ?? []
-        return Dictionary(uniqueKeysWithValues: artists.map { ($0.serverId, $0) })
+        let map = Dictionary(uniqueKeysWithValues: artists.map { ($0.serverId, $0) })
+        cachedArtistMap = map
+        return map
     }
 
+    /// Full album map — cached between revision bumps.
     private func buildAlbumMap() -> [UUID: LibraryAlbum] {
+        if let cached = cachedAlbumMap { return cached }
         let albums = (try? modelContext.fetch(FetchDescriptor<LibraryAlbum>())) ?? []
-        return Dictionary(uniqueKeysWithValues: albums.map { ($0.serverId, $0) })
+        let map = Dictionary(uniqueKeysWithValues: albums.map { ($0.serverId, $0) })
+        cachedAlbumMap = map
+        return map
     }
 
     // MARK: - Private: Builders

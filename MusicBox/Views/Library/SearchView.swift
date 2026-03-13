@@ -29,10 +29,11 @@ struct SearchView: View {
         .onChange(of: query) {
             results = query.isEmpty ? ([], [], []) : musicLibrary.search(query)
         }
-        .onChange(of: musicLibrary.revision) {
-            if !query.isEmpty {
-                results = musicLibrary.search(query)
-            }
+        .task(id: musicLibrary.revision) {
+            guard !query.isEmpty else { return }
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            results = musicLibrary.search(query)
         }
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &results.tracks)

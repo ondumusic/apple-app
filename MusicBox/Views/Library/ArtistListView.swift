@@ -44,7 +44,11 @@ struct ArtistListView: View {
                 }
             }
         }
-        .onChange(of: musicLibrary.revision, initial: true) {
+        .task(id: musicLibrary.revision) {
+            if !artists.isEmpty {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+            }
             reloadArtists()
         }
         .onChange(of: filterOption) {

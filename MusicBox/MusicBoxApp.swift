@@ -86,19 +86,15 @@ struct MusicBoxApp: App {
             }
             #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                Task {
-                    await auth.validateSession()
-                    await syncService?.syncIfNeeded()
-                }
+                Task { await auth.validateSession() }
+                Task { await syncService?.syncIfNeeded() }
                 downloadService?.resumeOnForeground()
             }
             #endif
             #if os(macOS)
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.willBecomeActiveNotification)) { _ in
-                Task {
-                    await auth.validateSession()
-                    await syncService?.syncIfNeeded()
-                }
+                Task { await auth.validateSession() }
+                Task { await syncService?.syncIfNeeded() }
                 downloadService?.resumeOnForeground()
             }
             #endif
