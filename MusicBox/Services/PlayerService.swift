@@ -20,10 +20,36 @@ final class PlayerService {
     var progress: Double = 0
     var duration: Double = 0
     var queueConfirmation: QueueConfirmation? = nil
+    var showReplaceQueueConfirmation: Bool = false
+    @ObservationIgnored private var pendingPlayAction: (() -> Void)?
 
     nonisolated enum QueueConfirmation: Equatable, Sendable {
         case playNext(Int)
         case addedToQueue(Int)
+    }
+
+    /// Call this instead of playNow/playShuffled directly to prompt for confirmation when a queue is active.
+    func requestPlay(_ action: @escaping () -> Void) {
+        if currentTrack != nil && queueHasMultipleAlbums {
+            pendingPlayAction = action
+            showReplaceQueueConfirmation = true
+        } else {
+            action()
+        }
+    }
+
+    private var queueHasMultipleAlbums: Bool {
+        guard let firstAlbumId = queue.first?.track.albumId else { return false }
+        return queue.contains { $0.track.albumId != firstAlbumId }
+    }
+
+    func confirmPlay() {
+        pendingPlayAction?()
+        pendingPlayAction = nil
+    }
+
+    func cancelPlay() {
+        pendingPlayAction = nil
     }
 
     var isShuffled: Bool { shuffledIndices != nil }

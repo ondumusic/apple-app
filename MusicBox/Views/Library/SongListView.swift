@@ -27,7 +27,7 @@ struct SongListView: View {
                             Button {
                                 let available = musicLibrary.availableItems(allQueueItems, isOnline: network.isOnline)
                                 guard !available.isEmpty else { return }
-                                player.playNow(queue: available)
+                                player.requestPlay { player.playNow(queue: available) }
                             } label: {
                                 Label("Play All", systemImage: "play.fill")
                                     .frame(maxWidth: .infinity)
@@ -36,7 +36,7 @@ struct SongListView: View {
                             Button {
                                 let available = musicLibrary.availableItems(allQueueItems, isOnline: network.isOnline)
                                 guard !available.isEmpty else { return }
-                                player.playShuffled(queue: available)
+                                player.requestPlay { player.playShuffled(queue: available) }
                             } label: {
                                 Label("Shuffle All", systemImage: "shuffle")
                                     .frame(maxWidth: .infinity)
@@ -54,7 +54,7 @@ struct SongListView: View {
                                 TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
                                     let available = musicLibrary.availableItems(allQueueItems, isOnline: network.isOnline)
                                     if let idx = available.firstIndex(where: { $0.track.id == track.id }) {
-                                        player.playNow(queue: available, startingAt: idx)
+                                        player.requestPlay { player.playNow(queue: available, startingAt: idx) }
                                     }
                                 }
                                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))

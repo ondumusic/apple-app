@@ -188,7 +188,7 @@ struct SearchView: View {
             let allItems = allTracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
             let items = musicLibrary.availableItems(allItems, isOnline: network.isOnline)
             if let idx = items.firstIndex(where: { $0.track.id == track.id }) {
-                player.playNow(queue: items, startingAt: idx)
+                player.requestPlay { player.playNow(queue: items, startingAt: idx) }
             }
             searchHistory.add(SearchHistoryItem(
                 id: track.id, kind: .song,

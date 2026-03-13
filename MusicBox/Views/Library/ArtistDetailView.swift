@@ -93,9 +93,9 @@ struct ArtistDetailView: View {
         let items = musicLibrary.availableItems(allItems, isOnline: network.isOnline)
         guard !items.isEmpty else { return }
         if shuffle {
-            player.playShuffled(queue: items)
+            player.requestPlay { player.playShuffled(queue: items) }
         } else {
-            player.playNow(queue: items)
+            player.requestPlay { player.playNow(queue: items) }
         }
     }
 }

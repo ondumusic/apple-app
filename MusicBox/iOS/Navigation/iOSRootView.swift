@@ -117,6 +117,7 @@ struct iOSRootView: View {
             }
         }
         .queueConfirmationOverlay()
+        .replaceQueueConfirmation()
         .sheet(isPresented: $showSettings) {
             NavigationStack {
                 SettingsView()

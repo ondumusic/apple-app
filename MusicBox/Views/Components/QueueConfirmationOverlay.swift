@@ -62,4 +62,23 @@ extension View {
     func queueConfirmationOverlay() -> some View {
         modifier(QueueConfirmationOverlay())
     }
+
+    func replaceQueueConfirmation() -> some View {
+        modifier(ReplaceQueueConfirmation())
+    }
+}
+
+struct ReplaceQueueConfirmation: ViewModifier {
+    @Environment(PlayerService.self) private var player
+
+    func body(content: Content) -> some View {
+        @Bindable var player = player
+        content
+            .alert("Replace Queue?", isPresented: $player.showReplaceQueueConfirmation) {
+                Button("Replace", role: .destructive) { player.confirmPlay() }
+                Button("Cancel", role: .cancel) { player.cancelPlay() }
+            } message: {
+                Text("This will replace your current queue and start new playback.")
+            }
+    }
 }
