@@ -63,16 +63,20 @@ struct TrackRow: View {
 
             Spacer()
 
-            if track.isDownloaded {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
             Text(track.formattedDuration)
                 .font(.callout)
                 .foregroundStyle(isAvailable ? .secondary : .tertiary)
                 .monospacedDigit()
+                .fixedSize()
+                .frame(minWidth: 42, alignment: .trailing)
+                .overlay(alignment: .trailing) {
+                    if track.isDownloaded {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .offset(x: -46)
+                    }
+                }
         }
         .contentShape(Rectangle())
         .onTapGesture {
