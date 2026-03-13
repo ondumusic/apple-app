@@ -6,8 +6,6 @@ struct FullPlayerView: View {
     @Environment(PlayerService.self) private var player
     @Environment(SettingsStore.self) private var settings
     @Environment(\.dismiss) private var dismiss
-    @State private var isDragging = false
-    @State private var dragValue: Double = 0
     @State private var showQueue = false
     @State private var artworkColor: Color?
 
@@ -33,34 +31,15 @@ struct FullPlayerView: View {
                         .padding(.horizontal)
 
                     // Scrubber
-                    scrubber
+                    PlayerScrubber()
                         .padding(.horizontal)
 
                     // Transport controls
-                    HStack(spacing: 40) {
-                        Button { player.back() } label: {
-                            Image(systemName: "backward.fill")
-                                .font(.title2)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!player.canGoBack)
-
-                        Button { player.togglePlayPause() } label: {
-                            Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                                .font(.system(size: 56))
-                        }
-                        .buttonStyle(.plain)
-
-                        Button { player.skip() } label: {
-                            Image(systemName: "forward.fill")
-                                .font(.title2)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!player.canSkip)
-                    }
+                    TransportControls()
+                        .padding(.horizontal)
 
                     // Volume
-                    volumeSlider
+                    PlayerVolumeSlider()
                         .padding(.horizontal)
 
                     // Bottom row: AirPlay left, queue right
@@ -109,12 +88,16 @@ struct FullPlayerView: View {
             }
             .foregroundStyle(settings.artworkTintedPlayer && artworkColor != nil ? .white : .primary)
             .tint(settings.artworkTintedPlayer && artworkColor != nil ? .white : .accentColor)
-            .task(id: "\(artworkURL?.absoluteString ?? ""):\(settings.artworkTintedPlayer)") {
+            .task(id: settings.artworkTintedPlayer) {
                 guard settings.artworkTintedPlayer else {
                     withAnimation(.easeInOut(duration: 0.5)) { artworkColor = nil }
                     return
                 }
                 await updateArtworkColor()
+            }
+            .onChange(of: player.currentTrack?.id) {
+                guard settings.artworkTintedPlayer else { return }
+                Task { await updateArtworkColor() }
             }
             .sheet(isPresented: $showQueue) {
                 NavigationStack {
@@ -214,12 +197,19 @@ struct FullPlayerView: View {
             .offset(x: 6, y: -6)
     }
 
-    // MARK: - Scrubber
+}
 
-    private var scrubber: some View {
+// MARK: - Scrubber (isolated from main body to avoid progress-driven rebuilds)
+
+private struct PlayerScrubber: View {
+    @Environment(PlayerService.self) private var player
+    @State private var isDragging = false
+    @State private var dragValue: Double = 0
+
+    var body: some View {
         let currentValue = isDragging ? dragValue : player.progress
 
-        return VStack(spacing: 4) {
+        VStack(spacing: 4) {
             CustomSlider(
                 value: Binding(
                     get: { isDragging ? dragValue : player.progress },
@@ -253,32 +243,64 @@ struct FullPlayerView: View {
         }
     }
 
-    // MARK: - Volume
-
-    @State private var isDraggingVolume = false
-
-    private var volumeSlider: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "speaker.fill")
-                .font(.caption2)
-                .foregroundStyle(isDraggingVolume ? .primary : .secondary)
-                .frame(width: 16, alignment: .center)
-
-            VolumeSlider(isDragging: $isDraggingVolume)
-                .frame(height: 32)
-
-            Image(systemName: "speaker.wave.3.fill")
-                .font(.caption2)
-                .foregroundStyle(isDraggingVolume ? .primary : .secondary)
-                .frame(width: 16, alignment: .center)
-        }
-        .animation(.easeInOut(duration: 0.15), value: isDraggingVolume)
-    }
-
     private func formatTime(_ seconds: Double) -> String {
         guard seconds.isFinite && seconds >= 0 else { return "0:00" }
         let total = Int(seconds)
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+// MARK: - Transport Controls (isolated to avoid progress-driven rebuilds)
+
+private struct TransportControls: View {
+    @Environment(PlayerService.self) private var player
+
+    var body: some View {
+        HStack(spacing: 40) {
+            Button { player.back() } label: {
+                Image(systemName: "backward.fill")
+                    .font(.title2)
+            }
+            .buttonStyle(.plain)
+            .disabled(!player.canGoBack)
+
+            Button { player.togglePlayPause() } label: {
+                Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 56))
+            }
+            .buttonStyle(.plain)
+
+            Button { player.skip() } label: {
+                Image(systemName: "forward.fill")
+                    .font(.title2)
+            }
+            .buttonStyle(.plain)
+            .disabled(!player.canSkip)
+        }
+    }
+}
+
+// MARK: - Volume Slider (isolated)
+
+private struct PlayerVolumeSlider: View {
+    @State private var isDragging = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "speaker.fill")
+                .font(.caption2)
+                .foregroundStyle(isDragging ? .primary : .secondary)
+                .frame(width: 16, alignment: .center)
+
+            VolumeSlider(isDragging: $isDragging)
+                .frame(height: 32)
+
+            Image(systemName: "speaker.wave.3.fill")
+                .font(.caption2)
+                .foregroundStyle(isDragging ? .primary : .secondary)
+                .frame(width: 16, alignment: .center)
+        }
+        .animation(.easeInOut(duration: 0.15), value: isDragging)
     }
 }
 
@@ -379,6 +401,7 @@ private struct VolumeSlider: View {
     private func setSystemVolume(_ value: Float) {
         if let slider = volumeView.subviews.first(where: { $0 is UISlider }) as? UISlider {
             slider.value = value
+            slider.sendActions(for: .valueChanged)
         }
     }
 }
@@ -410,7 +433,6 @@ private struct SystemVolumeView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MPVolumeView {
         volumeView.showsRouteButton = false
-        volumeView.showsVolumeSlider = false
         return volumeView
     }
 
