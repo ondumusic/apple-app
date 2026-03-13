@@ -39,6 +39,14 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("Artwork-Tinted Player", isOn: $settings.artworkTintedPlayer)
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Text("Colors the player background based on the current track's album artwork.")
+            }
+
+            Section {
                 Picker("Cache Limit", selection: $settings.playbackCacheLimit) {
                     ForEach(Self.cacheLimitOptions, id: \.1) { label, value in
                         Text(label).tag(value)

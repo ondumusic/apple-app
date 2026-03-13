@@ -4,17 +4,22 @@ import MediaPlayer
 
 struct FullPlayerView: View {
     @Environment(PlayerService.self) private var player
+    @Environment(SettingsStore.self) private var settings
     @Environment(\.dismiss) private var dismiss
     @State private var isDragging = false
     @State private var dragValue: Double = 0
     @State private var showQueue = false
+    @State private var artworkColor: Color?
+
+    private var artworkURL: URL? {
+        player.queue.indices.contains(player.effectiveIndex)
+            ? player.queue[player.effectiveIndex].artworkURL : nil
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Artwork — centered in available space
-                let artworkURL = player.queue.indices.contains(player.effectiveIndex)
-                    ? player.queue[player.effectiveIndex].artworkURL : nil
                 ArtworkView(url: artworkURL, cornerRadius: 12)
                     .frame(maxWidth: 300, maxHeight: 300)
                     .aspectRatio(1, contentMode: .fit)
@@ -85,6 +90,33 @@ struct FullPlayerView: View {
                 }
                 .padding(.bottom, 8)
             }
+            .background {
+                ZStack {
+                    if settings.artworkTintedPlayer, let artworkColor {
+                        LinearGradient(
+                            stops: [
+                                .init(color: artworkColor, location: 0),
+                                .init(color: artworkColor.opacity(0.6), location: 0.6),
+                                .init(color: artworkColor.opacity(0.3), location: 1),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    } else {
+                        Color(.systemBackground)
+                    }
+                }
+                .ignoresSafeArea()
+            }
+            .foregroundStyle(settings.artworkTintedPlayer && artworkColor != nil ? .white : .primary)
+            .tint(settings.artworkTintedPlayer && artworkColor != nil ? .white : .accentColor)
+            .task(id: "\(artworkURL?.absoluteString ?? ""):\(settings.artworkTintedPlayer)") {
+                guard settings.artworkTintedPlayer else {
+                    withAnimation(.easeInOut(duration: 0.5)) { artworkColor = nil }
+                    return
+                }
+                await updateArtworkColor()
+            }
             .sheet(isPresented: $showQueue) {
                 NavigationStack {
                     QueueView()
@@ -95,7 +127,13 @@ struct FullPlayerView: View {
                         }
                 }
             }
+            .preferredColorScheme(settings.artworkTintedPlayer && artworkColor != nil ? .dark : nil)
         }
+    }
+
+    private func updateArtworkColor() async {
+        let color = await ArtworkColorExtractor.extractColor(from: artworkURL)
+        withAnimation(.easeInOut(duration: 0.5)) { artworkColor = color }
     }
 
     // MARK: - Track Info

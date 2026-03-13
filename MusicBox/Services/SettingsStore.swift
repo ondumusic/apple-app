@@ -48,6 +48,10 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(downloadQuality.rawValue, forKey: "downloadQuality") }
     }
 
+    var artworkTintedPlayer: Bool {
+        didSet { UserDefaults.standard.set(artworkTintedPlayer, forKey: "artworkTintedPlayer") }
+    }
+
     init() {
         let defaults = UserDefaults.standard
         self.crossfadeDuration = defaults.object(forKey: "crossfadeDuration") as? Double ?? 1.0
@@ -56,5 +60,6 @@ final class SettingsStore {
         self.repeatMode = RepeatMode(rawValue: defaults.string(forKey: "repeatMode") ?? "") ?? .off
         self.playbackCacheLimit = defaults.object(forKey: "playbackCacheLimit") as? Int64 ?? (2 * 1024 * 1024 * 1024) // 2 GB default
         self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original
+        self.artworkTintedPlayer = defaults.object(forKey: "artworkTintedPlayer") as? Bool ?? true
     }
 }
