@@ -124,6 +124,61 @@ struct DownloadsView: View {
                 }
             }
 
+            if !downloadService.failedDownloads.isEmpty {
+                Section {
+                    ForEach(downloadService.failedDownloads) { failed in
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(failed.trackName)
+                                    .lineLimit(1)
+                                Text(failed.reason)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            Button {
+                                downloadService.retryDownload(failed)
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.callout)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.tint)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                downloadService.dismissFailedDownload(failed)
+                            } label: {
+                                Label("Dismiss", systemImage: "xmark")
+                            }
+                        }
+                    }
+                } header: {
+                    HStack {
+                        Text("Failed")
+                        Spacer()
+                        if downloadService.failedDownloads.count > 1 {
+                            Button("Retry All") {
+                                for failed in downloadService.failedDownloads {
+                                    downloadService.retryDownload(failed)
+                                }
+                            }
+                            .font(.caption)
+
+                            Button("Clear All") {
+                                downloadService.clearFailedDownloads()
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        }
+                    }
+                    .textCase(nil)
+                }
+            }
+
             if artists.isEmpty && !downloadService.hasActivity {
                 ContentUnavailableView(
                     "No Downloads",

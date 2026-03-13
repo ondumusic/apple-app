@@ -24,6 +24,17 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Progress snapshot updated on a timer (~2x/sec) for UI display only
     var progressSnapshot: [UUID: Double] = [:]
 
+    /// Downloads that failed (for user to retry or dismiss)
+    var failedDownloads: [FailedDownload] = []
+
+    nonisolated struct FailedDownload: Identifiable, Sendable {
+        let id: UUID  // track ID
+        let trackName: String
+        let artistName: String
+        let info: DownloadInfo
+        let reason: String
+    }
+
     nonisolated struct DownloadState: Sendable {
         let trackName: String
         let artistName: String
@@ -295,7 +306,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     var hasActivity: Bool {
-        !activeDownloads.isEmpty || !pendingQueue.isEmpty
+        !activeDownloads.isEmpty || !pendingQueue.isEmpty || !failedDownloads.isEmpty
     }
 
     // MARK: - Internal queue management
@@ -365,7 +376,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         components.path = "/transcode/\(trackId.uuidString.lowercased())"
         components.queryItems = [URLQueryItem(name: "preset", value: preset)]
         guard let prepareURL = components.url else {
-            cleanupPrepare(trackId: trackId)
+            cleanupPrepare(trackId: trackId, reason: "Invalid URL")
             return
         }
 
@@ -385,7 +396,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
                 let body = data.flatMap { String(data: $0, encoding: .utf8) }
                 guard error == nil, (200...299).contains(statusCode), let body else {
-                    self.cleanupPrepare(trackId: trackId)
+                    let msg = error?.localizedDescription ?? "HTTP \(statusCode)"
+                    self.cleanupPrepare(trackId: trackId, reason: "Transcode failed: \(msg)")
                     return
                 }
 
@@ -403,7 +415,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 guard let fileSize,
                       let downloadURL = URL(string: downloadUrlString),
                       var comps = URLComponents(url: downloadURL, resolvingAgainstBaseURL: false) else {
-                    self.cleanupPrepare(trackId: trackId)
+                    self.cleanupPrepare(trackId: trackId, reason: "Transcode response invalid")
                     return
                 }
                 var queryItems = comps.queryItems ?? []
@@ -411,7 +423,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 queryItems.append(URLQueryItem(name: "preset", value: preset))
                 comps.queryItems = queryItems
                 guard let url = comps.url else {
-                    self.cleanupPrepare(trackId: trackId)
+                    self.cleanupPrepare(trackId: trackId, reason: "Invalid download URL")
                     return
                 }
                 self.startDownloadTask(info: info, url: url)
@@ -446,29 +458,58 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     /// Cleans up a download that failed during the prepare/transcode phase (no URLSession task yet).
-    private func cleanupPrepare(trackId: UUID) {
+    private func cleanupPrepare(trackId: UUID, reason: String? = nil) {
+        let info = prepareInfos[trackId]
         prepareTasks.removeValue(forKey: trackId)
         prepareInfos.removeValue(forKey: trackId)
-        activeDownloads.removeValue(forKey: trackId)
+        let state = activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
         progressValues.removeValue(forKey: trackId)
         inFlightCount -= 1
+        if let reason, let info, let state {
+            addFailedDownload(trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: info, reason: reason)
+        }
         stopProgressTimerIfIdle()
         startNextIfNeeded()
     }
 
-    private func cleanupTask(trackId: UUID, taskId: Int) {
+    private func cleanupTask(trackId: UUID, taskId: Int, reason: String? = nil) {
         // Guard: only clean up if this task is still tracked (prevents double-cleanup
         // when migrateToBackground already cleaned up a cancelled task)
-        guard taskDownloads.removeValue(forKey: taskId) != nil else { return }
-        activeDownloads.removeValue(forKey: trackId)
+        guard let info = taskDownloads.removeValue(forKey: taskId) else { return }
+        let state = activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
         trackIdToTaskId.removeValue(forKey: trackId)
         activeTasks.removeValue(forKey: trackId)
         progressValues.removeValue(forKey: trackId)
         inFlightCount -= 1
+        if let reason, let state {
+            addFailedDownload(trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: info, reason: reason)
+        }
         stopProgressTimerIfIdle()
         startNextIfNeeded()
+    }
+
+    private func addFailedDownload(trackId: UUID, trackName: String, artistName: String, info: DownloadInfo, reason: String) {
+        // Don't add duplicates
+        guard !failedDownloads.contains(where: { $0.id == trackId }) else { return }
+        failedDownloads.append(FailedDownload(
+            id: trackId, trackName: trackName, artistName: artistName, info: info, reason: reason
+        ))
+    }
+
+    func retryDownload(_ failed: FailedDownload) {
+        failedDownloads.removeAll { $0.id == failed.id }
+        pendingQueue.append(failed.info)
+        startNextIfNeeded()
+    }
+
+    func dismissFailedDownload(_ failed: FailedDownload) {
+        failedDownloads.removeAll { $0.id == failed.id }
+    }
+
+    func clearFailedDownloads() {
+        failedDownloads.removeAll()
     }
 
     /// Processes any pending completions and migrates downloads to foreground session.
@@ -581,12 +622,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
         // Update UI state on MainActor (may not execute if suspended — that's OK)
         let taskId = downloadTask.taskIdentifier
+        let saveFailed = saved == nil
         Task { @MainActor in
             if let saved {
                 self.musicLibrary.markDownloaded(trackId: metadata.trackId, relativePath: saved.path, downloadedFileSize: saved.size)
                 self.removePendingCompletion(trackId: metadata.trackId)
             }
-            self.cleanupTask(trackId: metadata.trackId, taskId: taskId)
+            self.cleanupTask(trackId: metadata.trackId, taskId: taskId, reason: saveFailed ? "Failed to save file" : nil)
         }
     }
 
@@ -647,7 +689,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
             if let statusCode, !(200...299).contains(statusCode) {
                 print("DownloadService: HTTP \(statusCode) for \(info.track.name)")
-                cleanupTask(trackId: info.track.id, taskId: taskId)
+                cleanupTask(trackId: info.track.id, taskId: taskId, reason: "Server error (HTTP \(statusCode))")
                 return
             }
 
@@ -660,7 +702,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             }
             if (error as NSError).code == NSURLErrorCancelled { return }
             print("DownloadService: download failed for \(info.track.name): \(error)")
-            cleanupTask(trackId: info.track.id, taskId: taskId)
+            cleanupTask(trackId: info.track.id, taskId: taskId, reason: error.localizedDescription)
         }
     }
 
