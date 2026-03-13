@@ -404,6 +404,7 @@ final class PlayerService {
         } catch {
             isLoadingTrack = false
             print("PlayerService: failed to load track: \(error)")
+            next()
         }
     }
 
@@ -486,6 +487,7 @@ final class PlayerService {
                 self.skip()
             }
         }
+
     }
 
     // MARK: - Crossfade
