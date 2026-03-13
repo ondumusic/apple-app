@@ -29,6 +29,9 @@ struct MiniPlayerView: View {
                 HStack(spacing: 10) {
                     ArtworkView(url: artworkURL, cornerRadius: 4, thumbnailSize: 36)
                         .frame(width: 40, height: 40)
+                        .id(player.currentTrack?.id)
+                        .transition(.opacity)
+                        .animation(.easeInOut(duration: 0.3), value: player.currentTrack?.id)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(track.name)
@@ -39,10 +42,13 @@ struct MiniPlayerView: View {
                             .foregroundStyle(tinted ? .white.opacity(0.7) : .secondary)
                             .lineLimit(1)
                     }
+                    .id(player.currentTrack?.id)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.3), value: player.currentTrack?.id)
 
                     Spacer(minLength: 0)
 
-                    Button { player.togglePlayPause() } label: {
+                    Button { Haptics.light(); player.togglePlayPause() } label: {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                             .font(.title3)
                             .frame(width: 44, height: 44)
@@ -50,7 +56,7 @@ struct MiniPlayerView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button { player.skip() } label: {
+                    Button { Haptics.light(); player.skip() } label: {
                         Image(systemName: "forward.fill")
                             .font(.callout)
                             .frame(width: 44, height: 44)

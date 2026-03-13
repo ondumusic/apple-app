@@ -24,6 +24,9 @@ struct FullPlayerView: View {
                     .shadow(radius: player.isPlaying ? 16 : 6, y: player.isPlaying ? 8 : 4)
                     .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                     .animation(.spring(duration: 0.5, bounce: 0.3), value: player.isPlaying)
+                    .id(player.currentTrack?.id)
+                    .transition(.blurReplace)
+                    .animation(.easeInOut(duration: 0.4), value: player.currentTrack?.id)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // Controls pinned to bottom
@@ -259,20 +262,20 @@ private struct TransportControls: View {
 
     var body: some View {
         HStack(spacing: 40) {
-            Button { player.back() } label: {
+            Button { Haptics.light(); player.back() } label: {
                 Image(systemName: "backward.fill")
                     .font(.title2)
             }
             .buttonStyle(.plain)
             .disabled(!player.canGoBack)
 
-            Button { player.togglePlayPause() } label: {
+            Button { Haptics.medium(); player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 56))
             }
             .buttonStyle(.plain)
 
-            Button { player.skip() } label: {
+            Button { Haptics.light(); player.skip() } label: {
                 Image(systemName: "forward.fill")
                     .font(.title2)
             }
