@@ -21,7 +21,9 @@ struct FullPlayerView: View {
                 ArtworkView(url: artworkURL, cornerRadius: 12)
                     .frame(maxWidth: 300, maxHeight: 300)
                     .aspectRatio(1, contentMode: .fit)
-                    .shadow(radius: 16, y: 8)
+                    .shadow(radius: player.isPlaying ? 16 : 6, y: player.isPlaying ? 8 : 4)
+                    .scaleEffect(player.isPlaying ? 1.0 : 0.85)
+                    .animation(.spring(duration: 0.5, bounce: 0.3), value: player.isPlaying)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // Controls pinned to bottom
