@@ -67,7 +67,6 @@ struct FullPlayerView: View {
                     HStack {
                         #if os(iOS)
                         AirPlayButton()
-                            .frame(width: 28, height: 28)
                             .frame(width: 48, height: 48)
                         #else
                         Spacer().frame(width: 48)
