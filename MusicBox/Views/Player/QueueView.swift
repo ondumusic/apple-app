@@ -50,6 +50,32 @@ struct QueueView: View {
             }
             #endif
         }
+        .safeAreaInset(edge: .bottom) {
+            HStack(spacing: 0) {
+                Button { player.toggleShuffle() } label: {
+                    Label("Shuffle", systemImage: "shuffle")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(player.isShuffled ? .accentColor : .secondary)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Button { player.cycleRepeatMode() } label: {
+                    Label(
+                        player.repeatMode == .one ? "Repeat One" : "Repeat",
+                        systemImage: player.repeatMode == .one ? "repeat.1" : "repeat"
+                    )
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(player.repeatMode != .off ? .accentColor : .secondary)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.vertical, 12)
+            .background(.bar)
+        }
     }
 
     private var currentArtworkURL: URL? {
