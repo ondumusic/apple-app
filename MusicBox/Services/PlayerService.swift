@@ -61,9 +61,8 @@ final class PlayerService {
     @ObservationIgnored private let tokenManager = PlayTokenManager()
     @ObservationIgnored private let musicLibrary: MusicLibrary?
     @ObservationIgnored private let playbackCache: PlaybackCache?
-    @ObservationIgnored private var primaryPlayer = AVQueuePlayer()
-    @ObservationIgnored private var secondaryPlayer: AVQueuePlayer?
-    @ObservationIgnored private var gaplessItem: AVPlayerItem?
+    @ObservationIgnored private var primaryPlayer = AVPlayer()
+    @ObservationIgnored private var secondaryPlayer: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var crossfadeObserver: Any?
     @ObservationIgnored private var crossfadeTimer: Timer?
@@ -171,7 +170,7 @@ final class PlayerService {
             shuffledIndices = shuffled.map { $0 >= insertIndex ? $0 + items.count : $0 } + newIndices
         }
         queueConfirmation = .playNext(items.count)
-        setupGaplessOrCrossfade()
+        setupCrossfadeObserverIfNeeded()
     }
 
     func addToEnd(tracks: [Track], artworkURL: URL? = nil) {
@@ -214,9 +213,7 @@ final class PlayerService {
             // End of queue, repeat off — show first track, stopped
             isPlaying = false
             primaryPlayer.pause()
-            primaryPlayer.removeAllItems()
-            gaplessItem = nil
-            gaplessNextTrackId = nil
+            primaryPlayer.replaceCurrentItem(with: nil)
             tearDownCrossfade()
             currentIndex = 0
             let idx = effectiveIndex
@@ -299,7 +296,7 @@ final class PlayerService {
         } else {
             queue = Array(queue.prefix(keep))
         }
-        setupGaplessOrCrossfade()
+        setupCrossfadeObserverIfNeeded()
     }
 
     func removeFromQueue(at offsets: IndexSet) {
@@ -329,7 +326,7 @@ final class PlayerService {
                 }
             }
         }
-        setupGaplessOrCrossfade()
+        setupCrossfadeObserverIfNeeded()
     }
 
     func moveQueueItems(from source: IndexSet, to destination: Int) {
@@ -347,7 +344,7 @@ final class PlayerService {
             let destReal = destination + upNextStart
             queue.move(fromOffsets: sourceReal, toOffset: destReal)
         }
-        setupGaplessOrCrossfade()
+        setupCrossfadeObserverIfNeeded()
     }
 
     // MARK: - Shuffle
@@ -369,7 +366,7 @@ final class PlayerService {
             currentIndex = 0
         }
         settings.isShuffled = isShuffled
-        setupGaplessOrCrossfade()
+        setupCrossfadeObserverIfNeeded()
     }
 
     func cycleRepeatMode() {
@@ -379,7 +376,7 @@ final class PlayerService {
         case .one: repeatMode = .off
         }
         settings.repeatMode = repeatMode
-        setupGaplessOrCrossfade()
+        setupCrossfadeObserverIfNeeded()
     }
 
     // MARK: - Playback Engine
@@ -400,9 +397,7 @@ final class PlayerService {
 
         // Stop current playback
         primaryPlayer.pause()
-        primaryPlayer.removeAllItems()
-        gaplessItem = nil
-        gaplessNextTrackId = nil
+        primaryPlayer.replaceCurrentItem(with: nil)
         tearDownCrossfade()
 
         do {
@@ -429,15 +424,15 @@ final class PlayerService {
 
             activateAudioSession()
             let item = AVPlayerItem(url: playbackURL)
-            primaryPlayer.insert(item, after: nil)
+            primaryPlayer.replaceCurrentItem(with: item)
             primaryPlayer.volume = 1.0
             primaryPlayer.play()
             isLoadingTrack = false
             isPlaying = true
 
             updateNowPlayingPlaybackState()
-            await prefetchNextTrackAndWait()
-            setupGaplessOrCrossfade()
+            setupCrossfadeObserverIfNeeded()
+            prefetchNextTrack()
         } catch {
             isLoadingTrack = false
             print("PlayerService: failed to load track: \(error)")
@@ -518,68 +513,6 @@ final class PlayerService {
         return false
     }
 
-    @ObservationIgnored private var gaplessNextTrackId: UUID?
-
-    private func setupGaplessOrCrossfade() {
-        let nextId = nextTrackInfo().map { queue[$0.effectiveIndex].track.id }
-
-        // Skip if next track hasn't changed and we already have the right setup
-        if nextId == gaplessNextTrackId && (gaplessItem != nil || crossfadeObserver != nil) {
-            return
-        }
-        gaplessNextTrackId = nextId
-
-        // Clean up previous gapless state
-        if let old = gaplessItem {
-            primaryPlayer.remove(old)
-            gaplessItem = nil
-        }
-        // Clean up previous crossfade observer
-        if let crossfadeObserver {
-            primaryPlayer.removeTimeObserver(crossfadeObserver)
-            self.crossfadeObserver = nil
-        }
-
-        if isNextTrackSequential() {
-            setupGaplessTransition()
-        } else {
-            setupCrossfadeObserverIfNeeded()
-        }
-    }
-
-    private func setupGaplessTransition() {
-        guard let next = nextTrackInfo() else { return }
-
-        // URL should be resolved by prefetchNextTrackAndWait
-        guard let url = queue[next.effectiveIndex].playbackURL else {
-            // Fallback: URL not available, fall back to crossfade
-            setupCrossfadeObserverIfNeeded()
-            return
-        }
-
-        let item = AVPlayerItem(url: url)
-        gaplessItem = item
-        primaryPlayer.insert(item, after: nil)
-    }
-
-    private func completeGaplessTransition() {
-        guard let next = nextTrackInfo() else { return }
-        let nextTrack = queue[next.effectiveIndex].track
-
-        gaplessItem = nil
-        gaplessNextTrackId = nil
-        currentIndex = next.index
-        currentTrack = nextTrack
-        progress = 0
-        duration = nextTrack.duration
-
-        updateNowPlayingInfo()
-        Task {
-            await prefetchNextTrackAndWait()
-            setupGaplessOrCrossfade()
-        }
-    }
-
     // MARK: - Time Observer
 
     private func setupTimeObserver() {
@@ -608,19 +541,9 @@ final class PlayerService {
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
-            guard let endedItem = notification.object as? AVPlayerItem else { return }
-
-            // Ignore events from secondary (crossfade) player
-            if let secondary = self.secondaryPlayer, secondary.currentItem === endedItem { return }
-
-            // Gapless transition: AVQueuePlayer advanced to the queued item
-            if self.gaplessItem != nil {
-                self.completeGaplessTransition()
-                return
-            }
-
-            // Normal end: only handle if this was our primary player's item
-            if endedItem === self.primaryPlayer.currentItem || self.primaryPlayer.currentItem == nil {
+            // Only handle if this is the primary player's item
+            if let item = notification.object as? AVPlayerItem,
+               item === self.primaryPlayer.currentItem {
                 self.skip()
             }
         }
@@ -630,8 +553,13 @@ final class PlayerService {
     // MARK: - Crossfade
 
     private func setupCrossfadeObserverIfNeeded() {
-        let fadeDuration = settings.crossfadeDuration
-        guard fadeDuration > 0, repeatMode != .one else { return }
+        guard repeatMode != .one else { return }
+
+        // For sequential album tracks, use a short overlap for gapless effect
+        // For non-sequential, use the user's crossfade setting
+        let isGapless = isNextTrackSequential()
+        let fadeDuration = isGapless ? 0.8 : settings.crossfadeDuration
+        guard fadeDuration > 0 else { return }
 
         // Check there's a next track
         let nextIdx = currentIndex + 1
@@ -643,19 +571,19 @@ final class PlayerService {
         crossfadeObserver = primaryPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self else { return }
             guard let item = self.primaryPlayer.currentItem else { return }
-            
+
             let dur = item.duration.seconds
             let current = time.seconds
-                        
+
             guard dur.isFinite && current.isFinite else { return }
             let remaining = dur - current
             if remaining <= fadeDuration && remaining > 0 {
-                self.beginCrossfade(fadeDuration: fadeDuration, remaining: remaining)
+                self.beginCrossfade(fadeDuration: fadeDuration, remaining: remaining, gapless: isGapless)
             }
         }
     }
 
-    private func beginCrossfade(fadeDuration: Double, remaining: Double) {
+    private func beginCrossfade(fadeDuration: Double, remaining: Double, gapless: Bool = false) {
         // Only begin once
         guard secondaryPlayer == nil else { return }
 
@@ -717,16 +645,32 @@ final class PlayerService {
                 }
                 await MainActor.run {
                     let item = AVPlayerItem(url: playbackURL)
-                    let crossfadePlayer = AVQueuePlayer(playerItem: item)
+                    let crossfadePlayer = AVPlayer(playerItem: item)
                     self.secondaryPlayer = crossfadePlayer
-                    crossfadePlayer.volume = 0
-                    crossfadePlayer.play()
-                    self.startVolumeRamp(fadeDuration: min(fadeDuration, remaining), nextIndex: nextIdx, nextTrack: nextTrack)
+                    if gapless {
+                        // Gapless: both players at full volume, old one plays out naturally
+                        crossfadePlayer.volume = 1.0
+                        crossfadePlayer.play()
+                        self.startGaplessCompletion(remaining: remaining, nextIndex: nextIdx, nextTrack: nextTrack)
+                    } else {
+                        crossfadePlayer.volume = 0
+                        crossfadePlayer.play()
+                        self.startVolumeRamp(fadeDuration: min(fadeDuration, remaining), nextIndex: nextIdx, nextTrack: nextTrack)
+                    }
                 }
             } catch {
                 print("PlayerService: crossfade failed: \(error)")
                 await MainActor.run { self.tearDownCrossfade() }
             }
+        }
+    }
+
+    private func startGaplessCompletion(remaining: Double, nextIndex: Int, nextTrack: Track) {
+        // Wait for old track to finish, then swap. Both play at full volume for seamless overlap.
+        crossfadeTimer?.invalidate()
+        crossfadeTimer = Timer.scheduledTimer(withTimeInterval: remaining + 0.05, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.completeCrossfade(nextIndex: nextIndex, nextTrack: nextTrack)
         }
     }
 
@@ -757,12 +701,11 @@ final class PlayerService {
         timeObserver = nil
         if let crossfadeObserver { primaryPlayer.removeTimeObserver(crossfadeObserver) }
         crossfadeObserver = nil
-        gaplessNextTrackId = nil
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         endObserver = nil
 
         primaryPlayer.pause()
-        primaryPlayer.removeAllItems()
+        primaryPlayer.replaceCurrentItem(with: nil)
 
         if let secondary = secondaryPlayer {
             primaryPlayer = secondary
@@ -780,10 +723,7 @@ final class PlayerService {
         setupTimeObserver()
         setupEndObserver()
         updateNowPlayingInfo()
-        Task {
-            await prefetchNextTrackAndWait()
-            setupGaplessOrCrossfade()
-        }
+        setupCrossfadeObserverIfNeeded()
     }
 
     private func tearDownCrossfade() {
@@ -794,7 +734,7 @@ final class PlayerService {
             self.crossfadeObserver = nil
         }
         secondaryPlayer?.pause()
-        secondaryPlayer?.removeAllItems()
+        secondaryPlayer?.replaceCurrentItem(with: nil)
         secondaryPlayer = nil
         // Re-setup end observer if it was removed
         if endObserver == nil {
