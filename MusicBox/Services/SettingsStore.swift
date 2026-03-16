@@ -8,8 +8,8 @@ nonisolated enum DownloadQuality: String, CaseIterable, Sendable {
     var displayName: String {
         switch self {
         case .original: "Original"
-        case .defaultAAC: "Default (192kbps)"
-        case .mobileAAC: "Mobile (160kbps)"
+        case .defaultAAC: "Default (256kbps)"
+        case .mobileAAC: "Mobile (128kbps)"
         }
     }
 }
