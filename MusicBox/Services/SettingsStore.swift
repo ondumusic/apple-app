@@ -14,6 +14,20 @@ nonisolated enum DownloadQuality: String, CaseIterable, Sendable {
     }
 }
 
+nonisolated enum StreamingQuality: String, CaseIterable, Sendable {
+    case original
+    case defaultADTS = "default_adts"
+    case mobileADTS = "mobile_adts"
+
+    var displayName: String {
+        switch self {
+        case .original: "Original"
+        case .defaultADTS: "Default (256kbps)"
+        case .mobileADTS: "Mobile (128kbps)"
+        }
+    }
+}
+
 @Observable
 final class SettingsStore {
     // MARK: - Feature flags
@@ -48,6 +62,10 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(downloadQuality.rawValue, forKey: "downloadQuality") }
     }
 
+    var streamingQuality: StreamingQuality {
+        didSet { UserDefaults.standard.set(streamingQuality.rawValue, forKey: "streamingQuality") }
+    }
+
     var artworkTintedPlayer: Bool {
         didSet { UserDefaults.standard.set(artworkTintedPlayer, forKey: "artworkTintedPlayer") }
     }
@@ -60,6 +78,7 @@ final class SettingsStore {
         self.repeatMode = RepeatMode(rawValue: defaults.string(forKey: "repeatMode") ?? "") ?? .off
         self.playbackCacheLimit = defaults.object(forKey: "playbackCacheLimit") as? Int64 ?? (2 * 1024 * 1024 * 1024) // 2 GB default
         self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original
+        self.streamingQuality = StreamingQuality(rawValue: defaults.string(forKey: "streamingQuality") ?? "") ?? .original
         self.artworkTintedPlayer = defaults.object(forKey: "artworkTintedPlayer") as? Bool ?? true
     }
 }

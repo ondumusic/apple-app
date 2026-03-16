@@ -77,28 +77,36 @@ struct SettingsView: View {
                 Text("Recently played tracks are cached locally to avoid re-streaming. Set a limit or choose Unlimited.")
             }
 
+            if SettingsStore.enableDownloadQuality {
+                Section {
+                    Picker("Streaming Quality", selection: $settings.streamingQuality) {
+                        ForEach(StreamingQuality.allCases, id: \.self) { quality in
+                            Text(quality.displayName).tag(quality)
+                        }
+                    }
+
+                    Picker("Download Quality", selection: $settings.downloadQuality) {
+                        ForEach(DownloadQuality.allCases, id: \.self) { quality in
+                            Text(quality.displayName).tag(quality)
+                        }
+                    }
+                } header: {
+                    Text("Quality")
+                } footer: {
+                    Text("Streaming quality applies when playing from the server. Download quality only affects new downloads. Original streams the file as-is.")
+                }
+            }
+
             Section {
                 Picker("Concurrent Downloads", selection: $settings.maxConcurrentDownloads) {
                     ForEach([1, 2, 3, 4, 6, 8], id: \.self) { count in
                         Text("\(count)").tag(count)
                     }
                 }
-
-                if SettingsStore.enableDownloadQuality {
-                    Picker("Download Quality", selection: $settings.downloadQuality) {
-                        ForEach(DownloadQuality.allCases, id: \.self) { quality in
-                            Text(quality.displayName).tag(quality)
-                        }
-                    }
-                }
             } header: {
                 Text("Downloads")
             } footer: {
-                if SettingsStore.enableDownloadQuality {
-                    Text("Number of tracks to download simultaneously. Download quality only affects new downloads.")
-                } else {
-                    Text("Number of tracks to download simultaneously. Higher values use more bandwidth.")
-                }
+                Text("Number of tracks to download simultaneously.")
             }
 
             Section {

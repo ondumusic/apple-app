@@ -60,11 +60,7 @@ final class PlayerService {
     @ObservationIgnored private let tokenManager = PlayTokenManager()
     @ObservationIgnored private let musicLibrary: MusicLibrary?
     @ObservationIgnored private let playbackCache: PlaybackCache?
-    @ObservationIgnored private var primaryPlayer: AVQueuePlayer = {
-        let player = AVQueuePlayer()
-        player.automaticallyWaitsToMinimizeStalling = false
-        return player
-    }()
+    @ObservationIgnored private var primaryPlayer = AVQueuePlayer()
     @ObservationIgnored private var secondaryPlayer: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var crossfadeObserver: Any?
@@ -389,6 +385,8 @@ final class PlayerService {
             let playbackURL = try await resolvePlaybackURL(for: track, queueIndex: idx)
 
             activateAudioSession()
+            // Disable stalling wait for local files (better gapless), enable for remote streams
+            primaryPlayer.automaticallyWaitsToMinimizeStalling = !playbackURL.isFileURL
             let item = AVPlayerItem(url: playbackURL)
             primaryPlayer.insert(item, after: nil)
             primaryPlayer.volume = 1.0
@@ -408,18 +406,37 @@ final class PlayerService {
 
     private func resolvePlaybackURL(for track: Track, queueIndex: Int) async throws -> URL {
         if let offlineURL = musicLibrary?.localURL(for: track.id) {
+            print("PlayerService: using offline URL: \(offlineURL)")
             queue[queueIndex].playbackURL = offlineURL
             return offlineURL
         }
         if let cached = queue[queueIndex].playbackURL,
            !cached.isFileURL || FileManager.default.fileExists(atPath: cached.path) {
+            print("PlayerService: using cached queue URL: \(cached)")
             return cached
         }
         if let cachedURL = playbackCache?.cachedURL(for: track.id) {
+            print("PlayerService: using playback cache URL: \(cachedURL)")
             queue[queueIndex].playbackURL = cachedURL
             return cachedURL
         }
-        let streamURL = try await tokenManager.resolvedStreamURL(for: track, using: api)
+        var streamURL = try await tokenManager.resolvedStreamURL(for: track, using: api)
+        // Determine streaming preset: user setting, or force transcode for unsupported formats
+        let streamingQuality = settings.streamingQuality
+        let needsTranscode = streamingQuality != .original || !AudioFormat.isAVPlayerSupported(track.mimetype)
+        let preset = streamingQuality != .original ? streamingQuality.rawValue : "default_adts"
+        if needsTranscode {
+            if var comps = URLComponents(url: streamURL, resolvingAgainstBaseURL: false) {
+                var queryItems = comps.queryItems ?? []
+                queryItems.append(URLQueryItem(name: "transcode", value: "1"))
+                queryItems.append(URLQueryItem(name: "preset", value: preset))
+                comps.queryItems = queryItems
+                if let transcodedURL = comps.url {
+                    streamURL = transcodedURL
+                }
+            }
+        }
+        print("PlayerService: streaming URL: \(streamURL) (transcode=\(needsTranscode), preset=\(preset), mimetype=\(track.mimetype))")
         if let cache = playbackCache {
             Task.detached {
                 let _ = await cache.cacheTrack(trackId: track.id, from: streamURL)
@@ -433,24 +450,8 @@ final class PlayerService {
         let nextEffective = next.effectiveIndex
         guard nextEffective < queue.count, queue[nextEffective].playbackURL == nil else { return }
         let track = queue[nextEffective].track
-        if let offlineURL = musicLibrary?.localURL(for: track.id) {
-            queue[nextEffective].playbackURL = offlineURL
-            return
-        }
-        if let cachedURL = playbackCache?.cachedURL(for: track.id) {
-            queue[nextEffective].playbackURL = cachedURL
-            return
-        }
         do {
-            let streamURL = try await tokenManager.resolvedStreamURL(for: track, using: api)
-            let finalURL: URL
-            if let localURL = await self.playbackCache?.cacheTrack(trackId: track.id, from: streamURL) {
-                finalURL = localURL
-            } else {
-                finalURL = streamURL
-            }
-            guard nextEffective < self.queue.count else { return }
-            self.queue[nextEffective].playbackURL = finalURL
+            let _ = try await resolvePlaybackURL(for: track, queueIndex: nextEffective)
         } catch {}
     }
 
@@ -719,7 +720,8 @@ final class PlayerService {
             // Create new AVQueuePlayer from the secondary player's item
             if let item = secondary.currentItem {
                 let newPlayer = AVQueuePlayer(items: [item])
-                newPlayer.automaticallyWaitsToMinimizeStalling = false
+                let isLocal = item.asset is AVURLAsset && (item.asset as? AVURLAsset)?.url.isFileURL == true
+                newPlayer.automaticallyWaitsToMinimizeStalling = !isLocal
                 newPlayer.volume = secondary.volume
                 // Seek to match secondary's current position
                 let currentTime = secondary.currentTime()

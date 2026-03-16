@@ -336,9 +336,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         progressValues[info.track.id] = 0
         startProgressTimerIfNeeded()
 
-        if quality != .original, isInForeground {
+        // Determine effective preset: transcode unsupported formats even when quality is "original"
+        let needsTranscode = quality != .original || !AudioFormat.isAVPlayerSupported(info.track.mimetype)
+        let preset = quality != .original ? quality.rawValue : "default_aac"
+
+        if needsTranscode, isInForeground {
             // Two-stage: prepare transcode via SSE, then download cached file with progress
-            prepareAndDownload(info: info, preset: quality.rawValue)
+            prepareAndDownload(info: info, preset: preset)
         } else {
             // Background transcoded or original: download directly (no SSE prepare)
             guard let downloadURL = URL(string: info.track.downloadUrl),
@@ -348,10 +352,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 activeDownloadOrder.removeAll { $0 == info.track.id }
                 return
             }
-            if quality != .original {
+            if needsTranscode {
                 var queryItems = comps.queryItems ?? []
                 queryItems.append(URLQueryItem(name: "transcode", value: "1"))
-                queryItems.append(URLQueryItem(name: "preset", value: quality.rawValue))
+                queryItems.append(URLQueryItem(name: "preset", value: preset))
                 comps.queryItems = queryItems
             }
             guard let url = comps.url else {

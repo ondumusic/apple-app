@@ -172,7 +172,8 @@ final class PlaybackCache {
             switch mimeType {
             case "audio/flac": return "flac"
             case "audio/mpeg": return "mp3"
-            case "audio/mp4", "audio/x-m4a", "audio/aac": return "m4a"
+            case "audio/mp4", "audio/x-m4a": return "m4a"
+            case "audio/aac": return "aac"
             case "audio/ogg", "audio/vorbis": return "ogg"
             case "audio/wav", "audio/x-wav": return "wav"
             default: break
