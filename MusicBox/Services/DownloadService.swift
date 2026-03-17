@@ -126,6 +126,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Number of in-flight downloads — incremented synchronously, so concurrent calls
     /// to startNextIfNeeded can't exceed the limit.
     @ObservationIgnored private var inFlightCount: Int = 0
+    /// Tracks task IDs that successfully saved a file in didFinishDownloadingTo
+    @ObservationIgnored private var successfulSaves: Set<Int> = []
 
     // MARK: - Paths
 
@@ -602,12 +604,14 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
+        let taskId = downloadTask.taskIdentifier
+
         if let httpResponse = downloadTask.response as? HTTPURLResponse,
            !(200...299).contains(httpResponse.statusCode) {
+            // Don't save — didCompleteWithError will handle the failure
             return
         }
 
-        // Decode metadata from taskDescription — works even after app relaunch
         guard let descriptionData = downloadTask.taskDescription?.data(using: .utf8),
               let metadata = try? JSONDecoder().decode(TaskMetadata.self, from: descriptionData) else {
             return
@@ -619,20 +623,19 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
         let saved = saveDownloadedFile(metadata: metadata, mimetype: responseMimetype, tempLocation: location)
 
-        if let saved {
-            // Write pending completion for SwiftData update on foreground
-            writePendingCompletion(trackId: metadata.trackId, relativePath: saved.path, downloadedFileSize: saved.size)
+        // Validate file was saved and has reasonable size (> 1KB)
+        guard let saved, saved.size > 1024 else {
+            print("DownloadService: file save failed or too small for \(metadata.trackName)")
+            return
         }
 
-        // Update UI state on MainActor (may not execute if suspended — that's OK)
-        let taskId = downloadTask.taskIdentifier
-        let saveFailed = saved == nil
+        // Write pending completion for SwiftData update on foreground
+        writePendingCompletion(trackId: metadata.trackId, relativePath: saved.path, downloadedFileSize: saved.size)
+
         Task { @MainActor in
-            if let saved {
-                self.musicLibrary.markDownloaded(trackId: metadata.trackId, relativePath: saved.path, downloadedFileSize: saved.size)
-                self.removePendingCompletion(trackId: metadata.trackId)
-            }
-            self.cleanupTask(trackId: metadata.trackId, taskId: taskId, reason: saveFailed ? "Failed to save file" : nil)
+            self.successfulSaves.insert(taskId)
+            self.musicLibrary.markDownloaded(trackId: metadata.trackId, relativePath: saved.path, downloadedFileSize: saved.size)
+            self.removePendingCompletion(trackId: metadata.trackId)
         }
     }
 
@@ -698,10 +701,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             }
 
             guard let error else {
-                // Successful completion — cleanupTask is usually called from
-                // didFinishDownloadingTo, but for chunked responses it may not fire.
-                // The guard in cleanupTask prevents double-cleanup.
-                cleanupTask(trackId: info.track.id, taskId: taskId)
+                // Check if didFinishDownloadingTo actually saved the file
+                if self.successfulSaves.remove(taskId) != nil {
+                    cleanupTask(trackId: info.track.id, taskId: taskId)
+                } else {
+                    print("DownloadService: download completed but file was not saved for \(info.track.name)")
+                    cleanupTask(trackId: info.track.id, taskId: taskId, reason: "Download failed — file could not be saved")
+                }
                 return
             }
             if (error as NSError).code == NSURLErrorCancelled { return }

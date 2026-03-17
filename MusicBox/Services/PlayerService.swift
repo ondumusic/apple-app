@@ -406,17 +406,14 @@ final class PlayerService {
 
     private func resolvePlaybackURL(for track: Track, queueIndex: Int) async throws -> URL {
         if let offlineURL = musicLibrary?.localURL(for: track.id) {
-            print("PlayerService: using offline URL: \(offlineURL)")
             queue[queueIndex].playbackURL = offlineURL
             return offlineURL
         }
         if let cached = queue[queueIndex].playbackURL,
            !cached.isFileURL || FileManager.default.fileExists(atPath: cached.path) {
-            print("PlayerService: using cached queue URL: \(cached)")
             return cached
         }
         if let cachedURL = playbackCache?.cachedURL(for: track.id) {
-            print("PlayerService: using playback cache URL: \(cachedURL)")
             queue[queueIndex].playbackURL = cachedURL
             return cachedURL
         }
@@ -436,7 +433,6 @@ final class PlayerService {
                 }
             }
         }
-        print("PlayerService: streaming URL: \(streamURL) (transcode=\(needsTranscode), preset=\(preset), mimetype=\(track.mimetype))")
         if let cache = playbackCache {
             Task.detached {
                 let _ = await cache.cacheTrack(trackId: track.id, from: streamURL)
