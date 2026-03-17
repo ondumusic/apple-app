@@ -12,7 +12,7 @@ struct DownloadsView: View {
 
     var body: some View {
         List {
-            if downloadService.hasActivity {
+            if !downloadService.activeDownloads.isEmpty || !downloadService.pendingQueue.isEmpty {
                 Section {
                     // All downloads (active + queued in URLSession)
                     ForEach(downloadService.activeDownloadOrder, id: \.self) { trackId in
@@ -179,7 +179,7 @@ struct DownloadsView: View {
                 }
             }
 
-            if artists.isEmpty && !downloadService.hasActivity {
+            if artists.isEmpty && downloadService.activeDownloads.isEmpty && downloadService.pendingQueue.isEmpty && downloadService.failedDownloads.isEmpty {
                 ContentUnavailableView(
                     "No Downloads",
                     systemImage: "arrow.down.circle",

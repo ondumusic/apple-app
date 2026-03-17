@@ -506,6 +506,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func retryDownload(_ failed: FailedDownload) {
         failedDownloads.removeAll { $0.id == failed.id }
+        // Unmark in case a previous bad download marked it as downloaded
+        musicLibrary.markUndownloaded(trackId: failed.id)
         pendingQueue.append(failed.info)
         startNextIfNeeded()
     }
@@ -748,11 +750,38 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             }
             try fm.moveItem(at: tempLocation, to: destURL)
             let size = (try? fm.attributesOfItem(atPath: destURL.path)[.size] as? Int64) ?? 0
+
+            // Validate M4A/MP4 files have a moov atom (required for playback)
+            if ext == "m4a" || ext == "mp4" {
+                guard Self.hasMoovAtom(at: destURL) else {
+                    print("DownloadService: corrupt M4A (missing moov) for \(metadata.trackName)")
+                    try? fm.removeItem(at: destURL)
+                    return nil
+                }
+            }
+
             return (relativePath, size)
         } catch {
             print("DownloadService: failed to save file for \(metadata.trackName): \(error)")
             return nil
         }
+    }
+
+    /// Checks if an MP4/M4A file contains a moov atom (required for playback).
+    nonisolated private static func hasMoovAtom(at url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+
+        while let header = try? handle.read(upToCount: 8), header.count == 8 {
+            let size = UInt32(header[0]) << 24 | UInt32(header[1]) << 16 | UInt32(header[2]) << 8 | UInt32(header[3])
+            let type = String(data: header[4..<8], encoding: .ascii) ?? ""
+            if type == "moov" { return true }
+            guard size >= 8 else { return false }
+            let offset = try? handle.offset()
+            guard let currentOffset = offset else { return false }
+            try? handle.seek(toOffset: currentOffset + UInt64(size) - 8)
+        }
+        return false
     }
 
     /// Writes a pending completion record to disk. If the app is suspended before
