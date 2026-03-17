@@ -47,6 +47,30 @@ struct SettingsView: View {
             }
 
             Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Accent Color")
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
+                        ForEach(AccentColor.allCases, id: \.self) { color in
+                            Circle()
+                                .fill(color.color)
+                                .frame(width: 32, height: 32)
+                                .overlay {
+                                    if settings.accentColor == color {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+                                .onTapGesture {
+                                    settings.accentColor = color
+                                }
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section {
                 Picker("Cache Limit", selection: $settings.playbackCacheLimit) {
                     ForEach(Self.cacheLimitOptions, id: \.1) { label, value in
                         Text(label).tag(value)

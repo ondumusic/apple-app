@@ -9,7 +9,7 @@ struct SettingsStoreTests {
     private let testKeys = [
         "crossfadeDuration", "maxConcurrentDownloads", "isShuffled",
         "repeatMode", "playbackCacheLimit", "downloadQuality",
-        "streamingQuality", "artworkTintedPlayer",
+        "streamingQuality", "artworkTintedPlayer", "accentColor",
     ]
 
     private func clearDefaults() {
@@ -131,6 +131,23 @@ struct SettingsStoreTests {
         let store2 = SettingsStore()
         #expect(store2.artworkTintedPlayer == false)
         clearDefaults()
+    }
+
+    @Test func accentColorPersists() {
+        clearDefaults()
+        let store = SettingsStore()
+        store.accentColor = .purple
+        let store2 = SettingsStore()
+        #expect(store2.accentColor == .purple)
+        clearDefaults()
+    }
+
+    // MARK: - Defaults (accent color)
+
+    @Test func defaultAccentColor() {
+        clearDefaults()
+        let store = SettingsStore()
+        #expect(store.accentColor == .blue)
     }
 
     // MARK: - Feature flags

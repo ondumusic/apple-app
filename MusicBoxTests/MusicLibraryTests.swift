@@ -609,3 +609,179 @@ struct MusicLibrarySearchTests {
         #expect(results.artists.isEmpty)
     }
 }
+
+// MARK: - Additional Query Tests
+
+@Suite(.serialized)
+struct MusicLibraryAdditionalQueryTests {
+
+    @Test func albumWithTracksIncludesTracks() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 2)])
+        lib.upsertTracks([
+            syncTrack(artistId: artistId, albumId: albumId, name: "T1", number: 1),
+            syncTrack(artistId: artistId, albumId: albumId, name: "T2", number: 2),
+        ])
+        lib.bumpRevision()
+
+        let album = lib.albumWithTracks(albumId)
+        #expect(album?.name == "Album")
+        #expect(album?.tracks?.count == 2)
+        #expect(album?.tracks?[0].name == "T1")
+    }
+
+    @Test func albumsWithTracksForArtist() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let album1 = UUID(), album2 = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([
+            syncAlbum(id: album1, artistId: artistId, name: "A1", releaseYear: 2020, trackCount: 1),
+            syncAlbum(id: album2, artistId: artistId, name: "A2", releaseYear: 2010, trackCount: 1),
+        ])
+        lib.upsertTracks([
+            syncTrack(artistId: artistId, albumId: album1, name: "T1"),
+            syncTrack(artistId: artistId, albumId: album2, name: "T2"),
+        ])
+        lib.bumpRevision()
+
+        let albums = lib.albumsWithTracksForArtist(artistId)
+        #expect(albums.count == 2)
+        // Sorted by release year descending
+        #expect(albums[0].name == "A1")
+        #expect(albums[0].tracks?.count == 1)
+        #expect(albums[1].name == "A2")
+    }
+
+    @Test func downloadedAlbumsReturnsOnlyWithDownloads() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let album1 = UUID(), album2 = UUID()
+        let t1 = UUID(), t2 = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([
+            syncAlbum(id: album1, artistId: artistId, name: "Downloaded Album"),
+            syncAlbum(id: album2, artistId: artistId, name: "Not Downloaded"),
+        ])
+        lib.upsertTracks([
+            syncTrack(id: t1, artistId: artistId, albumId: album1, name: "T1"),
+            syncTrack(id: t2, artistId: artistId, albumId: album2, name: "T2"),
+        ])
+        lib.markDownloaded(trackId: t1, relativePath: "p.m4a")
+
+        let albums = lib.downloadedAlbums()
+        #expect(albums.count == 1)
+        #expect(albums[0].name == "Downloaded Album")
+    }
+
+    @Test func downloadedTracksReturnsSorted() throws {
+        let lib = try makeTestLibrary()
+        let a1 = UUID(), a2 = UUID()
+        let album1 = UUID(), album2 = UUID()
+        let t1 = UUID(), t2 = UUID()
+        lib.upsertArtists([
+            syncArtist(id: a1, name: "Zed", sortName: "Zed"),
+            syncArtist(id: a2, name: "Alpha", sortName: "Alpha"),
+        ])
+        lib.upsertAlbums([
+            syncAlbum(id: album1, artistId: a1, name: "ZAlbum"),
+            syncAlbum(id: album2, artistId: a2, name: "AAlbum"),
+        ])
+        lib.upsertTracks([
+            syncTrack(id: t1, artistId: a1, albumId: album1, name: "ZTrack"),
+            syncTrack(id: t2, artistId: a2, albumId: album2, name: "ATrack"),
+        ])
+        lib.markDownloaded(trackId: t1, relativePath: "z.m4a")
+        lib.markDownloaded(trackId: t2, relativePath: "a.m4a")
+
+        let tracks = lib.downloadedTracks()
+        #expect(tracks.count == 2)
+        #expect(tracks[0].name == "ATrack")
+        #expect(tracks[1].name == "ZTrack")
+    }
+
+    @Test func downloadedAlbumsForArtist() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let album1 = UUID(), album2 = UUID()
+        let t1 = UUID(), t2 = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([
+            syncAlbum(id: album1, artistId: artistId, name: "A1", releaseYear: 2020),
+            syncAlbum(id: album2, artistId: artistId, name: "A2", releaseYear: 2010),
+        ])
+        lib.upsertTracks([
+            syncTrack(id: t1, artistId: artistId, albumId: album1, name: "T1"),
+            syncTrack(id: t2, artistId: artistId, albumId: album2, name: "T2"),
+        ])
+        lib.markDownloaded(trackId: t1, relativePath: "p.m4a")
+
+        let albums = lib.downloadedAlbumsForArtist(artistId)
+        #expect(albums.count == 1)
+        #expect(albums[0].name == "A1")
+    }
+
+    @Test func markAlbumUndownloaded() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        let t1 = UUID(), t2 = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 2)])
+        lib.upsertTracks([
+            syncTrack(id: t1, artistId: artistId, albumId: albumId, name: "S1", number: 1),
+            syncTrack(id: t2, artistId: artistId, albumId: albumId, name: "S2", number: 2),
+        ])
+        lib.markDownloaded(trackId: t1, relativePath: "p1.m4a")
+        lib.markDownloaded(trackId: t2, relativePath: "p2.m4a")
+
+        lib.markAlbumUndownloaded(albumId: albumId)
+
+        #expect(!lib.isDownloaded(trackId: t1))
+        #expect(!lib.isDownloaded(trackId: t2))
+    }
+
+    @Test func markArtistUndownloaded() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let album1 = UUID(), album2 = UUID()
+        let t1 = UUID(), t2 = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([
+            syncAlbum(id: album1, artistId: artistId, name: "A1"),
+            syncAlbum(id: album2, artistId: artistId, name: "A2"),
+        ])
+        lib.upsertTracks([
+            syncTrack(id: t1, artistId: artistId, albumId: album1, name: "T1"),
+            syncTrack(id: t2, artistId: artistId, albumId: album2, name: "T2"),
+        ])
+        lib.markDownloaded(trackId: t1, relativePath: "p1.m4a")
+        lib.markDownloaded(trackId: t2, relativePath: "p2.m4a")
+
+        lib.markArtistUndownloaded(artistId: artistId)
+
+        #expect(!lib.isDownloaded(trackId: t1))
+        #expect(!lib.isDownloaded(trackId: t2))
+    }
+
+    @Test func availableTracksOnline() throws {
+        let lib = try makeTestLibrary()
+        let artist = Artist(id: UUID(), name: "A", sortName: "A", slug: "a")
+        let tracks = [
+            Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
+                  artist: artist, albumArtistSortName: "A", name: "T1", disc: 1, number: 1,
+                  duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: false),
+            Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
+                  artist: artist, albumArtistSortName: "A", name: "T2", disc: 1, number: 2,
+                  duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: true),
+        ]
+        // Online: all tracks available
+        #expect(lib.availableTracks(tracks, isOnline: true).count == 2)
+        // Offline: only downloaded
+        #expect(lib.availableTracks(tracks, isOnline: false).count == 1)
+        #expect(lib.availableTracks(tracks, isOnline: false)[0].name == "T2")
+    }
+}

@@ -28,6 +28,29 @@ nonisolated enum StreamingQuality: String, CaseIterable, Sendable {
     }
 }
 
+nonisolated enum AccentColor: String, CaseIterable, Sendable {
+    case blue, indigo, purple, pink, red, orange, yellow, green, teal, mint
+
+    var color: Color {
+        switch self {
+        case .blue: .blue
+        case .indigo: .indigo
+        case .purple: .purple
+        case .pink: .pink
+        case .red: .red
+        case .orange: .orange
+        case .yellow: .yellow
+        case .green: .green
+        case .teal: .teal
+        case .mint: .mint
+        }
+    }
+
+    var displayName: String {
+        rawValue.capitalized
+    }
+}
+
 @Observable
 final class SettingsStore {
     // MARK: - Feature flags
@@ -70,6 +93,10 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(artworkTintedPlayer, forKey: "artworkTintedPlayer") }
     }
 
+    var accentColor: AccentColor {
+        didSet { UserDefaults.standard.set(accentColor.rawValue, forKey: "accentColor") }
+    }
+
     init() {
         let defaults = UserDefaults.standard
         self.crossfadeDuration = defaults.object(forKey: "crossfadeDuration") as? Double ?? 1.0
@@ -80,5 +107,6 @@ final class SettingsStore {
         self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original
         self.streamingQuality = StreamingQuality(rawValue: defaults.string(forKey: "streamingQuality") ?? "") ?? .original
         self.artworkTintedPlayer = defaults.object(forKey: "artworkTintedPlayer") as? Bool ?? true
+        self.accentColor = AccentColor(rawValue: defaults.string(forKey: "accentColor") ?? "") ?? .blue
     }
 }

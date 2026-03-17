@@ -74,6 +74,7 @@ struct MusicBoxApp: App {
                 }
             }
             .environment(auth)
+            .tint(settings.accentColor.color)
             .modelContainer(musicLibrary.modelContainer)
             .onChange(of: auth.apiService.map(ObjectIdentifier.init)) { _, _ in
                 if auth.apiService == nil {

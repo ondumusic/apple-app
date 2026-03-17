@@ -68,3 +68,28 @@ struct RepeatModeTests {
         #expect(RepeatMode(rawValue: "") == nil)
     }
 }
+
+struct AccentColorTests {
+
+    @Test func allCasesCount() {
+        #expect(AccentColor.allCases.count == 10)
+    }
+
+    @Test func rawValues() {
+        #expect(AccentColor.blue.rawValue == "blue")
+        #expect(AccentColor.purple.rawValue == "purple")
+        #expect(AccentColor.mint.rawValue == "mint")
+    }
+
+    @Test func displayNames() {
+        #expect(AccentColor.blue.displayName == "Blue")
+        #expect(AccentColor.indigo.displayName == "Indigo")
+        #expect(AccentColor.teal.displayName == "Teal")
+    }
+
+    @Test func initFromRawValue() {
+        #expect(AccentColor(rawValue: "blue") == .blue)
+        #expect(AccentColor(rawValue: "purple") == .purple)
+        #expect(AccentColor(rawValue: "invalid") == nil)
+    }
+}
