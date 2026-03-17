@@ -46,6 +46,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let track: Track
         let album: Album
         let artist: Artist
+        var retryCount: Int = 0
     }
 
     /// Metadata stored in URLSessionTask.taskDescription — survives app termination.
@@ -666,17 +667,19 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let taskId = task.taskIdentifier
         let statusCode = (task.response as? HTTPURLResponse)?.statusCode
 
-        let retryAfter: TimeInterval? = if statusCode == 503,
+        let retryAfter: TimeInterval? = if [429, 503].contains(statusCode),
             let header = (task.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Retry-After"),
             let seconds = Double(header) { seconds } else { nil }
 
         Task { @MainActor in
             guard let info = taskDownloads[taskId] else { return }
 
-            if statusCode == 503 {
+            if [408, 429, 502, 503, 504].contains(statusCode), info.retryCount < 3 {
                 let delay = retryAfter ?? 5
-                print("DownloadService: server busy for \(info.track.name), retrying in \(Int(delay))s")
+                print("DownloadService: server busy for \(info.track.name), retrying in \(Int(delay))s (attempt \(info.retryCount + 1)/3)")
                 let trackId = info.track.id
+                var retryInfo = info
+                retryInfo.retryCount += 1
                 // Remove task tracking but don't decrement inFlightCount or start next —
                 // this slot stays reserved for the retry
                 taskDownloads.removeValue(forKey: taskId)
@@ -689,7 +692,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                     self.activeDownloads.removeValue(forKey: trackId)
                     self.activeDownloadOrder.removeAll { $0 == trackId }
                     self.inFlightCount -= 1
-                    self.pendingQueue.insert(info, at: 0)
+                    self.pendingQueue.insert(retryInfo, at: 0)
                     self.stopProgressTimerIfIdle()
                     self.startNextIfNeeded()
                 }
@@ -712,7 +715,37 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 }
                 return
             }
-            if (error as NSError).code == NSURLErrorCancelled { return }
+            let nsError = error as NSError
+            if nsError.code == NSURLErrorCancelled { return }
+
+            print("DownloadService: error detail for \(info.track.name):")
+            print("  code: \(nsError.code) domain: \(nsError.domain)")
+            print("  userInfo: \(nsError.userInfo)")
+            if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                print("  underlying: code=\(underlying.code) domain=\(underlying.domain) \(underlying.localizedDescription)")
+            }
+            if let response = task.response as? HTTPURLResponse {
+                print("  response: HTTP \(response.statusCode) headers=\(response.allHeaderFields)")
+            } else {
+                print("  response: nil")
+            }
+
+            // Retry transient network errors
+            let retryableErrors = [
+                NSURLErrorUnknown,              // -1
+                NSURLErrorTimedOut,              // -1001
+                NSURLErrorNetworkConnectionLost, // -1005
+            ]
+            if retryableErrors.contains(nsError.code), info.retryCount < 3 {
+                let trackId = info.track.id
+                var retryInfo = info
+                retryInfo.retryCount += 1
+                print("DownloadService: transient error for \(info.track.name), retrying (attempt \(retryInfo.retryCount)/3, code: \(nsError.code))")
+                pendingQueue.insert(retryInfo, at: 0)
+                cleanupTask(trackId: trackId, taskId: taskId)
+                return
+            }
+
             print("DownloadService: download failed for \(info.track.name): \(error)")
             cleanupTask(trackId: info.track.id, taskId: taskId, reason: error.localizedDescription)
         }
@@ -754,7 +787,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             // Validate M4A/MP4 files have a moov atom (required for playback)
             if ext == "m4a" || ext == "mp4" {
                 guard Self.hasMoovAtom(at: destURL) else {
-                    print("DownloadService: corrupt M4A (missing moov) for \(metadata.trackName)")
+                    print("DownloadService: corrupt M4A (missing moov) for \(metadata.trackName), size=\(size)")
+                    Self.debugAtoms(at: destURL)
                     try? fm.removeItem(at: destURL)
                     return nil
                 }
@@ -767,6 +801,25 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    /// Debug: prints all top-level MP4 atoms found in the file.
+    nonisolated private static func debugAtoms(at url: URL) {
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            print("  debugAtoms: cannot open file")
+            return
+        }
+        defer { try? handle.close() }
+
+        var offset: UInt64 = 0
+        while let header = try? handle.read(upToCount: 8), header.count == 8 {
+            let size = UInt32(header[0]) << 24 | UInt32(header[1]) << 16 | UInt32(header[2]) << 8 | UInt32(header[3])
+            let type = String(data: header[4..<8], encoding: .ascii) ?? "????"
+            print("  atom: \(type) size=\(size) offset=\(offset)")
+            guard size >= 8 else { break }
+            offset += UInt64(size)
+            try? handle.seek(toOffset: offset)
+        }
+    }
+
     /// Checks if an MP4/M4A file contains a moov atom (required for playback).
     nonisolated private static func hasMoovAtom(at url: URL) -> Bool {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
@@ -776,6 +829,23 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             let size = UInt32(header[0]) << 24 | UInt32(header[1]) << 16 | UInt32(header[2]) << 8 | UInt32(header[3])
             let type = String(data: header[4..<8], encoding: .ascii) ?? ""
             if type == "moov" { return true }
+
+            if size == 0 {
+                // size=0 means "extends to EOF" (common for mdat without faststart).
+                // moov may still follow the actual data — scan the tail of the file.
+                guard let fileSize = try? handle.seekToEnd(), fileSize > 0 else { return false }
+                let scanSize = min(fileSize, 512 * 1024)
+                try? handle.seek(toOffset: fileSize - scanSize)
+                guard let tail = try? handle.read(upToCount: Int(scanSize)), tail.count >= 8 else { return false }
+                let moov: [UInt8] = [0x6D, 0x6F, 0x6F, 0x76] // "moov"
+                for i in 4 ..< tail.count where tail[i] == moov[0] {
+                    if i + 3 < tail.count && tail[i+1] == moov[1] && tail[i+2] == moov[2] && tail[i+3] == moov[3] {
+                        return true
+                    }
+                }
+                return false
+            }
+
             guard size >= 8 else { return false }
             let offset = try? handle.offset()
             guard let currentOffset = offset else { return false }
