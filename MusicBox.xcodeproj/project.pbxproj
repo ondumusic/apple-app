@@ -10,7 +10,18 @@
 		50AFC93F2F585EA700056DCC /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001AAAA000000000001 /* NukeUI */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		50634C092F69C3D600A9BA4E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 50AFC7D62F58594300056DCC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 50AFC7DD2F58594300056DCC;
+			remoteInfo = MusicBox;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		50634C052F69C3D600A9BA4E /* MusicBoxTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MusicBoxTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		50AFC7DE2F58594300056DCC /* MusicBox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MusicBox.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -25,6 +36,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		50634C062F69C3D600A9BA4E /* MusicBoxTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MusicBoxTests;
+			sourceTree = "<group>";
+		};
 		50AFC7E02F58594300056DCC /* MusicBox */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -36,6 +52,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		50634C022F69C3D600A9BA4E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		50AFC7DB2F58594300056DCC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -51,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				50AFC7E02F58594300056DCC /* MusicBox */,
+				50634C062F69C3D600A9BA4E /* MusicBoxTests */,
 				50AFC7DF2F58594300056DCC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -59,6 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				50AFC7DE2F58594300056DCC /* MusicBox.app */,
+				50634C052F69C3D600A9BA4E /* MusicBoxTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -66,6 +91,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		50634C042F69C3D600A9BA4E /* MusicBoxTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 50634C0B2F69C3D600A9BA4E /* Build configuration list for PBXNativeTarget "MusicBoxTests" */;
+			buildPhases = (
+				50634C012F69C3D600A9BA4E /* Sources */,
+				50634C022F69C3D600A9BA4E /* Frameworks */,
+				50634C032F69C3D600A9BA4E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				50634C0A2F69C3D600A9BA4E /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				50634C062F69C3D600A9BA4E /* MusicBoxTests */,
+			);
+			name = MusicBoxTests;
+			packageProductDependencies = (
+			);
+			productName = MusicBoxTests;
+			productReference = 50634C052F69C3D600A9BA4E /* MusicBoxTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		50AFC7DD2F58594300056DCC /* MusicBox */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 50AFC7E92F58594300056DCC /* Build configuration list for PBXNativeTarget "MusicBox" */;
@@ -99,6 +147,10 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
+					50634C042F69C3D600A9BA4E = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 50AFC7DD2F58594300056DCC;
+					};
 					50AFC7DD2F58594300056DCC = {
 						CreatedOnToolsVersion = 26.3;
 					};
@@ -122,11 +174,19 @@
 			projectRoot = "";
 			targets = (
 				50AFC7DD2F58594300056DCC /* MusicBox */,
+				50634C042F69C3D600A9BA4E /* MusicBoxTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		50634C032F69C3D600A9BA4E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		50AFC7DC2F58594300056DCC /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,6 +197,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		50634C012F69C3D600A9BA4E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		50AFC7DA2F58594300056DCC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -146,7 +213,68 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		50634C0A2F69C3D600A9BA4E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 50AFC7DD2F58594300056DCC /* MusicBox */;
+			targetProxy = 50634C092F69C3D600A9BA4E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		50634C0C2F69C3D600A9BA4E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.MusicBoxTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MusicBox.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MusicBox";
+				XROS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Debug;
+		};
+		50634C0D2F69C3D600A9BA4E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.MusicBoxTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MusicBox.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MusicBox";
+				VALIDATE_PRODUCT = YES;
+				XROS_DEPLOYMENT_TARGET = 26.2;
+			};
+			name = Release;
+		};
 		50AFC7E72F58594300056DCC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -356,6 +484,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		50634C0B2F69C3D600A9BA4E /* Build configuration list for PBXNativeTarget "MusicBoxTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				50634C0C2F69C3D600A9BA4E /* Debug */,
+				50634C0D2F69C3D600A9BA4E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		50AFC7D92F58594300056DCC /* Build configuration list for PBXProject "MusicBox" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

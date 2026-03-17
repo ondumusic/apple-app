@@ -925,4 +925,11 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         default: "mp3"
         }
     }
+
+    // MARK: - Test Helpers
+
+    /// Exposes hasMoovAtom for unit tests via @testable import.
+    nonisolated static func testHasMoovAtom(at url: URL) -> Bool {
+        hasMoovAtom(at: url)
+    }
 }
