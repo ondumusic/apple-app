@@ -127,6 +127,11 @@ final class MusicLibrary {
         }
     }
 
+    /// Internal init for testing — accepts a pre-built container (e.g. in-memory).
+    init(container: ModelContainer) {
+        self.modelContainer = container
+    }
+
     init() throws {
         let schema = Schema([LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self])
         do {
