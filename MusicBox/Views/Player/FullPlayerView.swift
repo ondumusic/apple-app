@@ -50,7 +50,7 @@ struct FullPlayerView: View {
                     // Bottom row: AirPlay left, queue right
                     HStack {
                         #if os(iOS)
-                        AirPlayButton()
+                        AirPlayButton(activeTintColor: UIColor(settings.accentColor.color))
                             .frame(width: 48, height: 48)
                         #else
                         Spacer().frame(width: 48)
@@ -198,7 +198,7 @@ struct FullPlayerView: View {
             .font(.system(size: 8, weight: .bold))
             .foregroundColor(.white)
             .padding(3)
-            .background(Color.accentColor, in: Circle())
+            .background(settings.accentColor.color, in: Circle())
             .offset(x: 6, y: -6)
     }
 
@@ -445,14 +445,18 @@ private struct SystemVolumeView: UIViewRepresentable {
 }
 
 private struct AirPlayButton: UIViewRepresentable {
+    var activeTintColor: UIColor = .tintColor
+
     func makeUIView(context: Context) -> AVRoutePickerView {
         let view = AVRoutePickerView()
         view.tintColor = .secondaryLabel
-        view.activeTintColor = .tintColor
+        view.activeTintColor = activeTintColor
         view.prioritizesVideoDevices = false
         return view
     }
 
-    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
+        uiView.activeTintColor = activeTintColor
+    }
 }
 #endif
