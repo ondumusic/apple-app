@@ -5,6 +5,7 @@ struct DownloadsView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @State private var showDeleteAllConfirmation = false
     @State private var showDownloadAllConfirmation = false
+    @State private var showAllDownloadedAlert = false
     @State private var artistToDelete: Artist?
     @State private var artists: [Artist] = []
     @State private var totalSize: Int64 = 0
@@ -243,7 +244,11 @@ struct DownloadsView: View {
             ToolbarItem(placement: .automatic) {
                 Menu {
                     Button {
-                        showDownloadAllConfirmation = true
+                        if downloadService.hasUndownloadedTracks(library: musicLibrary) {
+                            showDownloadAllConfirmation = true
+                        } else {
+                            showAllDownloadedAlert = true
+                        }
                     } label: {
                         Label("Download All", systemImage: "arrow.down.circle")
                     }
@@ -280,6 +285,11 @@ struct DownloadsView: View {
                     }
                 } message: {
                     Text("This will remove all downloaded music from this device.")
+                }
+                .alert("All Songs Downloaded", isPresented: $showAllDownloadedAlert) {
+                    Button("OK") {}
+                } message: {
+                    Text("Your entire library is already downloaded.")
                 }
             }
         }

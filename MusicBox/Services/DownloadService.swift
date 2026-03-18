@@ -173,6 +173,24 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    func hasUndownloadedTracks(library: MusicLibrary) -> Bool {
+        let artists = library.allArtists()
+        for artist in artists {
+            let albums = library.albumsWithTracksForArtist(artist.id)
+            for album in albums {
+                guard let tracks = album.tracks else { continue }
+                for track in tracks {
+                    if !musicLibrary.isDownloaded(trackId: track.id),
+                       !isDownloading(trackId: track.id),
+                       !isQueued(trackId: track.id) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
     func downloadAll(library: MusicLibrary) {
         let artists = library.allArtists()
         for artist in artists {
