@@ -39,6 +39,9 @@ final class AuthService {
             return
         }
 
+        // Re-save to upgrade Keychain accessibility if needed (kSecAttrAccessibleAfterFirstUnlock)
+        KeychainHelper.save(token, for: Keys.sessionToken)
+
         // Optimistically set up the API service — UI renders immediately
         self.apiService = APIService(baseURL: serverURL, sessionToken: token)
 

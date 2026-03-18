@@ -71,6 +71,9 @@ struct MusicBoxApp: App {
                     NavigationStack {
                         LoginView()
                     }
+                } else {
+                    // auth.isLoggedIn but services not yet initialized
+                    ProgressView()
                 }
             }
             .environment(auth)
@@ -87,7 +90,12 @@ struct MusicBoxApp: App {
             }
             #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                Task { await auth.validateSession() }
+                if !auth.isLoggedIn {
+                    // Retry restore — Keychain may have been inaccessible on prelaunch
+                    auth.restoreSession()
+                } else {
+                    Task { await auth.validateSession() }
+                }
                 Task { await syncService?.syncIfNeeded() }
                 downloadService?.resumeOnForeground()
             }
