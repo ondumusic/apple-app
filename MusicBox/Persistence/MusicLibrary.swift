@@ -191,22 +191,34 @@ final class MusicLibrary {
 
     func search(_ query: String) -> (artists: [Artist], albums: [Album], tracks: [Track]) {
         _ = revision
-        let query = query.lowercased()
-        guard !query.isEmpty else { return ([], [], []) }
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return ([], [], []) }
 
-        let artistMap = buildArtistMap()
+        let artistDescriptor = FetchDescriptor<LibraryArtist>(
+            predicate: #Predicate {
+                $0.albumCount > 0 && (
+                    $0.name.localizedStandardContains(query) ||
+                    $0.sortName.localizedStandardContains(query)
+                )
+            },
+            sortBy: [SortDescriptor(\.sortName)]
+        )
+        let matchedArtists = (try? modelContext.fetch(artistDescriptor)) ?? []
+        let filteredArtists = matchedArtists.map {
+            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount)
+        }
 
-        let artists = (try? modelContext.fetch(FetchDescriptor<LibraryArtist>())) ?? []
-        let filteredArtists = artists
-            .filter { $0.name.localizedCaseInsensitiveContains(query) || $0.sortName.localizedCaseInsensitiveContains(query) }
-            .filter { $0.albumCount > 0 }
-            .sorted { $0.sortName < $1.sortName }
-            .map { Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount) }
-
-        let albums = (try? modelContext.fetch(FetchDescriptor<LibraryAlbum>())) ?? []
-        let filteredAlbums = albums
-            .filter { $0.name.localizedCaseInsensitiveContains(query) || $0.sortName.localizedCaseInsensitiveContains(query) }
-            .filter { $0.trackCount > 0 }
+        let albumDescriptor = FetchDescriptor<LibraryAlbum>(
+            predicate: #Predicate {
+                $0.trackCount > 0 && (
+                    $0.name.localizedStandardContains(query) ||
+                    $0.sortName.localizedStandardContains(query)
+                )
+            }
+        )
+        let matchedAlbums = (try? modelContext.fetch(albumDescriptor)) ?? []
+        let artistIds = Set(matchedAlbums.map(\.artistId))
+        let artistMap = buildArtistMapForIds(artistIds)
+        let filteredAlbums = matchedAlbums
             .sorted { a, b in
                 let aSortName = artistMap[a.artistId]?.sortName ?? ""
                 let bSortName = artistMap[b.artistId]?.sortName ?? ""
@@ -216,13 +228,29 @@ final class MusicLibrary {
                 if aYear != bYear { return aYear > bYear }
                 return a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
             }
-            .map { toAlbum($0) }
+            .map { toAlbum($0, artistMap: artistMap) }
 
-        let albumMap = buildAlbumMap()
-        let allTracks = (try? modelContext.fetch(FetchDescriptor<LibraryTrack>())) ?? []
-        let filteredTracks = allTracks
-            .filter { $0.name.localizedCaseInsensitiveContains(query) }
-            .map { buildTrack($0, artistMap: artistMap, album: albumMap[$0.albumId]) }
+        let trackDescriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate {
+                $0.name.localizedStandardContains(query)
+            }
+        )
+        let matchedTracks = (try? modelContext.fetch(trackDescriptor)) ?? []
+        let trackArtistIds = Set(matchedTracks.map(\.artistId) + matchedTracks.map(\.albumArtistId))
+        let trackArtistMap = buildArtistMapForIds(trackArtistIds)
+        let trackAlbumIds = Set(matchedTracks.map(\.albumId))
+        let trackAlbumMap: [UUID: LibraryAlbum]
+        if trackAlbumIds.count <= 20 {
+            var map: [UUID: LibraryAlbum] = [:]
+            for id in trackAlbumIds {
+                if let album = fetchAlbumRecord(id) { map[id] = album }
+            }
+            trackAlbumMap = map
+        } else {
+            trackAlbumMap = buildAlbumMap()
+        }
+        let filteredTracks = matchedTracks
+            .map { buildTrack($0, artistMap: trackArtistMap, album: trackAlbumMap[$0.albumId]) }
             .sorted { ($0.artist.sortName, $0.name) < ($1.artist.sortName, $1.name) }
 
         return (filteredArtists, filteredAlbums, filteredTracks)
