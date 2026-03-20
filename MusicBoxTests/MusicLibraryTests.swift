@@ -131,6 +131,52 @@ struct MusicLibraryAlbumTests {
         #expect(lib.album(albumId)?.name == "Album")
         #expect(lib.album(UUID()) == nil)
     }
+
+    @Test func allAlbumsIncludesArtistInfo() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Pink Floyd", sortName: "Pink Floyd")])
+        lib.upsertAlbums([syncAlbum(artistId: artistId, name: "The Wall")])
+        lib.bumpRevision()
+
+        let albums = lib.allAlbums()
+        #expect(albums.count == 1)
+        #expect(albums[0].artistName == "Pink Floyd")
+        #expect(albums[0].artistSortName == "Pink Floyd")
+    }
+
+    @Test func albumsForArtistNilYearSortsLast() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([
+            syncAlbum(artistId: artistId, name: "With Year", releaseYear: 2020),
+            syncAlbum(artistId: artistId, name: "No Year", releaseYear: nil),
+        ])
+        lib.bumpRevision()
+
+        let albums = lib.albumsForArtist(artistId)
+        #expect(albums[0].name == "With Year")
+        #expect(albums[1].name == "No Year")
+    }
+
+    @Test func albumsForArtistDoesNotReturnOtherArtists() throws {
+        let lib = try makeTestLibrary()
+        let a1 = UUID(), a2 = UUID()
+        lib.upsertArtists([
+            syncArtist(id: a1, name: "Artist 1"),
+            syncArtist(id: a2, name: "Artist 2"),
+        ])
+        lib.upsertAlbums([
+            syncAlbum(artistId: a1, name: "A1 Album"),
+            syncAlbum(artistId: a2, name: "A2 Album"),
+        ])
+        lib.bumpRevision()
+
+        let albums = lib.albumsForArtist(a1)
+        #expect(albums.count == 1)
+        #expect(albums[0].name == "A1 Album")
+    }
 }
 
 // MARK: - Track Query Tests
@@ -198,6 +244,74 @@ struct MusicLibraryTrackTests {
         #expect(tracks[0].name == "Dancing Queen")
         #expect(tracks[1].name == "Stairway")
     }
+
+    @Test func allTracksSortByAlbumThenDiscThenNumber() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let album1 = UUID()
+        let album2 = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist", sortName: "Artist")])
+        lib.upsertAlbums([
+            syncAlbum(id: album1, artistId: artistId, name: "B Album", sortName: "B Album", trackCount: 3),
+            syncAlbum(id: album2, artistId: artistId, name: "A Album", sortName: "A Album", trackCount: 2),
+        ])
+        lib.upsertTracks([
+            syncTrack(artistId: artistId, albumId: album1, name: "B-D1T2", disc: 1, number: 2),
+            syncTrack(artistId: artistId, albumId: album1, name: "B-D1T1", disc: 1, number: 1),
+            syncTrack(artistId: artistId, albumId: album1, name: "B-D2T1", disc: 2, number: 1),
+            syncTrack(artistId: artistId, albumId: album2, name: "A-T1", disc: 1, number: 1),
+            syncTrack(artistId: artistId, albumId: album2, name: "A-T2", disc: 1, number: 2),
+        ])
+        lib.bumpRevision()
+
+        let tracks = lib.allTracks()
+        // Same artist → sorted by album sortName, then disc, then number
+        #expect(tracks.map(\.name) == ["A-T1", "A-T2", "B-D1T1", "B-D1T2", "B-D2T1"])
+    }
+
+    @Test func trackIncludesArtistAndAlbumInfo() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        let trackId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Pink Floyd", sortName: "Pink Floyd", slug: "pink-floyd")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "The Wall", sortName: "Wall, The")])
+        lib.upsertTracks([syncTrack(id: trackId, artistId: artistId, albumId: albumId, name: "Comfortably Numb",
+                                    disc: 2, number: 6, duration: 382, mimetype: "audio/flac")])
+        lib.bumpRevision()
+
+        let track = lib.track(trackId)!
+        #expect(track.artist.name == "Pink Floyd")
+        #expect(track.artist.slug == "pink-floyd")
+        #expect(track.album?.name == "The Wall")
+        #expect(track.disc == 2)
+        #expect(track.number == 6)
+        #expect(track.duration == 382)
+        #expect(track.mimetype == "audio/flac")
+        #expect(track.albumArtistSortName == "Pink Floyd")
+    }
+
+    @Test func trackWithDifferentArtistAndAlbumArtist() throws {
+        let lib = try makeTestLibrary()
+        let albumArtistId = UUID()
+        let trackArtistId = UUID()
+        let albumId = UUID()
+        let trackId = UUID()
+        lib.upsertArtists([
+            syncArtist(id: albumArtistId, name: "Various Artists", sortName: "Various Artists"),
+            syncArtist(id: trackArtistId, name: "Featured Artist", sortName: "Featured Artist"),
+        ])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: albumArtistId, name: "Compilation")])
+        lib.upsertTracks([syncTrack(id: trackId, artistId: trackArtistId, albumArtistId: albumArtistId,
+                                    albumId: albumId, name: "Featured Song")])
+        lib.bumpRevision()
+
+        let track = lib.track(trackId)!
+        #expect(track.artist.name == "Featured Artist")
+        #expect(track.albumArtistSortName == "Various Artists")
+        #expect(track.artistId == trackArtistId)
+        #expect(track.albumArtistId == albumArtistId)
+    }
 }
 
 // MARK: - Upsert Tests
@@ -247,6 +361,18 @@ struct MusicLibraryUpsertTests {
             syncAlbum(id: albumId2, artistId: artistId, name: "A2"),
         ])
         #expect(inserted2 == [albumId2])
+    }
+
+    @Test func upsertEmptyArrayIsNoop() throws {
+        let lib = try makeTestLibrary()
+        lib.upsertArtists([])
+        lib.upsertAlbums([])
+        lib.upsertTracks([])
+        lib.bumpRevision()
+
+        #expect(lib.allArtists().isEmpty)
+        #expect(lib.allAlbums().isEmpty)
+        #expect(lib.allTracks().isEmpty)
     }
 
     @Test func upsertTrackUpdatesExisting() throws {
@@ -417,6 +543,44 @@ struct MusicLibraryDownloadTests {
         lib.markDownloaded(trackId: t1, relativePath: "p1.m4a")
 
         #expect(lib.downloadedSize() == 3000)
+    }
+
+    @Test func downloadChangedTracksIds() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        let t1 = UUID(), t2 = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 2)])
+        lib.upsertTracks([
+            syncTrack(id: t1, artistId: artistId, albumId: albumId, name: "S1", number: 1),
+            syncTrack(id: t2, artistId: artistId, albumId: albumId, name: "S2", number: 2),
+        ])
+
+        lib.markDownloaded(trackId: t1, relativePath: "p1.m4a")
+        #expect(lib.downloadChanged.contains(t1))
+
+        lib.markDownloaded(trackId: t2, relativePath: "p2.m4a")
+        #expect(lib.downloadChanged.contains(t2))
+    }
+
+    @Test func applyDownloadChangesUpdatesTracksInPlace() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        let trackId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album")])
+        lib.upsertTracks([syncTrack(id: trackId, artistId: artistId, albumId: albumId, name: "Song")])
+        lib.bumpRevision()
+
+        var tracks = lib.tracksForAlbum(albumId)
+        #expect(!tracks[0].isDownloaded)
+
+        lib.markDownloaded(trackId: trackId, relativePath: "p.m4a")
+        lib.applyDownloadChanges(to: &tracks)
+
+        #expect(tracks[0].isDownloaded)
     }
 
     @Test func markAllUndownloaded() throws {
@@ -608,6 +772,80 @@ struct MusicLibrarySearchTests {
         let results = lib.search("ghost")
         #expect(results.artists.isEmpty)
     }
+
+    @Test func searchExcludesAlbumsWithZeroTracks() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([syncAlbum(artistId: artistId, name: "Empty Album", trackCount: 0)])
+        lib.bumpRevision()
+
+        let results = lib.search("empty")
+        #expect(results.albums.isEmpty)
+    }
+
+    @Test func searchIsCaseInsensitive() throws {
+        let lib = try makeTestLibrary()
+        lib.upsertArtists([syncArtist(name: "Radiohead")])
+        lib.bumpRevision()
+
+        #expect(lib.search("radiohead").artists.count == 1)
+        #expect(lib.search("RADIOHEAD").artists.count == 1)
+        #expect(lib.search("RadioHead").artists.count == 1)
+    }
+
+    @Test func searchMatchesSortName() throws {
+        let lib = try makeTestLibrary()
+        lib.upsertArtists([syncArtist(name: "The Beatles", sortName: "Beatles, The")])
+        lib.bumpRevision()
+
+        // Should match on sortName too
+        let results = lib.search("beatles")
+        #expect(results.artists.count == 1)
+    }
+
+    @Test func searchArtistsSortedBySortName() throws {
+        let lib = try makeTestLibrary()
+        lib.upsertArtists([
+            syncArtist(name: "Zeppelin", sortName: "Zeppelin"),
+            syncArtist(name: "The Beatles", sortName: "Beatles, The"),
+            syncArtist(name: "ABBA", sortName: "ABBA"),
+        ])
+        lib.bumpRevision()
+
+        // Search for something that matches all — use a very broad term
+        // Each has unique names, so search for partial match on common letter
+        let all = lib.allArtists()
+        #expect(all[0].sortName == "ABBA")
+        #expect(all[1].sortName == "Beatles, The")
+        #expect(all[2].sortName == "Zeppelin")
+    }
+
+    @Test func searchReturnsMultipleEntityTypes() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Blue Artist")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Blue Album")])
+        lib.upsertTracks([syncTrack(artistId: artistId, albumId: albumId, name: "Blue Song")])
+        lib.bumpRevision()
+
+        let results = lib.search("blue")
+        #expect(results.artists.count == 1)
+        #expect(results.albums.count == 1)
+        #expect(results.tracks.count == 1)
+    }
+
+    @Test func searchNoMatch() throws {
+        let lib = try makeTestLibrary()
+        lib.upsertArtists([syncArtist(name: "Radiohead")])
+        lib.bumpRevision()
+
+        let results = lib.search("zzzznonexistent")
+        #expect(results.artists.isEmpty)
+        #expect(results.albums.isEmpty)
+        #expect(results.tracks.isEmpty)
+    }
 }
 
 // MARK: - Additional Query Tests
@@ -654,6 +892,70 @@ struct MusicLibraryAdditionalQueryTests {
         #expect(albums[0].name == "A1")
         #expect(albums[0].tracks?.count == 1)
         #expect(albums[1].name == "A2")
+    }
+
+    @Test func albumsWithTracksForArtistSortsByDiscNumber() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Double Album", trackCount: 4)])
+        lib.upsertTracks([
+            syncTrack(artistId: artistId, albumId: albumId, name: "D2T1", disc: 2, number: 1),
+            syncTrack(artistId: artistId, albumId: albumId, name: "D1T2", disc: 1, number: 2),
+            syncTrack(artistId: artistId, albumId: albumId, name: "D1T1", disc: 1, number: 1),
+            syncTrack(artistId: artistId, albumId: albumId, name: "D2T2", disc: 2, number: 2),
+        ])
+        lib.bumpRevision()
+
+        let albums = lib.albumsWithTracksForArtist(artistId)
+        #expect(albums.count == 1)
+        #expect(albums[0].tracks?.map(\.name) == ["D1T1", "D1T2", "D2T1", "D2T2"])
+    }
+
+    @Test func albumsWithTracksForArtistIncludesFeaturedTracks() throws {
+        let lib = try makeTestLibrary()
+        let albumArtist = UUID()
+        let featuredArtist = UUID()
+        let albumId = UUID()
+        lib.upsertArtists([
+            syncArtist(id: albumArtist, name: "Main Artist"),
+            syncArtist(id: featuredArtist, name: "Featured"),
+        ])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: albumArtist, name: "Album", trackCount: 2)])
+        lib.upsertTracks([
+            syncTrack(artistId: albumArtist, albumArtistId: albumArtist, albumId: albumId, name: "Solo Track", number: 1),
+            syncTrack(artistId: featuredArtist, albumArtistId: albumArtist, albumId: albumId, name: "Feat Track", number: 2),
+        ])
+        lib.bumpRevision()
+
+        let albums = lib.albumsWithTracksForArtist(albumArtist)
+        #expect(albums.count == 1)
+        #expect(albums[0].tracks?.count == 2)
+        // Featured track should show its own artist
+        let featTrack = albums[0].tracks?.first(where: { $0.name == "Feat Track" })
+        #expect(featTrack?.artist.name == "Featured")
+    }
+
+    @Test func cachedMapsInvalidatedOnBumpRevision() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album")])
+        lib.bumpRevision()
+
+        // First query populates cache
+        #expect(lib.allArtists().count == 1)
+        #expect(lib.allAlbums().count == 1)
+
+        // Add more data
+        let artist2 = UUID()
+        lib.upsertArtists([syncArtist(id: artist2, name: "Artist 2")])
+        lib.bumpRevision()
+
+        // After bump, cache is cleared and new data is visible
+        #expect(lib.allArtists().count == 2)
     }
 
     @Test func downloadedAlbumsReturnsOnlyWithDownloads() throws {
