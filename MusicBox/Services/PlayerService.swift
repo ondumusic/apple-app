@@ -367,6 +367,16 @@ final class PlayerService {
         guard idx >= 0 && idx < queue.count else { return }
         let track = queue[idx].track
 
+        // Request background time so iOS doesn't suspend mid-transition
+        #if os(iOS)
+        let bgTask = UIApplication.shared.beginBackgroundTask()
+        defer {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+            }
+        }
+        #endif
+
         isLoadingTrack = true
         isSeeking = false
         currentTrack = track
@@ -400,7 +410,10 @@ final class PlayerService {
         } catch {
             isLoadingTrack = false
             print("PlayerService: failed to load track: \(error)")
-            skip()
+            // Stop instead of skip to avoid recursive failure loops when backgrounded
+            isPlaying = false
+            primaryPlayer.pause()
+            updateNowPlayingPlaybackState()
         }
     }
 
