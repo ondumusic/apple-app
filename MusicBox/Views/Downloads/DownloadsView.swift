@@ -3,6 +3,7 @@ import SwiftUI
 struct DownloadsView: View {
     @Environment(DownloadService.self) private var downloadService
     @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(NetworkMonitor.self) private var network
     @State private var showDeleteAllConfirmation = false
     @State private var showDownloadAllConfirmation = false
     @State private var showAllDownloadedAlert = false
@@ -14,6 +15,13 @@ struct DownloadsView: View {
 
     var body: some View {
         List {
+            if let reason = downloadPausedNotice {
+                Label(reason, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .listRowBackground(Color.clear)
+            }
+
             if !downloadService.activeDownloads.isEmpty || !downloadService.pendingQueue.isEmpty {
                 Section {
                     // All downloads (active + queued in URLSession)
@@ -329,5 +337,20 @@ struct DownloadsView: View {
 
     private func formattedSize(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    private var downloadPausedNotice: String? {
+        let hasQueuedWork = !downloadService.activeDownloads.isEmpty || !downloadService.pendingQueue.isEmpty
+        guard hasQueuedWork else { return nil }
+        if let reason = downloadService.downloadsPausedReason {
+            switch reason {
+            case .lowPowerMode: return "Downloads paused — Low Power Mode is on"
+            case .lowDiskSpace: return "Downloads paused — device storage is low"
+            }
+        }
+        if network.isConstrained {
+            return "Downloads paused — Low Data Mode is on"
+        }
+        return nil
     }
 }

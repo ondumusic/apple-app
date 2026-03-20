@@ -27,6 +27,14 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Downloads that failed (for user to retry or dismiss)
     var failedDownloads: [FailedDownload] = []
 
+    /// Reason downloads are blocked by system conditions (nil when not blocked)
+    var downloadsPausedReason: DownloadPausedReason?
+
+    nonisolated enum DownloadPausedReason {
+        case lowPowerMode
+        case lowDiskSpace
+    }
+
     nonisolated struct FailedDownload: Identifiable, Sendable {
         let id: UUID  // track ID
         let trackName: String
@@ -109,6 +117,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let config = URLSessionConfiguration.background(withIdentifier: "com.musicbox.downloads")
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
+        config.allowsConstrainedNetworkAccess = false
         config.httpAdditionalHeaders = sessionHeaders
         config.timeoutIntervalForRequest = 300
         return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
@@ -117,6 +126,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Foreground session — faster (no IPC overhead), used while app is active
     @ObservationIgnored private lazy var foregroundSession: URLSession = {
         let config = URLSessionConfiguration.default
+        config.allowsConstrainedNetworkAccess = false
         config.httpAdditionalHeaders = sessionHeaders
         config.timeoutIntervalForRequest = 300
         return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
@@ -365,15 +375,39 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     // MARK: - Internal queue management
 
+    /// Minimum free disk space (in bytes) required to start new downloads.
+    private static let minimumFreeDiskSpace: Int64 = 100 * 1024 * 1024 // 100 MB
+
     /// Starts tasks from the pending queue up to the concurrency limit.
     private func startNextIfNeeded() {
         guard !isPaused else { return }
+
+        if ProcessInfo.processInfo.isLowPowerModeEnabled {
+            downloadsPausedReason = .lowPowerMode
+            return
+        }
+
+        if Self.availableDiskSpace() < Self.minimumFreeDiskSpace {
+            downloadsPausedReason = .lowDiskSpace
+            return
+        }
+
+        downloadsPausedReason = nil
 
         while !pendingQueue.isEmpty, inFlightCount < settings.maxConcurrentDownloads {
             let next = pendingQueue.removeFirst()
             if musicLibrary.isDownloaded(trackId: next.track.id) { continue }
             startTask(info: next)
         }
+    }
+
+    nonisolated private static func availableDiskSpace() -> Int64 {
+        guard let home = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
+              let values = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+              let capacity = values.volumeAvailableCapacityForImportantUsage else {
+            return Int64.max
+        }
+        return capacity
     }
 
     /// Creates and resumes a URLSession download task.
@@ -607,6 +641,11 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             NotificationCenter.default.addObserver(
                 forName: foregroundName, object: nil, queue: .main
             ) { [weak self] _ in self?.resumeOnForeground() }
+        )
+        lifecycleObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main
+            ) { [weak self] _ in self?.startNextIfNeeded() }
         )
     }
 
