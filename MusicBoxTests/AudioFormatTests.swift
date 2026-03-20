@@ -63,4 +63,36 @@ struct AudioFormatTests {
         #expect(AudioFormat.isAVPlayerSupported("AUDIO/MP4"))
         #expect(AudioFormat.isAVPlayerSupported("Audio/Flac"))
     }
+
+    // MARK: - File Extension
+
+    @Test func fileExtensionForCommonTypes() {
+        #expect(AudioFormat.fileExtension(for: "audio/mpeg") == "mp3")
+        #expect(AudioFormat.fileExtension(for: "audio/mp3") == "mp3")
+        #expect(AudioFormat.fileExtension(for: "audio/flac") == "flac")
+        #expect(AudioFormat.fileExtension(for: "audio/x-flac") == "flac")
+        #expect(AudioFormat.fileExtension(for: "audio/mp4") == "m4a")
+        #expect(AudioFormat.fileExtension(for: "audio/m4a") == "m4a")
+        #expect(AudioFormat.fileExtension(for: "audio/x-m4a") == "m4a")
+        #expect(AudioFormat.fileExtension(for: "audio/aac") == "aac")
+        #expect(AudioFormat.fileExtension(for: "audio/ogg") == "ogg")
+        #expect(AudioFormat.fileExtension(for: "audio/vorbis") == "ogg")
+        #expect(AudioFormat.fileExtension(for: "audio/wav") == "wav")
+        #expect(AudioFormat.fileExtension(for: "audio/x-wav") == "wav")
+    }
+
+    @Test func fileExtensionDefaultFallback() {
+        #expect(AudioFormat.fileExtension(for: "audio/unknown") == "mp3")
+        #expect(AudioFormat.fileExtension(for: "") == "mp3")
+    }
+
+    @Test func fileExtensionCustomFallback() {
+        #expect(AudioFormat.fileExtension(for: "audio/unknown", fallback: "bin") == "bin")
+        #expect(AudioFormat.fileExtension(for: "audio/unknown", fallback: "") == "")
+    }
+
+    @Test func fileExtensionCaseInsensitive() {
+        #expect(AudioFormat.fileExtension(for: "Audio/MPEG") == "mp3")
+        #expect(AudioFormat.fileExtension(for: "AUDIO/FLAC") == "flac")
+    }
 }
