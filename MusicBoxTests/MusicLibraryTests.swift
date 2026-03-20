@@ -784,4 +784,115 @@ struct MusicLibraryAdditionalQueryTests {
         #expect(lib.availableTracks(tracks, isOnline: false).count == 1)
         #expect(lib.availableTracks(tracks, isOnline: false)[0].name == "T2")
     }
+
+    @Test func availableItemsOnlineVsOffline() throws {
+        let lib = try makeTestLibrary()
+        let artist = Artist(id: UUID(), name: "A", sortName: "A", slug: "a")
+        let t1 = Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
+                       artist: artist, albumArtistSortName: "A", name: "T1", disc: 1, number: 1,
+                       duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: false)
+        let t2 = Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
+                       artist: artist, albumArtistSortName: "A", name: "T2", disc: 1, number: 2,
+                       duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: true)
+        let items = [QueueItem(track: t1), QueueItem(track: t2)]
+
+        #expect(lib.availableItems(items, isOnline: true).count == 2)
+        #expect(lib.availableItems(items, isOnline: false).count == 1)
+        #expect(lib.availableItems(items, isOnline: false)[0].track.name == "T2")
+    }
+}
+
+// MARK: - Apply Deletions
+
+@Suite(.serialized) struct MusicLibraryApplyDeletionTests {
+
+    @Test func applyDeletionRemovesTrack() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        let trackId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "A")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album")])
+        lib.upsertTracks([syncTrack(id: trackId, artistId: artistId, albumId: albumId, name: "Track")])
+        lib.bumpRevision()
+
+        #expect(lib.allTracks().count == 1)
+
+        lib.applyDeletions([SyncDeletion(entityType: "track", entityId: trackId)])
+        lib.bumpRevision()
+
+        #expect(lib.allTracks().isEmpty)
+    }
+
+    @Test func applyDeletionRemovesAlbumCascadesToTracks() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "A")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 2)])
+        lib.upsertTracks([
+            syncTrack(artistId: artistId, albumId: albumId, name: "T1", number: 1),
+            syncTrack(artistId: artistId, albumId: albumId, name: "T2", number: 2),
+        ])
+        lib.bumpRevision()
+
+        lib.applyDeletions([SyncDeletion(entityType: "album", entityId: albumId)])
+        lib.bumpRevision()
+
+        #expect(lib.allAlbums().isEmpty)
+        #expect(lib.allTracks().isEmpty)
+    }
+
+    @Test func applyDeletionRemovesArtistCascadesAll() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        let albumId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "A")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album")])
+        lib.upsertTracks([syncTrack(artistId: artistId, albumId: albumId, name: "Track")])
+        lib.bumpRevision()
+
+        lib.applyDeletions([SyncDeletion(entityType: "artist", entityId: artistId)])
+        lib.bumpRevision()
+
+        #expect(lib.allArtists().isEmpty)
+        #expect(lib.allAlbums().isEmpty)
+        #expect(lib.allTracks().isEmpty)
+    }
+
+    @Test func applyDeletionEmptyListNoOp() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "A")])
+        lib.bumpRevision()
+
+        lib.applyDeletions([])
+        lib.bumpRevision()
+
+        #expect(lib.allArtists().count == 1)
+    }
+
+    @Test func applyDeletionUnknownIdNoOp() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "A")])
+        lib.bumpRevision()
+
+        lib.applyDeletions([SyncDeletion(entityType: "artist", entityId: UUID())])
+        lib.bumpRevision()
+
+        #expect(lib.allArtists().count == 1)
+    }
+
+    @Test func applyDeletionUnknownEntityTypeIgnored() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "A")])
+        lib.bumpRevision()
+
+        lib.applyDeletions([SyncDeletion(entityType: "playlist", entityId: artistId)])
+        lib.bumpRevision()
+
+        #expect(lib.allArtists().count == 1)
+    }
 }

@@ -89,6 +89,9 @@ struct MusicBoxApp: App {
                 syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary) }
             }
             #if os(iOS)
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                playbackCache.flushMetadataIfNeeded()
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 if !auth.isLoggedIn {
                     // Retry restore — Keychain may have been inaccessible on prelaunch
@@ -101,6 +104,9 @@ struct MusicBoxApp: App {
             }
             #endif
             #if os(macOS)
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+                playbackCache.flushMetadataIfNeeded()
+            }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.willBecomeActiveNotification)) { _ in
                 Task { await auth.validateSession() }
                 Task { await syncService?.syncIfNeeded() }

@@ -316,6 +316,20 @@ struct PlayerQueueManipulationTests {
         #expect(player.queue[0].track.name == "A")
     }
 
+    @Test func clearUpNextWhileShuffled() {
+        let player = makePlayer()
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        player.playShuffled(queue: items)
+
+        let currentTrackName = player.queue[player.effectiveIndex].track.name
+        player.clearUpNext()
+
+        #expect(player.queue.count == 1)
+        #expect(player.queue[0].track.name == currentTrackName)
+        #expect(player.shuffledIndices == [0])
+    }
+
     @Test func removeFromQueueRemovesCorrectItem() {
         let player = makePlayer()
         let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
@@ -327,6 +341,98 @@ struct PlayerQueueManipulationTests {
 
         #expect(player.queue.count == 3)
         #expect(player.queue.map(\.track.name) == ["A", "C", "D"])
+    }
+
+    @Test func removeFromQueueWhileShuffled() {
+        let player = makePlayer()
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        player.playShuffled(queue: items)
+
+        let countBefore = player.queue.count
+        // Remove the first up-next item
+        player.removeFromQueue(at: IndexSet(integer: 0))
+
+        #expect(player.queue.count == countBefore - 1)
+        #expect(player.shuffledIndices?.count == countBefore - 1)
+    }
+
+    @Test func moveQueueItemsReorders() {
+        let player = makePlayer()
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        player.playNow(queue: items, startingAt: 0)
+
+        // Move up-next index 2 (D) to index 0 (before B)
+        player.moveQueueItems(from: IndexSet(integer: 2), to: 0)
+
+        // Queue should be: A (current), D, B, C
+        #expect(player.queue.map(\.track.name) == ["A", "D", "B", "C"])
+    }
+
+    @Test func moveQueueItemsWhileShuffled() {
+        let player = makePlayer()
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        player.playShuffled(queue: items)
+
+        let shuffledBefore = player.shuffledIndices!
+        let currentReal = shuffledBefore[0]
+
+        // Move up-next index 2 to index 0
+        player.moveQueueItems(from: IndexSet(integer: 2), to: 0)
+
+        let shuffledAfter = player.shuffledIndices!
+        // Current track should still be first
+        #expect(shuffledAfter[0] == currentReal)
+        // Shuffle order should be rearranged in the up-next portion
+        #expect(shuffledAfter.count == 4)
+    }
+}
+
+// MARK: - canGoBack / canSkip Edge Cases
+
+struct PlayerCanNavigateTests {
+
+    @Test func canGoBackTrueWhenProgressOverThreshold() {
+        let player = makePlayer()
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B")]
+        player.playNow(queue: items, startingAt: 0)
+        player.progress = 5.0 // Over 3s threshold
+
+        #expect(player.canGoBack)
+    }
+
+    @Test func canGoBackFalseAtStartWithLowProgress() {
+        let player = makePlayer()
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B")]
+        player.playNow(queue: items, startingAt: 0)
+        player.progress = 1.0
+
+        #expect(!player.canGoBack)
+    }
+
+    @Test func canGoBackTrueAtMiddle() {
+        let player = makePlayer()
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"), makeQueueItem(name: "C")]
+        player.playNow(queue: items, startingAt: 1)
+        player.progress = 1.0
+
+        #expect(player.canGoBack)
+    }
+
+    @Test func canSkipWithRepeatOne() {
+        let player = makePlayer()
+        let items = [makeQueueItem(name: "A")]
+        player.playNow(queue: items, startingAt: 0)
+        player.repeatMode = .one
+
+        #expect(player.canSkip)
+    }
+
+    @Test func canSkipEmptyQueue() {
+        let player = makePlayer()
+        #expect(!player.canSkip)
     }
 }
 

@@ -156,6 +156,14 @@ final class MusicLibrary {
 
     var modelContext: ModelContext { modelContainer.mainContext }
 
+    private func persistChanges(_ caller: String = #function) {
+        do {
+            try modelContext.save()
+        } catch {
+            print("MusicLibrary: save failed in \(caller): \(error)")
+        }
+    }
+
     // MARK: - Query: Artists
 
     func allArtists() -> [Artist] {
@@ -460,7 +468,7 @@ final class MusicLibrary {
         track.isDownloaded = true
         track.localFilePath = relativePath
         track.downloadedFileSize = downloadedFileSize
-        try? modelContext.save()
+        persistChanges()
         downloadChanged = [trackId]
     }
 
@@ -473,7 +481,7 @@ final class MusicLibrary {
         }
         track.isDownloaded = false
         track.localFilePath = nil
-        try? modelContext.save()
+        persistChanges()
         downloadChanged = [trackId]
     }
 
@@ -489,7 +497,7 @@ final class MusicLibrary {
             track.localFilePath = nil
             changed.insert(track.serverId)
         }
-        try? modelContext.save()
+        persistChanges()
         downloadChanged = changed
     }
 
@@ -505,7 +513,7 @@ final class MusicLibrary {
             track.localFilePath = nil
             changed.insert(track.serverId)
         }
-        try? modelContext.save()
+        persistChanges()
         downloadChanged = changed
     }
 
@@ -526,7 +534,7 @@ final class MusicLibrary {
             let downloadsDir = appSupport.appendingPathComponent("MusicBox/Downloads", isDirectory: true)
             try? fm.removeItem(at: downloadsDir)
         }
-        try? modelContext.save()
+        persistChanges()
         downloadChanged = changed
     }
 
@@ -579,7 +587,7 @@ final class MusicLibrary {
                     slug: sa.slug, albumCount: sa.albumCount, insertedAt: sa.insertedAt))
             }
         }
-        try? modelContext.save()
+        persistChanges()
     }
 
     /// Returns the server IDs of newly inserted albums.
@@ -612,7 +620,7 @@ final class MusicLibrary {
                 inserted.insert(sa.id)
             }
         }
-        try? modelContext.save()
+        persistChanges()
         return inserted
     }
 
@@ -646,7 +654,7 @@ final class MusicLibrary {
                     fileSize: st.file.size, fileChecksum: st.file.checksum))
             }
         }
-        try? modelContext.save()
+        persistChanges()
     }
 
     func applyDeletions(_ deletions: [SyncDeletion]) {
@@ -671,7 +679,7 @@ final class MusicLibrary {
                 break
             }
         }
-        try? modelContext.save()
+        persistChanges()
     }
 
     func clearAll() {
@@ -683,7 +691,7 @@ final class MusicLibrary {
         try? modelContext.delete(model: LibraryTrack.self)
         try? modelContext.delete(model: LibraryAlbum.self)
         try? modelContext.delete(model: LibraryArtist.self)
-        try? modelContext.save()
+        persistChanges()
         cachedArtistMap = nil
         cachedAlbumMap = nil
         revision += 1

@@ -32,6 +32,16 @@ final class PlaybackCache {
         loadMetadata()
     }
 
+    /// Test-only initializer with custom cache directory.
+    init(settings: SettingsStore, cacheDir: URL) {
+        self.settings = settings
+        self.cacheDir = cacheDir
+        self.metadataURL = cacheDir.appendingPathComponent(".cache-metadata.json")
+
+        try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        loadMetadata()
+    }
+
     // MARK: - Public
 
     /// Returns the local file URL if the track is cached, updating last-accessed time.

@@ -15,15 +15,21 @@ struct LoginView: View {
     @FocusState private var focusedField: Field?
 
     private var resolvedURL: URL? {
-        var input = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !input.isEmpty else { return nil }
+        Self.resolveServerURL(serverURL)
+    }
+
+    /// Resolves user input into a full server URL.
+    /// Defaults to https scheme and /api path when not specified.
+    static func resolveServerURL(_ input: String) -> URL? {
+        var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
 
         // Default to https if no scheme provided
-        if !input.contains("://") {
-            input = "https://\(input)"
+        if !text.contains("://") {
+            text = "https://\(text)"
         }
 
-        guard let url = URL(string: input) else { return nil }
+        guard let url = URL(string: text) else { return nil }
 
         // Default to /api path if user only entered a hostname (no path)
         if url.path.isEmpty || url.path == "/" {
