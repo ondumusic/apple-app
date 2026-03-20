@@ -4,11 +4,13 @@ nonisolated enum AlbumSortOption: String, CaseIterable {
     case artist = "Artist"
     case dateAdded = "Date Added"
     case name = "Name"
+    case releaseYear = "Release Year"
 
     var ascendingLabel: String {
         switch self {
         case .artist, .name: "A–Z"
         case .dateAdded: "Oldest First"
+        case .releaseYear: "Oldest First"
         }
     }
 
@@ -16,6 +18,7 @@ nonisolated enum AlbumSortOption: String, CaseIterable {
         switch self {
         case .artist, .name: "Z–A"
         case .dateAdded: "Newest First"
+        case .releaseYear: "Newest First"
         }
     }
 }
@@ -123,7 +126,7 @@ struct AlbumListView: View {
                             sortAscending.toggle()
                         } else {
                             sortOption = option
-                            sortAscending = option != .dateAdded
+                            sortAscending = option != .dateAdded && option != .releaseYear
                         }
                     }
                 )) {
@@ -168,6 +171,14 @@ struct AlbumListView: View {
                 }
             case .name:
                 result = a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
+            case .releaseYear:
+                let aYear = a.releaseYear ?? 0
+                let bYear = b.releaseYear ?? 0
+                if aYear != bYear {
+                    result = aYear < bYear
+                } else {
+                    result = a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
+                }
             }
             return sortAscending ? result : !result
         }
