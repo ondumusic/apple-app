@@ -220,6 +220,20 @@ struct DownloadsView: View {
                                 Label("Delete Artist", systemImage: "trash")
                             }
                         }
+                        .confirmationDialog(
+                            "Delete Artist",
+                            isPresented: Binding(
+                                get: { artistToDelete?.id == artist.id },
+                                set: { if !$0 { artistToDelete = nil } }
+                            ),
+                            titleVisibility: .visible
+                        ) {
+                            Button("Delete", role: .destructive) {
+                                musicLibrary.markArtistUndownloaded(artistId: artist.id)
+                            }
+                        } message: {
+                            Text("Remove all downloaded music by \(artist.name)?")
+                        }
                     }
                 } header: {
                     HStack {
@@ -298,21 +312,6 @@ struct DownloadsView: View {
         }
         .onChange(of: musicLibrary.downloadChanged) {
             reloadData()
-        }
-        .confirmationDialog(
-            "Delete Artist",
-            isPresented: Binding(get: { artistToDelete != nil }, set: { if !$0 { artistToDelete = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                if let artist = artistToDelete {
-                    musicLibrary.markArtistUndownloaded(artistId: artist.id)
-                }
-            }
-        } message: {
-            if let artist = artistToDelete {
-                Text("Remove all downloaded music by \(artist.name)?")
-            }
         }
     }
 
