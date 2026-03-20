@@ -1,4 +1,5 @@
 import Foundation
+import Nuke
 import SwiftUI
 
 @Observable
@@ -89,6 +90,14 @@ final class AuthService {
     // MARK: - Logout
 
     func logout() {
+        // Server-side session invalidation (best-effort, fire-and-forget)
+        if let api = apiService {
+            Task { try? await api.deleteSession() }
+        }
+
+        // Clear Nuke image cache (cached artwork)
+        ImagePipeline.shared.cache.removeAll()
+
         // Keep server URL and username for prefill
         KeychainHelper.deleteAll()
         currentUser = nil

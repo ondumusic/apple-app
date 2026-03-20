@@ -3,9 +3,11 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(SyncService.self) private var syncService
+    @Environment(AuthService.self) private var auth
     @Environment(PlaybackCache.self) private var playbackCache
 
     @State private var showClearCacheConfirmation = false
+    @State private var showLogoutConfirmation = false
 
     private static let cacheLimitOptions: [(String, Int64)] = [
         ("500 MB", 500 * 1024 * 1024),
@@ -170,6 +172,40 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("Library")
+            }
+
+            Section {
+                if let user = auth.currentUser {
+                    HStack {
+                        Text("Signed in as")
+                        Spacer()
+                        Text(user.username)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let host = auth.apiService?.baseURL.host() {
+                    HStack {
+                        Text("Server")
+                        Spacer()
+                        Text(host)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Button("Sign Out", role: .destructive) {
+                    showLogoutConfirmation = true
+                }
+                .confirmationDialog("Sign Out?", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
+                    Button("Sign Out", role: .destructive) {
+                        playbackCache.clearCache()
+                        auth.logout()
+                    }
+                } message: {
+                    Text("This will remove all offline data including downloads, cached artwork, and your synced library from this device.")
+                }
+            } header: {
+                Text("Account")
             }
         }
         .navigationTitle("Settings")

@@ -61,6 +61,15 @@ final class APIService: Sendable {
         try await fetch("/auth/me")
     }
 
+    func deleteSession() async throws {
+        var req = request(for: "/auth/session")
+        req.httpMethod = "DELETE"
+        let (_, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return // Best-effort — still clear local state even if server call fails
+        }
+    }
+
     func fetchPlayToken() async throws -> String {
         nonisolated struct PlayTokenResponse: Decodable, Sendable {
             var ok: Bool

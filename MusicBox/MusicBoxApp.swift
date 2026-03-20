@@ -112,6 +112,7 @@ struct MusicBoxApp: App {
         #if os(macOS)
         Settings {
             SettingsView()
+                .environment(auth)
                 .environment(settings)
                 .environment(playbackCache)
                 .optionalEnvironment(syncService)
