@@ -29,7 +29,7 @@ nonisolated enum StreamingQuality: String, CaseIterable, Sendable {
 }
 
 nonisolated enum AccentColor: String, CaseIterable, Sendable {
-    case blue, indigo, purple, pink, red, orange, yellow, green, teal, mint
+    case blue, indigo, purple, pink, red, orange, yellow, green, teal, custom
 
     var color: Color {
         switch self {
@@ -42,12 +42,8 @@ nonisolated enum AccentColor: String, CaseIterable, Sendable {
         case .yellow: .yellow
         case .green: .green
         case .teal: .teal
-        case .mint: .mint
+        case .custom: .blue // Placeholder — resolved via SettingsStore.resolvedAccentColor
         }
-    }
-
-    var displayName: String {
-        rawValue.capitalized
     }
 }
 
@@ -97,6 +93,29 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(accentColor.rawValue, forKey: "accentColor") }
     }
 
+    var customAccentRed: Double {
+        didSet { UserDefaults.standard.set(customAccentRed, forKey: "customAccentRed") }
+    }
+    var customAccentGreen: Double {
+        didSet { UserDefaults.standard.set(customAccentGreen, forKey: "customAccentGreen") }
+    }
+    var customAccentBlue: Double {
+        didSet { UserDefaults.standard.set(customAccentBlue, forKey: "customAccentBlue") }
+    }
+
+    var customAccentColor: Color {
+        Color(red: customAccentRed, green: customAccentGreen, blue: customAccentBlue)
+    }
+
+    /// The resolved accent color — use this everywhere instead of `accentColor.color`.
+    var resolvedAccentColor: Color {
+        accentColor == .custom ? customAccentColor : accentColor.color
+    }
+
+    var hapticsEnabled: Bool {
+        didSet { UserDefaults.standard.set(hapticsEnabled, forKey: "hapticsEnabled") }
+    }
+
     init() {
         let defaults = UserDefaults.standard
         self.crossfadeDuration = defaults.object(forKey: "crossfadeDuration") as? Double ?? 1.0
@@ -108,5 +127,9 @@ final class SettingsStore {
         self.streamingQuality = StreamingQuality(rawValue: defaults.string(forKey: "streamingQuality") ?? "") ?? .original
         self.artworkTintedPlayer = defaults.object(forKey: "artworkTintedPlayer") as? Bool ?? true
         self.accentColor = AccentColor(rawValue: defaults.string(forKey: "accentColor") ?? "") ?? .blue
+        self.customAccentRed = defaults.object(forKey: "customAccentRed") as? Double ?? 1.0
+        self.customAccentGreen = defaults.object(forKey: "customAccentGreen") as? Double ?? 0.4
+        self.customAccentBlue = defaults.object(forKey: "customAccentBlue") as? Double ?? 0.0
+        self.hapticsEnabled = defaults.object(forKey: "hapticsEnabled") as? Bool ?? true
     }
 }

@@ -53,7 +53,7 @@ struct FullPlayerView: View {
                         #if os(iOS)
                         HStack(spacing: 4) {
                             AirPlayButton(
-                                activeTintColor: UIColor(settings.accentColor.color),
+                                activeTintColor: UIColor(settings.resolvedAccentColor),
                                 routeActive: audioRouteName != nil
                             )
                             .frame(width: 48, height: 48)
@@ -61,7 +61,7 @@ struct FullPlayerView: View {
                                 Text(audioRouteName)
                                     .font(.footnote)
                                     .fontWeight(.medium)
-                                    .foregroundStyle(settings.accentColor.color)
+                                    .foregroundStyle(settings.resolvedAccentColor)
                                     .lineLimit(1)
                                     .overlay {
                                         AirPlayTapArea()
@@ -233,7 +233,7 @@ struct FullPlayerView: View {
             .font(.system(size: 8, weight: .bold))
             .foregroundColor(.white)
             .padding(3)
-            .background(settings.accentColor.color, in: Circle())
+            .background(settings.resolvedAccentColor, in: Circle())
             .offset(x: 6, y: -6)
     }
 

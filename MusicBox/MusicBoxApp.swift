@@ -77,7 +77,10 @@ struct MusicBoxApp: App {
                 }
             }
             .environment(auth)
-            .accentColor(settings.accentColor.color)
+            .accentColor(settings.resolvedAccentColor)
+            .onChange(of: settings.hapticsEnabled, initial: true) { _, enabled in
+                Haptics.isEnabled = enabled
+            }
             .modelContainer(musicLibrary.modelContainer)
             .onChange(of: auth.apiService.map(ObjectIdentifier.init)) { _, _ in
                 if auth.apiService == nil {

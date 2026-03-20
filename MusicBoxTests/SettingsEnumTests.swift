@@ -78,13 +78,7 @@ struct AccentColorTests {
     @Test func rawValues() {
         #expect(AccentColor.blue.rawValue == "blue")
         #expect(AccentColor.purple.rawValue == "purple")
-        #expect(AccentColor.mint.rawValue == "mint")
-    }
-
-    @Test func displayNames() {
-        #expect(AccentColor.blue.displayName == "Blue")
-        #expect(AccentColor.indigo.displayName == "Indigo")
-        #expect(AccentColor.teal.displayName == "Teal")
+        #expect(AccentColor.custom.rawValue == "custom")
     }
 
     @Test func initFromRawValue() {

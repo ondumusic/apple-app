@@ -42,6 +42,7 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Artwork-Tinted Player", isOn: $settings.artworkTintedPlayer)
+                Toggle("Haptic Feedback", isOn: $settings.hapticsEnabled)
             } header: {
                 Text("Appearance")
             } footer: {
@@ -52,20 +53,33 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Accent Color")
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
-                        ForEach(AccentColor.allCases, id: \.self) { color in
-                            Circle()
-                                .fill(color.color)
-                                .frame(width: 32, height: 32)
-                                .overlay {
-                                    if settings.accentColor == color {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundStyle(.white)
+                        ForEach(AccentColor.allCases, id: \.self) { accentOption in
+                            if accentOption == .custom {
+                                ColorPicker("", selection: customColorBinding(settings: settings), supportsOpacity: false)
+                                    .labelsHidden()
+                                    .frame(width: 32, height: 32)
+                                    .overlay {
+                                        if settings.accentColor == .custom {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 14, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        }
                                     }
-                                }
-                                .onTapGesture {
-                                    settings.accentColor = color
-                                }
+                            } else {
+                                Circle()
+                                    .fill(accentOption.color)
+                                    .frame(width: 32, height: 32)
+                                    .overlay {
+                                        if settings.accentColor == accentOption {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 14, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        }
+                                    }
+                                    .onTapGesture {
+                                        settings.accentColor = accentOption
+                                    }
+                            }
                         }
                     }
                 }
@@ -221,5 +235,32 @@ struct SettingsView: View {
             get: { settings.crossfadeDuration > 0 },
             set: { settings.crossfadeDuration = $0 ? 1.0 : 0.0 }
         )
+    }
+
+    private func customColorBinding(settings: SettingsStore) -> Binding<Color> {
+        Binding(
+            get: { settings.customAccentColor },
+            set: { newColor in
+                settings.accentColor = .custom
+                if let components = newColor.rgbComponents {
+                    settings.customAccentRed = components.red
+                    settings.customAccentGreen = components.green
+                    settings.customAccentBlue = components.blue
+                }
+            }
+        )
+    }
+}
+
+private extension Color {
+    var rgbComponents: (red: Double, green: Double, blue: Double)? {
+        #if os(iOS)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        guard UIColor(self).getRed(&r, green: &g, blue: &b, alpha: nil) else { return nil }
+        return (Double(r), Double(g), Double(b))
+        #else
+        guard let c = NSColor(self).usingColorSpace(.sRGB) else { return nil }
+        return (Double(c.redComponent), Double(c.greenComponent), Double(c.blueComponent))
+        #endif
     }
 }

@@ -19,8 +19,8 @@ struct PillButtonStyle: ButtonStyle {
             .labelStyle(PillLabelStyle())
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(settings.accentColor.color.opacity(configuration.isPressed ? 0.2 : 0.12))
-            .foregroundStyle(settings.accentColor.color)
+            .background(settings.resolvedAccentColor.opacity(configuration.isPressed ? 0.2 : 0.12))
+            .foregroundStyle(settings.resolvedAccentColor)
             .clipShape(Capsule())
             .opacity(configuration.isPressed ? 0.8 : 1)
     }

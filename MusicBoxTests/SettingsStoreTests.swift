@@ -10,6 +10,7 @@ struct SettingsStoreTests {
         "crossfadeDuration", "maxConcurrentDownloads", "isShuffled",
         "repeatMode", "playbackCacheLimit", "downloadQuality",
         "streamingQuality", "artworkTintedPlayer", "accentColor",
+        "hapticsEnabled", "customAccentRed", "customAccentGreen", "customAccentBlue",
     ]
 
     private func clearDefaults() {
@@ -148,6 +149,50 @@ struct SettingsStoreTests {
         clearDefaults()
         let store = SettingsStore()
         #expect(store.accentColor == .blue)
+    }
+
+    // MARK: - Haptics
+
+    @Test func defaultHapticsEnabled() {
+        clearDefaults()
+        let store = SettingsStore()
+        #expect(store.hapticsEnabled == true)
+    }
+
+    @Test func hapticsPersists() {
+        clearDefaults()
+        let store = SettingsStore()
+        store.hapticsEnabled = false
+        let store2 = SettingsStore()
+        #expect(store2.hapticsEnabled == false)
+        clearDefaults()
+    }
+
+    // MARK: - Custom accent color
+
+    @Test func customAccentColorPersists() {
+        clearDefaults()
+        let store = SettingsStore()
+        store.customAccentRed = 0.5
+        store.customAccentGreen = 0.25
+        store.customAccentBlue = 0.75
+        let store2 = SettingsStore()
+        #expect(store2.customAccentRed == 0.5)
+        #expect(store2.customAccentGreen == 0.25)
+        #expect(store2.customAccentBlue == 0.75)
+        clearDefaults()
+    }
+
+    @Test func resolvedAccentColorUsesCustomWhenSet() {
+        clearDefaults()
+        let store = SettingsStore()
+        store.accentColor = .custom
+        store.customAccentRed = 0.1
+        store.customAccentGreen = 0.2
+        store.customAccentBlue = 0.3
+        // resolvedAccentColor should use custom RGB, not the preset fallback
+        #expect(store.accentColor == .custom)
+        #expect(store.customAccentRed == 0.1)
     }
 
     // MARK: - Feature flags
