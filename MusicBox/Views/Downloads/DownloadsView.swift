@@ -10,6 +10,7 @@ struct DownloadsView: View {
     @State private var artists: [Artist] = []
     @State private var totalSize: Int64 = 0
     @State private var artistSizes: [UUID: Int64] = [:]
+    @State private var hasLoaded = false
 
     var body: some View {
         List {
@@ -180,7 +181,7 @@ struct DownloadsView: View {
                 }
             }
 
-            if artists.isEmpty && downloadService.activeDownloads.isEmpty && downloadService.pendingQueue.isEmpty && downloadService.failedDownloads.isEmpty {
+            if hasLoaded && artists.isEmpty && downloadService.activeDownloads.isEmpty && downloadService.pendingQueue.isEmpty && downloadService.failedDownloads.isEmpty {
                 ContentUnavailableView(
                     "No Downloads",
                     systemImage: "arrow.down.circle",
@@ -323,6 +324,7 @@ struct DownloadsView: View {
             sizes[artist.id] = musicLibrary.downloadedSize(artistId: artist.id)
         }
         artistSizes = sizes
+        hasLoaded = true
     }
 
     private func formattedSize(_ bytes: Int64) -> String {

@@ -60,6 +60,18 @@ final class MusicLibrary {
         }
     }
 
+    /// Fetches with debug logging on failure. In release builds, silently returns nil.
+    func fetch<T: PersistentModel>(_ descriptor: FetchDescriptor<T>, caller: String = #function) -> [T]? {
+        do {
+            return try modelContext.fetch(descriptor)
+        } catch {
+            #if DEBUG
+            print("MusicLibrary: fetch failed in \(caller): \(error)")
+            #endif
+            return nil
+        }
+    }
+
     // MARK: - Query: Artists
 
     func allArtists() -> [Artist] {
@@ -68,7 +80,7 @@ final class MusicLibrary {
             predicate: #Predicate { $0.albumCount > 0 },
             sortBy: [SortDescriptor(\.sortName)]
         )
-        let libArtists = (try? modelContext.fetch(descriptor)) ?? []
+        let libArtists = fetch(descriptor) ?? []
         return libArtists.map {
             Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName,
                    slug: $0.slug, albumCount: $0.albumCount)
@@ -79,7 +91,7 @@ final class MusicLibrary {
         _ = revision
         var descriptor = FetchDescriptor<LibraryArtist>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
-        guard let la = try? modelContext.fetch(descriptor).first else { return nil }
+        guard let la = fetch(descriptor)?.first else { return nil }
         return Artist(id: la.serverId, name: la.name, sortName: la.sortName, slug: la.slug, albumCount: la.albumCount)
     }
 
@@ -88,7 +100,7 @@ final class MusicLibrary {
     func allAlbums() -> [Album] {
         _ = revision
         let descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.trackCount > 0 })
-        let libAlbums = (try? modelContext.fetch(descriptor)) ?? []
+        let libAlbums = fetch(descriptor) ?? []
         let artistMap = buildArtistMap()
         return libAlbums.map { toAlbum($0, artistMap: artistMap) }
     }
@@ -96,7 +108,7 @@ final class MusicLibrary {
     func albumsForArtist(_ artistId: UUID) -> [Album] {
         _ = revision
         let descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.artistId == artistId })
-        let libAlbums = (try? modelContext.fetch(descriptor)) ?? []
+        let libAlbums = fetch(descriptor) ?? []
         return libAlbums
             .sorted { ($0.releaseYear ?? 0) > ($1.releaseYear ?? 0) }
             .map { toAlbum($0) }
@@ -106,7 +118,7 @@ final class MusicLibrary {
         _ = revision
         var descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
-        guard let la = try? modelContext.fetch(descriptor).first else { return nil }
+        guard let la = fetch(descriptor)?.first else { return nil }
         return toAlbum(la)
     }
 
@@ -114,7 +126,7 @@ final class MusicLibrary {
         _ = revision
         var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
-        guard let lt = try? modelContext.fetch(descriptor).first else { return nil }
+        guard let lt = fetch(descriptor)?.first else { return nil }
         let artist = fetchArtist(lt.artistId)
         let album = fetchAlbum(lt.albumId)
         let albumArtist = lt.albumArtistId != lt.artistId ? fetchArtist(lt.albumArtistId) : artist
@@ -125,7 +137,7 @@ final class MusicLibrary {
         _ = revision
         var descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
-        guard let la = try? modelContext.fetch(descriptor).first else { return nil }
+        guard let la = fetch(descriptor)?.first else { return nil }
         let tracks = tracksForAlbum(id)
         return Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
                      slug: la.slug, releaseYear: la.releaseYear, tracks: tracks,
@@ -135,11 +147,11 @@ final class MusicLibrary {
     func albumsWithTracksForArtist(_ artistId: UUID) -> [Album] {
         _ = revision
         let albumDescriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.artistId == artistId })
-        let libAlbums = ((try? modelContext.fetch(albumDescriptor)) ?? [])
+        let libAlbums = (fetch(albumDescriptor) ?? [])
             .sorted { ($0.releaseYear ?? 0) > ($1.releaseYear ?? 0) }
 
         let trackDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId })
-        let libTracks = (try? modelContext.fetch(trackDescriptor)) ?? []
+        let libTracks = fetch(trackDescriptor) ?? []
 
         let artistMap = buildArtistMapForIds(Set(libTracks.map(\.artistId) + [artistId]))
         let tracksByAlbum = Dictionary(grouping: libTracks, by: \.albumId)
@@ -159,7 +171,7 @@ final class MusicLibrary {
     func tracksForAlbum(_ albumId: UUID) -> [Track] {
         _ = revision
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId })
-        let libTracks = (try? modelContext.fetch(descriptor)) ?? []
+        let libTracks = fetch(descriptor) ?? []
         let artistIds = Set(libTracks.map(\.artistId) + libTracks.map(\.albumArtistId))
         let artistMap = buildArtistMapForIds(artistIds)
         let album = fetchAlbumRecord(albumId)
@@ -170,7 +182,7 @@ final class MusicLibrary {
 
     func allTracks() -> [Track] {
         _ = revision
-        let libTracks = (try? modelContext.fetch(FetchDescriptor<LibraryTrack>())) ?? []
+        let libTracks = fetch(FetchDescriptor<LibraryTrack>()) ?? []
         let artistMap = buildArtistMap()
         let albumMap = buildAlbumMap()
         return libTracks
@@ -202,7 +214,7 @@ final class MusicLibrary {
             },
             sortBy: [SortDescriptor(\.sortName)]
         )
-        let matchedArtists = (try? modelContext.fetch(artistDescriptor)) ?? []
+        let matchedArtists = fetch(artistDescriptor) ?? []
         let filteredArtists = matchedArtists.map {
             Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount)
         }
@@ -215,7 +227,7 @@ final class MusicLibrary {
                 )
             }
         )
-        let matchedAlbums = (try? modelContext.fetch(albumDescriptor)) ?? []
+        let matchedAlbums = fetch(albumDescriptor) ?? []
         let artistIds = Set(matchedAlbums.map(\.artistId))
         let artistMap = buildArtistMapForIds(artistIds)
         let filteredAlbums = matchedAlbums
@@ -235,7 +247,7 @@ final class MusicLibrary {
                 $0.name.localizedStandardContains(query)
             }
         )
-        let matchedTracks = (try? modelContext.fetch(trackDescriptor)) ?? []
+        let matchedTracks = fetch(trackDescriptor) ?? []
         let trackArtistIds = Set(matchedTracks.map(\.artistId) + matchedTracks.map(\.albumArtistId))
         let trackArtistMap = buildArtistMapForIds(trackArtistIds)
         let trackAlbumIds = Set(matchedTracks.map(\.albumId))
@@ -261,20 +273,20 @@ final class MusicLibrary {
     func fetchArtist(_ id: UUID) -> LibraryArtist? {
         var descriptor = FetchDescriptor<LibraryArtist>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first
+        return fetch(descriptor)?.first
     }
 
     func fetchAlbum(_ id: UUID) -> Album? {
         var descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
-        guard let la = try? modelContext.fetch(descriptor).first else { return nil }
+        guard let la = fetch(descriptor)?.first else { return nil }
         return toAlbum(la)
     }
 
     func fetchAlbumRecord(_ id: UUID) -> LibraryAlbum? {
         var descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first
+        return fetch(descriptor)?.first
     }
 
     /// Build artist map for a specific set of IDs (avoids full table scan when few IDs needed).
@@ -295,7 +307,7 @@ final class MusicLibrary {
     /// Full artist map — cached between revision bumps.
     func buildArtistMap() -> [UUID: LibraryArtist] {
         if let cached = cachedArtistMap { return cached }
-        let artists = (try? modelContext.fetch(FetchDescriptor<LibraryArtist>())) ?? []
+        let artists = fetch(FetchDescriptor<LibraryArtist>()) ?? []
         let map = Dictionary(uniqueKeysWithValues: artists.map { ($0.serverId, $0) })
         cachedArtistMap = map
         return map
@@ -304,7 +316,7 @@ final class MusicLibrary {
     /// Full album map — cached between revision bumps.
     func buildAlbumMap() -> [UUID: LibraryAlbum] {
         if let cached = cachedAlbumMap { return cached }
-        let albums = (try? modelContext.fetch(FetchDescriptor<LibraryAlbum>())) ?? []
+        let albums = fetch(FetchDescriptor<LibraryAlbum>()) ?? []
         let map = Dictionary(uniqueKeysWithValues: albums.map { ($0.serverId, $0) })
         cachedAlbumMap = map
         return map

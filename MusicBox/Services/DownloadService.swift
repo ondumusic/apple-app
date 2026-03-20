@@ -147,6 +147,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var inFlightCount: Int = 0
     /// Tracks task IDs that successfully saved a file in didFinishDownloadingTo
     @ObservationIgnored private var successfulSaves: Set<Int> = []
+    /// Notification observer tokens for cleanup
+    @ObservationIgnored private var lifecycleObservers: [Any] = []
 
     // MARK: - Paths
 
@@ -578,13 +580,22 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let foregroundName = NSApplication.didBecomeActiveNotification
         #endif
 
-        NotificationCenter.default.addObserver(
-            forName: backgroundName, object: nil, queue: .main
-        ) { [weak self] _ in self?.migrateToBackground() }
+        lifecycleObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: backgroundName, object: nil, queue: .main
+            ) { [weak self] _ in self?.migrateToBackground() }
+        )
+        lifecycleObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: foregroundName, object: nil, queue: .main
+            ) { [weak self] _ in self?.resumeOnForeground() }
+        )
+    }
 
-        NotificationCenter.default.addObserver(
-            forName: foregroundName, object: nil, queue: .main
-        ) { [weak self] _ in self?.resumeOnForeground() }
+    deinit {
+        for observer in lifecycleObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     /// App is going to background — move in-flight foreground tasks to background session.
@@ -883,7 +894,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     /// Scans for pending completion records and updates SwiftData.
-    /// Called on init and when returning to foreground.
+    /// Called on init and when returning to foreground. Runs on MainActor
+    /// (implicit from build setting) since it touches MusicLibrary's mainContext.
     func processPendingCompletions() {
         let fm = FileManager.default
         let dir = Self.pendingDirectory

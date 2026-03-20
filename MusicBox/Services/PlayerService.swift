@@ -190,9 +190,10 @@ final class PlayerService {
         }
         let startIndex = queue.count
         queue.append(contentsOf: items)
-        if shuffledIndices != nil {
+        if var shuffled = shuffledIndices {
             let newIndices = items.indices.map { startIndex + $0 }
-            shuffledIndices! += newIndices
+            shuffled += newIndices
+            shuffledIndices = shuffled
         }
         queueConfirmation = .addedToQueue(items.count)
     }
@@ -311,11 +312,12 @@ final class PlayerService {
         for idx in effectiveOffsets.sorted().reversed() {
             guard idx < queue.count else { continue }
             queue.remove(at: idx)
-            if shuffledIndices != nil {
-                shuffledIndices = shuffledIndices!.compactMap { i in
+            if var shuffled = shuffledIndices {
+                shuffled = shuffled.compactMap { i in
                     if i == idx { return nil }
                     return i > idx ? i - 1 : i
                 }
+                shuffledIndices = shuffled
             }
         }
         invalidateGaplessState()
