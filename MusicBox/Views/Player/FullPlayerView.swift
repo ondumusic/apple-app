@@ -8,6 +8,7 @@ struct FullPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showQueue = false
     @State private var artworkColor: Color?
+    @State private var audioRouteName: String?
 
     private var artworkURL: URL? {
         player.queue.indices.contains(player.effectiveIndex)
@@ -50,8 +51,24 @@ struct FullPlayerView: View {
                     // Bottom row: AirPlay left, queue right
                     HStack {
                         #if os(iOS)
-                        AirPlayButton(activeTintColor: UIColor(settings.accentColor.color))
+                        HStack(spacing: 4) {
+                            AirPlayButton(
+                                activeTintColor: UIColor(settings.accentColor.color),
+                                routeActive: audioRouteName != nil
+                            )
                             .frame(width: 48, height: 48)
+                            if let audioRouteName {
+                                Text(audioRouteName)
+                                    .font(.footnote)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(settings.accentColor.color)
+                                    .lineLimit(1)
+                                    .overlay {
+                                        AirPlayTapArea()
+                                            .frame(width: 200, height: 48)
+                                    }
+                            }
+                        }
                         #else
                         Spacer().frame(width: 48)
                         #endif
@@ -104,6 +121,10 @@ struct FullPlayerView: View {
                 guard settings.artworkTintedPlayer else { return }
                 Task { await updateArtworkColor() }
             }
+            .onAppear { updateAudioRoute() }
+            .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { _ in
+                updateAudioRoute()
+            }
             .sheet(isPresented: $showQueue) {
                 NavigationStack {
                     QueueView()
@@ -121,6 +142,20 @@ struct FullPlayerView: View {
     private func updateArtworkColor() async {
         let color = await ArtworkColorExtractor.extractColor(from: artworkURL)
         withAnimation(.easeInOut(duration: 0.5)) { artworkColor = color }
+    }
+
+    private func updateAudioRoute() {
+        #if os(iOS)
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+        let externalOutput = outputs.first { output in
+            output.portType != .builtInSpeaker && output.portType != .builtInReceiver
+        }
+        guard let externalOutput else {
+            audioRouteName = nil
+            return
+        }
+        audioRouteName = externalOutput.portName
+        #endif
     }
 
     // MARK: - Track Info
@@ -446,17 +481,32 @@ private struct SystemVolumeView: UIViewRepresentable {
 
 private struct AirPlayButton: UIViewRepresentable {
     var activeTintColor: UIColor = .tintColor
+    var routeActive: Bool = false
 
     func makeUIView(context: Context) -> AVRoutePickerView {
         let view = AVRoutePickerView()
-        view.tintColor = .secondaryLabel
+        view.tintColor = routeActive ? activeTintColor : .secondaryLabel
         view.activeTintColor = activeTintColor
         view.prioritizesVideoDevices = false
         return view
     }
 
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
+        uiView.tintColor = routeActive ? activeTintColor : .secondaryLabel
         uiView.activeTintColor = activeTintColor
     }
+}
+
+/// Invisible AVRoutePickerView that fills its frame — tapping anywhere opens the picker.
+private struct AirPlayTapArea: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let view = AVRoutePickerView()
+        view.tintColor = .clear
+        view.activeTintColor = .clear
+        view.prioritizesVideoDevices = false
+        return view
+    }
+
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
 }
 #endif

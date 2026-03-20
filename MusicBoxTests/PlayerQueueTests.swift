@@ -164,6 +164,42 @@ struct PlayerQueueInsertTests {
 
         #expect(player.queue.count == 1)
     }
+
+    @Test func playNextWhileShuffledInsertsAfterCurrentInShuffleOrder() {
+        let player = makePlayer()
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        player.playShuffled(queue: items)
+
+        // currentIndex is 0 in shuffle order
+        let shuffledBefore = player.shuffledIndices!
+        let currentReal = shuffledBefore[0]
+
+        player.playNext(queue: [makeQueueItem(name: "X")])
+
+        #expect(player.queue.count == 5)
+        let shuffled = player.shuffledIndices!
+        #expect(shuffled.count == 5)
+        // Current track should still be at position 0
+        #expect(shuffled[0] == currentReal)
+        // The inserted track should be at position 1 in shuffle order (plays next)
+        let nextRealIndex = shuffled[1]
+        #expect(player.queue[nextRealIndex].track.name == "X")
+    }
+
+    @Test func playNextWhileShuffledMultipleItemsInsertInOrder() {
+        let player = makePlayer()
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"), makeQueueItem(name: "C")]
+        player.playShuffled(queue: items)
+
+        player.playNext(queue: [makeQueueItem(name: "X"), makeQueueItem(name: "Y")])
+
+        #expect(player.queue.count == 5)
+        let shuffled = player.shuffledIndices!
+        // X and Y should be at positions 1 and 2 in shuffle order
+        #expect(player.queue[shuffled[1]].track.name == "X")
+        #expect(player.queue[shuffled[2]].track.name == "Y")
+    }
 }
 
 // MARK: - Skip / Back

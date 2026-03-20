@@ -164,9 +164,14 @@ final class PlayerService {
         }
         let insertIndex = min(effectiveIndex + 1, queue.count)
         queue.insert(contentsOf: items, at: insertIndex)
-        if let shuffled = shuffledIndices {
+        if var shuffled = shuffledIndices {
+            // Shift existing indices that are at or past the insert point
+            shuffled = shuffled.map { $0 >= insertIndex ? $0 + items.count : $0 }
+            // Insert new indices right after current position in shuffle order
             let newIndices = items.indices.map { insertIndex + $0 }
-            shuffledIndices = shuffled.map { $0 >= insertIndex ? $0 + items.count : $0 } + newIndices
+            let shuffleInsertPos = currentIndex + 1
+            shuffled.insert(contentsOf: newIndices, at: shuffleInsertPos)
+            shuffledIndices = shuffled
         }
         queueConfirmation = .playNext(items.count)
         invalidateGaplessState()
@@ -726,15 +731,19 @@ final class PlayerService {
         primaryPlayer.removeAllItems()
 
         if let secondary = secondaryPlayer {
-            // Create new AVQueuePlayer from the secondary player's item
-            if let item = secondary.currentItem {
-                let newPlayer = AVQueuePlayer(items: [item])
-                let isLocal = item.asset is AVURLAsset && (item.asset as? AVURLAsset)?.url.isFileURL == true
+            let volume = secondary.volume
+            let currentTime = secondary.currentTime()
+            // Get the URL before detaching the item
+            let url = (secondary.currentItem?.asset as? AVURLAsset)?.url
+            let isLocal = url?.isFileURL == true
+            secondary.pause()
+            secondary.replaceCurrentItem(with: nil) // Detach item from secondary
+
+            if let url {
+                let newItem = AVPlayerItem(url: url)
+                let newPlayer = AVQueuePlayer(items: [newItem])
                 newPlayer.automaticallyWaitsToMinimizeStalling = !isLocal
-                newPlayer.volume = secondary.volume
-                // Seek to match secondary's current position
-                let currentTime = secondary.currentTime()
-                secondary.pause()
+                newPlayer.volume = volume
                 newPlayer.seek(to: currentTime, toleranceBefore: .zero, toleranceAfter: .zero)
                 newPlayer.play()
                 primaryPlayer = newPlayer
@@ -858,6 +867,7 @@ final class PlayerService {
             info[MPMediaItemPropertyArtwork] = artwork
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        updateRemoteCommandStates()
 
         guard let artworkURL, artworkURL != nowPlayingArtworkURL else { return }
         let trackId = track.id
@@ -884,6 +894,13 @@ final class PlayerService {
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = progress
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        updateRemoteCommandStates()
+    }
+
+    private func updateRemoteCommandStates() {
+        let center = MPRemoteCommandCenter.shared()
+        center.nextTrackCommand.isEnabled = canSkip
+        center.previousTrackCommand.isEnabled = canGoBack
     }
 
     // MARK: - Remote Commands
