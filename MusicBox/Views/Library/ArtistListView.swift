@@ -3,23 +3,53 @@ import SwiftUI
 struct ArtistListView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(SyncService.self) private var syncService
-    @State private var scrollPosition = ScrollPosition()
 
     @AppStorage("libraryFilter") private var filterOption: LibraryFilter = .all
 
-    @State private var artists: [Artist] = []
+    @State private var sections: [ArtistSection] = []
+    @State private var availableLetters: [String] = []
     @State private var hasLoaded = false
 
+    private struct ArtistSection: Identifiable {
+        let letter: String
+        var artists: [Artist]
+        var id: String { letter }
+    }
+
     var body: some View {
-        List(artists) { artist in
-            NavigationLink(value: artist) {
-                ArtistCard(artist: artist)
+        ZStack(alignment: .trailing) {
+            ScrollViewReader { proxy in
+                List {
+                    ForEach(sections) { section in
+                        Section {
+                            ForEach(section.artists) { artist in
+                                ZStack(alignment: .leading) {
+                                    NavigationLink(value: artist) { EmptyView() }
+                                        .opacity(0)
+                                    ArtistCard(artist: artist)
+                                }
+                                .contextMenu {
+                                    ArtistContextMenuItems(artist: artist)
+                                }
+                                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 36))
+                            }
+                        } header: {
+                            Text(section.letter)
+                                .id(section.letter)
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollIndicators(.hidden)
+                .onReceive(NotificationCenter.default.publisher(for: .scrollToSectionLetter)) { notification in
+                    if let letter = notification.object as? String {
+                        proxy.scrollTo(letter, anchor: .top)
+                    }
+                }
             }
-            .contextMenu {
-                ArtistContextMenuItems(artist: artist)
-            }
+
+            SectionIndexBar(letters: availableLetters)
         }
-        .scrollPosition($scrollPosition)
         .refreshable { await syncService.sync() }
         .navigationTitle("Artists")
         .navigationDestination(for: Artist.self) { artist in
@@ -33,11 +63,8 @@ struct ArtistListView: View {
                 filterMenu
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .scrollToTop)) { _ in
-            withAnimation { scrollPosition.scrollTo(edge: .top) }
-        }
         .overlay {
-            if hasLoaded && artists.isEmpty {
+            if hasLoaded && sections.isEmpty {
                 if filterOption == .downloaded {
                     ContentUnavailableView("No Downloaded Artists", systemImage: "music.mic")
                 } else {
@@ -59,9 +86,33 @@ struct ArtistListView: View {
     }
 
     private func reloadArtists() {
-        artists = filterOption == .downloaded
+        let allArtists = filterOption == .downloaded
             ? musicLibrary.downloadedArtists()
             : musicLibrary.allArtists()
+
+        var grouped: [(letter: String, artists: [Artist])] = []
+        var currentLetter = ""
+        var currentArtists: [Artist] = []
+
+        for artist in allArtists {
+            let first = artist.sortName.prefix(1).uppercased()
+            let letter = first.first?.isLetter == true ? first : "#"
+            if letter != currentLetter {
+                if !currentArtists.isEmpty {
+                    grouped.append((currentLetter, currentArtists))
+                }
+                currentLetter = letter
+                currentArtists = [artist]
+            } else {
+                currentArtists.append(artist)
+            }
+        }
+        if !currentArtists.isEmpty {
+            grouped.append((currentLetter, currentArtists))
+        }
+
+        sections = grouped.map { ArtistSection(letter: $0.letter, artists: $0.artists) }
+        availableLetters = grouped.map(\.letter)
     }
 
     private var filterMenu: some View {
