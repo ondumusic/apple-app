@@ -73,7 +73,8 @@ struct QueueView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.vertical, 12)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
             .background(.bar)
         }
     }

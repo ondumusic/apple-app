@@ -117,6 +117,7 @@ final class SyncService {
 
     @ObservationIgnored private let api: APIService
     @ObservationIgnored private let musicLibrary: MusicLibrary
+    @ObservationIgnored private var artworkPrefetcher: ImagePrefetcher?
 
     private var syncCursor: String? {
         get { UserDefaults.standard.string(forKey: "syncCursor") }
@@ -190,11 +191,12 @@ final class SyncService {
         // Single revision bump after all pages — triggers view refreshes once
         musicLibrary.bumpRevision()
 
-        // Prefetch artwork off the main thread
+        // Prefetch artwork — detached to avoid slowing sync, stored to prevent deallocation
         if !artworkURLs.isEmpty {
             let urls = artworkURLs
-            Task.detached(priority: .utility) {
+            Task.detached(priority: .utility) { @MainActor [weak self] in
                 let prefetcher = ImagePrefetcher()
+                self?.artworkPrefetcher = prefetcher
                 prefetcher.startPrefetching(with: urls)
             }
         }
