@@ -50,7 +50,7 @@ struct MusicBoxApp: App {
         _playbackCache = State(initialValue: playbackCache)
         _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) })
         _downloadService = State(initialValue: auth.apiService.map { DownloadService(baseURL: $0.baseURL, sessionToken: $0.sessionToken, musicLibrary: musicLibrary, settings: settings) })
-        _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary) })
+        _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService) })
     }
 
     var body: some Scene {
@@ -89,7 +89,7 @@ struct MusicBoxApp: App {
                 }
                 player = auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) }
                 downloadService = auth.apiService.map { DownloadService(baseURL: $0.baseURL, sessionToken: $0.sessionToken, musicLibrary: musicLibrary, settings: settings) }
-                syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary) }
+                syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService) }
             }
             #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in

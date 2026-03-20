@@ -116,6 +116,10 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(hapticsEnabled, forKey: "hapticsEnabled") }
     }
 
+    var autoDownloadNewTracks: Bool {
+        didSet { UserDefaults.standard.set(autoDownloadNewTracks, forKey: "autoDownloadNewTracks") }
+    }
+
     init() {
         let defaults = UserDefaults.standard
         self.crossfadeDuration = defaults.object(forKey: "crossfadeDuration") as? Double ?? 1.0
@@ -131,5 +135,6 @@ final class SettingsStore {
         self.customAccentGreen = defaults.object(forKey: "customAccentGreen") as? Double ?? 0.4
         self.customAccentBlue = defaults.object(forKey: "customAccentBlue") as? Double ?? 0.0
         self.hapticsEnabled = defaults.object(forKey: "hapticsEnabled") as? Bool ?? true
+        self.autoDownloadNewTracks = defaults.bool(forKey: "autoDownloadNewTracks")
     }
 }

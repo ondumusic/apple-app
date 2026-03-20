@@ -117,6 +117,8 @@ final class SyncService {
 
     @ObservationIgnored private let api: APIService
     @ObservationIgnored private let musicLibrary: MusicLibrary
+    @ObservationIgnored private let settings: SettingsStore?
+    @ObservationIgnored private weak var downloadService: DownloadService?
     @ObservationIgnored private var artworkPrefetcher: ImagePrefetcher?
 
     private var syncCursor: String? {
@@ -124,9 +126,11 @@ final class SyncService {
         set { UserDefaults.standard.set(newValue, forKey: "syncCursor") }
     }
 
-    init(api: APIService, musicLibrary: MusicLibrary) {
+    init(api: APIService, musicLibrary: MusicLibrary, settings: SettingsStore? = nil, downloadService: DownloadService? = nil) {
         self.api = api
         self.musicLibrary = musicLibrary
+        self.settings = settings
+        self.downloadService = downloadService
         self.hasCompletedInitialSync = UserDefaults.standard.string(forKey: "syncCursor") != nil
         self.lastSyncDate = UserDefaults.standard.object(forKey: "lastSyncDate") as? Date
     }
@@ -149,6 +153,7 @@ final class SyncService {
         var cursor = syncCursor
 
         var artworkURLs: [URL] = []
+        var newTrackIds = Set<UUID>()
 
         do {
             var pageCount = 0
@@ -160,7 +165,7 @@ final class SyncService {
 
                 musicLibrary.upsertArtists(response.artists)
                 let newAlbumIds = musicLibrary.upsertAlbums(response.albums)
-                musicLibrary.upsertTracks(response.tracks)
+                newTrackIds.formUnion(musicLibrary.upsertTracks(response.tracks))
                 musicLibrary.applyDeletions(response.deletions)
 
                 // Only prefetch artwork for newly added albums
@@ -199,6 +204,14 @@ final class SyncService {
                 self?.artworkPrefetcher = prefetcher
                 prefetcher.startPrefetching(with: urls)
             }
+        }
+
+        // Auto-download new tracks if enabled
+        if !newTrackIds.isEmpty,
+           settings?.autoDownloadNewTracks == true,
+           let downloadService {
+            print("SyncService: auto-downloading \(newTrackIds.count) new tracks")
+            downloadService.downloadTracks(ids: newTrackIds, library: musicLibrary)
         }
     }
 

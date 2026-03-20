@@ -228,6 +228,24 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         startNextIfNeeded()
     }
 
+    func downloadTracks(ids trackIds: Set<UUID>, library: MusicLibrary) {
+        guard !trackIds.isEmpty else { return }
+        let artists = library.allArtists()
+        for artist in artists {
+            let albums = library.albumsWithTracksForArtist(artist.id)
+            for album in albums {
+                guard let tracks = album.tracks else { continue }
+                for track in tracks where trackIds.contains(track.id) {
+                    guard !musicLibrary.isDownloaded(trackId: track.id),
+                          !isDownloading(trackId: track.id),
+                          !isQueued(trackId: track.id) else { continue }
+                    pendingQueue.append(DownloadInfo(track: track, album: album, artist: artist))
+                }
+            }
+        }
+        startNextIfNeeded()
+    }
+
     // MARK: - Per-track controls
 
     func cancelDownload(trackId: UUID) {

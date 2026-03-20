@@ -143,10 +143,12 @@ struct SettingsView: View {
                         Text("\(count)").tag(count)
                     }
                 }
+                
+                Toggle("Auto-Download New Tracks", isOn: $settings.autoDownloadNewTracks)
             } header: {
                 Text("Downloads")
             } footer: {
-                Text("Number of tracks to download simultaneously.")
+                Text("Automatically download new tracks added to the server after each sync.")
             }
 
             Section {

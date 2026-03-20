@@ -11,6 +11,7 @@ struct SettingsStoreTests {
         "repeatMode", "playbackCacheLimit", "downloadQuality",
         "streamingQuality", "artworkTintedPlayer", "accentColor",
         "hapticsEnabled", "customAccentRed", "customAccentGreen", "customAccentBlue",
+        "autoDownloadNewTracks",
     ]
 
     private func clearDefaults() {
@@ -193,6 +194,23 @@ struct SettingsStoreTests {
         // resolvedAccentColor should use custom RGB, not the preset fallback
         #expect(store.accentColor == .custom)
         #expect(store.customAccentRed == 0.1)
+    }
+
+    // MARK: - Auto-download
+
+    @Test func defaultAutoDownloadNewTracks() {
+        clearDefaults()
+        let store = SettingsStore()
+        #expect(store.autoDownloadNewTracks == false)
+    }
+
+    @Test func autoDownloadNewTracksPersists() {
+        clearDefaults()
+        let store = SettingsStore()
+        store.autoDownloadNewTracks = true
+        let store2 = SettingsStore()
+        #expect(store2.autoDownloadNewTracks == true)
+        clearDefaults()
     }
 
     // MARK: - Feature flags

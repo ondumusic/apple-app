@@ -67,12 +67,15 @@ extension MusicLibrary {
         return inserted
     }
 
-    func upsertTracks(_ syncTracks: [SyncTrack]) {
-        guard !syncTracks.isEmpty else { return }
+    /// Returns the server IDs of newly inserted tracks.
+    @discardableResult
+    func upsertTracks(_ syncTracks: [SyncTrack]) -> Set<UUID> {
+        guard !syncTracks.isEmpty else { return [] }
         let ids = syncTracks.map(\.id)
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { ids.contains($0.serverId) })
         let existing = (try? modelContext.fetch(descriptor)) ?? []
         let map = Dictionary(uniqueKeysWithValues: existing.map { ($0.serverId, $0) })
+        var inserted = Set<UUID>()
         for st in syncTracks {
             if let lt = map[st.id] {
                 lt.artistId = st.artistId
@@ -95,9 +98,11 @@ extension MusicLibrary {
                     duration: st.duration, mimetype: st.mimetype, streamUrl: st.streamUrl,
                     downloadUrl: st.downloadUrl, insertedAt: st.insertedAt,
                     fileSize: st.file.size, fileChecksum: st.file.checksum))
+                inserted.insert(st.id)
             }
         }
         persistChanges()
+        return inserted
     }
 
     func applyDeletions(_ deletions: [SyncDeletion]) {
