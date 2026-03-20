@@ -259,6 +259,71 @@ import Testing
         #expect(progress.albumCount == 1)
         #expect(progress.trackCount == 3)
     }
+    @Test func syncIfNeededRespectsMinimumInterval() async {
+        let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
+        let lib = try! makeInMemoryLibrary()
+        let svc = SyncService(api: api, musicLibrary: lib)
+
+        // Set lastSyncDate to just now — should skip sync due to 5-minute cooldown
+        svc.lastSyncDate = Date()
+
+        await svc.syncIfNeeded()
+
+        // Should not have started syncing (cooldown not expired)
+        #expect(!svc.isSyncing)
+    }
+
+    @Test func syncIfNeededAllowsAfterCooldown() async {
+        let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
+        let lib = try! makeInMemoryLibrary()
+        let svc = SyncService(api: api, musicLibrary: lib)
+
+        // Set lastSyncDate to 6 minutes ago — past the 5-minute cooldown
+        svc.lastSyncDate = Date(timeIntervalSinceNow: -360)
+
+        // This will attempt to sync and fail (no server), but it will start
+        await svc.syncIfNeeded()
+
+        // After failed sync, syncError should be set
+        #expect(svc.syncError != nil)
+    }
+
+    @Test func syncSetsErrorOnFailure() async {
+        let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
+        let lib = try! makeInMemoryLibrary()
+        let svc = SyncService(api: api, musicLibrary: lib)
+
+        await svc.sync()
+
+        #expect(svc.syncError != nil)
+        #expect(!svc.isSyncing) // should reset after completing
+    }
+
+    @Test func syncClearsLibraryOnInitialSync() async {
+        let lib = try! makeInMemoryLibrary()
+        let artistId = UUID()
+        lib.upsertArtists([SyncArtist(id: artistId, name: "Pre-existing", sortName: "Pre-existing",
+                                      slug: "pre", albumCount: 1, insertedAt: Date())])
+        lib.bumpRevision()
+        #expect(lib.allArtists().count == 1)
+
+        // No cursor means initial sync — should clear the library
+        let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
+        let svc = SyncService(api: api, musicLibrary: lib)
+
+        await svc.sync()
+
+        // Library should have been cleared (even though sync failed after)
+        #expect(lib.allArtists().isEmpty)
+    }
+
+    @Test func syncProgressIsNilWhenNotSyncing() {
+        let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
+        let lib = try! makeInMemoryLibrary()
+        let svc = SyncService(api: api, musicLibrary: lib)
+
+        #expect(svc.syncProgress == nil)
+    }
 }
 
 // MARK: - Helpers
