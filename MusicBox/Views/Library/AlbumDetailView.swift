@@ -66,8 +66,10 @@ struct AlbumDetailView: View {
                                 .disabled(!hasPlayable)
 
                                 if downloadService.isAlbumDownloading(albumId: album.id) {
-                                    ProgressView()
-                                        .controlSize(.small)
+                                    Button {} label: {
+                                        ProgressView()
+                                    }
+                                    .disabled(true)
                                 } else if !musicLibrary.isAlbumFullyDownloaded(albumId: album.id) {
                                     Button {
                                         guard let fullAlbum = musicLibrary.albumWithTracks(album.id) else { return }
@@ -75,13 +77,15 @@ struct AlbumDetailView: View {
                                             ?? Artist(id: album.artistId, name: "", sortName: "", slug: "")
                                         downloadService.download(album: fullAlbum, artist: artist)
                                     } label: {
-                                        Label("Download", systemImage: "arrow.down.circle")
+                                        Label("Download", systemImage: "arrow.down")
                                     }
                                 }
                             }
                             .labelStyle(.iconOnly)
                             .buttonStyle(.bordered)
-                            .controlSize(.small)
+                            .buttonBorderShape(.circle)
+                            .controlSize(.regular)
+                            .font(.system(size: 12))
                             .padding(.top, 4)
                         }
                     }
