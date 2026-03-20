@@ -150,7 +150,6 @@ struct SearchView: View {
         NavigationLink(value: artist) {
             ArtistCard(artist: artist)
         }
-        .tint(.primary)
         .contextMenu {
             ArtistContextMenuItems(artist: artist)
         }

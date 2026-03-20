@@ -9,9 +9,9 @@ struct ArtistCard: View {
                 Circle()
                     .fill(.quaternary)
 
-                Text(artist.name.prefix(1).uppercased())
-                    .font(.title2.weight(.medium))
-                    .foregroundStyle(.secondary)
+                Image(systemName: "music.mic")
+                    .font(.title3)
+                    .foregroundStyle(.tint)
             }
             .frame(width: 44, height: 44)
 
