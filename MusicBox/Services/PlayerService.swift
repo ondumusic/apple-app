@@ -74,6 +74,10 @@ final class PlayerService {
     @ObservationIgnored private var isLoadingTrack: Bool = false
     /// Tracks whether AVQueuePlayer has a queued next item for gapless playback
     @ObservationIgnored private var hasQueuedGaplessItem: Bool = false
+    /// The AVPlayerItem currently playing — used to filter endObserver notifications
+    @ObservationIgnored private var currentPlayerItem: AVPlayerItem?
+    /// The AVPlayerItem queued for gapless playback
+    @ObservationIgnored private var gaplessPlayerItem: AVPlayerItem?
 
     // MARK: - Computed
 
@@ -220,6 +224,8 @@ final class PlayerService {
             primaryPlayer.removeAllItems()
             tearDownCrossfade()
             hasQueuedGaplessItem = false
+            currentPlayerItem = nil
+            gaplessPlayerItem = nil
             currentIndex = 0
             let idx = effectiveIndex
             if idx < queue.count {
@@ -405,6 +411,8 @@ final class PlayerService {
             // Disable stalling wait for local files (better gapless), enable for remote streams
             primaryPlayer.automaticallyWaitsToMinimizeStalling = !playbackURL.isFileURL
             let item = AVPlayerItem(url: playbackURL)
+            currentPlayerItem = item
+            gaplessPlayerItem = nil
             primaryPlayer.insert(item, after: nil)
             primaryPlayer.volume = 1.0
             primaryPlayer.play()
@@ -532,6 +540,7 @@ final class PlayerService {
                 }
             }
             hasQueuedGaplessItem = false
+            gaplessPlayerItem = nil
         }
         tearDownCrossfade()
         setupGaplessOrCrossfade()
@@ -555,6 +564,7 @@ final class PlayerService {
                     let item = AVPlayerItem(url: url)
                     if self.primaryPlayer.canInsert(item, after: self.primaryPlayer.items().last) {
                         self.primaryPlayer.insert(item, after: self.primaryPlayer.items().last)
+                        self.gaplessPlayerItem = item
                         self.hasQueuedGaplessItem = true
                     }
                 } catch {
@@ -567,6 +577,7 @@ final class PlayerService {
         let item = AVPlayerItem(url: url)
         if primaryPlayer.canInsert(item, after: primaryPlayer.items().last) {
             primaryPlayer.insert(item, after: primaryPlayer.items().last)
+            gaplessPlayerItem = item
             hasQueuedGaplessItem = true
         }
     }
@@ -601,22 +612,24 @@ final class PlayerService {
             guard let self else { return }
             guard let item = notification.object as? AVPlayerItem else { return }
 
-            // If gapless: AVQueuePlayer auto-advances. We just need to update our state.
-            if self.hasQueuedGaplessItem, item === self.primaryPlayer.items().first || self.primaryPlayer.items().count <= 1 {
-                self.advanceAfterGapless()
-                return
+            // Only handle notifications for items we're tracking
+            if item === self.currentPlayerItem {
+                if self.hasQueuedGaplessItem {
+                    self.advanceAfterGapless()
+                } else {
+                    self.skip()
+                }
             }
-
-            // Non-gapless: only handle primary player's current item
-            if item === self.primaryPlayer.currentItem {
-                self.skip()
-            }
+            // Ignore notifications from stale/unknown items
         }
     }
 
     /// Called when AVQueuePlayer auto-advances to the queued gapless item.
     private func advanceAfterGapless() {
         hasQueuedGaplessItem = false
+        // The gapless item is now the active item
+        currentPlayerItem = gaplessPlayerItem
+        gaplessPlayerItem = nil
 
         guard let next = nextTrackInfo() else {
             skip()
@@ -746,9 +759,13 @@ final class PlayerService {
                 let newPlayer = AVQueuePlayer(items: [newItem])
                 newPlayer.automaticallyWaitsToMinimizeStalling = !isLocal
                 newPlayer.volume = volume
-                newPlayer.seek(to: currentTime, toleranceBefore: .zero, toleranceAfter: .zero)
-                newPlayer.play()
+                // Seek BEFORE playing to avoid briefly hearing the track from position 0
+                newPlayer.seek(to: currentTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                    newPlayer.play()
+                }
                 primaryPlayer = newPlayer
+                currentPlayerItem = newItem
+                gaplessPlayerItem = nil
             }
             secondaryPlayer = nil
         }
