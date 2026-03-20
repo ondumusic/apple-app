@@ -12,19 +12,24 @@ final class APIService: Sendable {
 
     // MARK: - Generic Fetch
 
-    private func request(for endpoint: String, queryItems: [URLQueryItem] = []) -> URLRequest {
-        var components = URLComponents(url: baseURL.appendingPathComponent(endpoint), resolvingAgainstBaseURL: false)!
+    private func request(for endpoint: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {
+        guard var components = URLComponents(url: baseURL.appendingPathComponent(endpoint), resolvingAgainstBaseURL: false) else {
+            throw APIError.invalidResponse
+        }
         if !queryItems.isEmpty {
             components.queryItems = queryItems
         }
-        var request = URLRequest(url: components.url!)
+        guard let url = components.url else {
+            throw APIError.invalidResponse
+        }
+        var request = URLRequest(url: url)
         request.setValue("Bearer \(sessionToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         return request
     }
 
     private func fetch<T: Decodable & Sendable>(_ endpoint: String, queryItems: [URLQueryItem] = []) async throws -> T {
-        let req = request(for: endpoint, queryItems: queryItems)
+        let req = try request(for: endpoint, queryItems: queryItems)
         let (data, response) = try await URLSession.shared.data(for: req)
 
         guard let http = response as? HTTPURLResponse else {
@@ -62,7 +67,7 @@ final class APIService: Sendable {
     }
 
     func deleteSession() async throws {
-        var req = request(for: "/auth/session")
+        var req = try request(for: "/auth/session")
         req.httpMethod = "DELETE"
         let (_, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {

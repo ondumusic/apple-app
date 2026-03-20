@@ -24,7 +24,7 @@ final class PlaybackCache {
 
     init(settings: SettingsStore) {
         self.settings = settings
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fileManager.temporaryDirectory
         self.cacheDir = appSupport.appendingPathComponent("MusicBox/PlaybackCache", isDirectory: true)
         self.metadataURL = cacheDir.appendingPathComponent(".cache-metadata.json")
 
@@ -42,7 +42,7 @@ final class PlaybackCache {
             // File disappeared — remove entry
             entries.remove(at: idx)
             recalculateSize()
-            saveMetadataDebounced()
+            saveMetadata()
             return nil
         }
         // Update last accessed (move to end = most recently used)
@@ -158,10 +158,6 @@ final class PlaybackCache {
         }
     }
 
-    private func saveMetadataDebounced() {
-        saveMetadata()
-    }
-
     func flushMetadataIfNeeded() {
         guard metadataDirty else { return }
         saveMetadata()
@@ -169,15 +165,8 @@ final class PlaybackCache {
 
     private func fileExtension(from response: URLResponse, url: URL) -> String {
         if let mimeType = response.mimeType {
-            switch mimeType {
-            case "audio/flac": return "flac"
-            case "audio/mpeg": return "mp3"
-            case "audio/mp4", "audio/x-m4a": return "m4a"
-            case "audio/aac": return "aac"
-            case "audio/ogg", "audio/vorbis": return "ogg"
-            case "audio/wav", "audio/x-wav": return "wav"
-            default: break
-            }
+            let ext = AudioFormat.fileExtension(for: mimeType, fallback: "")
+            if !ext.isEmpty { return ext }
         }
         let pathExt = url.pathExtension
         return pathExt.isEmpty ? "audio" : pathExt

@@ -98,7 +98,7 @@ nonisolated class LibraryTrack {
     /// Resolves the absolute file URL from the stored relative path.
     var resolvedFileURL: URL? {
         guard let localFilePath else { return nil }
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         return appSupport.appendingPathComponent(localFilePath)
     }
 }

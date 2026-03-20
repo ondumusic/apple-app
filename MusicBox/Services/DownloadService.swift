@@ -133,8 +133,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     // MARK: - Paths
 
     nonisolated private static var downloadsDirectory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("MusicBox/Downloads", isDirectory: true)
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
+        return appSupport.appendingPathComponent("MusicBox/Downloads", isDirectory: true)
     }
 
     nonisolated private static var pendingDirectory: URL {
@@ -932,16 +932,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     // MARK: - Helpers
 
     nonisolated private func extensionFromMimetype(_ mimetype: String) -> String {
-        switch mimetype.lowercased() {
-        case "audio/mpeg", "audio/mp3": "mp3"
-        case "audio/flac": "flac"
-        case "audio/x-flac": "flac"
-        case "audio/mp4", "audio/m4a", "audio/x-m4a": "m4a"
-        case "audio/aac": "aac"
-        case "audio/ogg", "audio/vorbis": "ogg"
-        case "audio/wav", "audio/x-wav": "wav"
-        default: "mp3"
-        }
+        AudioFormat.fileExtension(for: mimetype)
     }
 
     // MARK: - Test Helpers
