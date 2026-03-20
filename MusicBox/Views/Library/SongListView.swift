@@ -31,7 +31,6 @@ struct SongListView: View {
                                 player.requestPlay { player.playNow(queue: available) }
                             } label: {
                                 Label("Play All", systemImage: "play.fill")
-                                    .frame(maxWidth: .infinity)
                             }
 
                             Button {
@@ -40,11 +39,9 @@ struct SongListView: View {
                                 player.requestPlay { player.playShuffled(queue: available) }
                             } label: {
                                 Label("Shuffle All", systemImage: "shuffle")
-                                    .frame(maxWidth: .infinity)
                             }
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.regular)
+                        .buttonStyle(PillButtonStyle())
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 36))
                         .listRowSeparator(.hidden)
                     }

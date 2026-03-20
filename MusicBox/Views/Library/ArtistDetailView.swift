@@ -22,18 +22,15 @@ struct ArtistDetailView: View {
                     playAll(shuffle: false)
                 } label: {
                     Label("Play All", systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
                 }
 
                 Button {
                     playAll(shuffle: true)
                 } label: {
                     Label("Shuffle All", systemImage: "shuffle")
-                        .frame(maxWidth: .infinity)
                 }
             }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
+            .buttonStyle(PillButtonStyle())
             .padding(.horizontal)
             .padding(.top, 8)
 
