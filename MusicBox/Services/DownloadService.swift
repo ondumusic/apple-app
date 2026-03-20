@@ -65,6 +65,32 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         var downloadedFileSize: Int64 = 0
     }
 
+    // MARK: - Per-track download phase (consolidated state)
+
+    /// Represents the lifecycle phase of a single download.
+    /// Replaces the previous separate dictionaries for prepare tasks, active tasks, and paused downloads.
+    private enum TrackPhase {
+        /// Transcode prepare request in progress (foreground only)
+        case preparing(task: URLSessionDataTask, info: DownloadInfo)
+        /// URLSession download task in progress
+        case downloading(task: URLSessionDownloadTask, taskId: Int, info: DownloadInfo)
+        /// Download paused by user
+        case paused(info: DownloadInfo)
+
+        var info: DownloadInfo {
+            switch self {
+            case .preparing(_, let info), .downloading(_, _, let info), .paused(let info): info
+            }
+        }
+
+        var isInFlight: Bool {
+            switch self {
+            case .preparing, .downloading: true
+            case .paused: false
+            }
+        }
+    }
+
     // MARK: - Private
 
     @ObservationIgnored private let musicLibrary: MusicLibrary
@@ -108,18 +134,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Whether the app is currently in the foreground
     @ObservationIgnored private var isInForeground: Bool = true
 
-    /// Maps URLSession task identifier → download info (for UI state management)
-    @ObservationIgnored private var taskDownloads: [Int: DownloadInfo] = [:]
-    /// Maps track ID → URLSession task identifier
-    @ObservationIgnored private var trackIdToTaskId: [UUID: Int] = [:]
-    /// Maps track ID → active URLSessionDownloadTask (for pause support)
-    @ObservationIgnored private var activeTasks: [UUID: URLSessionDownloadTask] = [:]
-    /// Maps track ID → active prepare data task (for cancellation during prepare phase)
-    @ObservationIgnored private var prepareTasks: [UUID: URLSessionDataTask] = [:]
-    /// Maps track ID → download info for tracks in the prepare phase (needed for re-queuing)
-    @ObservationIgnored private var prepareInfos: [UUID: DownloadInfo] = [:]
-    /// Stores info for paused downloads
-    @ObservationIgnored private var pausedDownloads: [UUID: DownloadInfo] = [:]
+    /// Per-track download phase — single source of truth for all active/paused downloads
+    @ObservationIgnored private var trackPhases: [UUID: TrackPhase] = [:]
+    /// Reverse lookup: URLSession task identifier → track ID (for delegate callbacks)
+    @ObservationIgnored private var taskIdToTrackId: [Int: UUID] = [:]
     /// Raw progress values — not observable, updated on every delegate callback
     @ObservationIgnored private var progressValues: [UUID: Double] = [:]
     /// Timer that batches progress into the observable snapshot
@@ -212,19 +230,19 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func cancelDownload(trackId: UUID) {
         pendingQueue.removeAll { $0.track.id == trackId }
-        pausedDownloads.removeValue(forKey: trackId)
-        prepareTasks.removeValue(forKey: trackId)?.cancel()
-        prepareInfos.removeValue(forKey: trackId)
 
-        if let task = activeTasks.removeValue(forKey: trackId) {
-            let taskId = task.taskIdentifier
-            task.cancel()
-            taskDownloads.removeValue(forKey: taskId)
-            trackIdToTaskId.removeValue(forKey: trackId)
-            inFlightCount -= 1
-        } else if activeDownloads[trackId] != nil {
-            // In prepare phase (no URLSession task yet)
-            inFlightCount -= 1
+        if let phase = trackPhases.removeValue(forKey: trackId) {
+            switch phase {
+            case .preparing(let task, _):
+                task.cancel()
+                inFlightCount -= 1
+            case .downloading(let task, let taskId, _):
+                task.cancel()
+                taskIdToTrackId.removeValue(forKey: taskId)
+                inFlightCount -= 1
+            case .paused:
+                break
+            }
         }
         activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
@@ -234,34 +252,28 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     func pauseDownload(trackId: UUID) {
-        // Handle prepare phase
-        if let prepareTask = prepareTasks.removeValue(forKey: trackId) {
-            prepareTask.cancel()
-            if let info = prepareInfos.removeValue(forKey: trackId) {
-                pausedDownloads[trackId] = info
-                activeDownloads[trackId]?.isPaused = true
-                inFlightCount -= 1
-            }
-            return
+        guard let phase = trackPhases[trackId], phase.isInFlight else { return }
+
+        switch phase {
+        case .preparing(let task, let info):
+            task.cancel()
+            trackPhases[trackId] = .paused(info: info)
+            activeDownloads[trackId]?.isPaused = true
+            inFlightCount -= 1
+        case .downloading(let task, let taskId, let info):
+            task.cancel()
+            taskIdToTrackId.removeValue(forKey: taskId)
+            trackPhases[trackId] = .paused(info: info)
+            activeDownloads[trackId]?.isPaused = true
+            inFlightCount -= 1
+        case .paused:
+            break
         }
-
-        // Handle download phase
-        guard let task = activeTasks.removeValue(forKey: trackId),
-              let info = taskDownloads[task.taskIdentifier] else { return }
-
-        let taskId = task.taskIdentifier
-        task.cancel()
-
-        taskDownloads.removeValue(forKey: taskId)
-        trackIdToTaskId.removeValue(forKey: trackId)
-        inFlightCount -= 1
-
-        pausedDownloads[trackId] = info
-        activeDownloads[trackId]?.isPaused = true
     }
 
     func resumeDownload(trackId: UUID) {
-        guard let info = pausedDownloads.removeValue(forKey: trackId) else { return }
+        guard case .paused(let info) = trackPhases[trackId] else { return }
+        trackPhases.removeValue(forKey: trackId)
 
         activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
@@ -277,7 +289,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func pauseAll() {
         isPaused = true
-        let activeIds = Array(trackIdToTaskId.keys)
+        let activeIds = trackPhases.filter { $0.value.isInFlight }.map(\.key)
         for trackId in activeIds {
             pauseDownload(trackId: trackId)
         }
@@ -285,7 +297,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func resumeAll() {
         isPaused = false
-        let pausedIds = Array(pausedDownloads.keys)
+        let pausedIds = trackPhases.filter { if case .paused = $0.value { return true }; return false }.map(\.key)
         for trackId in pausedIds {
             resumeDownload(trackId: trackId)
         }
@@ -294,17 +306,18 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func cancelAll() {
         isPaused = false
-        for (_, task) in prepareTasks { task.cancel() }
-        prepareTasks.removeAll()
-        prepareInfos.removeAll()
-        for (_, task) in activeTasks { task.cancel() }
-        activeTasks.removeAll()
-        taskDownloads.removeAll()
-        trackIdToTaskId.removeAll()
+        for (_, phase) in trackPhases {
+            switch phase {
+            case .preparing(let task, _): task.cancel()
+            case .downloading(let task, _, _): task.cancel()
+            case .paused: break
+            }
+        }
+        trackPhases.removeAll()
+        taskIdToTrackId.removeAll()
         activeDownloads.removeAll()
         activeDownloadOrder.removeAll()
         pendingQueue.removeAll()
-        pausedDownloads.removeAll()
         inFlightCount = 0
         progressValues.removeAll()
         progressSnapshot.removeAll()
@@ -394,7 +407,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let trackId = info.track.id
         let downloadUrlString = info.track.downloadUrl
         let session = prepareSession
-        prepareInfos[trackId] = info
 
         // Build prepare URL
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
@@ -412,10 +424,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let dataTask = session.dataTask(with: request) { [weak self] data, response, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                // If prepareTasks no longer contains this track, the request was cancelled
-                // by migrateToBackground/pause/cancel — ignore this stale callback
-                guard prepareTasks.removeValue(forKey: trackId) != nil else { return }
-                prepareInfos.removeValue(forKey: trackId)
+                // If trackPhases no longer contains this track as preparing, the request was
+                // cancelled by migrateToBackground/pause/cancel — ignore this stale callback
+                guard case .preparing = trackPhases[trackId] else { return }
                 guard activeDownloads[trackId] != nil else { return }
 
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -454,7 +465,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 self.startDownloadTask(info: info, url: url)
             }
         }
-        prepareTasks[trackId] = dataTask
+        trackPhases[trackId] = .preparing(task: dataTask, info: info)
         dataTask.resume()
     }
 
@@ -472,9 +483,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         )
         task.taskDescription = try? String(data: JSONEncoder().encode(metadata), encoding: .utf8)
 
-        taskDownloads[task.taskIdentifier] = info
-        trackIdToTaskId[info.track.id] = task.taskIdentifier
-        activeTasks[info.track.id] = task
+        let taskId = task.taskIdentifier
+        trackPhases[info.track.id] = .downloading(task: task, taskId: taskId, info: info)
+        taskIdToTrackId[taskId] = info.track.id
         task.resume()
     }
 
@@ -484,15 +495,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     /// Cleans up a download that failed during the prepare/transcode phase (no URLSession task yet).
     private func cleanupPrepare(trackId: UUID, reason: String? = nil) {
-        let info = prepareInfos[trackId]
-        prepareTasks.removeValue(forKey: trackId)
-        prepareInfos.removeValue(forKey: trackId)
+        let phase = trackPhases.removeValue(forKey: trackId)
         let state = activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
         progressValues.removeValue(forKey: trackId)
         inFlightCount -= 1
-        if let reason, let info, let state {
-            addFailedDownload(trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: info, reason: reason)
+        if let reason, let phase, let state {
+            addFailedDownload(trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: phase.info, reason: reason)
         }
         stopProgressTimerIfIdle()
         startNextIfNeeded()
@@ -501,15 +510,14 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     private func cleanupTask(trackId: UUID, taskId: Int, reason: String? = nil) {
         // Guard: only clean up if this task is still tracked (prevents double-cleanup
         // when migrateToBackground already cleaned up a cancelled task)
-        guard let info = taskDownloads.removeValue(forKey: taskId) else { return }
+        guard taskIdToTrackId.removeValue(forKey: taskId) != nil else { return }
+        let phase = trackPhases.removeValue(forKey: trackId)
         let state = activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
-        trackIdToTaskId.removeValue(forKey: trackId)
-        activeTasks.removeValue(forKey: trackId)
         progressValues.removeValue(forKey: trackId)
         inFlightCount -= 1
-        if let reason, let state {
-            addFailedDownload(trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: info, reason: reason)
+        if let reason, let state, let phase {
+            addFailedDownload(trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: phase.info, reason: reason)
         }
         stopProgressTimerIfIdle()
         startNextIfNeeded()
@@ -545,15 +553,12 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         processPendingCompletions()
 
         // Migrate in-flight background tasks to the faster foreground session
-        let inflight = activeTasks
-        for (trackId, task) in inflight {
-            let taskId = task.taskIdentifier
+        for (trackId, phase) in trackPhases {
+            guard case .downloading(let task, let taskId, let info) = phase else { continue }
             task.cancel()
-            if let info = taskDownloads.removeValue(forKey: taskId) {
-                pendingQueue.insert(info, at: 0)
-            }
-            trackIdToTaskId.removeValue(forKey: trackId)
-            activeTasks.removeValue(forKey: trackId)
+            taskIdToTrackId.removeValue(forKey: taskId)
+            trackPhases.removeValue(forKey: trackId)
+            pendingQueue.insert(info, at: 0)
             activeDownloads.removeValue(forKey: trackId)
             activeDownloadOrder.removeAll { $0 == trackId }
             progressValues.removeValue(forKey: trackId)
@@ -586,30 +591,19 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     private func migrateToBackground() {
         isInForeground = false
 
-        // Cancel any in-flight prepare requests and re-queue them
-        for (trackId, task) in prepareTasks {
-            task.cancel()
-            if let info = prepareInfos.removeValue(forKey: trackId) {
+        for (trackId, phase) in trackPhases {
+            switch phase {
+            case .preparing(let task, let info):
+                task.cancel()
                 pendingQueue.insert(info, at: 0)
-            }
-            activeDownloads.removeValue(forKey: trackId)
-            activeDownloadOrder.removeAll { $0 == trackId }
-            progressValues.removeValue(forKey: trackId)
-            inFlightCount -= 1
-        }
-        prepareTasks.removeAll()
-
-        let inflight = activeTasks
-
-        // Cancel foreground tasks and re-queue them for the background session
-        for (trackId, task) in inflight {
-            let taskId = task.taskIdentifier
-            task.cancel()
-            if let info = taskDownloads.removeValue(forKey: taskId) {
+            case .downloading(let task, let taskId, let info):
+                task.cancel()
+                taskIdToTrackId.removeValue(forKey: taskId)
                 pendingQueue.insert(info, at: 0)
+            case .paused:
+                continue  // Leave paused downloads alone
             }
-            trackIdToTaskId.removeValue(forKey: trackId)
-            activeTasks.removeValue(forKey: trackId)
+            trackPhases.removeValue(forKey: trackId)
             activeDownloads.removeValue(forKey: trackId)
             activeDownloadOrder.removeAll { $0 == trackId }
             progressValues.removeValue(forKey: trackId)
@@ -672,8 +666,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             : 0
         Task { @MainActor in
-            guard let info = taskDownloads[taskId] else { return }
-            progressValues[info.track.id] = progress
+            guard let trackId = self.taskIdToTrackId[taskId] else { return }
+            self.progressValues[trackId] = progress
         }
     }
 
@@ -690,19 +684,18 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             let seconds = Double(header) { seconds } else { nil }
 
         Task { @MainActor in
-            guard let info = taskDownloads[taskId] else { return }
+            guard let trackId = self.taskIdToTrackId[taskId],
+                  case .downloading(_, _, let info) = self.trackPhases[trackId] else { return }
 
             if [408, 429, 502, 503, 504].contains(statusCode), info.retryCount < 3 {
                 let delay = retryAfter ?? 5
                 print("DownloadService: server busy for \(info.track.name), retrying in \(Int(delay))s (attempt \(info.retryCount + 1)/3)")
-                let trackId = info.track.id
                 var retryInfo = info
                 retryInfo.retryCount += 1
                 // Remove task tracking but don't decrement inFlightCount or start next —
                 // this slot stays reserved for the retry
-                taskDownloads.removeValue(forKey: taskId)
-                trackIdToTaskId.removeValue(forKey: trackId)
-                activeTasks.removeValue(forKey: trackId)
+                trackPhases.removeValue(forKey: trackId)
+                taskIdToTrackId.removeValue(forKey: taskId)
                 progressValues.removeValue(forKey: trackId)
                 // Re-queue after delay, then release the slot
                 Task {
@@ -719,17 +712,17 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
             if let statusCode, !(200...299).contains(statusCode) {
                 print("DownloadService: HTTP \(statusCode) for \(info.track.name)")
-                cleanupTask(trackId: info.track.id, taskId: taskId, reason: "Server error (HTTP \(statusCode))")
+                cleanupTask(trackId: trackId, taskId: taskId, reason: "Server error (HTTP \(statusCode))")
                 return
             }
 
             guard let error else {
                 // Check if didFinishDownloadingTo actually saved the file
                 if self.successfulSaves.remove(taskId) != nil {
-                    cleanupTask(trackId: info.track.id, taskId: taskId)
+                    cleanupTask(trackId: trackId, taskId: taskId)
                 } else {
                     print("DownloadService: download completed but file was not saved for \(info.track.name)")
-                    cleanupTask(trackId: info.track.id, taskId: taskId, reason: "Download failed — file could not be saved")
+                    cleanupTask(trackId: trackId, taskId: taskId, reason: "Download failed — file could not be saved")
                 }
                 return
             }
@@ -755,7 +748,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 NSURLErrorNetworkConnectionLost, // -1005
             ]
             if retryableErrors.contains(nsError.code), info.retryCount < 3 {
-                let trackId = info.track.id
                 var retryInfo = info
                 retryInfo.retryCount += 1
                 print("DownloadService: transient error for \(info.track.name), retrying (attempt \(retryInfo.retryCount)/3, code: \(nsError.code))")
@@ -765,7 +757,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             }
 
             print("DownloadService: download failed for \(info.track.name): \(error)")
-            cleanupTask(trackId: info.track.id, taskId: taskId, reason: error.localizedDescription)
+            cleanupTask(trackId: trackId, taskId: taskId, reason: error.localizedDescription)
         }
     }
 
