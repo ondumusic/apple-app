@@ -11,6 +11,7 @@ struct SongListView: View {
     @State private var sections: [SongSection] = []
     @State private var allQueueItems: [QueueItem] = []
     @State private var availableLetters: [String] = []
+    @State private var hasLoaded = false
 
     private struct SongSection: Identifiable {
         let letter: String
@@ -89,7 +90,7 @@ struct SongListView: View {
             }
         }
         .overlay {
-            if sections.isEmpty {
+            if hasLoaded && sections.isEmpty {
                 if filterOption == .downloaded {
                     ContentUnavailableView("No Downloaded Songs", systemImage: "music.note")
                 } else {
@@ -98,11 +99,12 @@ struct SongListView: View {
             }
         }
         .task(id: musicLibrary.revision) {
-            if !sections.isEmpty {
+            if hasLoaded {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
             }
             reloadTracks()
+            hasLoaded = true
         }
         .onChange(of: musicLibrary.downloadChanged) {
             for i in sections.indices {

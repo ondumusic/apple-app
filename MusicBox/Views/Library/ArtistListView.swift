@@ -8,6 +8,7 @@ struct ArtistListView: View {
     @AppStorage("libraryFilter") private var filterOption: LibraryFilter = .all
 
     @State private var artists: [Artist] = []
+    @State private var hasLoaded = false
 
     var body: some View {
         List(artists) { artist in
@@ -36,7 +37,7 @@ struct ArtistListView: View {
             withAnimation { scrollPosition.scrollTo(edge: .top) }
         }
         .overlay {
-            if artists.isEmpty {
+            if hasLoaded && artists.isEmpty {
                 if filterOption == .downloaded {
                     ContentUnavailableView("No Downloaded Artists", systemImage: "music.mic")
                 } else {
@@ -45,11 +46,12 @@ struct ArtistListView: View {
             }
         }
         .task(id: musicLibrary.revision) {
-            if !artists.isEmpty {
+            if hasLoaded {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
             }
             reloadArtists()
+            hasLoaded = true
         }
         .onChange(of: filterOption) {
             reloadArtists()

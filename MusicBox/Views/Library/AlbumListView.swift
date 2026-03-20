@@ -35,6 +35,7 @@ struct AlbumListView: View {
     @AppStorage("libraryFilter") private var filterOption: LibraryFilter = .all
 
     @State private var albums: [Album] = []
+    @State private var hasLoaded = false
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
 
@@ -68,7 +69,7 @@ struct AlbumListView: View {
             withAnimation { scrollPosition.scrollTo(edge: .top) }
         }
         .overlay {
-            if albums.isEmpty {
+            if hasLoaded && albums.isEmpty {
                 if filterOption == .downloaded {
                     ContentUnavailableView("No Downloaded Albums", systemImage: "square.stack")
                 } else {
@@ -77,11 +78,12 @@ struct AlbumListView: View {
             }
         }
         .task(id: musicLibrary.revision) {
-            if !albums.isEmpty {
+            if hasLoaded {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
             }
             reloadAlbums()
+            hasLoaded = true
         }
         .onChange(of: filterOption) {
             reloadAlbums()
