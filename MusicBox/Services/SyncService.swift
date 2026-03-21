@@ -77,7 +77,7 @@ nonisolated struct SyncTrack: Decodable, Sendable {
     var albumId: UUID
     var name: String
     var disc: Int
-    var number: Int
+    var number: Int?
     var duration: Double
     var mimetype: String
     var streamUrl: String

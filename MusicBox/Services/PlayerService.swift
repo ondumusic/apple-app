@@ -509,10 +509,12 @@ final class PlayerService {
         let nextTrack = queue[next.effectiveIndex].track
         guard currentTrackItem.albumId == nextTrack.albumId else { return false }
 
-        if nextTrack.disc == currentTrackItem.disc && nextTrack.number == currentTrackItem.number + 1 {
+        if let currentNumber = currentTrackItem.number, let nextNumber = nextTrack.number,
+           nextTrack.disc == currentTrackItem.disc && nextNumber == currentNumber + 1 {
             return true
         }
-        if nextTrack.disc == currentTrackItem.disc + 1 && nextTrack.number == 1 {
+        if let nextNumber = nextTrack.number,
+           nextTrack.disc == currentTrackItem.disc + 1 && nextNumber == 1 {
             return true
         }
         return false
@@ -870,7 +872,9 @@ final class PlayerService {
             MPNowPlayingInfoPropertyElapsedPlaybackTime: progress,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
         ]
-        info[MPMediaItemPropertyAlbumTrackNumber] = track.number
+        if let number = track.number {
+            info[MPMediaItemPropertyAlbumTrackNumber] = number
+        }
         let idx = effectiveIndex
         let artworkURL = (idx >= 0 && idx < queue.count) ? queue[idx].artworkURL : nil
 

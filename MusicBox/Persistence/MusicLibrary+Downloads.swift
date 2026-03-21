@@ -114,7 +114,7 @@ extension MusicLibrary {
                 let bAlbum = albumMap[b.albumId]?.sortName ?? ""
                 if aAlbum != bAlbum { return aAlbum.localizedStandardCompare(bAlbum) == .orderedAscending }
                 if a.disc != b.disc { return a.disc < b.disc }
-                return a.number < b.number
+                return (a.number ?? Int.max) < (b.number ?? Int.max)
             }
     }
 

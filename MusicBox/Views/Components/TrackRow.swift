@@ -39,7 +39,7 @@ struct TrackRow: View {
                             .font(.caption)
                             .foregroundStyle(.tint)
                     } else {
-                        Text("\(track.number)")
+                        Text("\(track.number.map(String.init) ?? "–")")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()

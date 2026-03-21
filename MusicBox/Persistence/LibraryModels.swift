@@ -56,7 +56,7 @@ nonisolated class LibraryTrack {
     var albumId: UUID
     var name: String
     var disc: Int
-    var number: Int
+    var number: Int?
     var duration: Double
     var mimetype: String
     var streamUrl: String
@@ -71,7 +71,7 @@ nonisolated class LibraryTrack {
     var localFilePath: String?
 
     init(serverId: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
-         name: String, disc: Int, number: Int, duration: Double,
+         name: String, disc: Int, number: Int?, duration: Double,
          mimetype: String, streamUrl: String, downloadUrl: String = "", insertedAt: Date,
          fileSize: Int64, fileChecksum: String,
          isDownloaded: Bool = false, localFilePath: String? = nil) {

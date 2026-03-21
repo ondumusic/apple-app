@@ -159,7 +159,7 @@ final class MusicLibrary {
         return libAlbums.map { la in
             let albumTracks = (tracksByAlbum[la.serverId] ?? [])
                 .map { buildTrack($0, artistMap: artistMap, album: la) }
-                .sorted { ($0.disc, $0.number) < ($1.disc, $1.number) }
+                .sorted { ($0.disc, $0.number ?? Int.max) < ($1.disc, $1.number ?? Int.max) }
             return Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
                          slug: la.slug, releaseYear: la.releaseYear, tracks: albumTracks,
                          isUnknown: la.isUnknown, artworkUrl: la.artworkUrl)
@@ -177,7 +177,7 @@ final class MusicLibrary {
         let album = fetchAlbumRecord(albumId)
         return libTracks
             .map { buildTrack($0, artistMap: artistMap, album: album) }
-            .sorted { ($0.disc, $0.number) < ($1.disc, $1.number) }
+            .sorted { ($0.disc, $0.number ?? Int.max) < ($1.disc, $1.number ?? Int.max) }
     }
 
     func allTracks() -> [Track] {
@@ -195,7 +195,7 @@ final class MusicLibrary {
                 let bAlbum = albumMap[b.albumId]?.sortName ?? ""
                 if aAlbum != bAlbum { return aAlbum.localizedStandardCompare(bAlbum) == .orderedAscending }
                 if a.disc != b.disc { return a.disc < b.disc }
-                return a.number < b.number
+                return (a.number ?? Int.max) < (b.number ?? Int.max)
             }
     }
 
