@@ -118,7 +118,7 @@ final class SyncService {
     @ObservationIgnored private let api: APIService
     @ObservationIgnored private let musicLibrary: MusicLibrary
     @ObservationIgnored private let settings: SettingsStore?
-    @ObservationIgnored private weak var downloadService: DownloadService?
+    @ObservationIgnored private var downloadService: DownloadService?
     @ObservationIgnored private var artworkPrefetcher: ImagePrefetcher?
 
     private var syncCursor: String? {

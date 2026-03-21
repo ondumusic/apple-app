@@ -13,8 +13,10 @@ struct ContentView: View {
         if syncService.hasCompletedInitialSync {
             #if os(iOS)
             iOSRootView()
+                .task { await syncService.syncIfNeeded() }
             #else
             macOSRootView()
+                .task { await syncService.syncIfNeeded() }
             #endif
         } else {
             SyncProgressView()
