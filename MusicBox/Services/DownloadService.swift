@@ -148,8 +148,11 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var trackPhases: [UUID: TrackPhase] = [:]
     /// Reverse lookup: URLSession task identifier → track ID (for delegate callbacks)
     @ObservationIgnored private var taskIdToTrackId: [Int: UUID] = [:]
-    /// Raw progress values — not observable, updated on every delegate callback
+    /// Raw progress values keyed by track ID — used for cleanup tracking on main thread
     @ObservationIgnored private var progressValues: [UUID: Double] = [:]
+    /// Progress values keyed by task ID — written from delegate queue (lock-protected), read by timer
+    @ObservationIgnored private var taskProgressValues: [Int: Double] = [:]
+    @ObservationIgnored private let progressLock = NSLock()
     /// Timer that batches progress into the observable snapshot
     @ObservationIgnored private var progressTimer: Timer?
     /// Number of in-flight downloads — incremented synchronously, so concurrent calls
@@ -582,6 +585,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let state = activeDownloads.removeValue(forKey: trackId)
         activeDownloadOrder.removeAll { $0 == trackId }
         progressValues.removeValue(forKey: trackId)
+        progressLock.lock()
+        taskProgressValues.removeValue(forKey: taskId)
+        progressLock.unlock()
         inFlightCount -= 1
         if let reason, let state, let phase {
             addFailedDownload(trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: phase.info, reason: reason)
@@ -746,10 +752,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let progress = totalBytesExpectedToWrite > 0
             ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             : 0
-        Task { @MainActor in
-            guard let trackId = self.taskIdToTrackId[taskId] else { return }
-            self.progressValues[trackId] = progress
-        }
+        progressLock.lock()
+        taskProgressValues[taskId] = progress
+        progressLock.unlock()
     }
 
     nonisolated func urlSession(
@@ -990,9 +995,17 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     private func startProgressTimerIfNeeded() {
         guard progressTimer == nil else { return }
         progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.progressSnapshot = self?.progressValues ?? [:]
+            guard let self else { return }
+            self.progressLock.lock()
+            let taskValues = self.taskProgressValues
+            self.progressLock.unlock()
+            var snapshot: [UUID: Double] = [:]
+            for (taskId, progress) in taskValues {
+                if let trackId = self.taskIdToTrackId[taskId] {
+                    snapshot[trackId] = progress
+                }
             }
+            self.progressSnapshot = snapshot
         }
     }
 
@@ -1001,6 +1014,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         progressTimer?.invalidate()
         progressTimer = nil
         progressSnapshot.removeAll()
+        progressLock.lock()
+        taskProgressValues.removeAll()
+        progressLock.unlock()
     }
 
     // MARK: - Helpers
