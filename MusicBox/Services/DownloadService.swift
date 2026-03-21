@@ -378,6 +378,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Minimum free disk space (in bytes) required to start new downloads.
     private static let minimumFreeDiskSpace: Int64 = 100 * 1024 * 1024 // 100 MB
 
+    /// Cached disk space value and timestamp to avoid frequent filesystem queries.
+    @ObservationIgnored private var lastDiskSpaceCheck: (space: Int64, time: Date) = (Int64.max, .distantPast)
+    private static let diskSpaceCheckInterval: TimeInterval = 30
+
     /// Starts tasks from the pending queue up to the concurrency limit.
     private func startNextIfNeeded() {
         guard !isPaused else { return }
@@ -387,7 +391,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             return
         }
 
-        if Self.availableDiskSpace() < Self.minimumFreeDiskSpace {
+        if cachedAvailableDiskSpace() < Self.minimumFreeDiskSpace {
             downloadsPausedReason = .lowDiskSpace
             return
         }
@@ -399,6 +403,15 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             if musicLibrary.isDownloaded(trackId: next.track.id) { continue }
             startTask(info: next)
         }
+    }
+
+    private func cachedAvailableDiskSpace() -> Int64 {
+        if Date().timeIntervalSince(lastDiskSpaceCheck.time) < Self.diskSpaceCheckInterval {
+            return lastDiskSpaceCheck.space
+        }
+        let space = Self.availableDiskSpace()
+        lastDiskSpaceCheck = (space, Date())
+        return space
     }
 
     nonisolated private static func availableDiskSpace() -> Int64 {
