@@ -747,6 +747,14 @@ final class PlayerService {
         primaryPlayer.pause()
         primaryPlayer.removeAllItems()
 
+        currentIndex = nextIndex
+        currentTrack = nextTrack
+        hasQueuedGaplessItem = false
+        progress = 0
+        duration = nextTrack.duration
+        isPlaying = true
+        isLoadingTrack = true  // Prevent time observer from updating progress during seek
+
         if let secondary = secondaryPlayer {
             let volume = secondary.volume
             let currentTime = secondary.currentTime()
@@ -762,22 +770,21 @@ final class PlayerService {
                 newPlayer.automaticallyWaitsToMinimizeStalling = !isLocal
                 newPlayer.volume = volume
                 // Seek BEFORE playing to avoid briefly hearing the track from position 0
-                newPlayer.seek(to: currentTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                newPlayer.seek(to: currentTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+                    guard let self else { return }
                     newPlayer.play()
+                    self.isLoadingTrack = false
                 }
                 primaryPlayer = newPlayer
                 currentPlayerItem = newItem
                 gaplessPlayerItem = nil
+            } else {
+                isLoadingTrack = false
             }
             secondaryPlayer = nil
+        } else {
+            isLoadingTrack = false
         }
-
-        currentIndex = nextIndex
-        currentTrack = nextTrack
-        hasQueuedGaplessItem = false
-        progress = 0
-        duration = nextTrack.duration
-        isPlaying = true
 
         setupTimeObserver()
         setupEndObserver()
