@@ -127,7 +127,11 @@ struct MiniPlayerView: View {
                     if settings.artworkTintedPlayer, let artworkColor {
                         artworkColor
                     } else {
+                        #if os(iOS)
                         Color(.secondarySystemBackground)
+                        #else
+                        Color(nsColor: .windowBackgroundColor)
+                        #endif
                     }
                 }
                 .animation(.easeInOut(duration: 0.5), value: artworkColor != nil)

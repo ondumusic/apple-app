@@ -61,6 +61,12 @@ struct macOSRootView: View {
             .background(.yellow)
         }
 
+        MacOSPlayerToolbar()
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(.bar)
+
         NavigationSplitView {
             List(SidebarItem.allCases, selection: sidebarSelection) { item in
                 if item == .downloads {
@@ -90,11 +96,6 @@ struct macOSRootView: View {
                     Text("Select a category")
                         .foregroundStyle(.secondary)
                 }
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                MacOSPlayerToolbar()
             }
         }
         .queueConfirmationOverlay()

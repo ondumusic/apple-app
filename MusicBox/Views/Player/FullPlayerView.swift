@@ -45,8 +45,10 @@ struct FullPlayerView: View {
                         .padding(.horizontal)
 
                     // Volume
+                    #if os(iOS)
                     PlayerVolumeSlider()
                         .padding(.horizontal)
+                    #endif
 
                     // Bottom row: AirPlay left, queue right
                     HStack {
@@ -103,7 +105,11 @@ struct FullPlayerView: View {
                             endPoint: .bottom
                         )
                     } else {
+                        #if os(iOS)
                         Color(.systemBackground)
+                        #else
+                        Color(nsColor: .windowBackgroundColor)
+                        #endif
                     }
                 }
                 .ignoresSafeArea()
@@ -121,10 +127,12 @@ struct FullPlayerView: View {
                 guard settings.artworkTintedPlayer else { return }
                 Task { await updateArtworkColor() }
             }
+            #if os(iOS)
             .onAppear { updateAudioRoute() }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { _ in
                 updateAudioRoute()
             }
+            #endif
             .sheet(isPresented: $showQueue) {
                 NavigationStack {
                     QueueView()
@@ -322,6 +330,7 @@ private struct TransportControls: View {
 
 // MARK: - Volume Slider (isolated)
 
+#if os(iOS)
 private struct PlayerVolumeSlider: View {
     @State private var isDragging = false
 
@@ -343,6 +352,7 @@ private struct PlayerVolumeSlider: View {
         .animation(.easeInOut(duration: 0.15), value: isDragging)
     }
 }
+#endif
 
 // MARK: - Custom Slider (no thumb)
 
@@ -396,6 +406,7 @@ private struct CustomSlider: View {
 
 // MARK: - Volume Slider
 
+#if os(iOS)
 private struct VolumeSlider: View {
     @Binding var isDragging: Bool
     @State private var volume: Double = 0
@@ -420,7 +431,6 @@ private struct VolumeSlider: View {
             }
         }
         .onAppear {
-            #if os(iOS)
             let session = AVAudioSession.sharedInstance()
             try? session.setActive(true)
             volume = Double(session.outputVolume)
@@ -429,7 +439,6 @@ private struct VolumeSlider: View {
                     volume = Double(newVolume)
                 }
             }
-            #endif
         }
         .background {
             SystemVolumeView(volumeView: volumeView)
@@ -445,6 +454,7 @@ private struct VolumeSlider: View {
         }
     }
 }
+#endif
 
 #if os(iOS)
 private class VolumeObserver: NSObject {

@@ -52,6 +52,9 @@ struct ArtistListView: View {
         }
         .refreshable { await syncService.sync() }
         .navigationTitle("Artists")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .navigationDestination(for: Artist.self) { artist in
             ArtistDetailView(artist: artist)
         }
