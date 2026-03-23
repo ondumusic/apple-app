@@ -10,9 +10,31 @@ struct AlbumContextMenuItems: View {
     var artist: Artist? = nil
     var downloadedOnly: Bool = false
 
+    private func availableTracks() -> [Track] {
+        musicLibrary.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
+    }
+
     var body: some View {
         Button {
-            let tracks = musicLibrary.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
+            let tracks = availableTracks()
+            guard !tracks.isEmpty else { return }
+            player.requestPlay { player.playNow(tracks: tracks, artworkURL: album.artworkUrl) }
+        } label: {
+            Label("Play", systemImage: "play.fill")
+        }
+
+        Button {
+            let tracks = availableTracks()
+            guard !tracks.isEmpty else { return }
+            player.requestPlay { player.playShuffled(tracks: tracks, artworkURL: album.artworkUrl) }
+        } label: {
+            Label("Shuffle", systemImage: "shuffle")
+        }
+
+        Divider()
+
+        Button {
+            let tracks = availableTracks()
             guard !tracks.isEmpty else { return }
             player.playNext(tracks: tracks, artworkURL: album.artworkUrl)
         } label: {
@@ -20,7 +42,7 @@ struct AlbumContextMenuItems: View {
         }
 
         Button {
-            let tracks = musicLibrary.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
+            let tracks = availableTracks()
             guard !tracks.isEmpty else { return }
             player.addToEnd(tracks: tracks, artworkURL: album.artworkUrl)
         } label: {
@@ -65,8 +87,30 @@ struct TrackContextMenuItems: View {
         network.isOnline || track.isDownloaded
     }
 
+    /// Tracks from this track through end of album (for "Play" action).
+    private func tracksFromHere() -> [Track] {
+        let albumId = album?.id ?? track.albumId
+        let albumTracks = musicLibrary.availableTracks(
+            musicLibrary.tracksForAlbum(albumId), isOnline: network.isOnline
+        )
+        guard let startIndex = albumTracks.firstIndex(where: { $0.id == track.id }) else {
+            return [track]
+        }
+        return Array(albumTracks[startIndex...])
+    }
+
     var body: some View {
         if isAvailable {
+            Button {
+                let tracks = tracksFromHere()
+                guard !tracks.isEmpty else { return }
+                player.requestPlay { player.playNow(tracks: tracks, artworkURL: artworkURL) }
+            } label: {
+                Label("Play", systemImage: "play.fill")
+            }
+
+            Divider()
+
             Button {
                 player.playNext(tracks: [track], artworkURL: artworkURL)
             } label: {
@@ -95,10 +139,32 @@ struct ArtistContextMenuItems: View {
     let artist: Artist
     var downloadedOnly: Bool = false
 
+    private func availableItems() -> [QueueItem] {
+        let items = buildQueueItems()
+        return musicLibrary.availableItems(items, isOnline: network.isOnline)
+    }
+
     var body: some View {
         Button {
-            let items = buildQueueItems()
-            let available = musicLibrary.availableItems(items, isOnline: network.isOnline)
+            let available = availableItems()
+            guard !available.isEmpty else { return }
+            player.requestPlay { player.playNow(queue: available) }
+        } label: {
+            Label("Play", systemImage: "play.fill")
+        }
+
+        Button {
+            let available = availableItems()
+            guard !available.isEmpty else { return }
+            player.requestPlay { player.playShuffled(queue: available) }
+        } label: {
+            Label("Shuffle", systemImage: "shuffle")
+        }
+
+        Divider()
+
+        Button {
+            let available = availableItems()
             guard !available.isEmpty else { return }
             player.playNext(queue: available)
         } label: {
@@ -106,8 +172,7 @@ struct ArtistContextMenuItems: View {
         }
 
         Button {
-            let items = buildQueueItems()
-            let available = musicLibrary.availableItems(items, isOnline: network.isOnline)
+            let available = availableItems()
             guard !available.isEmpty else { return }
             player.addToEnd(queue: available)
         } label: {
