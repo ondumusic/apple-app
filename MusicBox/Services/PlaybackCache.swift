@@ -66,12 +66,19 @@ final class PlaybackCache {
 
     /// Downloads the stream URL to a local file and returns the cached file URL.
     /// Returns nil if caching fails (playback should fall back to streaming).
-    func cacheTrack(trackId: UUID, from streamURL: URL) async -> URL? {
+    func cacheTrack(trackId: UUID, from streamURL: URL, sessionToken: String? = nil) async -> URL? {
         // Already cached?
         if let existing = cachedURL(for: trackId) { return existing }
 
         do {
-            let (tempURL, response) = try await URLSession.shared.download(from: streamURL)
+            let (tempURL, response): (URL, URLResponse)
+            if let sessionToken {
+                var request = URLRequest(url: streamURL)
+                request.setValue("Bearer \(sessionToken)", forHTTPHeaderField: "Authorization")
+                (tempURL, response) = try await URLSession.shared.download(for: request)
+            } else {
+                (tempURL, response) = try await URLSession.shared.download(from: streamURL)
+            }
 
             // Determine file extension from MIME type or URL
             let ext = fileExtension(from: response, url: streamURL)

@@ -57,7 +57,6 @@ final class PlayerService {
 
     @ObservationIgnored private let api: APIService
     @ObservationIgnored private let settings: SettingsStore
-    @ObservationIgnored private let tokenManager = PlayTokenManager()
     @ObservationIgnored private let musicLibrary: MusicLibrary?
     @ObservationIgnored private let playbackCache: PlaybackCache?
     @ObservationIgnored private var primaryPlayer = AVQueuePlayer()
@@ -405,12 +404,12 @@ final class PlayerService {
         tearDownCrossfade()
 
         do {
-            let playbackURL = try await resolvePlaybackURL(for: track, queueIndex: idx)
+            let playbackURL = try resolvePlaybackURL(for: track, queueIndex: idx)
 
             activateAudioSession()
             // Disable stalling wait for local files (better gapless), enable for remote streams
             primaryPlayer.automaticallyWaitsToMinimizeStalling = !playbackURL.isFileURL
-            let item = AVPlayerItem(url: playbackURL)
+            let item = makePlayerItem(url: playbackURL)
             currentPlayerItem = item
             gaplessPlayerItem = nil
             primaryPlayer.insert(item, after: nil)
@@ -439,7 +438,7 @@ final class PlayerService {
         }
     }
 
-    private func resolvePlaybackURL(for track: Track, queueIndex: Int) async throws -> URL {
+    private func resolvePlaybackURL(for track: Track, queueIndex: Int) throws -> URL {
         if let offlineURL = musicLibrary?.localURL(for: track.id) {
             queue[queueIndex].playbackURL = offlineURL
             return offlineURL
@@ -452,7 +451,9 @@ final class PlayerService {
             queue[queueIndex].playbackURL = cachedURL
             return cachedURL
         }
-        var streamURL = try await tokenManager.resolvedStreamURL(for: track, using: api)
+        guard var streamURL = URL(string: track.streamUrl) else {
+            throw URLError(.badURL)
+        }
         // Determine streaming preset: user setting, or force transcode for unsupported formats
         let streamingQuality = settings.streamingQuality
         let needsTranscode = streamingQuality != .original || !AudioFormat.isAVPlayerSupported(track.mimetype)
@@ -469,11 +470,22 @@ final class PlayerService {
             }
         }
         if let cache = playbackCache {
+            let cacheURL = streamURL
             Task.detached {
-                let _ = await cache.cacheTrack(trackId: track.id, from: streamURL)
+                let _ = await cache.cacheTrack(trackId: track.id, from: cacheURL, sessionToken: self.api.sessionToken)
             }
         }
         return streamURL
+    }
+
+    /// Creates an AVPlayerItem, attaching Bearer auth headers for remote URLs.
+    private func makePlayerItem(url: URL) -> AVPlayerItem {
+        if url.isFileURL {
+            return AVPlayerItem(url: url)
+        }
+        let headers = ["Authorization": "Bearer \(api.sessionToken)"]
+        let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+        return AVPlayerItem(asset: asset)
     }
 
     private func prefetchNextTrackAsync() async {
@@ -482,7 +494,7 @@ final class PlayerService {
         guard nextEffective < queue.count, queue[nextEffective].playbackURL == nil else { return }
         let track = queue[nextEffective].track
         do {
-            let _ = try await resolvePlaybackURL(for: track, queueIndex: nextEffective)
+            let _ = try resolvePlaybackURL(for: track, queueIndex: nextEffective)
         } catch {}
     }
 
@@ -569,8 +581,8 @@ final class PlayerService {
             let nextTrack = queue[nextEffective].track
             Task {
                 do {
-                    let url = try await resolvePlaybackURL(for: nextTrack, queueIndex: nextEffective)
-                    let item = AVPlayerItem(url: url)
+                    let url = try resolvePlaybackURL(for: nextTrack, queueIndex: nextEffective)
+                    let item = self.makePlayerItem(url: url)
                     if self.primaryPlayer.canInsert(item, after: self.primaryPlayer.items().last) {
                         self.primaryPlayer.insert(item, after: self.primaryPlayer.items().last)
                         self.gaplessPlayerItem = item
@@ -583,7 +595,7 @@ final class PlayerService {
             return
         }
 
-        let item = AVPlayerItem(url: url)
+        let item = makePlayerItem(url: url)
         if primaryPlayer.canInsert(item, after: primaryPlayer.items().last) {
             primaryPlayer.insert(item, after: primaryPlayer.items().last)
             gaplessPlayerItem = item
@@ -707,9 +719,9 @@ final class PlayerService {
 
         Task {
             do {
-                let playbackURL = try await resolvePlaybackURL(for: nextTrack, queueIndex: nextEffective)
+                let playbackURL = try resolvePlaybackURL(for: nextTrack, queueIndex: nextEffective)
                 await MainActor.run {
-                    let item = AVPlayerItem(url: playbackURL)
+                    let item = self.makePlayerItem(url: playbackURL)
                     let crossfadePlayer = AVPlayer(playerItem: item)
                     self.secondaryPlayer = crossfadePlayer
                     crossfadePlayer.volume = 0
@@ -772,7 +784,7 @@ final class PlayerService {
             secondary.replaceCurrentItem(with: nil) // Detach item from secondary
 
             if let url {
-                let newItem = AVPlayerItem(url: url)
+                let newItem = makePlayerItem(url: url)
                 let newPlayer = AVQueuePlayer(items: [newItem])
                 newPlayer.automaticallyWaitsToMinimizeStalling = !isLocal
                 newPlayer.volume = volume

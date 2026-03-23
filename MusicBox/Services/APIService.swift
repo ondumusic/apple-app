@@ -75,15 +75,6 @@ final class APIService: Sendable {
         }
     }
 
-    func fetchPlayToken() async throws -> String {
-        nonisolated struct PlayTokenResponse: Decodable, Sendable {
-            var ok: Bool
-            var playToken: String
-        }
-        let response: PlayTokenResponse = try await fetch("/auth/playtoken")
-        return response.playToken
-    }
-
     // MARK: - Sync
 
     func fetchSync(cursor: String? = nil) async throws -> SyncResponse {
