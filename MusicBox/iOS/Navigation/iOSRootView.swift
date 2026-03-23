@@ -10,6 +10,7 @@ struct iOSRootView: View {
     @Environment(DownloadService.self) private var downloadService
     @Environment(NetworkMonitor.self) private var network
     @State private var showSettings = false
+    @State private var showReAuth = false
     @AppStorage("selectedTab") private var selectedTab: iOSTab = .artists
     @State private var artistsPath = NavigationPath()
     @State private var albumsPath = NavigationPath()
@@ -29,11 +30,11 @@ struct iOSRootView: View {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.caption)
-                Text("Session expired — please log in again")
+                Text("Session expired")
                     .font(.caption)
                 Spacer()
-                Button("Log In") {
-                    authService.logout()
+                Button("Re-authenticate") {
+                    showReAuth = true
                 }
                 .font(.caption.bold())
             }
@@ -41,7 +42,7 @@ struct iOSRootView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .padding(.horizontal, 12)
-            .background(.red)
+            .background(.orange)
         } else if !network.isOnline {
             HStack(spacing: 6) {
                 Image(systemName: "wifi.slash")
@@ -118,6 +119,14 @@ struct iOSRootView: View {
         }
         .queueConfirmationOverlay()
         .replaceQueueConfirmation()
+        .sheet(isPresented: $showReAuth) {
+            ReAuthView()
+                .interactiveDismissDisabled()
+        }
+        .onChange(of: authService.isSessionExpired) { _, expired in
+            if expired { showReAuth = true }
+            if !expired { showReAuth = false }
+        }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
                 SettingsView()

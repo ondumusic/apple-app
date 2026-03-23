@@ -188,6 +188,10 @@ final class SyncService {
                     break
                 }
             }
+        } catch APIError.unauthorized {
+            syncError = "Session expired"
+            print("SyncService: sync failed with auth error")
+            NotificationCenter.default.post(name: .sessionExpired, object: nil)
         } catch {
             syncError = error.localizedDescription
             print("SyncService: sync failed: \(error)")

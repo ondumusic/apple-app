@@ -4,6 +4,7 @@ extension Notification.Name {
     static let scrollToTop = Notification.Name("MusicBox.scrollToTop")
     static let navigateToArtist = Notification.Name("MusicBox.navigateToArtist")
     static let navigateToAlbum = Notification.Name("MusicBox.navigateToAlbum")
+    static let sessionExpired = Notification.Name("MusicBox.sessionExpired")
 }
 
 struct ContentView: View {

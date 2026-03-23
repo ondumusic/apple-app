@@ -40,6 +40,7 @@ struct MusicBoxApp: App {
         ImagePipeline.shared = ImagePipeline(configuration: .withDataCache)
 
         let auth = AuthService()
+        auth.observeSessionExpiration()
         auth.restoreSession()
         let settings = SettingsStore()
         let musicLibrary = try! MusicLibrary()

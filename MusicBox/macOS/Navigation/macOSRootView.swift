@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 enum SidebarItem: String, CaseIterable, Identifiable {
@@ -28,6 +29,7 @@ struct macOSRootView: View {
     private var selection: SidebarItem? { SidebarItem(rawValue: selectionRaw) }
     @State private var navigationPath = NavigationPath()
     @State private var searchText = ""
+    @State private var showReAuth = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,11 +37,11 @@ struct macOSRootView: View {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.caption)
-                Text("Session expired — please log in again")
+                Text("Session expired")
                     .font(.caption)
                 Spacer()
-                Button("Log In") {
-                    authService.logout()
+                Button("Re-authenticate") {
+                    showReAuth = true
                 }
                 .font(.caption.bold())
             }
@@ -47,7 +49,7 @@ struct macOSRootView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
             .padding(.horizontal, 12)
-            .background(.red)
+            .background(.orange)
         } else if !network.isOnline {
             HStack(spacing: 6) {
                 Image(systemName: "wifi.slash")
@@ -100,6 +102,14 @@ struct macOSRootView: View {
         }
         .queueConfirmationOverlay()
         .replaceQueueConfirmation()
+        .sheet(isPresented: $showReAuth) {
+            ReAuthView()
+                .interactiveDismissDisabled()
+        }
+        .onChange(of: authService.isSessionExpired) { _, expired in
+            if expired { showReAuth = true }
+            if !expired { showReAuth = false }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
             guard let artist = notification.object as? Artist else { return }
             navigationPath = NavigationPath()
@@ -143,3 +153,4 @@ private struct DownloadSidebarRow: View {
             .badge(count)
     }
 }
+#endif

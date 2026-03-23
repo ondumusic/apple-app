@@ -17,7 +17,6 @@ final class AuthService {
     private enum Keys {
         static let serverURL = "serverURL"
         static let username = "username"
-        static let password = "password"
         static let sessionToken = "sessionToken"
     }
 
@@ -44,9 +43,10 @@ final class AuthService {
         KeychainHelper.save(token, for: Keys.sessionToken)
 
         // Optimistically set up the API service — UI renders immediately
+        print("AuthService: restoring session with token: \(token)")
         self.apiService = APIService(baseURL: serverURL, sessionToken: token)
 
-        // Validate in the background; kick to login if expired
+        // Validate in the background
         Task {
             await validateSession()
         }
@@ -70,9 +70,9 @@ final class AuthService {
                 UserDefaults.standard.set(serverURL.absoluteString, forKey: Keys.serverURL)
                 UserDefaults.standard.set(username, forKey: Keys.username)
 
-                // Secrets in Keychain
-                KeychainHelper.save(password, for: Keys.password)
+                // Session token in Keychain
                 KeychainHelper.save(token, for: Keys.sessionToken)
+                print("AuthService: logged in with token: \(token)")
 
                 let api = APIService(baseURL: serverURL, sessionToken: token)
                 self.apiService = api
@@ -85,6 +85,47 @@ final class AuthService {
         }
 
         isLoading = false
+    }
+
+    // MARK: - Re-Authentication
+
+    /// Re-authenticate with a user-provided password.
+    func reAuthenticate(password: String) async -> Bool {
+        guard let serverURLString = storedServerURL,
+              let serverURL = URL(string: serverURLString),
+              let username = storedUsername else {
+            return false
+        }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let response = try await APIService.login(
+                baseURL: serverURL,
+                username: username,
+                password: password
+            )
+
+            if response.ok, let token = response.sessionToken, let user = response.currentUser {
+                KeychainHelper.save(token, for: Keys.sessionToken)
+                print("AuthService: re-authenticated with token: \(token)")
+
+                let api = APIService(baseURL: serverURL, sessionToken: token)
+                self.apiService = api
+                self.currentUser = user
+                self.isSessionExpired = false
+                isLoading = false
+                return true
+            } else {
+                errorMessage = response.fields?.password?.message ?? "Re-authentication failed"
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+        return false
     }
 
     // MARK: - Logout
@@ -106,6 +147,18 @@ final class AuthService {
         isOffline = false
     }
 
+    // MARK: - Session Expiration Observation
+
+    func observeSessionExpiration() {
+        NotificationCenter.default.addObserver(
+            forName: .sessionExpired,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.isSessionExpired = true
+        }
+    }
+
     // MARK: - Session Validation
 
     func validateSession() async {
@@ -122,14 +175,5 @@ final class AuthService {
             // Network error or other failure — stay logged in for offline playback
             self.isOffline = true
         }
-    }
-
-    // MARK: - Private
-
-    private func clearSession() {
-        KeychainHelper.delete(key: Keys.sessionToken)
-        KeychainHelper.delete(key: Keys.password)
-        currentUser = nil
-        apiService = nil
     }
 }

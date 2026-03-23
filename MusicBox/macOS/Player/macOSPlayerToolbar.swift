@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 struct MacOSPlayerToolbar: View {
@@ -71,3 +72,4 @@ struct MacOSPlayerToolbar: View {
         .allowsHitTesting(track != nil)
     }
 }
+#endif
