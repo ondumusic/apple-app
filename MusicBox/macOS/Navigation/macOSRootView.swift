@@ -104,11 +104,13 @@ struct macOSRootView: View {
         .replaceQueueConfirmation()
         .sheet(isPresented: $showReAuth) {
             ReAuthView()
-                .interactiveDismissDisabled()
         }
         .onChange(of: authService.isSessionExpired) { _, expired in
             if expired { showReAuth = true }
             if !expired { showReAuth = false }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in
+            showReAuth = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
             guard let artist = notification.object as? Artist else { return }

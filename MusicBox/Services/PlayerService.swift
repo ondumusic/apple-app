@@ -422,6 +422,13 @@ final class PlayerService {
             updateNowPlayingPlaybackState()
             await prefetchNextTrackAsync()
             setupGaplessOrCrossfade()
+        } catch APIError.unauthorized {
+            isLoadingTrack = false
+            print("PlayerService: playback failed — session expired")
+            isPlaying = false
+            primaryPlayer.pause()
+            updateNowPlayingPlaybackState()
+            NotificationCenter.default.post(name: .sessionExpired, object: nil)
         } catch {
             isLoadingTrack = false
             print("PlayerService: failed to load track: \(error)")

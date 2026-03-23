@@ -120,6 +120,7 @@ final class SyncService {
     @ObservationIgnored private let settings: SettingsStore?
     @ObservationIgnored private var downloadService: DownloadService?
     @ObservationIgnored private var artworkPrefetcher: ImagePrefetcher?
+    @ObservationIgnored private var isSessionExpired = false
 
     private var syncCursor: String? {
         get { UserDefaults.standard.string(forKey: "syncCursor") }
@@ -133,10 +134,18 @@ final class SyncService {
         self.downloadService = downloadService
         self.hasCompletedInitialSync = UserDefaults.standard.string(forKey: "syncCursor") != nil
         self.lastSyncDate = UserDefaults.standard.object(forKey: "lastSyncDate") as? Date
+
+        NotificationCenter.default.addObserver(forName: .sessionExpired, object: nil, queue: .main) { [weak self] _ in
+            self?.isSessionExpired = true
+        }
     }
 
     func sync() async {
         guard !isSyncing else { return }
+        if isSessionExpired {
+            NotificationCenter.default.post(name: .sessionExpired, object: nil)
+            return
+        }
         isSyncing = true
         syncProgress = SyncProgress()
         syncError = nil
@@ -220,7 +229,7 @@ final class SyncService {
     }
 
     func syncIfNeeded() async {
-        guard !isSyncing else { return }
+        guard !isSyncing, !isSessionExpired else { return }
         if let lastSync = lastSyncDate, Date().timeIntervalSince(lastSync) < 300 {
             return
         }
