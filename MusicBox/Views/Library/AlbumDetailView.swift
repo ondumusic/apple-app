@@ -53,7 +53,9 @@ struct AlbumDetailView: View {
                                     let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
                                     player.requestPlay { player.playNow(tracks: available, artworkURL: album.artworkUrl) }
                                 } label: {
-                                    Label("Play", systemImage: "play.fill")
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 13))
+                                        .frame(width: 18, height: 18)
                                 }
                                 .disabled(!hasPlayable)
 
@@ -61,13 +63,17 @@ struct AlbumDetailView: View {
                                     let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
                                     player.requestPlay { player.playShuffled(tracks: available, artworkURL: album.artworkUrl) }
                                 } label: {
-                                    Label("Shuffle", systemImage: "shuffle")
+                                    Image(systemName: "shuffle")
+                                        .font(.system(size: 13))
+                                        .frame(width: 18, height: 18)
                                 }
                                 .disabled(!hasPlayable)
 
                                 if downloadService.isAlbumDownloading(albumId: album.id) {
                                     Button {} label: {
                                         ProgressView()
+                                            .controlSize(.small)
+                                            .frame(width: 18, height: 18)
                                     }
                                     .disabled(true)
                                 } else if !musicLibrary.isAlbumFullyDownloaded(albumId: album.id) {
@@ -77,15 +83,16 @@ struct AlbumDetailView: View {
                                             ?? Artist(id: album.artistId, name: "", sortName: "", slug: "")
                                         downloadService.download(album: fullAlbum, artist: artist)
                                     } label: {
-                                        Label("Download", systemImage: "arrow.down")
+                                        Image(systemName: "arrow.down")
+                                            .font(.system(size: 13))
+                                            .frame(width: 18, height: 18)
                                     }
                                 }
                             }
-                            .labelStyle(.iconOnly)
                             .buttonStyle(.bordered)
                             .buttonBorderShape(.circle)
                             .controlSize(.regular)
-                            .font(.system(size: 12))
+                            .offset(x: -4)
                             .padding(.top, 4)
                         }
                     }
