@@ -28,6 +28,7 @@ struct MiniPlayerView: View {
                         .frame(width: geo.size.width * min(fraction, 1))
                 }
                 .frame(height: 2)
+                .padding(.horizontal, 6)
                 .background(tinted ? AnyShapeStyle(.white.opacity(0.2)) : AnyShapeStyle(.quaternary))
 
                 HStack(spacing: 10) {
