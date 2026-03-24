@@ -372,6 +372,15 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         pendingQueue.contains { $0.album.id == albumId }
     }
 
+    func cancelAlbumDownloads(albumId: UUID) {
+        pendingQueue.removeAll { $0.album.id == albumId }
+
+        let trackIds = activeDownloads.filter { $0.value.albumId == albumId }.map(\.key)
+        for trackId in trackIds {
+            cancelDownload(trackId: trackId)
+        }
+    }
+
     var hasActivity: Bool {
         !activeDownloads.isEmpty || !pendingQueue.isEmpty || !failedDownloads.isEmpty
     }

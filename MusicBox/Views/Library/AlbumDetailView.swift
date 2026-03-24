@@ -14,6 +14,7 @@ struct AlbumDetailView: View {
     @State private var tracks: [Track] = []
     @State private var totalTrackCount: Int = 0
     @State private var hasLoadedOnce: Bool = false
+    @State private var showCancelDownloads: Bool = false
 
     private var discs: [Int] { Array(Set(tracks.map(\.disc))).sorted() }
     private var hasMultipleDiscs: Bool { discs.count > 1 }
@@ -70,12 +71,13 @@ struct AlbumDetailView: View {
                                 .disabled(!hasPlayable)
 
                                 if downloadService.isAlbumDownloading(albumId: album.id) {
-                                    Button {} label: {
+                                    Button {
+                                        showCancelDownloads = true
+                                    } label: {
                                         ProgressView()
                                             .controlSize(.small)
                                             .frame(width: 18, height: 18)
                                     }
-                                    .disabled(true)
                                 } else if !musicLibrary.isAlbumFullyDownloaded(albumId: album.id) {
                                     Button {
                                         guard let fullAlbum = musicLibrary.albumWithTracks(album.id) else { return }
@@ -137,6 +139,13 @@ struct AlbumDetailView: View {
             if tracks.isEmpty {
                 ContentUnavailableView("No Tracks", systemImage: "music.note")
             }
+        }
+        .confirmationDialog("Cancel Downloads", isPresented: $showCancelDownloads) {
+            Button("Cancel All Downloads", role: .destructive) {
+                downloadService.cancelAlbumDownloads(albumId: album.id)
+            }
+        } message: {
+            Text("Cancel all pending and active downloads for this album?")
         }
         .onChange(of: musicLibrary.revision, initial: true) {
             reloadTracks()
