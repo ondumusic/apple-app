@@ -349,7 +349,7 @@ final class MusicLibrary {
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
             mimetype: lt.mimetype, streamUrl: lt.streamUrl, downloadUrl: lt.downloadUrl,
-            fileSize: lt.fileSize, isDownloaded: lt.isDownloaded
+            isDownloaded: lt.isDownloaded
         )
     }
 
@@ -371,7 +371,7 @@ final class MusicLibrary {
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
             mimetype: lt.mimetype, streamUrl: lt.streamUrl, downloadUrl: lt.downloadUrl,
-            fileSize: lt.fileSize, isDownloaded: lt.isDownloaded
+            isDownloaded: lt.isDownloaded
         )
     }
 }

@@ -48,8 +48,7 @@ import Testing
                 "mimetype": "audio/flac",
                 "stream_url": "/tracks/33333333/stream",
                 "download_url": "/tracks/33333333/download",
-                "inserted_at": "2025-01-01T00:00:00Z",
-                "file": { "size": 35000000, "checksum": "abc123" }
+                "inserted_at": "2025-01-01T00:00:00Z"
             }],
             "deletions": [],
             "cursor": "cursor_abc",
@@ -67,7 +66,6 @@ import Testing
         #expect(response.tracks[0].name == "Paranoid Android")
         #expect(response.tracks[0].disc == 1)
         #expect(response.tracks[0].number == 2)
-        #expect(response.tracks[0].file.size == 35_000_000)
         #expect(response.deletions.isEmpty)
         #expect(response.cursor == "cursor_abc")
         #expect(response.complete)

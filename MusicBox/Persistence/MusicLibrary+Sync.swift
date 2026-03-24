@@ -89,15 +89,12 @@ extension MusicLibrary {
                 lt.streamUrl = st.streamUrl
                 lt.downloadUrl = st.downloadUrl
                 lt.insertedAt = st.insertedAt
-                lt.fileSize = st.file.size
-                lt.fileChecksum = st.file.checksum
             } else {
                 modelContext.insert(LibraryTrack(
                     serverId: st.id, artistId: st.artistId, albumArtistId: st.albumArtistId,
                     albumId: st.albumId, name: st.name, disc: st.disc, number: st.number,
                     duration: st.duration, mimetype: st.mimetype, streamUrl: st.streamUrl,
-                    downloadUrl: st.downloadUrl, insertedAt: st.insertedAt,
-                    fileSize: st.file.size, fileChecksum: st.file.checksum))
+                    downloadUrl: st.downloadUrl, insertedAt: st.insertedAt))
                 inserted.insert(st.id)
             }
         }

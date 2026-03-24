@@ -51,14 +51,14 @@ extension MusicLibrary {
         _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
         let tracks = (try? modelContext.fetch(descriptor)) ?? []
-        return tracks.reduce(0) { $0 + ($1.downloadedFileSize > 0 ? $1.downloadedFileSize : $1.fileSize) }
+        return tracks.reduce(0) { $0 + $1.downloadedFileSize }
     }
 
     func downloadedSize(artistId: UUID) -> Int64 {
         _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         let tracks = (try? modelContext.fetch(descriptor)) ?? []
-        return tracks.reduce(0) { $0 + ($1.downloadedFileSize > 0 ? $1.downloadedFileSize : $1.fileSize) }
+        return tracks.reduce(0) { $0 + $1.downloadedFileSize }
     }
 
     func localURL(for trackId: UUID) -> URL? {

@@ -83,12 +83,6 @@ nonisolated struct SyncTrack: Decodable, Sendable {
     var streamUrl: String
     var downloadUrl: String
     var insertedAt: Date
-    var file: SyncFile
-
-    nonisolated struct SyncFile: Decodable, Sendable {
-        var size: Int64
-        var checksum: String
-    }
 }
 
 nonisolated struct SyncDeletion: Decodable, Sendable {

@@ -32,14 +32,12 @@ private func syncAlbum(id: UUID = UUID(), artistId: UUID, name: String, sortName
 
 private func syncTrack(id: UUID = UUID(), artistId: UUID, albumArtistId: UUID? = nil,
                        albumId: UUID, name: String, disc: Int = 1, number: Int = 1,
-                       duration: Double = 200, mimetype: String = "audio/mp4",
-                       fileSize: Int64 = 5_000_000) -> SyncTrack {
+                       duration: Double = 200, mimetype: String = "audio/mp4") -> SyncTrack {
     SyncTrack(id: id, artistId: artistId, albumArtistId: albumArtistId ?? artistId,
               albumId: albumId, name: name, disc: disc, number: number,
               duration: duration, mimetype: mimetype,
               streamUrl: "/stream/\(id)", downloadUrl: "/download/\(id)",
-              insertedAt: now,
-              file: SyncTrack.SyncFile(size: fileSize, checksum: "abc123"))
+              insertedAt: now)
 }
 
 // MARK: - Artist Query Tests
@@ -518,8 +516,8 @@ struct MusicLibraryDownloadTests {
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 2)])
         lib.upsertTracks([
-            syncTrack(id: t1, artistId: artistId, albumId: albumId, name: "S1", number: 1, fileSize: 1000),
-            syncTrack(id: t2, artistId: artistId, albumId: albumId, name: "S2", number: 2, fileSize: 2000),
+            syncTrack(id: t1, artistId: artistId, albumId: albumId, name: "S1", number: 1),
+            syncTrack(id: t2, artistId: artistId, albumId: albumId, name: "S2", number: 2),
         ])
 
         lib.markDownloaded(trackId: t1, relativePath: "p1.m4a", downloadedFileSize: 1500)
@@ -528,21 +526,6 @@ struct MusicLibraryDownloadTests {
         // downloadedFileSize is used when > 0
         #expect(lib.downloadedSize() == 4000)
         #expect(lib.downloadedSize(artistId: artistId) == 4000)
-    }
-
-    @Test func downloadedSizeFallsBackToFileSize() throws {
-        let lib = try makeTestLibrary()
-        let artistId = UUID()
-        let albumId = UUID()
-        let t1 = UUID()
-        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
-        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album")])
-        lib.upsertTracks([syncTrack(id: t1, artistId: artistId, albumId: albumId, name: "S1", fileSize: 3000)])
-
-        // downloadedFileSize defaults to 0, so falls back to fileSize
-        lib.markDownloaded(trackId: t1, relativePath: "p1.m4a")
-
-        #expect(lib.downloadedSize() == 3000)
     }
 
     @Test func downloadChangedTracksIds() throws {

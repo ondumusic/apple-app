@@ -62,10 +62,8 @@ nonisolated class LibraryTrack {
     var streamUrl: String
     var downloadUrl: String = ""
     var insertedAt: Date
-    var fileSize: Int64
-    var fileChecksum: String
     var isDownloaded: Bool = false
-    /// Actual size of the downloaded file (may differ from fileSize if transcoded)
+    /// Actual size of the downloaded file on disk
     var downloadedFileSize: Int64 = 0
     /// Relative path from Application Support directory, e.g. "MusicBox/Downloads/{artistId}/{albumId}/{trackId}.flac"
     var localFilePath: String?
@@ -73,7 +71,6 @@ nonisolated class LibraryTrack {
     init(serverId: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
          name: String, disc: Int, number: Int?, duration: Double,
          mimetype: String, streamUrl: String, downloadUrl: String = "", insertedAt: Date,
-         fileSize: Int64, fileChecksum: String,
          isDownloaded: Bool = false, localFilePath: String? = nil) {
         self.serverId = serverId
         self.artistId = artistId
@@ -87,8 +84,6 @@ nonisolated class LibraryTrack {
         self.streamUrl = streamUrl
         self.downloadUrl = downloadUrl
         self.insertedAt = insertedAt
-        self.fileSize = fileSize
-        self.fileChecksum = fileChecksum
         self.isDownloaded = isDownloaded
         self.localFilePath = localFilePath
     }
