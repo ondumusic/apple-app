@@ -12,14 +12,16 @@ final class MusicLibrary {
     @ObservationIgnored var cachedArtistMap: [UUID: LibraryArtist]?
     @ObservationIgnored var cachedAlbumMap: [UUID: LibraryAlbum]?
 
-    /// Track IDs whose download state changed. Views observe this to update in-place
-    /// without re-querying SwiftData.
-    var downloadChanged: Set<UUID> = []
+    /// Track IDs whose download state changed, mapped to the new `isDownloaded` value.
+    /// Views observe this to update in-place without re-querying SwiftData.
+    var downloadChanged: [UUID: Bool] = [:]
 
     /// Updates `isDownloaded` in-place on tracks affected by the latest download change.
     func applyDownloadChanges(to tracks: inout [Track]) {
-        for i in tracks.indices where downloadChanged.contains(tracks[i].id) {
-            tracks[i].isDownloaded = isDownloaded(trackId: tracks[i].id)
+        for i in tracks.indices {
+            if let newState = downloadChanged[tracks[i].id] {
+                tracks[i].isDownloaded = newState
+            }
         }
     }
 

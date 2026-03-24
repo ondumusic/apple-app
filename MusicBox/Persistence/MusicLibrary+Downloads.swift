@@ -140,7 +140,7 @@ extension MusicLibrary {
         track.localFilePath = relativePath
         track.downloadedFileSize = downloadedFileSize
         persistChanges()
-        downloadChanged = [trackId]
+        downloadChanged = [trackId: true]
     }
 
     func markUndownloaded(trackId: UUID) {
@@ -153,20 +153,20 @@ extension MusicLibrary {
         track.isDownloaded = false
         track.localFilePath = nil
         persistChanges()
-        downloadChanged = [trackId]
+        downloadChanged = [trackId: false]
     }
 
     func markAlbumUndownloaded(albumId: UUID) {
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return }
-        var changed = Set<UUID>()
+        var changed: [UUID: Bool] = [:]
         for track in tracks {
             if let url = track.resolvedFileURL {
                 try? FileManager.default.removeItem(at: url)
             }
             track.isDownloaded = false
             track.localFilePath = nil
-            changed.insert(track.serverId)
+            changed[track.serverId] = false
         }
         persistChanges()
         downloadChanged = changed
@@ -175,14 +175,14 @@ extension MusicLibrary {
     func markArtistUndownloaded(artistId: UUID) {
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return }
-        var changed = Set<UUID>()
+        var changed: [UUID: Bool] = [:]
         for track in tracks {
             if let url = track.resolvedFileURL {
                 try? FileManager.default.removeItem(at: url)
             }
             track.isDownloaded = false
             track.localFilePath = nil
-            changed.insert(track.serverId)
+            changed[track.serverId] = false
         }
         persistChanges()
         downloadChanged = changed
@@ -191,14 +191,14 @@ extension MusicLibrary {
     func markAllUndownloaded() {
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return }
-        var changed = Set<UUID>()
+        var changed: [UUID: Bool] = [:]
         for track in tracks {
             if let url = track.resolvedFileURL {
                 try? FileManager.default.removeItem(at: url)
             }
             track.isDownloaded = false
             track.localFilePath = nil
-            changed.insert(track.serverId)
+            changed[track.serverId] = false
         }
         let fm = FileManager.default
         if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {

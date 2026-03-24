@@ -12,6 +12,7 @@ struct DownloadsView: View {
     @State private var totalSize: Int64 = 0
     @State private var artistSizes: [UUID: Int64] = [:]
     @State private var hasLoaded = false
+    @State private var isVisible = false
 
     var body: some View {
         List {
@@ -320,8 +321,10 @@ struct DownloadsView: View {
             reloadData()
         }
         .onChange(of: musicLibrary.downloadChanged) {
-            reloadData()
+            if isVisible { reloadData() }
         }
+        .onAppear { isVisible = true; reloadData() }
+        .onDisappear { isVisible = false }
     }
 
     private func reloadData() {
