@@ -60,7 +60,7 @@ final class PlayerService {
     @ObservationIgnored private let musicLibrary: MusicLibrary?
     @ObservationIgnored private let playbackCache: PlaybackCache?
     @ObservationIgnored private var primaryPlayer = AVQueuePlayer()
-    @ObservationIgnored private var secondaryPlayer: AVPlayer?
+    @ObservationIgnored private var secondaryPlayer: AVQueuePlayer?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var crossfadeObserver: Any?
     @ObservationIgnored private var crossfadeTimer: Timer?
@@ -722,7 +722,7 @@ final class PlayerService {
                 let playbackURL = try resolvePlaybackURL(for: nextTrack, queueIndex: nextEffective)
                 await MainActor.run {
                     let item = self.makePlayerItem(url: playbackURL)
-                    let crossfadePlayer = AVPlayer(playerItem: item)
+                    let crossfadePlayer = AVQueuePlayer(items: [item])
                     self.secondaryPlayer = crossfadePlayer
                     crossfadePlayer.volume = 0
                     crossfadePlayer.play()
@@ -775,49 +775,14 @@ final class PlayerService {
         isLoadingTrack = true  // Prevent time observer from updating progress during seek
 
         if let secondary = secondaryPlayer {
-            // Promote secondary directly — it's already playing at the correct position.
-            // No item recreation or seeking needed, which avoids stutter/rewind artifacts.
+            // Promote secondary directly — it's already an AVQueuePlayer playing at the correct position.
+            // No pause/recreate/seek needed, which avoids stutter/rewind artifacts.
             secondary.volume = 1.0
+            primaryPlayer = secondary
             currentPlayerItem = secondary.currentItem
             gaplessPlayerItem = nil
-
-            // Wrap the AVPlayer in an AVQueuePlayer for gapless support on the next track.
-            // We can't cast AVPlayer to AVQueuePlayer, so we recreate — but keep the item playing.
-            // Instead, just keep the secondary as-is and use it as primary.
-            // primaryPlayer is AVQueuePlayer but we only need AVPlayer features until next gapless setup.
-            // Simplest: keep secondary playing, set up a new AVQueuePlayer for future inserts,
-            // and let the secondary finish naturally via end observer.
-
-            // Actually: just replace primaryPlayer's role with secondary.
-            // Since primaryPlayer must be AVQueuePlayer for gapless, and secondary is AVPlayer,
-            // we set up a fresh AVQueuePlayer and let secondary keep playing as a "legacy" player
-            // that we monitor. But that's complex.
-
-            // Pragmatic approach: recreate item but mute until seek completes.
-            let currentTime = secondary.currentTime()
-            let url = (secondary.currentItem?.asset as? AVURLAsset)?.url
-            let isLocal = url?.isFileURL == true
-            secondary.pause()
-            secondary.replaceCurrentItem(with: nil)
-
-            if let url {
-                let newItem = makePlayerItem(url: url)
-                let newPlayer = AVQueuePlayer(items: [newItem])
-                newPlayer.automaticallyWaitsToMinimizeStalling = !isLocal
-                newPlayer.volume = 0  // Mute until seek completes to prevent stutter
-                newPlayer.seek(to: currentTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
-                    guard let self else { return }
-                    newPlayer.volume = 1.0
-                    newPlayer.play()
-                    self.isLoadingTrack = false
-                }
-                primaryPlayer = newPlayer
-                currentPlayerItem = newItem
-                gaplessPlayerItem = nil
-            } else {
-                isLoadingTrack = false
-            }
             secondaryPlayer = nil
+            isLoadingTrack = false
         } else {
             isLoadingTrack = false
         }
