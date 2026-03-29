@@ -9,6 +9,7 @@ struct SearchView: View {
     let query: String
 
     @State private var results: (artists: [Artist], albums: [Album], tracks: [Track]) = ([], [], [])
+    @State private var didAddToHistory = false
 
     var body: some View {
         let hasResults = !results.artists.isEmpty || !results.albums.isEmpty || !results.tracks.isEmpty
@@ -27,6 +28,7 @@ struct SearchView: View {
             }
         }
         .onChange(of: query) {
+            didAddToHistory = false
             results = query.isEmpty ? ([], [], []) : musicLibrary.search(query)
         }
         .task(id: musicLibrary.revision) {
@@ -72,20 +74,26 @@ struct SearchView: View {
         .navigationDestination(for: Artist.self) { artist in
             ArtistDetailView(artist: artist)
                 .onAppear {
-                    searchHistory.add(SearchHistoryItem(
-                        id: artist.id, kind: .artist, name: artist.name
-                    ))
+                    if !didAddToHistory, results.artists.contains(where: { $0.id == artist.id }) {
+                        didAddToHistory = true
+                        searchHistory.add(SearchHistoryItem(
+                            id: artist.id, kind: .artist, name: artist.name
+                        ))
+                    }
                 }
         }
         .navigationDestination(for: Album.self) { album in
             AlbumDetailView(album: album)
                 .onAppear {
-                    let artistName = musicLibrary.artist(album.artistId)?.name
-                    searchHistory.add(SearchHistoryItem(
-                        id: album.id, kind: .album, name: album.name,
-                        subtitle: artistName, artworkUrl: album.artworkUrl,
-                        artistId: album.artistId
-                    ))
+                    if !didAddToHistory, results.albums.contains(where: { $0.id == album.id }) {
+                        didAddToHistory = true
+                        let artistName = musicLibrary.artist(album.artistId)?.name
+                        searchHistory.add(SearchHistoryItem(
+                            id: album.id, kind: .album, name: album.name,
+                            subtitle: artistName, artworkUrl: album.artworkUrl,
+                            artistId: album.artistId
+                        ))
+                    }
                 }
         }
     }
