@@ -328,13 +328,10 @@ struct DownloadsView: View {
     }
 
     private func reloadData() {
-        artists = musicLibrary.downloadedArtists()
-        totalSize = musicLibrary.downloadedSize()
-        var sizes: [UUID: Int64] = [:]
-        for artist in artists {
-            sizes[artist.id] = musicLibrary.downloadedSize(artistId: artist.id)
-        }
-        artistSizes = sizes
+        let summary = musicLibrary.downloadedSummary()
+        artists = summary.artists
+        totalSize = summary.totalSize
+        artistSizes = summary.artistSizes
         hasLoaded = true
     }
 

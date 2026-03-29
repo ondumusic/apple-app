@@ -69,6 +69,39 @@ extension MusicLibrary {
         return track.resolvedFileURL
     }
 
+    nonisolated struct DownloadedSummary {
+        var artists: [Artist]
+        var totalSize: Int64
+        var artistSizes: [UUID: Int64]
+    }
+
+    /// Single-query summary of all downloaded content for the Downloads tab.
+    func downloadedSummary() -> DownloadedSummary {
+        _ = downloadChanged
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
+        let downloaded = (try? modelContext.fetch(descriptor)) ?? []
+
+        var totalSize: Int64 = 0
+        var artistSizes: [UUID: Int64] = [:]
+        var artistAlbumIds: [UUID: Set<UUID>] = [:]
+
+        for track in downloaded {
+            totalSize += track.downloadedFileSize
+            artistSizes[track.albumArtistId, default: 0] += track.downloadedFileSize
+            artistAlbumIds[track.albumArtistId, default: []].insert(track.albumId)
+        }
+
+        let artistIds = Set(downloaded.map(\.albumArtistId))
+        let artistMap = buildArtistMapForIds(artistIds)
+        let artists = artistIds.compactMap { id -> Artist? in
+            guard let la = artistMap[id] else { return nil }
+            return Artist(id: la.serverId, name: la.name, sortName: la.sortName,
+                          slug: la.slug, albumCount: artistAlbumIds[id]?.count ?? 0)
+        }.sorted { $0.sortName.localizedStandardCompare($1.sortName) == .orderedAscending }
+
+        return DownloadedSummary(artists: artists, totalSize: totalSize, artistSizes: artistSizes)
+    }
+
     /// Returns artists that have at least one downloaded track, sorted by sortName.
     func downloadedArtists() -> [Artist] {
         _ = downloadChanged
