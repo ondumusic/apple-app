@@ -73,7 +73,7 @@ struct SearchView: View {
         .listStyle(.plain)
         .navigationDestination(for: Artist.self) { artist in
             ArtistDetailView(artist: artist)
-                .onAppear {
+                .task {
                     if !didAddToHistory, results.artists.contains(where: { $0.id == artist.id }) {
                         didAddToHistory = true
                         searchHistory.add(SearchHistoryItem(
@@ -84,13 +84,12 @@ struct SearchView: View {
         }
         .navigationDestination(for: Album.self) { album in
             AlbumDetailView(album: album)
-                .onAppear {
+                .task {
                     if !didAddToHistory, results.albums.contains(where: { $0.id == album.id }) {
                         didAddToHistory = true
-                        let artistName = musicLibrary.artist(album.artistId)?.name
                         searchHistory.add(SearchHistoryItem(
                             id: album.id, kind: .album, name: album.name,
-                            subtitle: artistName, artworkUrl: album.artworkUrl,
+                            subtitle: album.artistName, artworkUrl: album.artworkUrl,
                             artistId: album.artistId
                         ))
                     }
