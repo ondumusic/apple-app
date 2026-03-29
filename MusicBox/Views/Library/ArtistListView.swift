@@ -21,21 +21,22 @@ struct ArtistListView: View {
             ScrollViewReader { proxy in
                 List {
                     ForEach(sections) { section in
-                        Section {
-                            ForEach(section.artists) { artist in
-                                ZStack(alignment: .leading) {
-                                    NavigationLink(value: artist) { EmptyView() }
-                                        .opacity(0)
-                                    ArtistCard(artist: artist)
-                                }
-                                .contextMenu {
-                                    ArtistContextMenuItems(artist: artist)
-                                }
-                                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 36))
+                        Text(section.letter)
+                            .font(.title3.weight(.bold))
+                            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 36))
+                            .listRowSeparator(.hidden)
+                            .id(section.letter)
+
+                        ForEach(section.artists) { artist in
+                            ZStack(alignment: .leading) {
+                                NavigationLink(value: artist) { EmptyView() }
+                                    .opacity(0)
+                                ArtistCard(artist: artist)
                             }
-                        } header: {
-                            Text(section.letter)
-                                .id(section.letter)
+                            .contextMenu {
+                                ArtistContextMenuItems(artist: artist)
+                            }
+                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 36))
                         }
                     }
                 }

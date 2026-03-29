@@ -47,19 +47,20 @@ struct SongListView: View {
                     }
 
                     ForEach(sections) { section in
-                        Section {
-                            ForEach(section.tracks) { track in
-                                TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
-                                    let available = musicLibrary.availableItems(allQueueItems, isOnline: network.isOnline)
-                                    if let idx = available.firstIndex(where: { $0.track.id == track.id }) {
-                                        player.requestPlay { player.playNow(queue: available, startingAt: idx) }
-                                    }
+                        Text(section.letter)
+                            .font(.title3.weight(.bold))
+                            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 36))
+                            .listRowSeparator(.hidden)
+                            .id(section.letter)
+
+                        ForEach(section.tracks) { track in
+                            TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
+                                let available = musicLibrary.availableItems(allQueueItems, isOnline: network.isOnline)
+                                if let idx = available.firstIndex(where: { $0.track.id == track.id }) {
+                                    player.requestPlay { player.playNow(queue: available, startingAt: idx) }
                                 }
-                                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
                             }
-                        } header: {
-                            Text(section.letter)
-                                .id(section.letter)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 36))
                         }
                     }
                 }
