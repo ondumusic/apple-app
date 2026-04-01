@@ -898,6 +898,7 @@ final class PlayerService {
             info[MPMediaItemPropertyArtwork] = artwork
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
         updateRemoteCommandStates()
 
         guard let artworkURL, artworkURL != nowPlayingArtworkURL else { return }
@@ -925,6 +926,7 @@ final class PlayerService {
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = progress
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
         updateRemoteCommandStates()
     }
 
