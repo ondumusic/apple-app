@@ -263,4 +263,46 @@ extension MusicLibrary {
         if isOnline { return items }
         return items.filter { $0.track.isDownloaded }
     }
+
+    // MARK: - Reconciliation
+
+    /// Re-marks tracks as downloaded by matching the on-disk Downloads/ manifest written
+    /// before a SwiftData store reset. Orphaned files (no matching track in the new library)
+    /// are deleted. Consumes the manifest on success.
+    func reconcileDownloadedFiles() {
+        let fm = FileManager.default
+        guard let manifestURL = Self.reconciliationManifestURL,
+              fm.fileExists(atPath: manifestURL.path),
+              let data = try? Data(contentsOf: manifestURL),
+              let entries = try? JSONDecoder().decode([DownloadManifestEntry].self, from: data) else {
+            return
+        }
+
+        var matched: [UUID: Bool] = [:]
+        var reclaimed = 0
+        for entry in entries {
+            var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == entry.trackId })
+            descriptor.fetchLimit = 1
+            if let track = try? modelContext.fetch(descriptor).first {
+                track.isDownloaded = true
+                track.localFilePath = entry.relativePath
+                track.downloadedFileSize = entry.fileSize
+                matched[entry.trackId] = true
+                reclaimed += 1
+            } else {
+                // Orphan — track no longer in library, remove the file.
+                if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                    let fileURL = appSupport.appendingPathComponent(entry.relativePath)
+                    try? fm.removeItem(at: fileURL)
+                }
+            }
+        }
+
+        persistChanges()
+        downloadChanged = matched
+        #if DEBUG
+        print("MusicLibrary: reconciled \(reclaimed)/\(entries.count) downloaded tracks after store reset")
+        #endif
+        try? fm.removeItem(at: manifestURL)
+    }
 }

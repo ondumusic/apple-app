@@ -43,7 +43,9 @@ final class AuthService {
         KeychainHelper.save(token, for: Keys.sessionToken)
 
         // Optimistically set up the API service — UI renders immediately
+        #if DEBUG
         print("AuthService: restoring session with token: \(token)")
+        #endif
         self.apiService = APIService(baseURL: serverURL, sessionToken: token)
 
         // Validate in the background
@@ -72,7 +74,9 @@ final class AuthService {
 
                 // Session token in Keychain
                 KeychainHelper.save(token, for: Keys.sessionToken)
+                #if DEBUG
                 print("AuthService: logged in with token: \(token)")
+                #endif
 
                 let api = APIService(baseURL: serverURL, sessionToken: token)
                 self.apiService = api
@@ -109,7 +113,9 @@ final class AuthService {
 
             if response.ok, let token = response.sessionToken, let user = response.currentUser {
                 KeychainHelper.save(token, for: Keys.sessionToken)
+                #if DEBUG
                 print("AuthService: re-authenticated with token: \(token)")
+                #endif
 
                 let api = APIService(baseURL: serverURL, sessionToken: token)
                 self.apiService = api

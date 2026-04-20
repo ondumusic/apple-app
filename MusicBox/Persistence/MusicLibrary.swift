@@ -35,7 +35,13 @@ final class MusicLibrary {
         do {
             modelContainer = try ModelContainer(for: schema)
         } catch {
+            #if DEBUG
             print("MusicLibrary: schema migration failed, resetting database: \(error)")
+            #endif
+            // Scan the Downloads/ directory and record what's on disk BEFORE we wipe the
+            // SwiftData store. After a successful re-sync, reconcileDownloadedFiles() uses
+            // this manifest to re-mark tracks as downloaded (and delete orphaned files).
+            Self.writeReconciliationManifest()
             let fm = FileManager.default
             if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
                 let enumerator = fm.enumerator(at: appSupport, includingPropertiesForKeys: nil)
@@ -52,13 +58,53 @@ final class MusicLibrary {
         }
     }
 
+    // MARK: - Reconciliation manifest
+
+    nonisolated struct DownloadManifestEntry: Codable, Sendable {
+        let trackId: UUID
+        let relativePath: String
+        let fileSize: Int64
+    }
+
+    nonisolated static var reconciliationManifestURL: URL? {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        return appSupport.appendingPathComponent("MusicBox/.reconciliation-manifest.json")
+    }
+
+    /// Scans Downloads/{artistId}/{albumId}/{trackId}.ext and writes a manifest of found files.
+    /// Called from the store-reset catch path so we can rebuild download state after sync.
+    nonisolated static func writeReconciliationManifest() {
+        let fm = FileManager.default
+        guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        let downloads = appSupport.appendingPathComponent("MusicBox/Downloads", isDirectory: true)
+        guard fm.fileExists(atPath: downloads.path) else { return }
+
+        var entries: [DownloadManifestEntry] = []
+        let enumerator = fm.enumerator(at: downloads, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey])
+        while let url = enumerator?.nextObject() as? URL {
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+            guard values?.isRegularFile == true else { continue }
+            let trackIdString = url.deletingPathExtension().lastPathComponent
+            guard let trackId = UUID(uuidString: trackIdString) else { continue }
+            let relativePath = "MusicBox/Downloads/\(url.path.replacingOccurrences(of: downloads.path + "/", with: ""))"
+            let size = Int64(values?.fileSize ?? 0)
+            entries.append(DownloadManifestEntry(trackId: trackId, relativePath: relativePath, fileSize: size))
+        }
+
+        guard let manifestURL = reconciliationManifestURL else { return }
+        try? fm.createDirectory(at: manifestURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? JSONEncoder().encode(entries).write(to: manifestURL)
+    }
+
     var modelContext: ModelContext { modelContainer.mainContext }
 
     func persistChanges(_ caller: String = #function) {
         do {
             try modelContext.save()
         } catch {
+            #if DEBUG
             print("MusicLibrary: save failed in \(caller): \(error)")
+            #endif
         }
     }
 

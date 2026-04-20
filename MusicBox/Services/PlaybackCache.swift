@@ -101,7 +101,9 @@ final class PlaybackCache {
 
             return destURL
         } catch {
+            #if DEBUG
             print("PlaybackCache: failed to cache track \(trackId): \(error)")
+            #endif
             return nil
         }
     }

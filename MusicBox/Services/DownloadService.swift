@@ -103,7 +103,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     @ObservationIgnored private let musicLibrary: MusicLibrary
     @ObservationIgnored private let settings: SettingsStore
-    @ObservationIgnored private let baseURL: URL
+    /// Current auth — nil when logged out. Updated via `configure(baseURL:sessionToken:)`.
+    @ObservationIgnored private var baseURL: URL?
+    @ObservationIgnored private var sessionToken: String?
 
     @ObservationIgnored private let delegateQueue: OperationQueue = {
         let q = OperationQueue()
@@ -112,13 +114,13 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         return q
     }()
 
-    /// Background session — survives app suspension/termination
+    /// Background session — survives app suspension/termination.
+    /// Auth header is attached per-request (not via config) so we can swap tokens without recreating the session.
     @ObservationIgnored private lazy var backgroundSession: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: "com.musicbox.downloads")
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
         config.allowsConstrainedNetworkAccess = false
-        config.httpAdditionalHeaders = sessionHeaders
         config.timeoutIntervalForRequest = 300
         return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
     }()
@@ -127,7 +129,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private lazy var foregroundSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.allowsConstrainedNetworkAccess = false
-        config.httpAdditionalHeaders = sessionHeaders
         config.timeoutIntervalForRequest = 300
         return URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
     }()
@@ -135,12 +136,19 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Lightweight session for transcode prepare requests (no delegate needed)
     @ObservationIgnored private lazy var prepareSession: URLSession = {
         let config = URLSessionConfiguration.default
-        config.httpAdditionalHeaders = sessionHeaders
         config.timeoutIntervalForRequest = 300
         return URLSession(configuration: config)
     }()
 
-    @ObservationIgnored private let sessionHeaders: [String: String]
+    private var authorizedRequest: (URL) -> URLRequest? {
+        { [weak self] url in
+            guard let token = self?.sessionToken else { return nil }
+            var req = URLRequest(url: url)
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            req.timeoutInterval = 300
+            return req
+        }
+    }
     /// Whether the app is currently in the foreground
     @ObservationIgnored private var isInForeground: Bool = true
 
@@ -176,15 +184,36 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     // MARK: - Init
 
-    init(baseURL: URL, sessionToken: String, musicLibrary: MusicLibrary, settings: SettingsStore) {
-        self.baseURL = baseURL
+    init(musicLibrary: MusicLibrary, settings: SettingsStore) {
         self.musicLibrary = musicLibrary
         self.settings = settings
-        self.sessionHeaders = ["Authorization": "Bearer \(sessionToken)"]
         super.init()
         _ = backgroundSession // reconnect to any in-flight background tasks
         processPendingCompletions()
         observeAppLifecycle()
+    }
+
+    /// Convenience init used by tests and legacy call sites that already have auth available.
+    convenience init(baseURL: URL, sessionToken: String, musicLibrary: MusicLibrary, settings: SettingsStore) {
+        self.init(musicLibrary: musicLibrary, settings: settings)
+        configure(baseURL: baseURL, sessionToken: sessionToken)
+    }
+
+    /// Updates current auth. Safe to call repeatedly (e.g. after re-auth). Does not cancel active downloads —
+    /// any in-flight request keeps its original Bearer token, and only new/retried requests use the new one.
+    func configure(baseURL: URL, sessionToken: String) {
+        self.baseURL = baseURL
+        self.sessionToken = sessionToken
+    }
+
+    /// Clears auth state and cancels everything in-flight + queued. Called on logout.
+    /// The service stays alive (URLSession continues to exist with its background identifier) so that
+    /// the next login can simply call `configure(...)` without creating a second session with the same id.
+    func clearAuth() {
+        cancelAll()
+        failedDownloads.removeAll()
+        baseURL = nil
+        sessionToken = nil
     }
 
     // MARK: - Public API
@@ -488,16 +517,16 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let session = prepareSession
 
         // Build prepare URL
-        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+        guard let baseURL, var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            cleanupPrepare(trackId: trackId, reason: "Not authenticated")
+            return
+        }
         components.path = "/transcode/\(trackId.uuidString.lowercased())"
         components.queryItems = [URLQueryItem(name: "preset", value: preset)]
-        guard let prepareURL = components.url else {
+        guard let prepareURL = components.url, let request = authorizedRequest(prepareURL) else {
             cleanupPrepare(trackId: trackId, reason: "Invalid URL")
             return
         }
-
-        var request = URLRequest(url: prepareURL)
-        request.timeoutInterval = 300
 
         // Use a completion-based data task to avoid Task/async entirely
         let dataTask = session.dataTask(with: request) { [weak self] data, response, error in
@@ -509,6 +538,12 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 guard activeDownloads[trackId] != nil else { return }
 
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+                if statusCode == 401 {
+                    self.handleUnauthorized(requeue: info)
+                    return
+                }
+
                 let body = data.flatMap { String(data: $0, encoding: .utf8) }
                 guard error == nil, (200...299).contains(statusCode), let body else {
                     let msg = error?.localizedDescription ?? "HTTP \(statusCode)"
@@ -550,8 +585,12 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     /// Starts the actual URLSession download task for a given URL.
     private func startDownloadTask(info: DownloadInfo, url: URL) {
+        guard let request = authorizedRequest(url) else {
+            cleanupPrepare(trackId: info.track.id, reason: "Not authenticated")
+            return
+        }
         let session = isInForeground ? foregroundSession : backgroundSession
-        let task = session.downloadTask(with: url)
+        let task = session.downloadTask(with: request)
 
         let metadata = TaskMetadata(
             trackId: info.track.id,
@@ -566,6 +605,26 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         trackPhases[info.track.id] = .downloading(task: task, taskId: taskId, info: info)
         taskIdToTrackId[taskId] = info.track.id
         task.resume()
+    }
+
+    /// Handles a 401 response: re-queue the download for after re-auth, pause new starts, notify UI.
+    private func handleUnauthorized(requeue info: DownloadInfo) {
+        let trackId = info.track.id
+        let phase = trackPhases.removeValue(forKey: trackId)
+        activeDownloads.removeValue(forKey: trackId)
+        activeDownloadOrder.removeAll { $0 == trackId }
+        progressValues.removeValue(forKey: trackId)
+        if case .downloading(_, let taskId, _) = phase {
+            taskIdToTrackId.removeValue(forKey: taskId)
+            progressLock.lock()
+            taskProgressValues.removeValue(forKey: taskId)
+            progressLock.unlock()
+        }
+        inFlightCount -= 1
+        pendingQueue.insert(info, at: 0)
+        isPaused = true
+        stopProgressTimerIfIdle()
+        NotificationCenter.default.post(name: .sessionExpired, object: nil)
     }
 
     private nonisolated struct PrepareResult: Decodable {
@@ -736,7 +795,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
         // Validate file was saved and has reasonable size (> 1KB)
         guard let saved, saved.size > 1024 else {
+            #if DEBUG
             print("DownloadService: file save failed or too small for \(metadata.trackName)")
+            #endif
             return
         }
 
@@ -782,9 +843,16 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             guard let trackId = self.taskIdToTrackId[taskId],
                   case .downloading(_, _, let info) = self.trackPhases[trackId] else { return }
 
+            if statusCode == 401 {
+                self.handleUnauthorized(requeue: info)
+                return
+            }
+
             if [408, 429, 502, 503, 504].contains(statusCode), info.retryCount < 3 {
                 let delay = retryAfter ?? 5
+                #if DEBUG
                 print("DownloadService: server busy for \(info.track.name), retrying in \(Int(delay))s (attempt \(info.retryCount + 1)/3)")
+                #endif
                 var retryInfo = info
                 retryInfo.retryCount += 1
                 // Remove task tracking but don't decrement inFlightCount or start next —
@@ -806,7 +874,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             }
 
             if let statusCode, !(200...299).contains(statusCode) {
+                #if DEBUG
                 print("DownloadService: HTTP \(statusCode) for \(info.track.name)")
+                #endif
                 cleanupTask(trackId: trackId, taskId: taskId, reason: "Server error (HTTP \(statusCode))")
                 return
             }
@@ -816,7 +886,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 if self.successfulSaves.remove(taskId) != nil {
                     cleanupTask(trackId: trackId, taskId: taskId)
                 } else {
+                    #if DEBUG
                     print("DownloadService: download completed but file was not saved for \(info.track.name)")
+                    #endif
                     cleanupTask(trackId: trackId, taskId: taskId, reason: "Download failed — file could not be saved")
                 }
                 return
@@ -824,6 +896,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             let nsError = error as NSError
             if nsError.code == NSURLErrorCancelled { return }
 
+            #if DEBUG
             print("DownloadService: error detail for \(info.track.name):")
             print("  code: \(nsError.code) domain: \(nsError.domain)")
             print("  userInfo: \(nsError.userInfo)")
@@ -835,6 +908,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             } else {
                 print("  response: nil")
             }
+            #endif
 
             // Retry transient network errors
             let retryableErrors = [
@@ -845,13 +919,17 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             if retryableErrors.contains(nsError.code), info.retryCount < 3 {
                 var retryInfo = info
                 retryInfo.retryCount += 1
+                #if DEBUG
                 print("DownloadService: transient error for \(info.track.name), retrying (attempt \(retryInfo.retryCount)/3, code: \(nsError.code))")
+                #endif
                 pendingQueue.insert(retryInfo, at: 0)
                 cleanupTask(trackId: trackId, taskId: taskId)
                 return
             }
 
+            #if DEBUG
             print("DownloadService: download failed for \(info.track.name): \(error)")
+            #endif
             cleanupTask(trackId: trackId, taskId: taskId, reason: error.localizedDescription)
         }
     }
@@ -892,8 +970,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             // Validate M4A/MP4 files have a moov atom (required for playback)
             if ext == "m4a" || ext == "mp4" {
                 guard Self.hasMoovAtom(at: destURL) else {
+                    #if DEBUG
                     print("DownloadService: corrupt M4A (missing moov) for \(metadata.trackName), size=\(size)")
                     Self.debugAtoms(at: destURL)
+                    #endif
                     try? fm.removeItem(at: destURL)
                     return nil
                 }
@@ -901,13 +981,16 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
             return (relativePath, size)
         } catch {
+            #if DEBUG
             print("DownloadService: failed to save file for \(metadata.trackName): \(error)")
+            #endif
             return nil
         }
     }
 
     /// Debug: prints all top-level MP4 atoms found in the file.
     nonisolated private static func debugAtoms(at url: URL) {
+        #if DEBUG
         guard let handle = try? FileHandle(forReadingFrom: url) else {
             print("  debugAtoms: cannot open file")
             return
@@ -923,6 +1006,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             offset += UInt64(size)
             try? handle.seek(toOffset: offset)
         }
+        #endif
     }
 
     /// Checks if an MP4/M4A file contains a moov atom (required for playback).

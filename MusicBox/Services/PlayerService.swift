@@ -423,14 +423,18 @@ final class PlayerService {
             setupGaplessOrCrossfade()
         } catch APIError.unauthorized {
             isLoadingTrack = false
+            #if DEBUG
             print("PlayerService: playback failed — session expired")
+            #endif
             isPlaying = false
             primaryPlayer.pause()
             updateNowPlayingPlaybackState()
             NotificationCenter.default.post(name: .sessionExpired, object: nil)
         } catch {
             isLoadingTrack = false
+            #if DEBUG
             print("PlayerService: failed to load track: \(error)")
+            #endif
             // Stop instead of skip to avoid recursive failure loops when backgrounded
             isPlaying = false
             primaryPlayer.pause()
@@ -589,7 +593,9 @@ final class PlayerService {
                         self.hasQueuedGaplessItem = true
                     }
                 } catch {
+                    #if DEBUG
                     print("PlayerService: failed to enqueue gapless item: \(error)")
+                    #endif
                 }
             }
             return
@@ -729,7 +735,9 @@ final class PlayerService {
                     self.startVolumeRamp(fadeDuration: min(fadeDuration, remaining), nextIndex: nextIdx, nextTrack: nextTrack)
                 }
             } catch {
+                #if DEBUG
                 print("PlayerService: crossfade failed: \(error)")
+                #endif
                 await MainActor.run { self.tearDownCrossfade() }
             }
         }
@@ -819,7 +827,9 @@ final class PlayerService {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
+            #if DEBUG
             print("PlayerService: audio session activation failed: \(error)")
+            #endif
         }
         #endif
     }

@@ -164,7 +164,9 @@ final class SyncService {
                 pageCount += 1
                 let response = try await api.fetchSync(cursor: cursor)
 
+                #if DEBUG
                 print("SyncService: page \(pageCount) — \(response.artists.count) artists, \(response.albums.count) albums, \(response.tracks.count) tracks, \(response.deletions.count) deletions, complete: \(response.complete)")
+                #endif
 
                 musicLibrary.upsertArtists(response.artists)
                 let newAlbumIds = musicLibrary.upsertAlbums(response.albums)
@@ -187,17 +189,25 @@ final class SyncService {
                     lastSyncDate = Date()
                     UserDefaults.standard.set(lastSyncDate, forKey: "lastSyncDate")
                     hasCompletedInitialSync = true
+                    #if DEBUG
                     print("SyncService: sync complete — \(syncProgress?.artistCount ?? 0) artists, \(syncProgress?.albumCount ?? 0) albums, \(syncProgress?.trackCount ?? 0) tracks total")
+                    #endif
+                    // Rebuild download state from on-disk manifest if a prior store reset left one behind.
+                    musicLibrary.reconcileDownloadedFiles()
                     break
                 }
             }
         } catch APIError.unauthorized {
             syncError = "Session expired"
+            #if DEBUG
             print("SyncService: sync failed with auth error")
+            #endif
             NotificationCenter.default.post(name: .sessionExpired, object: nil)
         } catch {
             syncError = error.localizedDescription
+            #if DEBUG
             print("SyncService: sync failed: \(error)")
+            #endif
         }
 
         // Single revision bump after all pages — triggers view refreshes once
@@ -217,7 +227,9 @@ final class SyncService {
         if !newTrackIds.isEmpty,
            settings?.autoDownloadNewTracks == true,
            let downloadService {
+            #if DEBUG
             print("SyncService: auto-downloading \(newTrackIds.count) new tracks")
+            #endif
             downloadService.downloadTracks(ids: newTrackIds, library: musicLibrary)
         }
     }

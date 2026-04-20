@@ -30,7 +30,9 @@ struct MusicBoxApp: App {
     @State private var musicLibrary: MusicLibrary
     @State private var settings = SettingsStore()
     @State private var player: PlayerService?
-    @State private var downloadService: DownloadService?
+    /// Long-lived — survives login/logout cycles so the background URLSession identifier
+    /// stays bound to a single instance (creating a second session with the same id crashes).
+    @State private var downloadService: DownloadService
     @State private var syncService: SyncService?
     @State private var playbackCache: PlaybackCache
     @State private var networkMonitor = NetworkMonitor()
@@ -45,12 +47,16 @@ struct MusicBoxApp: App {
         let settings = SettingsStore()
         let musicLibrary = try! MusicLibrary()
         let playbackCache = PlaybackCache(settings: settings)
+        let downloadService = DownloadService(musicLibrary: musicLibrary, settings: settings)
+        if let api = auth.apiService {
+            downloadService.configure(baseURL: api.baseURL, sessionToken: api.sessionToken)
+        }
         _auth = State(initialValue: auth)
         _settings = State(initialValue: settings)
         _musicLibrary = State(initialValue: musicLibrary)
         _playbackCache = State(initialValue: playbackCache)
+        _downloadService = State(initialValue: downloadService)
         _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) })
-        _downloadService = State(initialValue: auth.apiService.map { DownloadService(baseURL: $0.baseURL, sessionToken: $0.sessionToken, musicLibrary: musicLibrary, settings: settings) })
         _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService) })
     }
 
@@ -63,7 +69,7 @@ struct MusicBoxApp: App {
                         .environment(settings)
                         .environment(player)
                         .environment(playbackCache)
-                        .optionalEnvironment(downloadService)
+                        .environment(downloadService)
                         .environment(syncService)
                         .environment(networkMonitor)
                         .environment(searchHistory)
@@ -84,12 +90,16 @@ struct MusicBoxApp: App {
             }
             .modelContainer(musicLibrary.modelContainer)
             .onChange(of: auth.apiService.map(ObjectIdentifier.init)) { _, _ in
-                if auth.apiService == nil {
+                if let api = auth.apiService {
+                    downloadService.configure(baseURL: api.baseURL, sessionToken: api.sessionToken)
+                    // If downloads were paused due to a prior 401, let them resume under the new token.
+                    if downloadService.isPaused { downloadService.resumeAll() }
+                } else {
                     SyncService.clearSyncState()
                     musicLibrary.clearAll()
+                    downloadService.clearAuth()
                 }
                 player = auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) }
-                downloadService = auth.apiService.map { DownloadService(baseURL: $0.baseURL, sessionToken: $0.sessionToken, musicLibrary: musicLibrary, settings: settings) }
                 syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService) }
             }
             #if os(iOS)
@@ -104,7 +114,7 @@ struct MusicBoxApp: App {
                     Task { await auth.validateSession() }
                 }
                 Task { await syncService?.syncIfNeeded() }
-                downloadService?.resumeOnForeground()
+                downloadService.resumeOnForeground()
             }
             #endif
             #if os(macOS)
@@ -114,7 +124,7 @@ struct MusicBoxApp: App {
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.willBecomeActiveNotification)) { _ in
                 Task { await auth.validateSession() }
                 Task { await syncService?.syncIfNeeded() }
-                downloadService?.resumeOnForeground()
+                downloadService.resumeOnForeground()
             }
             #endif
         }
