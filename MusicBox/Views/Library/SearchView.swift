@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct SearchView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
@@ -7,6 +10,7 @@ struct SearchView: View {
     @Environment(NetworkMonitor.self) private var network
 
     let query: String
+    @Binding var path: NavigationPath
 
     @State private var results: (artists: [Artist], albums: [Album], tracks: [Track]) = ([], [], [])
     @State private var didAddToHistory = false
@@ -154,16 +158,24 @@ struct SearchView: View {
     // MARK: - Shared row views
 
     private func artistRow(_ artist: Artist) -> some View {
-        NavigationLink(value: artist) {
+        Button {
+            dismissKeyboard()
+            path.append(artist)
+        } label: {
             ArtistCard(artist: artist)
         }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
         .contextMenu {
             ArtistContextMenuItems(artist: artist)
         }
     }
 
     private func albumRow(_ album: Album) -> some View {
-        NavigationLink(value: album) {
+        Button {
+            dismissKeyboard()
+            path.append(album)
+        } label: {
             HStack(spacing: 12) {
                 ArtworkView(url: album.artworkUrl)
                     .frame(width: 44, height: 44)
@@ -181,12 +193,20 @@ struct SearchView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                Spacer()
             }
+            .contentShape(Rectangle())
         }
-        .tint(.primary)
+        .buttonStyle(.plain)
         .contextMenu {
             AlbumContextMenuItems(album: album)
         }
+    }
+
+    private func dismissKeyboard() {
+        #if canImport(UIKit)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #endif
     }
 
     private func trackRow(_ track: Track, allTracks: [Track]) -> some View {

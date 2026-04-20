@@ -23,7 +23,6 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 
 struct macOSRootView: View {
     @Environment(AuthService.self) private var authService
-    @Environment(NetworkMonitor.self) private var network
     @AppStorage("selectedSidebarItem") private var selectionRaw: String = SidebarItem.artists.rawValue
 
     private var selection: SidebarItem? { SidebarItem(rawValue: selectionRaw) }
@@ -50,17 +49,6 @@ struct macOSRootView: View {
             .padding(.vertical, 4)
             .padding(.horizontal, 12)
             .background(.orange)
-        } else if !network.isOnline {
-            HStack(spacing: 6) {
-                Image(systemName: "wifi.slash")
-                    .font(.caption)
-                Text("Offline — only downloaded music is available")
-                    .font(.caption)
-            }
-            .foregroundStyle(.black)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
-            .background(.yellow)
         }
 
         MacOSPlayerToolbar()
@@ -90,7 +78,7 @@ struct macOSRootView: View {
                 case .songs:
                     SongListView()
                 case .search:
-                    SearchView(query: searchText)
+                    SearchView(query: searchText, path: $navigationPath)
                         .searchable(text: $searchText, prompt: "Artists, albums, or songs")
                 case .downloads:
                     DownloadsView()

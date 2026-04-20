@@ -8,12 +8,12 @@ nonisolated enum iOSTab: String, Hashable, Sendable {
 struct iOSRootView: View {
     @Environment(AuthService.self) private var authService
     @Environment(DownloadService.self) private var downloadService
-    @Environment(NetworkMonitor.self) private var network
     @State private var showSettings = false
     @State private var showReAuth = false
     @AppStorage("selectedTab") private var selectedTab: iOSTab = .artists
     @State private var artistsPath = NavigationPath()
     @State private var albumsPath = NavigationPath()
+    @State private var searchPath = NavigationPath()
     @State private var searchText = ""
 
     private var downloadCount: Int {
@@ -43,17 +43,6 @@ struct iOSRootView: View {
             .padding(.vertical, 6)
             .padding(.horizontal, 12)
             .background(.orange)
-        } else if !network.isOnline {
-            HStack(spacing: 6) {
-                Image(systemName: "wifi.slash")
-                    .font(.caption)
-                Text("Offline — only downloaded music is available")
-                    .font(.caption)
-            }
-            .foregroundStyle(.black)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(.yellow)
         }
 
         TabView(selection: tabSelection) {
@@ -82,8 +71,8 @@ struct iOSRootView: View {
             }
 
             Tab("Search", systemImage: "magnifyingglass", value: .search) {
-                NavigationStack {
-                    SearchView(query: searchText)
+                NavigationStack(path: $searchPath) {
+                    SearchView(query: searchText, path: $searchPath)
                         .navigationTitle("Search")
                         .searchable(text: $searchText, prompt: "Artists, albums, or songs")
                         .toolbar { settingsButton }
