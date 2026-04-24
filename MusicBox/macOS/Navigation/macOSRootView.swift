@@ -33,6 +33,7 @@ struct macOSRootView: View {
     @State private var searchText = ""
     @State private var showReAuth = false
     @State private var showDownloads = false
+    @State private var addToPlaylistTrackIds: [UUID] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -107,6 +108,19 @@ struct macOSRootView: View {
                     }
             }
             .frame(minWidth: 520, minHeight: 480)
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { !addToPlaylistTrackIds.isEmpty },
+                set: { if !$0 { addToPlaylistTrackIds = [] } }
+            )
+        ) {
+            AddToPlaylistSheet(trackIds: addToPlaylistTrackIds)
+                .frame(minWidth: 420, minHeight: 420)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .requestAddToPlaylist)) { notification in
+            guard let ids = notification.object as? [UUID], !ids.isEmpty else { return }
+            addToPlaylistTrackIds = ids
         }
         .onChange(of: authService.isSessionExpired) { _, expired in
             if expired { showReAuth = true }

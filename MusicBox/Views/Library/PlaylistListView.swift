@@ -4,7 +4,6 @@ struct PlaylistListView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(SyncService.self) private var syncService
     @Environment(PlaylistController.self) private var controller
-    @Environment(NetworkMonitor.self) private var network
 
     @State private var playlists: [Playlist] = []
     @State private var hasLoaded = false
@@ -26,7 +25,6 @@ struct PlaylistListView: View {
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
-                    .disabled(!network.isOnline)
                 }
             }
         }
@@ -50,12 +48,11 @@ struct PlaylistListView: View {
                 Button { showCreate = true } label: {
                     Image(systemName: "plus")
                 }
-                .disabled(!network.isOnline)
             }
         }
         .sheet(isPresented: $showCreate) {
             PlaylistNameSheet(mode: .create) { name in
-                await controller.createPlaylist(name: name)
+                controller.createPlaylist(name: name)
             }
         }
         .confirmationDialog(
@@ -65,7 +62,7 @@ struct PlaylistListView: View {
             presenting: pendingDelete
         ) { playlist in
             Button("Delete Playlist", role: .destructive) {
-                Task { await controller.deletePlaylist(playlist.id) }
+                controller.deletePlaylist(playlist.id)
             }
             Button("Cancel", role: .cancel) {}
         } message: { _ in

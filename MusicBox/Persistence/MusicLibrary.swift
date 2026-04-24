@@ -31,7 +31,7 @@ final class MusicLibrary {
     }
 
     init() throws {
-        let schema = Schema([LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self, LibraryPlaylist.self, LibraryPlaylistItem.self])
+        let schema = Schema([LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self, LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self])
         do {
             modelContainer = try ModelContainer(for: schema)
         } catch {

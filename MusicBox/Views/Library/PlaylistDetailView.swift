@@ -79,11 +79,10 @@ struct PlaylistDetailView: View {
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         if let item = items.indices.contains(index) ? items[index] : nil {
                             Button(role: .destructive) {
-                                Task { await controller.removeItem(item.id, from: playlist.id) }
+                                controller.removeItem(item.id, from: playlist.id)
                             } label: {
                                 Label("Remove", systemImage: "minus.circle")
                             }
-                            .disabled(!network.isOnline)
                         }
                     }
                 }
@@ -102,14 +101,12 @@ struct PlaylistDetailView: View {
                     } label: {
                         Label("Rename", systemImage: "pencil")
                     }
-                    .disabled(!network.isOnline)
 
                     Button(role: .destructive) {
                         showDeleteConfirm = true
                     } label: {
                         Label("Delete Playlist", systemImage: "trash")
                     }
-                    .disabled(!network.isOnline)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -117,7 +114,7 @@ struct PlaylistDetailView: View {
         }
         .sheet(isPresented: $showRename) {
             PlaylistNameSheet(mode: .rename(initialName: currentName)) { name in
-                await controller.renamePlaylist(playlist.id, name: name)
+                controller.renamePlaylist(playlist.id, name: name)
                 currentName = name
             }
         }
@@ -127,10 +124,8 @@ struct PlaylistDetailView: View {
             titleVisibility: .visible
         ) {
             Button("Delete Playlist", role: .destructive) {
-                Task {
-                    await controller.deletePlaylist(playlist.id)
-                    dismiss()
-                }
+                controller.deletePlaylist(playlist.id)
+                dismiss()
             }
             Button("Cancel", role: .cancel) {}
         } message: {

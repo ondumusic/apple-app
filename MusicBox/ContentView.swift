@@ -5,21 +5,29 @@ extension Notification.Name {
     static let navigateToArtist = Notification.Name("MusicBox.navigateToArtist")
     static let navigateToAlbum = Notification.Name("MusicBox.navigateToAlbum")
     static let sessionExpired = Notification.Name("MusicBox.sessionExpired")
+    /// Posted with `object: [UUID]` — the track ids to be added.
+    static let requestAddToPlaylist = Notification.Name("MusicBox.requestAddToPlaylist")
 }
 
 struct ContentView: View {
     @Environment(SyncService.self) private var syncService
-    @Environment(PlaylistController.self) private var playlistController
+    @Environment(OutboxService.self) private var outbox
 
     var body: some View {
         Group {
             if syncService.hasCompletedInitialSync {
                 #if os(iOS)
                 iOSRootView()
-                    .task { await syncService.syncIfNeeded() }
+                    .task {
+                        await outbox.flush()
+                        await syncService.syncIfNeeded()
+                    }
                 #else
                 macOSRootView()
-                    .task { await syncService.syncIfNeeded() }
+                    .task {
+                        await outbox.flush()
+                        await syncService.syncIfNeeded()
+                    }
                 #endif
             } else {
                 SyncProgressView()
@@ -29,14 +37,14 @@ struct ContentView: View {
             }
         }
         .alert(
-            "Error",
+            "Playlist sync issue",
             isPresented: Binding(
-                get: { playlistController.lastError != nil },
-                set: { if !$0 { playlistController.lastError = nil } }
+                get: { outbox.lastError != nil },
+                set: { if !$0 { outbox.lastError = nil } }
             ),
-            presenting: playlistController.lastError
+            presenting: outbox.lastError
         ) { _ in
-            Button("OK", role: .cancel) { playlistController.lastError = nil }
+            Button("OK", role: .cancel) { outbox.lastError = nil }
         } message: { message in
             Text(message)
         }

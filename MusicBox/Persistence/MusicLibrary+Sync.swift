@@ -196,6 +196,7 @@ extension MusicLibrary {
         try? modelContext.delete(model: LibraryArtist.self)
         try? modelContext.delete(model: LibraryPlaylistItem.self)
         try? modelContext.delete(model: LibraryPlaylist.self)
+        try? modelContext.delete(model: PendingMutation.self)
         persistChanges()
         cachedArtistMap = nil
         cachedAlbumMap = nil
@@ -309,6 +310,98 @@ extension MusicLibrary {
         descriptor.fetchLimit = 1
         if let playlist = fetch(descriptor)?.first {
             playlist.trackCount = max(0, playlist.trackCount + delta)
+        }
+    }
+
+    /// Rewrites a local playlist's identity from a temp UUID to the server-confirmed UUID, cascading
+    /// to dependent items. Called by OutboxService when a queued `create_playlist` finally resolves.
+    func remapPlaylistId(from tempId: UUID, to confirmed: Playlist) {
+        var descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { $0.serverId == tempId })
+        descriptor.fetchLimit = 1
+        if let playlist = fetch(descriptor)?.first {
+            modelContext.delete(playlist)
+        }
+        modelContext.insert(LibraryPlaylist(
+            serverId: confirmed.id, name: confirmed.name,
+            trackCount: confirmed.trackCount, insertedAt: confirmed.insertedAt))
+
+        let itemDescriptor = FetchDescriptor<LibraryPlaylistItem>(
+            predicate: #Predicate { $0.playlistId == tempId }
+        )
+        for item in (try? modelContext.fetch(itemDescriptor)) ?? [] {
+            item.playlistId = confirmed.id
+        }
+        persistChanges()
+        revision += 1
+    }
+
+    // MARK: - Pending mutations (outbox)
+
+    func pendingMutations() -> [PendingMutation] {
+        let descriptor = FetchDescriptor<PendingMutation>(
+            sortBy: [SortDescriptor(\.createdAt)]
+        )
+        return fetch(descriptor) ?? []
+    }
+
+    func enqueuePendingMutation(_ mutation: PendingMutation) {
+        modelContext.insert(mutation)
+        persistChanges()
+    }
+
+    func deletePendingMutation(_ mutation: PendingMutation) {
+        modelContext.delete(mutation)
+        persistChanges()
+    }
+
+    /// Rewrites payloads of queued mutations so any reference to `tempId` becomes `realId`.
+    /// Called after a successful `create_playlist` so dependent ops fire against the real playlist.
+    func remapQueuedPlaylistId(from tempId: UUID, to realId: UUID) {
+        let mutations = pendingMutations()
+        for mutation in mutations {
+            guard let kind = OutboxKind(rawValue: mutation.kind) else { continue }
+            guard let rewritten = rewrittenPayload(kind: kind, payload: mutation.payload, remap: [tempId: realId]) else { continue }
+            mutation.payload = rewritten
+        }
+        persistChanges()
+    }
+
+    private func rewrittenPayload(kind: OutboxKind, payload: Data, remap: [UUID: UUID]) -> Data? {
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+
+        switch kind {
+        case .createPlaylist:
+            // Temp playlist IDs are already embedded; nothing to rewrite.
+            return nil
+        case .renamePlaylist:
+            guard var p = try? decoder.decode(RenamePlaylistPayload.self, from: payload) else { return nil }
+            if let mapped = remap[p.playlistId] {
+                p.playlistId = mapped
+                return try? encoder.encode(p)
+            }
+            return nil
+        case .deletePlaylist:
+            guard var p = try? decoder.decode(DeletePlaylistPayload.self, from: payload) else { return nil }
+            if let mapped = remap[p.playlistId] {
+                p.playlistId = mapped
+                return try? encoder.encode(p)
+            }
+            return nil
+        case .addItems:
+            guard var p = try? decoder.decode(AddItemsPayload.self, from: payload) else { return nil }
+            if let mapped = remap[p.playlistId] {
+                p.playlistId = mapped
+                return try? encoder.encode(p)
+            }
+            return nil
+        case .removeItems:
+            guard var p = try? decoder.decode(RemoveItemsPayload.self, from: payload) else { return nil }
+            if let mapped = remap[p.playlistId] {
+                p.playlistId = mapped
+                return try? encoder.encode(p)
+            }
+            return nil
         }
     }
 

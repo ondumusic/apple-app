@@ -34,6 +34,7 @@ struct MusicBoxApp: App {
     /// stays bound to a single instance (creating a second session with the same id crashes).
     @State private var downloadService: DownloadService
     @State private var syncService: SyncService?
+    @State private var outboxService: OutboxService?
     @State private var playlistController: PlaylistController?
     @State private var playbackCache: PlaybackCache
     @State private var networkMonitor = NetworkMonitor()
@@ -59,7 +60,9 @@ struct MusicBoxApp: App {
         _downloadService = State(initialValue: downloadService)
         _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) })
         _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService) })
-        _playlistController = State(initialValue: auth.apiService.map { PlaylistController(api: $0, musicLibrary: musicLibrary) })
+        let outbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
+        _outboxService = State(initialValue: outbox)
+        _playlistController = State(initialValue: outbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0) })
     }
 
     var body: some Scene {
@@ -77,6 +80,7 @@ struct MusicBoxApp: App {
                         .environment(searchHistory)
                         .optionalEnvironment(auth.apiService)
                         .optionalEnvironment(playlistController)
+                        .optionalEnvironment(outboxService)
                 } else if !auth.isLoggedIn {
                     NavigationStack {
                         LoginView()
@@ -104,7 +108,17 @@ struct MusicBoxApp: App {
                 }
                 player = auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) }
                 syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService) }
-                playlistController = auth.apiService.map { PlaylistController(api: $0, musicLibrary: musicLibrary) }
+                let newOutbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
+                outboxService = newOutbox
+                playlistController = newOutbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0) }
+                if newOutbox != nil {
+                    Task { await newOutbox?.flush() }
+                }
+            }
+            .onChange(of: networkMonitor.isOnline) { _, online in
+                if online {
+                    Task { await outboxService?.flush() }
+                }
             }
             #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
@@ -117,6 +131,7 @@ struct MusicBoxApp: App {
                 } else {
                     Task { await auth.validateSession() }
                 }
+                Task { await outboxService?.flush() }
                 Task { await syncService?.syncIfNeeded() }
                 downloadService.resumeOnForeground()
             }
@@ -127,6 +142,7 @@ struct MusicBoxApp: App {
             }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.willBecomeActiveNotification)) { _ in
                 Task { await auth.validateSession() }
+                Task { await outboxService?.flush() }
                 Task { await syncService?.syncIfNeeded() }
                 downloadService.resumeOnForeground()
             }
@@ -187,6 +203,15 @@ extension View {
     func optionalEnvironment(_ controller: PlaylistController?) -> some View {
         if let controller {
             self.environment(controller)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func optionalEnvironment(_ outbox: OutboxService?) -> some View {
+        if let outbox {
+            self.environment(outbox)
         } else {
             self
         }

@@ -14,6 +14,11 @@ struct AlbumContextMenuItems: View {
         musicLibrary.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
     }
 
+    /// All tracks on this album regardless of online availability — used for playlist adds.
+    private func allTracks() -> [Track] {
+        musicLibrary.tracksForAlbum(album.id)
+    }
+
     var body: some View {
         Button {
             let tracks = availableTracks()
@@ -49,6 +54,14 @@ struct AlbumContextMenuItems: View {
             Label("Add to Queue", systemImage: "text.append")
         }
 
+        Button {
+            let ids = allTracks().map(\.id)
+            guard !ids.isEmpty else { return }
+            NotificationCenter.default.post(name: .requestAddToPlaylist, object: ids)
+        } label: {
+            Label("Add to Playlist…", systemImage: "music.note.list")
+        }
+
         Divider()
 
         if downloadedOnly || musicLibrary.isAlbumFullyDownloaded(albumId: album.id) {
@@ -78,9 +91,6 @@ struct TrackContextMenuItems: View {
     let track: Track
     var album: Album? = nil
     var artist: Artist? = nil
-    /// Binding raised when the "Add to Playlist" item is tapped. Presenters set a sheet-isPresented
-    /// from this so the sheet renders in view-coordinate space rather than the transient menu's.
-    var onAddToPlaylist: ((Track) -> Void)? = nil
 
     private var artworkURL: URL? {
         album?.artworkUrl ?? track.album?.artworkUrl
@@ -126,11 +136,26 @@ struct TrackContextMenuItems: View {
                 Label("Add to Queue", systemImage: "text.append")
             }
 
-            if let onAddToPlaylist, network.isOnline {
+            Button {
+                NotificationCenter.default.post(name: .requestAddToPlaylist, object: [track.id])
+            } label: {
+                Label("Add to Playlist…", systemImage: "music.note.list")
+            }
+
+            Divider()
+
+            Button {
+                let target = artist ?? track.artist
+                NotificationCenter.default.post(name: .navigateToArtist, object: target)
+            } label: {
+                Label("Go to Artist", systemImage: "music.mic")
+            }
+
+            if let resolvedAlbum = album ?? musicLibrary.album(track.albumId) {
                 Button {
-                    onAddToPlaylist(track)
+                    NotificationCenter.default.post(name: .navigateToAlbum, object: resolvedAlbum)
                 } label: {
-                    Label("Add to Playlist…", systemImage: "music.note.list")
+                    Label("Go to Album", systemImage: "square.stack")
                 }
             }
 
@@ -188,6 +213,14 @@ struct ArtistContextMenuItems: View {
             player.addToEnd(queue: available)
         } label: {
             Label("Add to Queue", systemImage: "text.append")
+        }
+
+        Button {
+            let ids = buildQueueItems().map(\.track.id)
+            guard !ids.isEmpty else { return }
+            NotificationCenter.default.post(name: .requestAddToPlaylist, object: ids)
+        } label: {
+            Label("Add to Playlist…", systemImage: "music.note.list")
         }
 
         Divider()

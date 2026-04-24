@@ -1,16 +1,21 @@
 import SwiftUI
 
-/// Picker sheet shown from track context menus. Lists existing playlists and offers an inline
-/// "New Playlist..." that creates and adds the track in one gesture.
+/// Picker sheet shown via `.requestAddToPlaylist` notifications. Lists existing playlists and
+/// offers an inline "New Playlist…" that creates and adds in one gesture. Accepts any number
+/// of track ids, so the same sheet serves track/album/artist add-to-playlist flows.
 struct AddToPlaylistSheet: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlaylistController.self) private var controller
     @Environment(\.dismiss) private var dismiss
 
-    let trackId: UUID
+    let trackIds: [UUID]
 
     @State private var playlists: [Playlist] = []
     @State private var showCreateAndAdd = false
+
+    private var countLabel: String {
+        "\(trackIds.count) \(trackIds.count == 1 ? "track" : "tracks")"
+    }
 
     var body: some View {
         NavigationStack {
@@ -24,13 +29,11 @@ struct AddToPlaylistSheet: View {
                 }
 
                 if !playlists.isEmpty {
-                    Section("Add to") {
+                    Section("Add \(countLabel) to") {
                         ForEach(playlists) { playlist in
                             Button {
-                                Task {
-                                    await controller.addTrack(trackId, to: playlist.id)
-                                    dismiss()
-                                }
+                                controller.addTracks(trackIds, to: playlist.id)
+                                dismiss()
                             } label: {
                                 HStack {
                                     Image(systemName: "music.note.list")
@@ -60,8 +63,8 @@ struct AddToPlaylistSheet: View {
             }
             .sheet(isPresented: $showCreateAndAdd) {
                 PlaylistNameSheet(mode: .create) { name in
-                    if let created = await controller.createPlaylist(name: name) {
-                        await controller.addTrack(trackId, to: created.id)
+                    if let created = controller.createPlaylist(name: name) {
+                        controller.addTracks(trackIds, to: created.id)
                         dismiss()
                     }
                 }

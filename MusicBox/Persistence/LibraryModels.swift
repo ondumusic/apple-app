@@ -127,3 +127,27 @@ nonisolated class LibraryPlaylistItem {
         self.insertedAt = insertedAt
     }
 }
+
+/// Durable queue of playlist mutations pending replay to the server.
+/// Processed in `createdAt` order; temp UUIDs assigned locally are resolved to server UUIDs
+/// on successful replay, and subsequent payloads referencing those temp IDs are rewritten.
+@Model
+nonisolated class PendingMutation {
+    @Attribute(.unique) var localId: UUID
+    /// One of `OutboxKind.rawValue`
+    var kind: String
+    /// JSON-encoded payload specific to `kind`
+    var payload: Data
+    var createdAt: Date
+    var attemptCount: Int
+    var lastError: String?
+    var lastAttemptAt: Date?
+
+    init(localId: UUID = UUID(), kind: String, payload: Data, createdAt: Date = Date()) {
+        self.localId = localId
+        self.kind = kind
+        self.payload = payload
+        self.createdAt = createdAt
+        self.attemptCount = 0
+    }
+}

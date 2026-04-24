@@ -11,6 +11,7 @@ struct iOSRootView: View {
     @State private var showSettings = false
     @State private var showDownloads = false
     @State private var showReAuth = false
+    @State private var addToPlaylistTrackIds: [UUID] = []
     @AppStorage("selectedTab") private var selectedTabRaw: String = iOSTab.artists.rawValue
     @State private var artistsPath = NavigationPath()
     @State private var albumsPath = NavigationPath()
@@ -142,6 +143,18 @@ struct iOSRootView: View {
                     }
             }
             .nowPlayingBar()
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { !addToPlaylistTrackIds.isEmpty },
+                set: { if !$0 { addToPlaylistTrackIds = [] } }
+            )
+        ) {
+            AddToPlaylistSheet(trackIds: addToPlaylistTrackIds)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .requestAddToPlaylist)) { notification in
+            guard let ids = notification.object as? [UUID], !ids.isEmpty else { return }
+            addToPlaylistTrackIds = ids
         }
         } // VStack
     }

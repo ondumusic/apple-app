@@ -3,7 +3,6 @@ import SwiftUI
 struct QueueView: View {
     @Environment(PlayerService.self) private var player
     @Environment(PlaylistController.self) private var controller
-    @Environment(NetworkMonitor.self) private var network
 
     @State private var showSaveAsPlaylist = false
 
@@ -69,7 +68,7 @@ struct QueueView: View {
                     } label: {
                         Label("Save as Playlist…", systemImage: "square.and.arrow.down")
                     }
-                    .disabled(queueTracksForSaving.isEmpty || !network.isOnline)
+                    .disabled(queueTracksForSaving.isEmpty)
 
                     #if os(iOS)
                     if !upNextItems.isEmpty {
@@ -88,8 +87,8 @@ struct QueueView: View {
         .sheet(isPresented: $showSaveAsPlaylist) {
             PlaylistNameSheet(mode: .create) { name in
                 let trackIds = queueTracksForSaving.map(\.id)
-                if let playlist = await controller.createPlaylist(name: name) {
-                    await controller.addTracks(trackIds, to: playlist.id)
+                if let playlist = controller.createPlaylist(name: name) {
+                    controller.addTracks(trackIds, to: playlist.id)
                 }
             }
         }
