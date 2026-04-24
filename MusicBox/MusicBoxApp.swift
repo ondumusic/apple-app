@@ -34,6 +34,7 @@ struct MusicBoxApp: App {
     /// stays bound to a single instance (creating a second session with the same id crashes).
     @State private var downloadService: DownloadService
     @State private var syncService: SyncService?
+    @State private var playlistController: PlaylistController?
     @State private var playbackCache: PlaybackCache
     @State private var networkMonitor = NetworkMonitor()
     @State private var searchHistory = SearchHistory()
@@ -58,6 +59,7 @@ struct MusicBoxApp: App {
         _downloadService = State(initialValue: downloadService)
         _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) })
         _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService) })
+        _playlistController = State(initialValue: auth.apiService.map { PlaylistController(api: $0, musicLibrary: musicLibrary) })
     }
 
     var body: some Scene {
@@ -74,6 +76,7 @@ struct MusicBoxApp: App {
                         .environment(networkMonitor)
                         .environment(searchHistory)
                         .optionalEnvironment(auth.apiService)
+                        .optionalEnvironment(playlistController)
                 } else if !auth.isLoggedIn {
                     NavigationStack {
                         LoginView()
@@ -101,6 +104,7 @@ struct MusicBoxApp: App {
                 }
                 player = auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) }
                 syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService) }
+                playlistController = auth.apiService.map { PlaylistController(api: $0, musicLibrary: musicLibrary) }
             }
             #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
@@ -174,6 +178,15 @@ extension View {
     func optionalEnvironment(_ sync: SyncService?) -> some View {
         if let sync {
             self.environment(sync)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func optionalEnvironment(_ controller: PlaylistController?) -> some View {
+        if let controller {
+            self.environment(controller)
         } else {
             self
         }

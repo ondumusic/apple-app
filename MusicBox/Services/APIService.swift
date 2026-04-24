@@ -85,6 +85,87 @@ final class APIService: Sendable {
         return try await fetch("/sync", queryItems: queryItems)
     }
 
+    // MARK: - Playlists
+
+    nonisolated struct PositionedTrackBody: Encodable, Sendable {
+        let trackId: UUID
+        let position: String
+    }
+
+    nonisolated struct PositionedItemBody: Encodable, Sendable {
+        let itemId: UUID
+        let position: String
+    }
+
+    nonisolated struct UpdatePlaylistItemsBody: Encodable, Sendable {
+        let add: [PositionedTrackBody]
+        let move: [PositionedItemBody]
+        let remove: [UUID]
+    }
+
+    nonisolated struct UpdatePlaylistItemsResponse: Decodable, Sendable {
+        var added: [PlaylistItem]
+        var moved: [PlaylistItem]
+        var removed: [UUID]
+
+        nonisolated enum CodingKeys: String, CodingKey {
+            case added, moved, removed
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            added = try container.decodeIfPresent([PlaylistItem].self, forKey: .added) ?? []
+            moved = try container.decodeIfPresent([PlaylistItem].self, forKey: .moved) ?? []
+            removed = try container.decodeIfPresent([UUID].self, forKey: .removed) ?? []
+        }
+    }
+
+    func createPlaylist(name: String) async throws -> Playlist {
+        let body = try JSONEncoder.api.encode(["name": name])
+        return try await perform("/playlists", method: "POST", body: body)
+    }
+
+    func renamePlaylist(_ id: UUID, name: String) async throws -> Playlist {
+        let body = try JSONEncoder.api.encode(["name": name])
+        return try await perform("/playlists/\(id.uuidString.lowercased())", method: "PATCH", body: body)
+    }
+
+    func deletePlaylist(_ id: UUID) async throws {
+        let _: Playlist = try await perform("/playlists/\(id.uuidString.lowercased())", method: "DELETE", body: nil)
+    }
+
+    func updatePlaylistItems(_ id: UUID,
+                             add: [PositionedTrackBody] = [],
+                             move: [PositionedItemBody] = [],
+                             remove: [UUID] = []) async throws -> UpdatePlaylistItemsResponse {
+        let body = try JSONEncoder.api.encode(UpdatePlaylistItemsBody(add: add, move: move, remove: remove))
+        return try await perform("/playlists/\(id.uuidString.lowercased())/items", method: "PATCH", body: body)
+    }
+
+    // MARK: - Mutation helper
+
+    private func perform<T: Decodable & Sendable>(_ endpoint: String, method: String, body: Data?) async throws -> T {
+        var req = try request(for: endpoint)
+        req.httpMethod = method
+        if let body {
+            req.httpBody = body
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200...299).contains(http.statusCode) else {
+            throw APIError.httpError(http.statusCode)
+        }
+        do {
+            return try JSONDecoder.api.decode(T.self, from: data)
+        } catch {
+            throw APIError.decoding(error.localizedDescription)
+        }
+    }
+
     // MARK: - Static Auth (no token needed)
 
     nonisolated struct LoginResponse: Decodable, Sendable {
@@ -125,6 +206,23 @@ final class APIService: Sendable {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(LoginResponse.self, from: data)
     }
+}
+
+extension JSONDecoder {
+    nonisolated(unsafe) static let api: JSONDecoder = {
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        d.dateDecodingStrategy = .iso8601
+        return d
+    }()
+}
+
+extension JSONEncoder {
+    nonisolated(unsafe) static let api: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        return e
+    }()
 }
 
 nonisolated enum APIError: LocalizedError, Sendable {

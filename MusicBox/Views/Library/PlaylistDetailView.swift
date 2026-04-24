@@ -3,12 +3,23 @@ import SwiftUI
 struct PlaylistDetailView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
+    @Environment(PlaylistController.self) private var controller
     @Environment(NetworkMonitor.self) private var network
+    @Environment(\.dismiss) private var dismiss
 
     let playlist: Playlist
 
     @State private var tracks: [Track] = []
+    @State private var items: [PlaylistItem] = []
+    @State private var currentName: String
     @State private var hasLoadedOnce: Bool = false
+    @State private var showRename = false
+    @State private var showDeleteConfirm = false
+
+    init(playlist: Playlist) {
+        self.playlist = playlist
+        self._currentName = State(initialValue: playlist.name)
+    }
 
     private var hasPlayable: Bool {
         guard !tracks.isEmpty else { return false }
@@ -20,7 +31,7 @@ struct PlaylistDetailView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(playlist.name)
+                    Text(currentName)
                         .font(.title2.bold())
 
                     Text("\(tracks.count) \(tracks.count == 1 ? "song" : "songs")")
@@ -58,21 +69,73 @@ struct PlaylistDetailView: View {
             }
 
             Section {
-                ForEach(tracks) { track in
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
                         let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
-                        if let index = available.firstIndex(where: { $0.id == track.id }) {
-                            player.requestPlay { player.playNow(tracks: available, startingAt: index, artworkURL: track.album?.artworkUrl) }
+                        if let startIndex = available.firstIndex(where: { $0.id == track.id }) {
+                            player.requestPlay { player.playNow(tracks: available, startingAt: startIndex, artworkURL: track.album?.artworkUrl) }
+                        }
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        if let item = items.indices.contains(index) ? items[index] : nil {
+                            Button(role: .destructive) {
+                                Task { await controller.removeItem(item.id, from: playlist.id) }
+                            } label: {
+                                Label("Remove", systemImage: "minus.circle")
+                            }
+                            .disabled(!network.isOnline)
                         }
                     }
                 }
             }
         }
         .listStyle(.plain)
-        .navigationTitle(playlist.name)
+        .navigationTitle(currentName)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        showRename = true
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                    .disabled(!network.isOnline)
+
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Delete Playlist", systemImage: "trash")
+                    }
+                    .disabled(!network.isOnline)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .sheet(isPresented: $showRename) {
+            PlaylistNameSheet(mode: .rename(initialName: currentName)) { name in
+                await controller.renamePlaylist(playlist.id, name: name)
+                currentName = name
+            }
+        }
+        .confirmationDialog(
+            "Delete \(currentName)?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Playlist", role: .destructive) {
+                Task {
+                    await controller.deletePlaylist(playlist.id)
+                    dismiss()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete the playlist.")
+        }
         .overlay {
             if hasLoadedOnce && tracks.isEmpty {
                 ContentUnavailableView("Empty Playlist", systemImage: "music.note.list")
@@ -87,7 +150,17 @@ struct PlaylistDetailView: View {
     }
 
     private func reloadTracks() {
-        tracks = musicLibrary.tracksForPlaylist(playlist.id)
+        items = musicLibrary.playlistItems(playlist.id)
+        let allTracks = musicLibrary.tracksForPlaylist(playlist.id)
+        // tracksForPlaylist skips missing-from-library items, so filter `items` to match.
+        let trackIds = Set(allTracks.map(\.id))
+        items = items.filter { trackIds.contains($0.trackId) }
+        tracks = allTracks
         hasLoadedOnce = true
+
+        // Also refresh the display name in case sync applied a rename.
+        if let refreshed = musicLibrary.playlist(playlist.id) {
+            currentName = refreshed.name
+        }
     }
 }

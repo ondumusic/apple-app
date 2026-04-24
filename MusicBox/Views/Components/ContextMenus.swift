@@ -78,6 +78,9 @@ struct TrackContextMenuItems: View {
     let track: Track
     var album: Album? = nil
     var artist: Artist? = nil
+    /// Binding raised when the "Add to Playlist" item is tapped. Presenters set a sheet-isPresented
+    /// from this so the sheet renders in view-coordinate space rather than the transient menu's.
+    var onAddToPlaylist: ((Track) -> Void)? = nil
 
     private var artworkURL: URL? {
         album?.artworkUrl ?? track.album?.artworkUrl
@@ -121,6 +124,14 @@ struct TrackContextMenuItems: View {
                 player.addToEnd(tracks: [track], artworkURL: artworkURL)
             } label: {
                 Label("Add to Queue", systemImage: "text.append")
+            }
+
+            if let onAddToPlaylist, network.isOnline {
+                Button {
+                    onAddToPlaylist(track)
+                } label: {
+                    Label("Add to Playlist…", systemImage: "music.note.list")
+                }
             }
 
             Divider()

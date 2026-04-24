@@ -9,21 +9,36 @@ extension Notification.Name {
 
 struct ContentView: View {
     @Environment(SyncService.self) private var syncService
+    @Environment(PlaylistController.self) private var playlistController
 
     var body: some View {
-        if syncService.hasCompletedInitialSync {
-            #if os(iOS)
-            iOSRootView()
-                .task { await syncService.syncIfNeeded() }
-            #else
-            macOSRootView()
-                .task { await syncService.syncIfNeeded() }
-            #endif
-        } else {
-            SyncProgressView()
-                .task {
-                    try? await syncService.sync()
-                }
+        Group {
+            if syncService.hasCompletedInitialSync {
+                #if os(iOS)
+                iOSRootView()
+                    .task { await syncService.syncIfNeeded() }
+                #else
+                macOSRootView()
+                    .task { await syncService.syncIfNeeded() }
+                #endif
+            } else {
+                SyncProgressView()
+                    .task {
+                        try? await syncService.sync()
+                    }
+            }
+        }
+        .alert(
+            "Error",
+            isPresented: Binding(
+                get: { playlistController.lastError != nil },
+                set: { if !$0 { playlistController.lastError = nil } }
+            ),
+            presenting: playlistController.lastError
+        ) { _ in
+            Button("OK", role: .cancel) { playlistController.lastError = nil }
+        } message: { message in
+            Text(message)
         }
     }
 }

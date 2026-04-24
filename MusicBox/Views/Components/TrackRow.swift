@@ -12,6 +12,8 @@ struct TrackRow: View {
     var showNumber = true
     var onTap: (() -> Void)? = nil
 
+    @State private var showAddToPlaylist = false
+
     private var isCurrentTrack: Bool {
         player.currentTrack?.id == track.id
     }
@@ -84,7 +86,12 @@ struct TrackRow: View {
             onTap?()
         }
         .contextMenu {
-            TrackContextMenuItems(track: track, album: album, artist: artist)
+            TrackContextMenuItems(track: track, album: album, artist: artist) { _ in
+                showAddToPlaylist = true
+            }
+        }
+        .sheet(isPresented: $showAddToPlaylist) {
+            AddToPlaylistSheet(trackId: track.id)
         }
     }
 }

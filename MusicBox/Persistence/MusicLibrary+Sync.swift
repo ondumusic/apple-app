@@ -234,6 +234,84 @@ extension MusicLibrary {
         }
     }
 
+    // MARK: - Local Playlist Mutations (optimistic writes)
+
+    /// Returns the last position string currently in the playlist, for computing an append position.
+    func lastPlaylistItemPosition(_ playlistId: UUID) -> String? {
+        var descriptor = FetchDescriptor<LibraryPlaylistItem>(
+            predicate: #Predicate { $0.playlistId == playlistId },
+            sortBy: [SortDescriptor(\.position, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        return fetch(descriptor)?.first?.position
+    }
+
+    func insertLocalPlaylist(_ playlist: Playlist) {
+        modelContext.insert(LibraryPlaylist(
+            serverId: playlist.id, name: playlist.name,
+            trackCount: playlist.trackCount, insertedAt: playlist.insertedAt))
+        persistChanges()
+        revision += 1
+    }
+
+    func renameLocalPlaylist(_ id: UUID, name: String) {
+        var descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        guard let lp = fetch(descriptor)?.first else { return }
+        lp.name = name
+        persistChanges()
+        revision += 1
+    }
+
+    func deleteLocalPlaylist(_ id: UUID) {
+        deletePlaylistCascade(id)
+        persistChanges()
+        revision += 1
+    }
+
+    /// Inserts a local PlaylistItem, also bumping the parent playlist's track count.
+    func insertLocalPlaylistItem(_ item: PlaylistItem) {
+        modelContext.insert(LibraryPlaylistItem(
+            serverId: item.id, playlistId: item.playlistId, trackId: item.trackId,
+            position: item.position, insertedAt: item.insertedAt))
+        adjustPlaylistTrackCount(item.playlistId, delta: 1)
+        persistChanges()
+        revision += 1
+    }
+
+    func deleteLocalPlaylistItem(_ id: UUID) {
+        var descriptor = FetchDescriptor<LibraryPlaylistItem>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        guard let item = fetch(descriptor)?.first else { return }
+        let playlistId = item.playlistId
+        modelContext.delete(item)
+        adjustPlaylistTrackCount(playlistId, delta: -1)
+        persistChanges()
+        revision += 1
+    }
+
+    /// Replaces a temp item ID with the real server-assigned ID (used after an optimistic add).
+    func swapLocalPlaylistItemId(tempId: UUID, confirmed: PlaylistItem) {
+        var descriptor = FetchDescriptor<LibraryPlaylistItem>(predicate: #Predicate { $0.serverId == tempId })
+        descriptor.fetchLimit = 1
+        if let item = fetch(descriptor)?.first {
+            modelContext.delete(item)
+        }
+        modelContext.insert(LibraryPlaylistItem(
+            serverId: confirmed.id, playlistId: confirmed.playlistId, trackId: confirmed.trackId,
+            position: confirmed.position, insertedAt: confirmed.insertedAt))
+        persistChanges()
+        revision += 1
+    }
+
+    private func adjustPlaylistTrackCount(_ playlistId: UUID, delta: Int) {
+        var descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { $0.serverId == playlistId })
+        descriptor.fetchLimit = 1
+        if let playlist = fetch(descriptor)?.first {
+            playlist.trackCount = max(0, playlist.trackCount + delta)
+        }
+    }
+
     func deletePlaylistCascade(_ playlistId: UUID) {
         let itemDescriptor = FetchDescriptor<LibraryPlaylistItem>(predicate: #Predicate { $0.playlistId == playlistId })
         for item in (try? modelContext.fetch(itemDescriptor)) ?? [] {

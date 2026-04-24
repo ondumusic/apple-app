@@ -2,6 +2,29 @@ import SwiftUI
 
 struct QueueView: View {
     @Environment(PlayerService.self) private var player
+    @Environment(PlaylistController.self) private var controller
+    @Environment(NetworkMonitor.self) private var network
+
+    @State private var showSaveAsPlaylist = false
+
+    /// Tracks to persist as a new playlist: current track + everything queued after it, in play order.
+    private var queueTracksForSaving: [Track] {
+        guard !player.queue.isEmpty else { return [] }
+        let count = player.queue.count
+        var collected: [Track] = []
+        if let current = player.currentTrack { collected.append(current) }
+        for i in (player.currentIndex + 1)..<count {
+            let effective: Int
+            if let shuffled = player.shuffledIndices, i < shuffled.count {
+                effective = shuffled[i]
+            } else {
+                effective = i
+            }
+            guard effective < player.queue.count else { continue }
+            collected.append(player.queue[effective].track)
+        }
+        return collected
+    }
 
     var body: some View {
         List {
@@ -39,16 +62,36 @@ struct QueueView: View {
                 EditButton()
             }
             #endif
-            #if os(iOS)
-            if !upNextItems.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Clear") {
-                        player.clearUpNext()
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        showSaveAsPlaylist = true
+                    } label: {
+                        Label("Save as Playlist…", systemImage: "square.and.arrow.down")
                     }
-                    .font(.subheadline)
+                    .disabled(queueTracksForSaving.isEmpty || !network.isOnline)
+
+                    #if os(iOS)
+                    if !upNextItems.isEmpty {
+                        Button(role: .destructive) {
+                            player.clearUpNext()
+                        } label: {
+                            Label("Clear Up Next", systemImage: "trash")
+                        }
+                    }
+                    #endif
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
             }
-            #endif
+        }
+        .sheet(isPresented: $showSaveAsPlaylist) {
+            PlaylistNameSheet(mode: .create) { name in
+                let trackIds = queueTracksForSaving.map(\.id)
+                if let playlist = await controller.createPlaylist(name: name) {
+                    await controller.addTracks(trackIds, to: playlist.id)
+                }
+            }
         }
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 0) {
