@@ -87,20 +87,38 @@ final class APIService: Sendable {
 
     // MARK: - Playlists
 
+    /// Server stores UUIDs lowercase; Swift's default `UUID` encoding emits uppercase. These body
+    /// structs take UUIDs at construction time and lowercase them for the wire.
     nonisolated struct PositionedTrackBody: Encodable, Sendable {
-        let trackId: UUID
+        let trackId: String
         let position: String
+
+        init(trackId: UUID, position: String) {
+            self.trackId = trackId.uuidString.lowercased()
+            self.position = position
+        }
     }
 
     nonisolated struct PositionedItemBody: Encodable, Sendable {
-        let itemId: UUID
+        let itemId: String
         let position: String
+
+        init(itemId: UUID, position: String) {
+            self.itemId = itemId.uuidString.lowercased()
+            self.position = position
+        }
     }
 
     nonisolated struct UpdatePlaylistItemsBody: Encodable, Sendable {
         let add: [PositionedTrackBody]
         let move: [PositionedItemBody]
-        let remove: [UUID]
+        let remove: [String]
+
+        init(add: [PositionedTrackBody], move: [PositionedItemBody], remove: [UUID]) {
+            self.add = add
+            self.move = move
+            self.remove = remove.map { $0.uuidString.lowercased() }
+        }
     }
 
     nonisolated struct UpdatePlaylistItemsResponse: Decodable, Sendable {
@@ -157,6 +175,10 @@ final class APIService: Sendable {
 
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            let bodyString = String(data: data, encoding: .utf8) ?? "<non-utf8 body, \(data.count) bytes>"
+            print("APIService: \(method) \(endpoint) failed — HTTP \(http.statusCode), body: \(bodyString)")
+            #endif
             throw APIError.httpError(http.statusCode)
         }
         do {

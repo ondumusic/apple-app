@@ -21,6 +21,10 @@ final class OutboxService {
     @ObservationIgnored private var isFlushing = false
     @ObservationIgnored private var retryTask: Task<Void, Never>?
 
+    /// After this many transient failures in a row, escalate to a discard so one bad mutation
+    /// can't permanently block the queue. Real outages (server down for a day) are well under this.
+    @ObservationIgnored private let maxRetryAttempts = 20
+
     init(musicLibrary: MusicLibrary, api: APIService) {
         self.musicLibrary = musicLibrary
         self.api = api
@@ -73,24 +77,65 @@ final class OutboxService {
     /// Drains the queue in order. Stops at the first retryable failure (no immediate re-attempt —
     /// the next trigger picks it up). Idempotent; concurrent calls share one flush.
     func flush() async {
-        guard !isFlushing else { return }
+        guard !isFlushing else {
+            #if DEBUG
+            print("OutboxService: flush skipped — already in progress")
+            #endif
+            return
+        }
         isFlushing = true
         retryTask?.cancel()
         retryTask = nil
         defer { isFlushing = false }
 
+        let initialCount = musicLibrary.pendingMutations().count
+        #if DEBUG
+        if initialCount > 0 {
+            print("OutboxService: flushing \(initialCount) mutation(s)")
+        }
+        #endif
+
         while let next = musicLibrary.pendingMutations().first {
             let outcome = await process(next)
             switch outcome {
             case .success:
+                #if DEBUG
+                print("OutboxService: \(next.kind) succeeded")
+                #endif
                 musicLibrary.deletePendingMutation(next)
             case .discard(let reason):
+                #if DEBUG
+                print("OutboxService: \(next.kind) discarded — \(reason)")
+                #endif
                 lastError = reason
                 musicLibrary.deletePendingMutation(next)
             case .retry(let reason):
                 next.attemptCount += 1
                 next.lastError = reason
                 next.lastAttemptAt = Date()
+                if next.attemptCount >= maxRetryAttempts {
+                    #if DEBUG
+                    print("OutboxService: \(next.kind) giving up after \(next.attemptCount) attempts — \(reason)")
+                    #endif
+                    lastError = "A playlist change couldn't sync: \(reason)"
+                    musicLibrary.deletePendingMutation(next)
+                    refreshPendingCount()
+                    continue  // try the next mutation
+                }
+                #if DEBUG
+                print("OutboxService: \(next.kind) retry (attempt \(next.attemptCount)) — \(reason)")
+                #endif
+                musicLibrary.persistChanges()
+                refreshPendingCount()
+                scheduleRetry()
+                return
+
+            case .retryNoPenalty(let reason):
+                next.lastError = reason
+                next.lastAttemptAt = Date()
+                #if DEBUG
+                print("OutboxService: \(next.kind) paused (no-penalty) — \(reason)")
+                #endif
                 musicLibrary.persistChanges()
                 refreshPendingCount()
                 scheduleRetry()
@@ -102,15 +147,20 @@ final class OutboxService {
 
     private enum Outcome {
         case success
+        /// Retry later, and count this attempt toward the cap.
         case retry(String)
+        /// Retry later, but don't count toward the cap — used for transient conditions that will
+        /// resolve themselves externally (offline, expired auth).
+        case retryNoPenalty(String)
         case discard(String)
     }
 
     /// Retry policy, in one place:
     /// - 422 is the only status we treat as permanently bad (invalid input the server will never accept).
     /// - 404 on delete is treated as success (already gone).
-    /// - Everything else retries indefinitely. Missing endpoints (pre-upgrade servers), 5xx outages, and
-    ///   transient network issues all resolve themselves once the server is healthy again.
+    /// - If the target playlist no longer exists locally, the mutation is orphaned — skip as success
+    ///   rather than retry against an id the server will never recognize.
+    /// - Everything else retries up to `maxRetryAttempts`, then escalates to discard + alert.
     /// - We never roll back local state on discard — the next sync reconciles authoritatively.
     private func process(_ mutation: PendingMutation) async -> Outcome {
         guard let kind = OutboxKind(rawValue: mutation.kind) else {
@@ -123,20 +173,37 @@ final class OutboxService {
             guard let p = try? decoder.decode(CreatePlaylistPayload.self, from: mutation.payload) else {
                 return .discard("Malformed create_playlist payload")
             }
+            // The local playlist this mutation was meant to materialize is already gone (user deleted
+            // it locally before we synced) — don't bother creating it on the server.
+            if musicLibrary.playlist(p.tempPlaylistId) == nil {
+                #if DEBUG
+                print("OutboxService: create_playlist skipped — local playlist \(p.tempPlaylistId) no longer exists")
+                #endif
+                return .success
+            }
             do {
                 let server = try await api.createPlaylist(name: p.name)
+                #if DEBUG
+                print("OutboxService: create_playlist OK — temp=\(p.tempPlaylistId) → real=\(server.id)")
+                #endif
                 musicLibrary.remapPlaylistId(from: p.tempPlaylistId, to: server)
                 musicLibrary.remapQueuedPlaylistId(from: p.tempPlaylistId, to: server.id)
                 return .success
             } catch APIError.httpError(422) {
                 return .discard("Couldn't create playlist “\(p.name)” — the name is invalid.")
             } catch {
-                return .retry(error.localizedDescription)
+                return classify(error)
             }
 
         case .renamePlaylist:
             guard let p = try? decoder.decode(RenamePlaylistPayload.self, from: mutation.payload) else {
                 return .discard("Malformed rename_playlist payload")
+            }
+            if musicLibrary.playlist(p.playlistId) == nil {
+                #if DEBUG
+                print("OutboxService: rename_playlist skipped — local playlist \(p.playlistId) no longer exists")
+                #endif
+                return .success
             }
             do {
                 _ = try await api.renamePlaylist(p.playlistId, name: p.name)
@@ -144,7 +211,7 @@ final class OutboxService {
             } catch APIError.httpError(422) {
                 return .discard("Couldn't rename playlist — the name is invalid.")
             } catch {
-                return .retry(error.localizedDescription)
+                return classify(error)
             }
 
         case .deletePlaylist:
@@ -157,13 +224,22 @@ final class OutboxService {
             } catch APIError.httpError(404) {
                 return .success  // already gone, local delete was correct
             } catch {
-                return .retry(error.localizedDescription)
+                return classify(error)
             }
 
         case .addItems:
             guard let p = try? decoder.decode(AddItemsPayload.self, from: mutation.payload) else {
                 return .discard("Malformed add_items payload")
             }
+            if musicLibrary.playlist(p.playlistId) == nil {
+                #if DEBUG
+                print("OutboxService: add_items skipped — local playlist \(p.playlistId) no longer exists")
+                #endif
+                return .success
+            }
+            #if DEBUG
+            print("OutboxService: add_items firing — playlistId=\(p.playlistId), items=\(p.items.count)")
+            #endif
             do {
                 let adds = p.items.map { APIService.PositionedTrackBody(trackId: $0.trackId, position: $0.position) }
                 let response = try await api.updatePlaylistItems(p.playlistId, add: adds)
@@ -177,23 +253,50 @@ final class OutboxService {
                 return .success
             } catch APIError.httpError(422) {
                 return .discard("Some tracks couldn't be added — they were rejected by the server.")
+            } catch APIError.httpError(400) {
+                // PATCH /playlists/{id}/items uses 400 for its discriminated error union
+                // (too_many_operations, unknown_tracks, add_move_conflict, etc.). The
+                // specific reason was already printed by APIService.perform; surface a
+                // generic message and discard so the queue doesn't loop.
+                return .discard("Some tracks couldn't be added — see console for server details.")
             } catch {
-                return .retry(error.localizedDescription)
+                return classify(error)
             }
 
         case .removeItems:
             guard let p = try? decoder.decode(RemoveItemsPayload.self, from: mutation.payload) else {
                 return .discard("Malformed remove_items payload")
             }
+            if musicLibrary.playlist(p.playlistId) == nil {
+                #if DEBUG
+                print("OutboxService: remove_items skipped — local playlist \(p.playlistId) no longer exists")
+                #endif
+                return .success
+            }
             do {
                 _ = try await api.updatePlaylistItems(p.playlistId, remove: p.itemIds)
                 return .success
             } catch APIError.httpError(404) {
                 return .success  // playlist/items already gone, local removal was correct
+            } catch APIError.httpError(400) {
+                return .discard("Some tracks couldn't be removed — see console for server details.")
             } catch {
-                return .retry(error.localizedDescription)
+                return classify(error)
             }
         }
+    }
+
+    /// Classifies an error into the right retry outcome. URL errors (offline, timeout, unreachable)
+    /// and expired auth shouldn't burn through the retry cap — they resolve themselves externally.
+    private func classify(_ error: Error) -> Outcome {
+        if let apiError = error as? APIError, case .unauthorized = apiError {
+            NotificationCenter.default.post(name: .sessionExpired, object: nil)
+            return .retryNoPenalty("Session expired — waiting for re-authentication")
+        }
+        if let urlError = error as? URLError {
+            return .retryNoPenalty(urlError.localizedDescription)
+        }
+        return .retry(error.localizedDescription)
     }
 
     // MARK: - Retry scheduling

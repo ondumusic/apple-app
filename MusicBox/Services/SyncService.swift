@@ -198,6 +198,7 @@ final class SyncService {
     @ObservationIgnored private let musicLibrary: MusicLibrary
     @ObservationIgnored private let settings: SettingsStore?
     @ObservationIgnored private var downloadService: DownloadService?
+    @ObservationIgnored private weak var outbox: OutboxService?
     @ObservationIgnored private var artworkPrefetcher: ImagePrefetcher?
     @ObservationIgnored private var isSessionExpired = false
 
@@ -206,11 +207,12 @@ final class SyncService {
         set { UserDefaults.standard.set(newValue, forKey: "syncCursor") }
     }
 
-    init(api: APIService, musicLibrary: MusicLibrary, settings: SettingsStore? = nil, downloadService: DownloadService? = nil) {
+    init(api: APIService, musicLibrary: MusicLibrary, settings: SettingsStore? = nil, downloadService: DownloadService? = nil, outbox: OutboxService? = nil) {
         self.api = api
         self.musicLibrary = musicLibrary
         self.settings = settings
         self.downloadService = downloadService
+        self.outbox = outbox
         self.hasCompletedInitialSync = UserDefaults.standard.string(forKey: "syncCursor") != nil
         self.lastSyncDate = UserDefaults.standard.object(forKey: "lastSyncDate") as? Date
 
@@ -225,6 +227,11 @@ final class SyncService {
             NotificationCenter.default.post(name: .sessionExpired, object: nil)
             return
         }
+
+        // Drain any queued playlist mutations first so the server's view reflects them before
+        // we pull its state back down.
+        await outbox?.flush()
+
         isSyncing = true
         syncProgress = SyncProgress()
         syncError = nil

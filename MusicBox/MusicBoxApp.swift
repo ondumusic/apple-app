@@ -59,9 +59,9 @@ struct MusicBoxApp: App {
         _playbackCache = State(initialValue: playbackCache)
         _downloadService = State(initialValue: downloadService)
         _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) })
-        _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService) })
         let outbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
         _outboxService = State(initialValue: outbox)
+        _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService, outbox: outbox) })
         _playlistController = State(initialValue: outbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0) })
     }
 
@@ -107,9 +107,9 @@ struct MusicBoxApp: App {
                     downloadService.clearAuth()
                 }
                 player = auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) }
-                syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService) }
                 let newOutbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
                 outboxService = newOutbox
+                syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService, outbox: newOutbox) }
                 playlistController = newOutbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0) }
                 if newOutbox != nil {
                     Task { await newOutbox?.flush() }

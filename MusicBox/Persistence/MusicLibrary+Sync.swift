@@ -358,12 +358,17 @@ extension MusicLibrary {
     /// Called after a successful `create_playlist` so dependent ops fire against the real playlist.
     func remapQueuedPlaylistId(from tempId: UUID, to realId: UUID) {
         let mutations = pendingMutations()
+        var rewrittenCount = 0
         for mutation in mutations {
             guard let kind = OutboxKind(rawValue: mutation.kind) else { continue }
             guard let rewritten = rewrittenPayload(kind: kind, payload: mutation.payload, remap: [tempId: realId]) else { continue }
             mutation.payload = rewritten
+            rewrittenCount += 1
         }
         persistChanges()
+        #if DEBUG
+        print("MusicLibrary.remapQueuedPlaylistId: temp=\(tempId) → real=\(realId), scanned=\(mutations.count), rewritten=\(rewrittenCount)")
+        #endif
     }
 
     private func rewrittenPayload(kind: OutboxKind, payload: Data, remap: [UUID: UUID]) -> Data? {
