@@ -97,13 +97,13 @@ struct PlaylistDetailView: View {
                         if !tracks.isEmpty {
                             if isFullyDownloaded {
                                 Button(role: .destructive) {
-                                    musicLibrary.markTracksUndownloaded(trackIds: allTrackIds)
+                                    controller.disableAutoDownloadAndRemove(playlist.id)
                                 } label: {
                                     Label("Remove Download", systemImage: "trash")
                                 }
                             } else {
                                 Button {
-                                    downloadService.downloadTracks(ids: allTrackIds, library: musicLibrary)
+                                    controller.enableAutoDownload(playlist.id)
                                 } label: {
                                     Label("Download", systemImage: "arrow.down.circle")
                                 }
@@ -321,7 +321,7 @@ struct PlaylistDetailView: View {
                             }
                         } else if !isFullyDownloaded {
                             Button {
-                                downloadService.downloadTracks(ids: allTrackIds, library: musicLibrary)
+                                controller.enableAutoDownload(playlist.id)
                             } label: {
                                 Image(systemName: "arrow.down")
                                     .font(.system(size: 13))

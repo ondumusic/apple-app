@@ -300,6 +300,7 @@ struct PlaylistContextMenuItems: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
+    @Environment(PlaylistController.self) private var playlistController
     @Environment(NetworkMonitor.self) private var network
 
     let playlist: Playlist
@@ -365,15 +366,13 @@ struct PlaylistContextMenuItems: View {
 
         if isFullyDownloaded {
             Button(role: .destructive) {
-                musicLibrary.markTracksUndownloaded(trackIds: allTrackIds())
+                playlistController.disableAutoDownloadAndRemove(playlist.id)
             } label: {
                 Label("Remove Download", systemImage: "trash")
             }
         } else {
             Button {
-                let ids = allTrackIds()
-                guard !ids.isEmpty else { return }
-                downloadService.downloadTracks(ids: ids, library: musicLibrary)
+                playlistController.enableAutoDownload(playlist.id)
             } label: {
                 Label("Download", systemImage: "arrow.down.circle")
             }

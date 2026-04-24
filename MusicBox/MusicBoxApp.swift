@@ -62,7 +62,7 @@ struct MusicBoxApp: App {
         let outbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
         _outboxService = State(initialValue: outbox)
         _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService, outbox: outbox) })
-        _playlistController = State(initialValue: outbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0) })
+        _playlistController = State(initialValue: outbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0, downloadService: downloadService) })
     }
 
     var body: some Scene {
@@ -110,7 +110,7 @@ struct MusicBoxApp: App {
                 let newOutbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
                 outboxService = newOutbox
                 syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService, outbox: newOutbox) }
-                playlistController = newOutbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0) }
+                playlistController = newOutbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0, downloadService: downloadService) }
                 if newOutbox != nil {
                     Task { await newOutbox?.flush() }
                 }

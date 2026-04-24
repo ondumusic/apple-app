@@ -5,12 +5,15 @@ nonisolated struct Playlist: Codable, Identifiable, Sendable, Hashable {
     var name: String
     var trackCount: Int
     var insertedAt: Date
+    /// Local-only; see `LibraryPlaylist.autoDownload`.
+    var autoDownload: Bool
 
-    init(id: UUID, name: String, trackCount: Int, insertedAt: Date) {
+    init(id: UUID, name: String, trackCount: Int, insertedAt: Date, autoDownload: Bool = false) {
         self.id = id
         self.name = name
         self.trackCount = trackCount
         self.insertedAt = insertedAt
+        self.autoDownload = autoDownload
     }
 
     nonisolated enum CodingKeys: String, CodingKey {
@@ -23,5 +26,6 @@ nonisolated struct Playlist: Codable, Identifiable, Sendable, Hashable {
         name = try container.decode(String.self, forKey: .name)
         trackCount = try container.decodeIfPresent(Int.self, forKey: .trackCount) ?? 0
         insertedAt = try container.decodeIfPresent(Date.self, forKey: .insertedAt) ?? Date()
+        autoDownload = false
     }
 }

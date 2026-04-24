@@ -102,12 +102,17 @@ nonisolated class LibraryPlaylist {
     var name: String
     var trackCount: Int
     var insertedAt: Date
+    /// Local-only flag set when the user taps Download on the playlist; cleared on Remove
+    /// Download. Drives auto-downloading of subsequent additions (local or synced). Not sent
+    /// to or from the server.
+    var autoDownload: Bool = false
 
-    init(serverId: UUID, name: String, trackCount: Int, insertedAt: Date) {
+    init(serverId: UUID, name: String, trackCount: Int, insertedAt: Date, autoDownload: Bool = false) {
         self.serverId = serverId
         self.name = name
         self.trackCount = trackCount
         self.insertedAt = insertedAt
+        self.autoDownload = autoDownload
     }
 }
 

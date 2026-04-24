@@ -317,14 +317,27 @@ final class SyncService {
             }
         }
 
-        // Auto-download new tracks if enabled
-        if !newTrackIds.isEmpty,
-           settings?.autoDownloadNewTracks == true,
-           let downloadService {
-            #if DEBUG
-            print("SyncService: auto-downloading \(newTrackIds.count) new tracks")
-            #endif
-            downloadService.downloadTracks(ids: newTrackIds, library: musicLibrary)
+        if let downloadService {
+            // Global "auto-download new tracks" setting — only applies if enabled.
+            let globalAutoIds: Set<UUID> = settings?.autoDownloadNewTracks == true ? newTrackIds : []
+            if !globalAutoIds.isEmpty {
+                #if DEBUG
+                print("SyncService: auto-downloading \(globalAutoIds.count) new tracks")
+                #endif
+                downloadService.downloadTracks(ids: globalAutoIds, library: musicLibrary)
+            }
+
+            // Per-playlist: any track in an auto-downloaded playlist that isn't downloaded yet.
+            // Covers new items synced from another device plus any backfill. Subtract only the
+            // ids we already handled above — if the global setting was off, a brand-new track
+            // that also lives in an auto-downloaded playlist must still be queued here.
+            let playlistAutoIds = musicLibrary.tracksNeedingAutoDownload().subtracting(globalAutoIds)
+            if !playlistAutoIds.isEmpty {
+                #if DEBUG
+                print("SyncService: auto-downloading \(playlistAutoIds.count) track(s) for downloaded playlists")
+                #endif
+                downloadService.downloadTracks(ids: playlistAutoIds, library: musicLibrary)
+            }
         }
     }
 

@@ -7,6 +7,7 @@ import Foundation
 final class PlaylistController {
     @ObservationIgnored private let musicLibrary: MusicLibrary
     @ObservationIgnored private let outbox: OutboxService
+    @ObservationIgnored private let downloadService: DownloadService
 
     /// Most recently used playlist — powers the "Add to <name>" shortcut in track/album/artist
     /// context menus. Persisted across launches. Set whenever the user adds tracks to a playlist.
@@ -21,12 +22,37 @@ final class PlaylistController {
         }
     }
 
-    init(musicLibrary: MusicLibrary, outbox: OutboxService) {
+    init(musicLibrary: MusicLibrary, outbox: OutboxService, downloadService: DownloadService) {
         self.musicLibrary = musicLibrary
         self.outbox = outbox
+        self.downloadService = downloadService
         if let raw = UserDefaults.standard.string(forKey: Self.lastUsedKey),
            let id = UUID(uuidString: raw) {
             self.lastUsedPlaylistId = id
+        }
+    }
+
+    /// Marks a playlist as auto-downloaded and kicks off downloads for any tracks not yet
+    /// downloaded. Called from the playlist's Download action in the UI.
+    func enableAutoDownload(_ playlistId: UUID) {
+        musicLibrary.setPlaylistAutoDownload(id: playlistId, enabled: true)
+        let undownloaded = Set(
+            musicLibrary.tracksForPlaylist(playlistId)
+                .filter { !$0.isDownloaded }
+                .map(\.id)
+        )
+        if !undownloaded.isEmpty {
+            downloadService.downloadTracks(ids: undownloaded, library: musicLibrary)
+        }
+    }
+
+    /// Clears the auto-download flag and removes the playlist's downloaded tracks. Called
+    /// from the Remove Download action.
+    func disableAutoDownloadAndRemove(_ playlistId: UUID) {
+        musicLibrary.setPlaylistAutoDownload(id: playlistId, enabled: false)
+        let ids = Set(musicLibrary.tracksForPlaylist(playlistId).map(\.id))
+        if !ids.isEmpty {
+            musicLibrary.markTracksUndownloaded(trackIds: ids)
         }
     }
 
@@ -80,6 +106,15 @@ final class PlaylistController {
         }
         outbox.enqueueAddItems(playlistId: playlistId, entries: entries)
         lastUsedPlaylistId = playlistId
+
+        // If the target playlist is flagged for auto-download, queue any just-added tracks
+        // that aren't already downloaded. DownloadService dedupes against in-flight downloads.
+        if let target = musicLibrary.playlist(playlistId), target.autoDownload {
+            let undownloaded = Set(trackIds.filter { !musicLibrary.isDownloaded(trackId: $0) })
+            if !undownloaded.isEmpty {
+                downloadService.downloadTracks(ids: undownloaded, library: musicLibrary)
+            }
+        }
     }
 
     func removeItem(_ itemId: UUID, from playlistId: UUID) {

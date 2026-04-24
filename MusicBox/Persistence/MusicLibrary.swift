@@ -255,7 +255,8 @@ final class MusicLibrary {
             sortBy: [SortDescriptor(\.name, comparator: .localizedStandard)]
         )
         return (fetch(descriptor) ?? []).map {
-            Playlist(id: $0.serverId, name: $0.name, trackCount: $0.trackCount, insertedAt: $0.insertedAt)
+            Playlist(id: $0.serverId, name: $0.name, trackCount: $0.trackCount,
+                     insertedAt: $0.insertedAt, autoDownload: $0.autoDownload)
         }
     }
 
@@ -264,7 +265,42 @@ final class MusicLibrary {
         var descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
         guard let lp = fetch(descriptor)?.first else { return nil }
-        return Playlist(id: lp.serverId, name: lp.name, trackCount: lp.trackCount, insertedAt: lp.insertedAt)
+        return Playlist(id: lp.serverId, name: lp.name, trackCount: lp.trackCount,
+                        insertedAt: lp.insertedAt, autoDownload: lp.autoDownload)
+    }
+
+    /// Flips a playlist's `autoDownload` flag. Caller is responsible for triggering any
+    /// backfill or cleanup downloads as appropriate.
+    func setPlaylistAutoDownload(id: UUID, enabled: Bool) {
+        var descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        guard let lp = fetch(descriptor)?.first else { return }
+        lp.autoDownload = enabled
+        persistChanges()
+        revision += 1
+    }
+
+    /// Set of track IDs that live in an `autoDownload`-flagged playlist and aren't yet downloaded.
+    /// Called by SyncService after each sync so new items or backfill tracks get queued for download.
+    func tracksNeedingAutoDownload() -> Set<UUID> {
+        _ = revision
+        let playlistDescriptor = FetchDescriptor<LibraryPlaylist>(
+            predicate: #Predicate { $0.autoDownload == true }
+        )
+        let autoPlaylists = fetch(playlistDescriptor) ?? []
+        guard !autoPlaylists.isEmpty else { return [] }
+        let playlistIds = Set(autoPlaylists.map(\.serverId))
+        let itemDescriptor = FetchDescriptor<LibraryPlaylistItem>(
+            predicate: #Predicate { playlistIds.contains($0.playlistId) }
+        )
+        let items = fetch(itemDescriptor) ?? []
+        let candidateTrackIds = Set(items.map(\.trackId))
+        guard !candidateTrackIds.isEmpty else { return [] }
+        let trackDescriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { candidateTrackIds.contains($0.serverId) && $0.isDownloaded == false }
+        )
+        let tracks = fetch(trackDescriptor) ?? []
+        return Set(tracks.map(\.serverId))
     }
 
     func playlistItems(_ playlistId: UUID) -> [PlaylistItem] {
