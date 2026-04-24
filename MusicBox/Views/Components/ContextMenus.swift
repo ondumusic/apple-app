@@ -296,6 +296,98 @@ struct ArtistContextMenuItems: View {
     }
 }
 
+struct PlaylistContextMenuItems: View {
+    @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(PlayerService.self) private var player
+    @Environment(DownloadService.self) private var downloadService
+    @Environment(NetworkMonitor.self) private var network
+
+    let playlist: Playlist
+    var onRequestDelete: (() -> Void)? = nil
+
+    /// Builds QueueItems for this playlist in position order, preserving PlaylistItem.id so the
+    /// currently-playing row can be identified even when the same track appears multiple times.
+    private func availableQueueItems() -> [QueueItem] {
+        let items = musicLibrary.playlistItems(playlist.id)
+        let tracks = musicLibrary.tracksForPlaylist(playlist.id)
+        guard items.count == tracks.count else { return [] }
+        return zip(items, tracks).compactMap { item, track in
+            guard network.isOnline || track.isDownloaded else { return nil }
+            return QueueItem(id: item.id, track: track, artworkURL: track.album?.artworkUrl)
+        }
+    }
+
+    private func allTrackIds() -> Set<UUID> {
+        Set(musicLibrary.tracksForPlaylist(playlist.id).map(\.id))
+    }
+
+    private var isFullyDownloaded: Bool {
+        let tracks = musicLibrary.tracksForPlaylist(playlist.id)
+        return !tracks.isEmpty && tracks.allSatisfy { $0.isDownloaded }
+    }
+
+    var body: some View {
+        Button {
+            let available = availableQueueItems()
+            guard !available.isEmpty else { return }
+            player.requestPlay { player.playNow(queue: available) }
+        } label: {
+            Label("Play", systemImage: "play.fill")
+        }
+
+        Button {
+            let available = availableQueueItems()
+            guard !available.isEmpty else { return }
+            player.requestPlay { player.playShuffled(queue: available) }
+        } label: {
+            Label("Shuffle", systemImage: "shuffle")
+        }
+
+        Divider()
+
+        Button {
+            let available = availableQueueItems()
+            guard !available.isEmpty else { return }
+            player.playNext(queue: available)
+        } label: {
+            Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+        }
+
+        Button {
+            let available = availableQueueItems()
+            guard !available.isEmpty else { return }
+            player.addToEnd(queue: available)
+        } label: {
+            Label("Add to Queue", systemImage: "text.append")
+        }
+
+        Divider()
+
+        if isFullyDownloaded {
+            Button(role: .destructive) {
+                musicLibrary.markTracksUndownloaded(trackIds: allTrackIds())
+            } label: {
+                Label("Remove Download", systemImage: "trash")
+            }
+        } else {
+            Button {
+                let ids = allTrackIds()
+                guard !ids.isEmpty else { return }
+                downloadService.downloadTracks(ids: ids, library: musicLibrary)
+            } label: {
+                Label("Download", systemImage: "arrow.down.circle")
+            }
+        }
+
+        if let onRequestDelete {
+            Divider()
+            Button(role: .destructive, action: onRequestDelete) {
+                Label("Delete Playlist", systemImage: "trash")
+            }
+        }
+    }
+}
+
 /// Isolated subview so download/offline observation doesn't invalidate the parent view.
 struct TrackDownloadMenuItems: View {
     @Environment(DownloadService.self) private var downloadService

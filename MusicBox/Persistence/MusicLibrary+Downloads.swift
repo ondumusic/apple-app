@@ -189,6 +189,28 @@ extension MusicLibrary {
         downloadChanged = [trackId: false]
     }
 
+    /// Bulk variant of `markUndownloaded(trackId:)` — the single-track version replaces
+    /// `downloadChanged` per call, so a loop only propagates the last mutation. This one
+    /// builds a combined `downloadChanged` map so views see all the undownloads at once.
+    func markTracksUndownloaded(trackIds: Set<UUID>) {
+        guard !trackIds.isEmpty else { return }
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { trackIds.contains($0.serverId) && $0.isDownloaded == true }
+        )
+        guard let tracks = try? modelContext.fetch(descriptor) else { return }
+        var changed: [UUID: Bool] = [:]
+        for track in tracks {
+            if let url = track.resolvedFileURL {
+                try? FileManager.default.removeItem(at: url)
+            }
+            track.isDownloaded = false
+            track.localFilePath = nil
+            changed[track.serverId] = false
+        }
+        persistChanges()
+        downloadChanged = changed
+    }
+
     func markAlbumUndownloaded(albumId: UUID) {
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return }
