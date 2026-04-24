@@ -102,6 +102,55 @@ extension MusicLibrary {
         return inserted
     }
 
+    @discardableResult
+    func upsertPlaylists(_ syncPlaylists: [SyncPlaylist]) -> Set<UUID> {
+        guard !syncPlaylists.isEmpty else { return [] }
+        let ids = syncPlaylists.map(\.id)
+        let descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { ids.contains($0.serverId) })
+        let existing = (try? modelContext.fetch(descriptor)) ?? []
+        let map = Dictionary(uniqueKeysWithValues: existing.map { ($0.serverId, $0) })
+        var inserted = Set<UUID>()
+        for sp in syncPlaylists {
+            if let lp = map[sp.id] {
+                lp.name = sp.name
+                lp.trackCount = sp.trackCount
+                lp.insertedAt = sp.insertedAt
+            } else {
+                modelContext.insert(LibraryPlaylist(
+                    serverId: sp.id, name: sp.name,
+                    trackCount: sp.trackCount, insertedAt: sp.insertedAt))
+                inserted.insert(sp.id)
+            }
+        }
+        persistChanges()
+        return inserted
+    }
+
+    @discardableResult
+    func upsertPlaylistItems(_ syncItems: [SyncPlaylistItem]) -> Set<UUID> {
+        guard !syncItems.isEmpty else { return [] }
+        let ids = syncItems.map(\.id)
+        let descriptor = FetchDescriptor<LibraryPlaylistItem>(predicate: #Predicate { ids.contains($0.serverId) })
+        let existing = (try? modelContext.fetch(descriptor)) ?? []
+        let map = Dictionary(uniqueKeysWithValues: existing.map { ($0.serverId, $0) })
+        var inserted = Set<UUID>()
+        for si in syncItems {
+            if let li = map[si.id] {
+                li.playlistId = si.playlistId
+                li.trackId = si.trackId
+                li.position = si.position
+                li.insertedAt = si.insertedAt
+            } else {
+                modelContext.insert(LibraryPlaylistItem(
+                    serverId: si.id, playlistId: si.playlistId, trackId: si.trackId,
+                    position: si.position, insertedAt: si.insertedAt))
+                inserted.insert(si.id)
+            }
+        }
+        persistChanges()
+        return inserted
+    }
+
     func applyDeletions(_ deletions: [SyncDeletion]) {
         guard !deletions.isEmpty else { return }
         for deletion in deletions {
@@ -120,6 +169,15 @@ extension MusicLibrary {
                     }
                     modelContext.delete(track)
                 }
+            case "playlist":
+                deletePlaylistCascade(deletion.entityId)
+            case "playlistItem":
+                let id = deletion.entityId
+                var descriptor = FetchDescriptor<LibraryPlaylistItem>(predicate: #Predicate { $0.serverId == id })
+                descriptor.fetchLimit = 1
+                if let item = try? modelContext.fetch(descriptor).first {
+                    modelContext.delete(item)
+                }
             default:
                 break
             }
@@ -136,6 +194,8 @@ extension MusicLibrary {
         try? modelContext.delete(model: LibraryTrack.self)
         try? modelContext.delete(model: LibraryAlbum.self)
         try? modelContext.delete(model: LibraryArtist.self)
+        try? modelContext.delete(model: LibraryPlaylistItem.self)
+        try? modelContext.delete(model: LibraryPlaylist.self)
         persistChanges()
         cachedArtistMap = nil
         cachedAlbumMap = nil
@@ -171,6 +231,18 @@ extension MusicLibrary {
         }
         if let album = fetchAlbumRecord(albumId) {
             modelContext.delete(album)
+        }
+    }
+
+    func deletePlaylistCascade(_ playlistId: UUID) {
+        let itemDescriptor = FetchDescriptor<LibraryPlaylistItem>(predicate: #Predicate { $0.playlistId == playlistId })
+        for item in (try? modelContext.fetch(itemDescriptor)) ?? [] {
+            modelContext.delete(item)
+        }
+        var descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { $0.serverId == playlistId })
+        descriptor.fetchLimit = 1
+        if let playlist = try? modelContext.fetch(descriptor).first {
+            modelContext.delete(playlist)
         }
     }
 }

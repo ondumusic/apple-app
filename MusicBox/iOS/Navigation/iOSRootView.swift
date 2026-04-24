@@ -1,7 +1,7 @@
 import SwiftUI
 
 nonisolated enum iOSTab: String, Hashable, Sendable {
-    case artists, albums, songs, search, downloads
+    case artists, albums, songs, search, playlists
 }
 
 
@@ -9,15 +9,18 @@ struct iOSRootView: View {
     @Environment(AuthService.self) private var authService
     @Environment(DownloadService.self) private var downloadService
     @State private var showSettings = false
+    @State private var showDownloads = false
     @State private var showReAuth = false
-    @AppStorage("selectedTab") private var selectedTab: iOSTab = .artists
+    @AppStorage("selectedTab") private var selectedTabRaw: String = iOSTab.artists.rawValue
     @State private var artistsPath = NavigationPath()
     @State private var albumsPath = NavigationPath()
     @State private var searchPath = NavigationPath()
+    @State private var playlistsPath = NavigationPath()
     @State private var searchText = ""
 
-    private var downloadCount: Int {
-        downloadService.activeDownloads.count + downloadService.pendingQueue.count
+    private var selectedTab: iOSTab {
+        // Migrate the retired `.downloads` value to `.artists`.
+        iOSTab(rawValue: selectedTabRaw) ?? .artists
     }
 
     private func postScrollToTop() {
@@ -49,7 +52,7 @@ struct iOSRootView: View {
             Tab("Artists", systemImage: "music.mic", value: .artists) {
                 NavigationStack(path: $artistsPath) {
                     ArtistListView()
-                        .toolbar { settingsButton }
+                        .toolbar { userMenu }
                 }
                 .nowPlayingBar()
             }
@@ -57,7 +60,7 @@ struct iOSRootView: View {
             Tab("Albums", systemImage: "square.stack", value: .albums) {
                 NavigationStack(path: $albumsPath) {
                     AlbumListView()
-                        .toolbar { settingsButton }
+                        .toolbar { userMenu }
                 }
                 .nowPlayingBar()
             }
@@ -65,7 +68,7 @@ struct iOSRootView: View {
             Tab("Songs", systemImage: "music.note", value: .songs) {
                 NavigationStack {
                     SongListView()
-                        .toolbar { settingsButton }
+                        .toolbar { userMenu }
                 }
                 .nowPlayingBar()
             }
@@ -75,24 +78,24 @@ struct iOSRootView: View {
                     SearchView(query: searchText, path: $searchPath)
                         .navigationTitle("Search")
                         .searchable(text: $searchText, prompt: "Artists, albums, or songs")
-                        .toolbar { settingsButton }
+                        .toolbar { userMenu }
                 }
                 .nowPlayingBar()
             }
 
-            Tab("Downloads", systemImage: "arrow.down.circle", value: .downloads) {
-                NavigationStack {
-                    DownloadsView()
-                        .toolbar { settingsButton }
+            Tab("Playlists", systemImage: "music.note.list", value: .playlists) {
+                NavigationStack(path: $playlistsPath) {
+                    PlaylistListView()
+                        .toolbar { userMenu }
                 }
                 .nowPlayingBar()
             }
-            .badge(downloadCount > 0 ? downloadCount : 0)
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
             guard let artist = notification.object as? Artist else { return }
+            showDownloads = false
             artistsPath = NavigationPath()
-            selectedTab = .artists
+            selectedTabRaw = iOSTab.artists.rawValue
             // Delay slightly so tab switch completes before push
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 artistsPath.append(artist)
@@ -100,8 +103,9 @@ struct iOSRootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
             guard let album = notification.object as? Album else { return }
+            showDownloads = false
             albumsPath = NavigationPath()
-            selectedTab = .albums
+            selectedTabRaw = iOSTab.albums.rawValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 albumsPath.append(album)
             }
@@ -128,6 +132,17 @@ struct iOSRootView: View {
                     }
             }
         }
+        .sheet(isPresented: $showDownloads) {
+            NavigationStack {
+                DownloadsView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showDownloads = false }
+                        }
+                    }
+            }
+            .nowPlayingBar()
+        }
         } // VStack
     }
 
@@ -138,17 +153,16 @@ struct iOSRootView: View {
             if newTab == selectedTab {
                 postScrollToTop()
             }
-            selectedTab = newTab
+            selectedTabRaw = newTab.rawValue
         }
     }
 
-    private var settingsButton: some ToolbarContent {
+    private var userMenu: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: "gearshape")
-            }
+            UserMenuButton(
+                onDownloads: { showDownloads = true },
+                onSettings: { showSettings = true }
+            )
         }
     }
 }

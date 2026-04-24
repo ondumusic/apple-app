@@ -95,3 +95,35 @@ nonisolated class LibraryTrack {
         return appSupport.appendingPathComponent(localFilePath)
     }
 }
+
+@Model
+nonisolated class LibraryPlaylist {
+    @Attribute(.unique) var serverId: UUID
+    var name: String
+    var trackCount: Int
+    var insertedAt: Date
+
+    init(serverId: UUID, name: String, trackCount: Int, insertedAt: Date) {
+        self.serverId = serverId
+        self.name = name
+        self.trackCount = trackCount
+        self.insertedAt = insertedAt
+    }
+}
+
+@Model
+nonisolated class LibraryPlaylistItem {
+    @Attribute(.unique) var serverId: UUID
+    var playlistId: UUID
+    var trackId: UUID
+    var position: String
+    var insertedAt: Date
+
+    init(serverId: UUID, playlistId: UUID, trackId: UUID, position: String, insertedAt: Date) {
+        self.serverId = serverId
+        self.playlistId = playlistId
+        self.trackId = trackId
+        self.position = position
+        self.insertedAt = insertedAt
+    }
+}

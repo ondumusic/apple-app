@@ -31,7 +31,7 @@ final class MusicLibrary {
     }
 
     init() throws {
-        let schema = Schema([LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self])
+        let schema = Schema([LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self, LibraryPlaylist.self, LibraryPlaylistItem.self])
         do {
             modelContainer = try ModelContainer(for: schema)
         } catch {
@@ -245,6 +245,76 @@ final class MusicLibrary {
                 if a.disc != b.disc { return a.disc < b.disc }
                 return (a.number ?? Int.max) < (b.number ?? Int.max)
             }
+    }
+
+    // MARK: - Query: Playlists
+
+    func allPlaylists() -> [Playlist] {
+        _ = revision
+        let descriptor = FetchDescriptor<LibraryPlaylist>(
+            sortBy: [SortDescriptor(\.name, comparator: .localizedStandard)]
+        )
+        return (fetch(descriptor) ?? []).map {
+            Playlist(id: $0.serverId, name: $0.name, trackCount: $0.trackCount, insertedAt: $0.insertedAt)
+        }
+    }
+
+    func playlist(_ id: UUID) -> Playlist? {
+        _ = revision
+        var descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        guard let lp = fetch(descriptor)?.first else { return nil }
+        return Playlist(id: lp.serverId, name: lp.name, trackCount: lp.trackCount, insertedAt: lp.insertedAt)
+    }
+
+    func playlistItems(_ playlistId: UUID) -> [PlaylistItem] {
+        _ = revision
+        let descriptor = FetchDescriptor<LibraryPlaylistItem>(
+            predicate: #Predicate { $0.playlistId == playlistId },
+            sortBy: [SortDescriptor(\.position)]
+        )
+        return (fetch(descriptor) ?? []).map {
+            PlaylistItem(id: $0.serverId, playlistId: $0.playlistId, trackId: $0.trackId,
+                         position: $0.position, insertedAt: $0.insertedAt)
+        }
+    }
+
+    /// Returns tracks for a playlist in `position` order. Items whose track is missing from the library
+    /// are silently skipped (e.g. after a cascade delete of the underlying track).
+    func tracksForPlaylist(_ playlistId: UUID) -> [Track] {
+        _ = revision
+        let itemDescriptor = FetchDescriptor<LibraryPlaylistItem>(
+            predicate: #Predicate { $0.playlistId == playlistId },
+            sortBy: [SortDescriptor(\.position)]
+        )
+        let items = fetch(itemDescriptor) ?? []
+        guard !items.isEmpty else { return [] }
+
+        let trackIds = items.map(\.trackId)
+        let trackDescriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { trackIds.contains($0.serverId) }
+        )
+        let libTracks = fetch(trackDescriptor) ?? []
+        let trackMap = Dictionary(uniqueKeysWithValues: libTracks.map { ($0.serverId, $0) })
+
+        let artistIds = Set(libTracks.map(\.artistId) + libTracks.map(\.albumArtistId))
+        let artistMap = buildArtistMapForIds(artistIds)
+        let albumIds = Set(libTracks.map(\.albumId))
+        let albumMap: [UUID: LibraryAlbum]
+        if albumIds.count <= 20 {
+            var map: [UUID: LibraryAlbum] = [:]
+            for id in albumIds {
+                if let album = fetchAlbumRecord(id) { map[id] = album }
+            }
+            albumMap = map
+        } else {
+            albumMap = buildAlbumMap()
+        }
+
+        return items.compactMap { item in
+            guard let lt = trackMap[item.trackId] else { return nil }
+            return buildTrack(lt, artistMap: artistMap, album: albumMap[lt.albumId])
+        }
     }
 
     // MARK: - Search

@@ -7,9 +7,27 @@ nonisolated struct SyncResponse: Decodable, Sendable {
     var artists: [SyncArtist]
     var albums: [SyncAlbum]
     var tracks: [SyncTrack]
+    var playlists: [SyncPlaylist]
+    var playlistItems: [SyncPlaylistItem]
     var deletions: [SyncDeletion]
     var cursor: String
     var complete: Bool
+
+    nonisolated enum CodingKeys: String, CodingKey {
+        case artists, albums, tracks, playlists, playlistItems, deletions, cursor, complete
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        artists = try container.decode([SyncArtist].self, forKey: .artists)
+        albums = try container.decode([SyncAlbum].self, forKey: .albums)
+        tracks = try container.decode([SyncTrack].self, forKey: .tracks)
+        playlists = try container.decodeIfPresent([SyncPlaylist].self, forKey: .playlists) ?? []
+        playlistItems = try container.decodeIfPresent([SyncPlaylistItem].self, forKey: .playlistItems) ?? []
+        deletions = try container.decode([SyncDeletion].self, forKey: .deletions)
+        cursor = try container.decode(String.self, forKey: .cursor)
+        complete = try container.decode(Bool.self, forKey: .complete)
+    }
 }
 
 nonisolated struct SyncArtist: Sendable {
@@ -108,6 +126,50 @@ extension SyncTrack: Decodable {
     }
 }
 
+nonisolated struct SyncPlaylist: Sendable {
+    var id: UUID
+    var name: String
+    var trackCount: Int
+    var insertedAt: Date
+}
+
+extension SyncPlaylist: Decodable {
+    nonisolated enum CodingKeys: String, CodingKey {
+        case id, name, trackCount, insertedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        trackCount = try container.decodeIfPresent(Int.self, forKey: .trackCount) ?? 0
+        insertedAt = try container.decode(Date.self, forKey: .insertedAt)
+    }
+}
+
+nonisolated struct SyncPlaylistItem: Sendable {
+    var id: UUID
+    var playlistId: UUID
+    var trackId: UUID
+    var position: String
+    var insertedAt: Date
+}
+
+extension SyncPlaylistItem: Decodable {
+    nonisolated enum CodingKeys: String, CodingKey {
+        case id, playlistId, trackId, position, insertedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        playlistId = try container.decode(UUID.self, forKey: .playlistId)
+        trackId = try container.decode(UUID.self, forKey: .trackId)
+        position = try container.decode(String.self, forKey: .position)
+        insertedAt = try container.decode(Date.self, forKey: .insertedAt)
+    }
+}
+
 nonisolated struct SyncDeletion: Decodable, Sendable {
     var entityType: String
     var entityId: UUID
@@ -194,6 +256,8 @@ final class SyncService {
                 musicLibrary.upsertArtists(response.artists)
                 let newAlbumIds = musicLibrary.upsertAlbums(response.albums)
                 newTrackIds.formUnion(musicLibrary.upsertTracks(response.tracks))
+                musicLibrary.upsertPlaylists(response.playlists)
+                musicLibrary.upsertPlaylistItems(response.playlistItems)
                 musicLibrary.applyDeletions(response.deletions)
 
                 // Only prefetch artwork for newly added albums

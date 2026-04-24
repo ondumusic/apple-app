@@ -6,7 +6,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case albums = "Albums"
     case songs = "Songs"
     case search = "Search"
-    case downloads = "Downloads"
+    case playlists = "Playlists"
 
     var id: String { rawValue }
 
@@ -16,7 +16,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .albums: "square.stack"
         case .songs: "music.note"
         case .search: "magnifyingglass"
-        case .downloads: "arrow.down.circle"
+        case .playlists: "music.note.list"
         }
     }
 }
@@ -25,10 +25,14 @@ struct macOSRootView: View {
     @Environment(AuthService.self) private var authService
     @AppStorage("selectedSidebarItem") private var selectionRaw: String = SidebarItem.artists.rawValue
 
-    private var selection: SidebarItem? { SidebarItem(rawValue: selectionRaw) }
+    /// Migrates the retired `downloads` sidebar value to `artists`.
+    private var selection: SidebarItem? {
+        SidebarItem(rawValue: selectionRaw) ?? .artists
+    }
     @State private var navigationPath = NavigationPath()
     @State private var searchText = ""
     @State private var showReAuth = false
+    @State private var showDownloads = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,21 +55,21 @@ struct macOSRootView: View {
             .background(.orange)
         }
 
-        MacOSPlayerToolbar()
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(.bar)
+        HStack(spacing: 0) {
+            MacOSPlayerToolbar()
+                .frame(maxWidth: .infinity)
+                .padding(.leading, 12)
+                .padding(.trailing, 8)
+                .padding(.vertical, 6)
+            UserMenuButton(onDownloads: { showDownloads = true })
+                .padding(.trailing, 12)
+        }
+        .background(.bar)
 
         NavigationSplitView {
             List(SidebarItem.allCases, selection: sidebarSelection) { item in
-                if item == .downloads {
-                    DownloadSidebarRow()
-                        .tag(item)
-                } else {
-                    Label(item.rawValue, systemImage: item.icon)
-                        .tag(item)
-                }
+                Label(item.rawValue, systemImage: item.icon)
+                    .tag(item)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         } detail: {
@@ -80,8 +84,8 @@ struct macOSRootView: View {
                 case .search:
                     SearchView(query: searchText, path: $navigationPath)
                         .searchable(text: $searchText, prompt: "Artists, albums, or songs")
-                case .downloads:
-                    DownloadsView()
+                case .playlists:
+                    PlaylistListView()
                 case nil:
                     Text("Select a category")
                         .foregroundStyle(.secondary)
@@ -93,6 +97,17 @@ struct macOSRootView: View {
         .sheet(isPresented: $showReAuth) {
             ReAuthView()
         }
+        .sheet(isPresented: $showDownloads) {
+            NavigationStack {
+                DownloadsView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showDownloads = false }
+                        }
+                    }
+            }
+            .frame(minWidth: 520, minHeight: 480)
+        }
         .onChange(of: authService.isSessionExpired) { _, expired in
             if expired { showReAuth = true }
             if !expired { showReAuth = false }
@@ -102,6 +117,7 @@ struct macOSRootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
             guard let artist = notification.object as? Artist else { return }
+            showDownloads = false
             navigationPath = NavigationPath()
             selectionRaw = SidebarItem.artists.rawValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -110,6 +126,7 @@ struct macOSRootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
             guard let album = notification.object as? Album else { return }
+            showDownloads = false
             navigationPath = NavigationPath()
             selectionRaw = SidebarItem.albums.rawValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -128,19 +145,6 @@ struct macOSRootView: View {
             }
             selectionRaw = newValue?.rawValue ?? SidebarItem.artists.rawValue
         }
-    }
-}
-
-private struct DownloadSidebarRow: View {
-    @Environment(DownloadService.self) private var downloadService
-
-    private var count: Int {
-        downloadService.activeDownloads.count + downloadService.pendingQueue.count
-    }
-
-    var body: some View {
-        Label("Downloads", systemImage: "arrow.down.circle")
-            .badge(count)
     }
 }
 #endif
