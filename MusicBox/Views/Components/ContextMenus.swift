@@ -4,11 +4,17 @@ struct AlbumContextMenuItems: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
+    @Environment(PlaylistController.self) private var playlistController
     @Environment(NetworkMonitor.self) private var network
 
     let album: Album
     var artist: Artist? = nil
     var downloadedOnly: Bool = false
+
+    private var lastUsedPlaylist: Playlist? {
+        guard let id = playlistController.lastUsedPlaylistId else { return nil }
+        return musicLibrary.playlist(id)
+    }
 
     private func availableTracks() -> [Track] {
         musicLibrary.availableTracks(musicLibrary.tracksForAlbum(album.id), isOnline: network.isOnline)
@@ -54,6 +60,16 @@ struct AlbumContextMenuItems: View {
             Label("Add to Queue", systemImage: "text.append")
         }
 
+        if let last = lastUsedPlaylist {
+            Button {
+                let ids = allTracks().map(\.id)
+                guard !ids.isEmpty else { return }
+                playlistController.addTracks(ids, to: last.id)
+            } label: {
+                Label("Add to \(last.name)", systemImage: "plus.circle")
+            }
+        }
+
         Button {
             let ids = allTracks().map(\.id)
             guard !ids.isEmpty else { return }
@@ -86,6 +102,7 @@ struct AlbumContextMenuItems: View {
 struct TrackContextMenuItems: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
+    @Environment(PlaylistController.self) private var playlistController
     @Environment(NetworkMonitor.self) private var network
 
     let track: Track
@@ -94,6 +111,11 @@ struct TrackContextMenuItems: View {
 
     private var artworkURL: URL? {
         album?.artworkUrl ?? track.album?.artworkUrl
+    }
+
+    private var lastUsedPlaylist: Playlist? {
+        guard let id = playlistController.lastUsedPlaylistId else { return nil }
+        return musicLibrary.playlist(id)
     }
 
     private var isAvailable: Bool {
@@ -136,6 +158,14 @@ struct TrackContextMenuItems: View {
                 Label("Add to Queue", systemImage: "text.append")
             }
 
+            if let last = lastUsedPlaylist {
+                Button {
+                    playlistController.addTrack(track.id, to: last.id)
+                } label: {
+                    Label("Add to \(last.name)", systemImage: "plus.circle")
+                }
+            }
+
             Button {
                 NotificationCenter.default.post(name: .requestAddToPlaylist, object: [track.id])
             } label: {
@@ -170,10 +200,16 @@ struct ArtistContextMenuItems: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(DownloadService.self) private var downloadService
+    @Environment(PlaylistController.self) private var playlistController
     @Environment(NetworkMonitor.self) private var network
 
     let artist: Artist
     var downloadedOnly: Bool = false
+
+    private var lastUsedPlaylist: Playlist? {
+        guard let id = playlistController.lastUsedPlaylistId else { return nil }
+        return musicLibrary.playlist(id)
+    }
 
     private func availableItems() -> [QueueItem] {
         let items = buildQueueItems()
@@ -213,6 +249,16 @@ struct ArtistContextMenuItems: View {
             player.addToEnd(queue: available)
         } label: {
             Label("Add to Queue", systemImage: "text.append")
+        }
+
+        if let last = lastUsedPlaylist {
+            Button {
+                let ids = buildQueueItems().map(\.track.id)
+                guard !ids.isEmpty else { return }
+                playlistController.addTracks(ids, to: last.id)
+            } label: {
+                Label("Add to \(last.name)", systemImage: "plus.circle")
+            }
         }
 
         Button {

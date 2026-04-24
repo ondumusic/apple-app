@@ -5,7 +5,14 @@ import MediaPlayer
 struct FullPlayerView: View {
     @Environment(PlayerService.self) private var player
     @Environment(SettingsStore.self) private var settings
+    @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(PlaylistController.self) private var playlistController
     @Environment(\.dismiss) private var dismiss
+
+    private var lastUsedPlaylist: Playlist? {
+        guard let id = playlistController.lastUsedPlaylistId else { return nil }
+        return musicLibrary.playlist(id)
+    }
     @State private var showQueue = false
     @State private var artworkColor: Color?
     @State private var audioRouteName: String?
@@ -176,6 +183,25 @@ struct FullPlayerView: View {
 
             if let track = player.currentTrack {
                 Menu {
+                    if let last = lastUsedPlaylist {
+                        Button {
+                            playlistController.addTrack(track.id, to: last.id)
+                        } label: {
+                            Label("Add to \(last.name)", systemImage: "plus.circle")
+                        }
+                    }
+
+                    Button {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NotificationCenter.default.post(name: .requestAddToPlaylist, object: [track.id])
+                        }
+                    } label: {
+                        Label("Add to Playlist…", systemImage: "music.note.list")
+                    }
+
+                    Divider()
+
                     Button {
                         let artist = track.artist
                         dismiss()

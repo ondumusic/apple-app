@@ -8,9 +8,26 @@ final class PlaylistController {
     @ObservationIgnored private let musicLibrary: MusicLibrary
     @ObservationIgnored private let outbox: OutboxService
 
+    /// Most recently used playlist — powers the "Add to <name>" shortcut in track/album/artist
+    /// context menus. Persisted across launches. Set whenever the user adds tracks to a playlist.
+    private static let lastUsedKey = "playlists.lastUsedId"
+    var lastUsedPlaylistId: UUID? {
+        didSet {
+            if let id = lastUsedPlaylistId {
+                UserDefaults.standard.set(id.uuidString, forKey: Self.lastUsedKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.lastUsedKey)
+            }
+        }
+    }
+
     init(musicLibrary: MusicLibrary, outbox: OutboxService) {
         self.musicLibrary = musicLibrary
         self.outbox = outbox
+        if let raw = UserDefaults.standard.string(forKey: Self.lastUsedKey),
+           let id = UUID(uuidString: raw) {
+            self.lastUsedPlaylistId = id
+        }
     }
 
     // MARK: - Playlist CRUD
@@ -36,6 +53,7 @@ final class PlaylistController {
     func deletePlaylist(_ id: UUID) {
         musicLibrary.deleteLocalPlaylist(id)
         outbox.enqueueDeletePlaylist(id)
+        if lastUsedPlaylistId == id { lastUsedPlaylistId = nil }
     }
 
     // MARK: - Items
@@ -61,6 +79,7 @@ final class PlaylistController {
             entries.append(.init(tempItemId: tempItemId, trackId: trackId, position: position))
         }
         outbox.enqueueAddItems(playlistId: playlistId, entries: entries)
+        lastUsedPlaylistId = playlistId
     }
 
     func removeItem(_ itemId: UUID, from playlistId: UUID) {
