@@ -138,6 +138,35 @@ final class APIService: Sendable {
         }
     }
 
+    /// Discriminated error returned as HTTP 400 by PATCH /playlists/{id}/items. The caller
+    /// can recover from `unknownTracks` / `unknownItems` by filtering and retrying; the
+    /// conflict cases and `tooManyOperations` are ambiguous enough to surface as errors.
+    nonisolated enum PlaylistItemsError: Error, Sendable {
+        case tooManyOperations
+        case addMoveConflict(itemIds: [UUID])
+        case moveRemoveConflict(itemIds: [UUID])
+        case unknownItems(itemIds: [UUID])
+        case unknownTracks(trackIds: [UUID])
+
+        nonisolated struct DecodedBody: Decodable {
+            let error: String
+            let itemIds: [UUID]?
+            let trackIds: [UUID]?
+        }
+
+        static func decode(_ data: Data) -> PlaylistItemsError? {
+            guard let body = try? JSONDecoder.api.decode(DecodedBody.self, from: data) else { return nil }
+            switch body.error {
+            case "too_many_operations":    return .tooManyOperations
+            case "add_move_conflict":      return .addMoveConflict(itemIds: body.itemIds ?? [])
+            case "move_remove_conflict":   return .moveRemoveConflict(itemIds: body.itemIds ?? [])
+            case "unknown_items":          return .unknownItems(itemIds: body.itemIds ?? [])
+            case "unknown_tracks":         return .unknownTracks(trackIds: body.trackIds ?? [])
+            default:                       return nil
+            }
+        }
+    }
+
     func createPlaylist(name: String) async throws -> Playlist {
         let body = try JSONEncoder.api.encode(["name": name])
         return try await perform("/playlists", method: "POST", body: body)
@@ -156,8 +185,36 @@ final class APIService: Sendable {
                              add: [PositionedTrackBody] = [],
                              move: [PositionedItemBody] = [],
                              remove: [UUID] = []) async throws -> UpdatePlaylistItemsResponse {
-        let body = try JSONEncoder.api.encode(UpdatePlaylistItemsBody(add: add, move: move, remove: remove))
-        return try await perform("/playlists/\(id.uuidString.lowercased())/items", method: "PATCH", body: body)
+        var req = try request(for: "/playlists/\(id.uuidString.lowercased())/items")
+        req.httpMethod = "PATCH"
+        req.httpBody = try JSONEncoder.api.encode(UpdatePlaylistItemsBody(add: add, move: move, remove: remove))
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+
+        // Typed recovery for the discriminated error union — callers can inspect which items
+        // or tracks the server rejected and retry with them filtered out.
+        if http.statusCode == 400, let typed = PlaylistItemsError.decode(data) {
+            #if DEBUG
+            print("APIService: PATCH /playlists/\(id.uuidString.lowercased())/items 400 — \(typed)")
+            #endif
+            throw typed
+        }
+
+        guard (200...299).contains(http.statusCode) else {
+            #if DEBUG
+            let bodyString = String(data: data, encoding: .utf8) ?? "<non-utf8 body, \(data.count) bytes>"
+            print("APIService: PATCH /playlists/\(id.uuidString.lowercased())/items failed — HTTP \(http.statusCode), body: \(bodyString)")
+            #endif
+            throw APIError.httpError(http.statusCode)
+        }
+        do {
+            return try JSONDecoder.api.decode(UpdatePlaylistItemsResponse.self, from: data)
+        } catch {
+            throw APIError.decoding(error.localizedDescription)
+        }
     }
 
     // MARK: - Mutation helper

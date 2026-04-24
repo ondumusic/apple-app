@@ -7,23 +7,30 @@ import Foundation
 /// Temp UUIDs minted by the UI for create_playlist / add_items are swapped for server-assigned
 /// UUIDs on successful replay, both in the local SwiftData store and in downstream payloads
 /// still waiting in the queue.
+///
+/// Item-level ops (add/move/remove) coalesce at flush time: adjacent mutations targeting the
+/// same playlist merge into one API call — across kinds too, since PATCH /items takes all
+/// three arrays — capped at `maxOperationsPerBatch`. A move/remove referencing a temp id whose
+/// add is in the same batch would fail (server doesn't know the temp id yet), so those break
+/// the batch and run in separate flushes.
 @Observable
 final class OutboxService {
     @ObservationIgnored private let musicLibrary: MusicLibrary
     @ObservationIgnored private let api: APIService
 
-    /// Number of mutations still waiting to replay — observed by UI indicators.
     var pendingCount: Int = 0
-    /// One-shot surface for the most recent hard failure that was discarded (e.g. 404 on delete).
-    /// UIs observe this to show an alert and clear by setting back to nil.
     var lastError: String?
 
     @ObservationIgnored private var isFlushing = false
     @ObservationIgnored private var retryTask: Task<Void, Never>?
 
     /// After this many transient failures in a row, escalate to a discard so one bad mutation
-    /// can't permanently block the queue. Real outages (server down for a day) are well under this.
+    /// can't permanently block the queue.
     @ObservationIgnored private let maxRetryAttempts = 20
+    /// Server accepts up to 250 operations per PATCH /items request.
+    @ObservationIgnored private let maxOperationsPerBatch = 250
+    /// Bound on the filter-and-retry recursion for `unknown_tracks` / `unknown_items`.
+    @ObservationIgnored private let maxFilterRetries = 3
 
     init(musicLibrary: MusicLibrary, api: APIService) {
         self.musicLibrary = musicLibrary
@@ -79,8 +86,6 @@ final class OutboxService {
 
     // MARK: - Flush
 
-    /// Drains the queue in order. Stops at the first retryable failure (no immediate re-attempt —
-    /// the next trigger picks it up). Idempotent; concurrent calls share one flush.
     func flush() async {
         guard !isFlushing else {
             #if DEBUG
@@ -100,73 +105,343 @@ final class OutboxService {
         }
         #endif
 
-        while let next = musicLibrary.pendingMutations().first {
-            let outcome = await process(next)
-            switch outcome {
-            case .success:
-                #if DEBUG
-                print("OutboxService: \(next.kind) succeeded")
-                #endif
-                musicLibrary.deletePendingMutation(next)
-            case .discard(let reason):
-                #if DEBUG
-                print("OutboxService: \(next.kind) discarded — \(reason)")
-                #endif
-                lastError = reason
-                musicLibrary.deletePendingMutation(next)
-            case .retry(let reason):
-                next.attemptCount += 1
-                next.lastError = reason
-                next.lastAttemptAt = Date()
-                if next.attemptCount >= maxRetryAttempts {
-                    #if DEBUG
-                    print("OutboxService: \(next.kind) giving up after \(next.attemptCount) attempts — \(reason)")
-                    #endif
-                    lastError = "A playlist change couldn't sync: \(reason)"
-                    musicLibrary.deletePendingMutation(next)
-                    refreshPendingCount()
-                    continue  // try the next mutation
-                }
-                #if DEBUG
-                print("OutboxService: \(next.kind) retry (attempt \(next.attemptCount)) — \(reason)")
-                #endif
-                musicLibrary.persistChanges()
-                refreshPendingCount()
-                scheduleRetry()
-                return
+        while let head = musicLibrary.pendingMutations().first {
+            let consumed: [PendingMutation]
+            let outcome: Outcome
 
-            case .retryNoPenalty(let reason):
-                next.lastError = reason
-                next.lastAttemptAt = Date()
+            if let batch = collectBatch(from: musicLibrary.pendingMutations()) {
                 #if DEBUG
-                print("OutboxService: \(next.kind) paused (no-penalty) — \(reason)")
+                if batch.consumed.count > 1 {
+                    print("OutboxService: batched \(batch.summary) — \(batch.consumed.count) mutations, \(batch.operationCount) ops")
+                }
                 #endif
-                musicLibrary.persistChanges()
-                refreshPendingCount()
-                scheduleRetry()
+                consumed = batch.consumed
+                outcome = await processBatch(batch)
+            } else {
+                consumed = [head]
+                outcome = await process(head)
+            }
+
+            if !applyOutcome(outcome, head: head, consumedOnSuccess: consumed) {
                 return
             }
-            refreshPendingCount()
         }
     }
 
+    private func applyOutcome(_ outcome: Outcome, head: PendingMutation, consumedOnSuccess: [PendingMutation]) -> Bool {
+        switch outcome {
+        case .success:
+            #if DEBUG
+            print("OutboxService: \(head.kind) succeeded (\(consumedOnSuccess.count) mutation\(consumedOnSuccess.count == 1 ? "" : "s"))")
+            #endif
+            for mutation in consumedOnSuccess {
+                musicLibrary.deletePendingMutation(mutation)
+            }
+            refreshPendingCount()
+            return true
+        case .discard(let reason):
+            #if DEBUG
+            print("OutboxService: \(head.kind) discarded — \(reason)")
+            #endif
+            lastError = reason
+            musicLibrary.deletePendingMutation(head)
+            refreshPendingCount()
+            return true
+        case .retry(let reason):
+            head.attemptCount += 1
+            head.lastError = reason
+            head.lastAttemptAt = Date()
+            if head.attemptCount >= maxRetryAttempts {
+                #if DEBUG
+                print("OutboxService: \(head.kind) giving up after \(head.attemptCount) attempts — \(reason)")
+                #endif
+                lastError = "A playlist change couldn't sync: \(reason)"
+                musicLibrary.deletePendingMutation(head)
+                refreshPendingCount()
+                return true
+            }
+            #if DEBUG
+            print("OutboxService: \(head.kind) retry (attempt \(head.attemptCount)) — \(reason)")
+            #endif
+            musicLibrary.persistChanges()
+            refreshPendingCount()
+            scheduleRetry()
+            return false
+        case .retryNoPenalty(let reason):
+            head.lastError = reason
+            head.lastAttemptAt = Date()
+            #if DEBUG
+            print("OutboxService: \(head.kind) paused (no-penalty) — \(reason)")
+            #endif
+            musicLibrary.persistChanges()
+            refreshPendingCount()
+            scheduleRetry()
+            return false
+        }
+    }
+
+    // MARK: - Batching
+
+    private struct Batch {
+        let playlistId: UUID
+        let consumed: [PendingMutation]
+        let addEntries: [AddItemsPayload.Entry]
+        let moveEntries: [MoveItemsPayload.Entry]
+        let removeIds: [UUID]
+
+        var operationCount: Int { addEntries.count + moveEntries.count + removeIds.count }
+        var summary: String {
+            var parts: [String] = []
+            if !addEntries.isEmpty { parts.append("add=\(addEntries.count)") }
+            if !moveEntries.isEmpty { parts.append("move=\(moveEntries.count)") }
+            if !removeIds.isEmpty { parts.append("remove=\(removeIds.count)") }
+            return parts.joined(separator: " ")
+        }
+    }
+
+    /// Walks from the head collecting adjacent item-level mutations (add/move/remove) for the same
+    /// playlist into a single multi-op batch. Stops at: different playlist, op cap reached, a
+    /// move/remove that references a temp id whose add is in this same batch (the server doesn't
+    /// know that id yet), or a non-batchable kind.
+    private func collectBatch(from mutations: [PendingMutation]) -> Batch? {
+        guard let head = mutations.first,
+              let headKind = OutboxKind(rawValue: head.kind),
+              isBatchableKind(headKind) else { return nil }
+
+        let decoder = JSONDecoder()
+        var consumed: [PendingMutation] = []
+        var addEntries: [AddItemsPayload.Entry] = []
+        var moveEntries: [MoveItemsPayload.Entry] = []
+        var removeIds: [UUID] = []
+        var playlistId: UUID?
+        var opCount = 0
+        var pendingAddItemIds: Set<UUID> = []  // temp ids in this batch's adds
+
+        loop: for mutation in mutations {
+            guard let mk = OutboxKind(rawValue: mutation.kind), isBatchableKind(mk) else { break }
+
+            switch mk {
+            case .addItems:
+                guard let p = try? decoder.decode(AddItemsPayload.self, from: mutation.payload) else { break loop }
+                if let existing = playlistId, existing != p.playlistId { break loop }
+                if opCount + p.items.count > maxOperationsPerBatch { break loop }
+                playlistId = p.playlistId
+                addEntries.append(contentsOf: p.items)
+                for entry in p.items { pendingAddItemIds.insert(entry.tempItemId) }
+                opCount += p.items.count
+
+            case .moveItems:
+                guard let p = try? decoder.decode(MoveItemsPayload.self, from: mutation.payload) else { break loop }
+                if let existing = playlistId, existing != p.playlistId { break loop }
+                // A move of a temp item added in this batch would fail — server doesn't know
+                // about it yet. Break so the add runs first, gets remapped, then move follows.
+                if p.items.contains(where: { pendingAddItemIds.contains($0.itemId) }) { break loop }
+                if opCount + p.items.count > maxOperationsPerBatch { break loop }
+                playlistId = p.playlistId
+                moveEntries.append(contentsOf: p.items)
+                opCount += p.items.count
+
+            case .removeItems:
+                guard let p = try? decoder.decode(RemoveItemsPayload.self, from: mutation.payload) else { break loop }
+                if let existing = playlistId, existing != p.playlistId { break loop }
+                if p.itemIds.contains(where: { pendingAddItemIds.contains($0) }) { break loop }
+                if opCount + p.itemIds.count > maxOperationsPerBatch { break loop }
+                playlistId = p.playlistId
+                removeIds.append(contentsOf: p.itemIds)
+                opCount += p.itemIds.count
+
+            default:
+                break loop
+            }
+            consumed.append(mutation)
+        }
+
+        guard !consumed.isEmpty, let pid = playlistId else { return nil }
+        return Batch(playlistId: pid, consumed: consumed,
+                     addEntries: addEntries, moveEntries: moveEntries, removeIds: removeIds)
+    }
+
+    private func isBatchableKind(_ kind: OutboxKind) -> Bool {
+        kind == .addItems || kind == .moveItems || kind == .removeItems
+    }
+
+    private func processBatch(_ batch: Batch) async -> Outcome {
+        if musicLibrary.playlist(batch.playlistId) == nil {
+            #if DEBUG
+            print("OutboxService: batched ops skipped — local playlist \(batch.playlistId) no longer exists")
+            #endif
+            return .success
+        }
+        return await executeItemOps(
+            playlistId: batch.playlistId,
+            addEntries: batch.addEntries,
+            moveEntries: batch.moveEntries,
+            removeIds: batch.removeIds,
+            depth: 0
+        )
+    }
+
+    // MARK: - Unified item-ops executor
+
+    /// Runs one PATCH /items with the given combined payload. Recursive when the server returns
+    /// `unknown_tracks` / `unknown_items` — we filter them out and retry up to `maxFilterRetries`.
+    /// All single-mutation and batched paths ultimately flow through here.
+    private func executeItemOps(
+        playlistId: UUID,
+        addEntries: [AddItemsPayload.Entry],
+        moveEntries: [MoveItemsPayload.Entry],
+        removeIds: [UUID],
+        depth: Int
+    ) async -> Outcome {
+        if addEntries.isEmpty && moveEntries.isEmpty && removeIds.isEmpty { return .success }
+        if depth >= maxFilterRetries {
+            return .discard("Gave up after \(depth) filter retries.")
+        }
+
+        let adds = addEntries.map { APIService.PositionedTrackBody(trackId: $0.trackId, position: $0.position) }
+        let moves = moveEntries.map { APIService.PositionedItemBody(itemId: $0.itemId, position: $0.position) }
+
+        do {
+            let response = try await api.updatePlaylistItems(playlistId, add: adds, move: moves, remove: removeIds)
+            if !addEntries.isEmpty {
+                let addedByPosition = Dictionary(uniqueKeysWithValues: response.added.map { ($0.position, $0) })
+                for entry in addEntries {
+                    if let confirmed = addedByPosition[entry.position] {
+                        musicLibrary.swapLocalPlaylistItemId(tempId: entry.tempItemId, confirmed: confirmed)
+                    }
+                }
+            }
+            return .success
+        } catch let error as APIService.PlaylistItemsError {
+            return await recover(
+                from: error,
+                playlistId: playlistId,
+                addEntries: addEntries,
+                moveEntries: moveEntries,
+                removeIds: removeIds,
+                depth: depth
+            )
+        } catch APIError.httpError(422) {
+            return .discard("Some changes were rejected by the server (422).")
+        } catch APIError.httpError(400) {
+            // Unrecognized 400 body — already logged by APIService.
+            return .discard("Some changes couldn't be applied — see console for server details.")
+        } catch APIError.httpError(404) where addEntries.isEmpty && moveEntries.isEmpty {
+            // Playlist or items gone on a pure-remove call; local removal was still correct.
+            return .success
+        } catch {
+            return classify(error)
+        }
+    }
+
+    /// Filter-and-retry recovery for the two errors whose user intent is clear.
+    private func recover(
+        from error: APIService.PlaylistItemsError,
+        playlistId: UUID,
+        addEntries: [AddItemsPayload.Entry],
+        moveEntries: [MoveItemsPayload.Entry],
+        removeIds: [UUID],
+        depth: Int
+    ) async -> Outcome {
+        switch error {
+        case .unknownTracks(let badTrackIds):
+            let badSet = Set(badTrackIds)
+            let filtered = addEntries.filter { !badSet.contains($0.trackId) }
+            if filtered.count == addEntries.count {
+                // Server said unknown but none of our entries matched — something is off.
+                return .discard("Some tracks couldn't be added — server rejected them.")
+            }
+            #if DEBUG
+            print("OutboxService: dropped \(addEntries.count - filtered.count) unknown track(s); retrying")
+            #endif
+            return await executeItemOps(
+                playlistId: playlistId,
+                addEntries: filtered, moveEntries: moveEntries, removeIds: removeIds,
+                depth: depth + 1
+            )
+
+        case .unknownItems(let badItemIds):
+            let badSet = Set(badItemIds)
+            let filteredMoves = moveEntries.filter { !badSet.contains($0.itemId) }
+            let filteredRemoves = removeIds.filter { !badSet.contains($0) }
+            if filteredMoves.count == moveEntries.count && filteredRemoves.count == removeIds.count {
+                return .discard("Some playlist items couldn't be updated — server rejected them.")
+            }
+            #if DEBUG
+            print("OutboxService: dropped \(moveEntries.count - filteredMoves.count) move(s) and \(removeIds.count - filteredRemoves.count) remove(s) referencing unknown items; retrying")
+            #endif
+            return await executeItemOps(
+                playlistId: playlistId,
+                addEntries: addEntries, moveEntries: filteredMoves, removeIds: filteredRemoves,
+                depth: depth + 1
+            )
+
+        case .addMoveConflict:
+            // Positions are algorithm-computed, so a collision means our local view of the
+            // playlist's tail was stale (multi-device concurrency). Regenerate fresh positions
+            // appended past the current local tail for everything in the request, reflect the
+            // new move positions locally so the UI stays in sync, and retry.
+            var cursor = musicLibrary.lastPlaylistItemPosition(playlistId)
+            let newAdds: [AddItemsPayload.Entry] = addEntries.map { entry in
+                let newPosition = FractionalIndex.after(cursor)
+                cursor = newPosition
+                return AddItemsPayload.Entry(tempItemId: entry.tempItemId, trackId: entry.trackId, position: newPosition)
+            }
+            let newMoves: [MoveItemsPayload.Entry] = moveEntries.map { entry in
+                let newPosition = FractionalIndex.after(cursor)
+                cursor = newPosition
+                return MoveItemsPayload.Entry(itemId: entry.itemId, position: newPosition)
+            }
+            for entry in newMoves {
+                musicLibrary.moveLocalPlaylistItem(itemId: entry.itemId, newPosition: entry.position)
+            }
+            #if DEBUG
+            print("OutboxService: add_move_conflict — repositioned \(newAdds.count) add(s) + \(newMoves.count) move(s) past current tail; retrying")
+            #endif
+            return await executeItemOps(
+                playlistId: playlistId,
+                addEntries: newAdds, moveEntries: newMoves, removeIds: removeIds,
+                depth: depth + 1
+            )
+
+        case .moveRemoveConflict(let conflictIds):
+            // The same item was both moved and removed. Remove wins — drop the move.
+            let conflictSet = Set(conflictIds)
+            let filteredMoves = moveEntries.filter { !conflictSet.contains($0.itemId) }
+            if filteredMoves.count == moveEntries.count {
+                // Server flagged ids that weren't in our moves — can't self-heal.
+                return .discard("A move and remove collided, but we couldn't identify which.")
+            }
+            #if DEBUG
+            print("OutboxService: move_remove_conflict — dropping \(moveEntries.count - filteredMoves.count) conflicting move(s); retrying")
+            #endif
+            return await executeItemOps(
+                playlistId: playlistId,
+                addEntries: addEntries, moveEntries: filteredMoves, removeIds: removeIds,
+                depth: depth + 1
+            )
+
+        case .tooManyOperations:
+            // Our cap (maxOperationsPerBatch) should match the server's. Hitting this means
+            // the server lowered its cap without the client being updated. Discard + surface
+            // for now.
+            //
+            // Later improvement: split the batch (halve and retry) until it fits, and/or have
+            // the server return its current limit in the error body so the client can adjust
+            // `maxOperationsPerBatch` live. Needs a server-side API change.
+            return .discard("Batch exceeded server op limit — client and server caps have drifted.")
+        }
+    }
+
+    // MARK: - Single-mutation processing
+
     private enum Outcome {
         case success
-        /// Retry later, and count this attempt toward the cap.
         case retry(String)
-        /// Retry later, but don't count toward the cap — used for transient conditions that will
-        /// resolve themselves externally (offline, expired auth).
         case retryNoPenalty(String)
         case discard(String)
     }
 
-    /// Retry policy, in one place:
-    /// - 422 is the only status we treat as permanently bad (invalid input the server will never accept).
-    /// - 404 on delete is treated as success (already gone).
-    /// - If the target playlist no longer exists locally, the mutation is orphaned — skip as success
-    ///   rather than retry against an id the server will never recognize.
-    /// - Everything else retries up to `maxRetryAttempts`, then escalates to discard + alert.
-    /// - We never roll back local state on discard — the next sync reconciles authoritatively.
     private func process(_ mutation: PendingMutation) async -> Outcome {
         guard let kind = OutboxKind(rawValue: mutation.kind) else {
             return .discard("Unknown mutation kind: \(mutation.kind)")
@@ -178,8 +453,6 @@ final class OutboxService {
             guard let p = try? decoder.decode(CreatePlaylistPayload.self, from: mutation.payload) else {
                 return .discard("Malformed create_playlist payload")
             }
-            // The local playlist this mutation was meant to materialize is already gone (user deleted
-            // it locally before we synced) — don't bother creating it on the server.
             if musicLibrary.playlist(p.tempPlaylistId) == nil {
                 #if DEBUG
                 print("OutboxService: create_playlist skipped — local playlist \(p.tempPlaylistId) no longer exists")
@@ -227,7 +500,7 @@ final class OutboxService {
                 try await api.deletePlaylist(p.playlistId)
                 return .success
             } catch APIError.httpError(404) {
-                return .success  // already gone, local delete was correct
+                return .success
             } catch {
                 return classify(error)
             }
@@ -236,88 +509,31 @@ final class OutboxService {
             guard let p = try? decoder.decode(AddItemsPayload.self, from: mutation.payload) else {
                 return .discard("Malformed add_items payload")
             }
-            if musicLibrary.playlist(p.playlistId) == nil {
-                #if DEBUG
-                print("OutboxService: add_items skipped — local playlist \(p.playlistId) no longer exists")
-                #endif
-                return .success
-            }
-            #if DEBUG
-            print("OutboxService: add_items firing — playlistId=\(p.playlistId), items=\(p.items.count)")
-            #endif
-            do {
-                let adds = p.items.map { APIService.PositionedTrackBody(trackId: $0.trackId, position: $0.position) }
-                let response = try await api.updatePlaylistItems(p.playlistId, add: adds)
-                // Pair temp item IDs to server items by position (unique in this batch).
-                let addedByPosition = Dictionary(uniqueKeysWithValues: response.added.map { ($0.position, $0) })
-                for entry in p.items {
-                    if let confirmed = addedByPosition[entry.position] {
-                        musicLibrary.swapLocalPlaylistItemId(tempId: entry.tempItemId, confirmed: confirmed)
-                    }
-                }
-                return .success
-            } catch APIError.httpError(422) {
-                return .discard("Some tracks couldn't be added — they were rejected by the server.")
-            } catch APIError.httpError(400) {
-                // PATCH /playlists/{id}/items uses 400 for its discriminated error union
-                // (too_many_operations, unknown_tracks, add_move_conflict, etc.). The
-                // specific reason was already printed by APIService.perform; surface a
-                // generic message and discard so the queue doesn't loop.
-                return .discard("Some tracks couldn't be added — see console for server details.")
-            } catch {
-                return classify(error)
-            }
+            if musicLibrary.playlist(p.playlistId) == nil { return .success }
+            return await executeItemOps(playlistId: p.playlistId,
+                                         addEntries: p.items, moveEntries: [], removeIds: [],
+                                         depth: 0)
 
         case .moveItems:
             guard let p = try? decoder.decode(MoveItemsPayload.self, from: mutation.payload) else {
                 return .discard("Malformed move_items payload")
             }
-            if musicLibrary.playlist(p.playlistId) == nil {
-                #if DEBUG
-                print("OutboxService: move_items skipped — local playlist \(p.playlistId) no longer exists")
-                #endif
-                return .success
-            }
-            #if DEBUG
-            print("OutboxService: move_items firing — playlistId=\(p.playlistId), items=\(p.items.count)")
-            #endif
-            do {
-                let moves = p.items.map { APIService.PositionedItemBody(itemId: $0.itemId, position: $0.position) }
-                _ = try await api.updatePlaylistItems(p.playlistId, move: moves)
-                return .success
-            } catch APIError.httpError(422) {
-                return .discard("Couldn't reorder — input rejected by the server.")
-            } catch APIError.httpError(400) {
-                return .discard("Couldn't reorder — see console for server details.")
-            } catch {
-                return classify(error)
-            }
+            if musicLibrary.playlist(p.playlistId) == nil { return .success }
+            return await executeItemOps(playlistId: p.playlistId,
+                                         addEntries: [], moveEntries: p.items, removeIds: [],
+                                         depth: 0)
 
         case .removeItems:
             guard let p = try? decoder.decode(RemoveItemsPayload.self, from: mutation.payload) else {
                 return .discard("Malformed remove_items payload")
             }
-            if musicLibrary.playlist(p.playlistId) == nil {
-                #if DEBUG
-                print("OutboxService: remove_items skipped — local playlist \(p.playlistId) no longer exists")
-                #endif
-                return .success
-            }
-            do {
-                _ = try await api.updatePlaylistItems(p.playlistId, remove: p.itemIds)
-                return .success
-            } catch APIError.httpError(404) {
-                return .success  // playlist/items already gone, local removal was correct
-            } catch APIError.httpError(400) {
-                return .discard("Some tracks couldn't be removed — see console for server details.")
-            } catch {
-                return classify(error)
-            }
+            if musicLibrary.playlist(p.playlistId) == nil { return .success }
+            return await executeItemOps(playlistId: p.playlistId,
+                                         addEntries: [], moveEntries: [], removeIds: p.itemIds,
+                                         depth: 0)
         }
     }
 
-    /// Classifies an error into the right retry outcome. URL errors (offline, timeout, unreachable)
-    /// and expired auth shouldn't burn through the retry cap — they resolve themselves externally.
     private func classify(_ error: Error) -> Outcome {
         if let apiError = error as? APIError, case .unauthorized = apiError {
             NotificationCenter.default.post(name: .sessionExpired, object: nil)
@@ -331,8 +547,6 @@ final class OutboxService {
 
     // MARK: - Retry scheduling
 
-    /// Schedules one delayed retry. The next foreground / connectivity / enqueue trigger will
-    /// cancel this and flush promptly.
     private func scheduleRetry() {
         retryTask?.cancel()
         retryTask = Task { [weak self] in
