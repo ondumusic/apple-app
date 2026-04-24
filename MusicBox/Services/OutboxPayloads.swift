@@ -5,6 +5,7 @@ nonisolated enum OutboxKind: String, Sendable {
     case renamePlaylist = "rename_playlist"
     case deletePlaylist = "delete_playlist"
     case addItems       = "add_items"
+    case moveItems      = "move_items"
     case removeItems    = "remove_items"
 }
 
@@ -26,6 +27,15 @@ nonisolated struct AddItemsPayload: Codable, Sendable {
     nonisolated struct Entry: Codable, Sendable {
         var tempItemId: UUID
         var trackId: UUID
+        var position: String
+    }
+    var playlistId: UUID
+    var items: [Entry]
+}
+
+nonisolated struct MoveItemsPayload: Codable, Sendable {
+    nonisolated struct Entry: Codable, Sendable {
+        var itemId: UUID
         var position: String
     }
     var playlistId: UUID

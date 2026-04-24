@@ -86,6 +86,7 @@ struct PlaylistDetailView: View {
                         }
                     }
                 }
+                .onMove(perform: handleMove)
             }
         }
         .listStyle(.plain)
@@ -94,6 +95,11 @@ struct PlaylistDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
+            #if os(iOS)
+            ToolbarItem(placement: .primaryAction) {
+                EditButton()
+            }
+            #endif
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button {
@@ -142,6 +148,21 @@ struct PlaylistDetailView: View {
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &tracks)
         }
+    }
+
+    private func handleMove(from source: IndexSet, to destination: Int) {
+        guard let sourceIndex = source.first, items.indices.contains(sourceIndex) else { return }
+        let movingItem = items[sourceIndex]
+
+        var reordered = items
+        reordered.move(fromOffsets: source, toOffset: destination)
+        guard let newIndex = reordered.firstIndex(where: { $0.id == movingItem.id }) else { return }
+
+        let before = newIndex > 0 ? reordered[newIndex - 1].position : nil
+        let after  = newIndex < reordered.count - 1 ? reordered[newIndex + 1].position : nil
+        let newPosition = FractionalIndex.between(before, after)
+
+        controller.moveItem(movingItem.id, to: newPosition, within: playlist.id)
     }
 
     private func reloadTracks() {

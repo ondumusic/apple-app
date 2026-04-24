@@ -67,4 +67,11 @@ final class PlaylistController {
         musicLibrary.deleteLocalPlaylistItem(itemId)
         outbox.enqueueRemoveItems(playlistId: playlistId, itemIds: [itemId])
     }
+
+    /// Caller computes `newPosition` via `FractionalIndex.between(...)` using the two neighboring
+    /// items in the destination order.
+    func moveItem(_ itemId: UUID, to newPosition: String, within playlistId: UUID) {
+        musicLibrary.moveLocalPlaylistItem(itemId: itemId, newPosition: newPosition)
+        outbox.enqueueMoveItems(playlistId: playlistId, entries: [.init(itemId: itemId, position: newPosition)])
+    }
 }

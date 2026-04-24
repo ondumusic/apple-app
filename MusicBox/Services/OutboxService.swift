@@ -54,6 +54,11 @@ final class OutboxService {
         enqueue(.addItems, payload: AddItemsPayload(playlistId: playlistId, items: entries))
     }
 
+    func enqueueMoveItems(playlistId: UUID, entries: [MoveItemsPayload.Entry]) {
+        guard !entries.isEmpty else { return }
+        enqueue(.moveItems, payload: MoveItemsPayload(playlistId: playlistId, items: entries))
+    }
+
     func enqueueRemoveItems(playlistId: UUID, itemIds: [UUID]) {
         guard !itemIds.isEmpty else { return }
         enqueue(.removeItems, payload: RemoveItemsPayload(playlistId: playlistId, itemIds: itemIds))
@@ -259,6 +264,31 @@ final class OutboxService {
                 // specific reason was already printed by APIService.perform; surface a
                 // generic message and discard so the queue doesn't loop.
                 return .discard("Some tracks couldn't be added — see console for server details.")
+            } catch {
+                return classify(error)
+            }
+
+        case .moveItems:
+            guard let p = try? decoder.decode(MoveItemsPayload.self, from: mutation.payload) else {
+                return .discard("Malformed move_items payload")
+            }
+            if musicLibrary.playlist(p.playlistId) == nil {
+                #if DEBUG
+                print("OutboxService: move_items skipped — local playlist \(p.playlistId) no longer exists")
+                #endif
+                return .success
+            }
+            #if DEBUG
+            print("OutboxService: move_items firing — playlistId=\(p.playlistId), items=\(p.items.count)")
+            #endif
+            do {
+                let moves = p.items.map { APIService.PositionedItemBody(itemId: $0.itemId, position: $0.position) }
+                _ = try await api.updatePlaylistItems(p.playlistId, move: moves)
+                return .success
+            } catch APIError.httpError(422) {
+                return .discard("Couldn't reorder — input rejected by the server.")
+            } catch APIError.httpError(400) {
+                return .discard("Couldn't reorder — see console for server details.")
             } catch {
                 return classify(error)
             }

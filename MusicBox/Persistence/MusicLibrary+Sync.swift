@@ -292,6 +292,7 @@ extension MusicLibrary {
     }
 
     /// Replaces a temp item ID with the real server-assigned ID (used after an optimistic add).
+    /// Also rewrites any queued move/remove payloads still targeting the temp ID.
     func swapLocalPlaylistItemId(tempId: UUID, confirmed: PlaylistItem) {
         var descriptor = FetchDescriptor<LibraryPlaylistItem>(predicate: #Predicate { $0.serverId == tempId })
         descriptor.fetchLimit = 1
@@ -302,7 +303,64 @@ extension MusicLibrary {
             serverId: confirmed.id, playlistId: confirmed.playlistId, trackId: confirmed.trackId,
             position: confirmed.position, insertedAt: confirmed.insertedAt))
         persistChanges()
+        remapQueuedPlaylistItemId(from: tempId, to: confirmed.id)
         revision += 1
+    }
+
+    /// Rewrites queued move/remove payloads so any reference to `tempId` becomes `realId`.
+    func remapQueuedPlaylistItemId(from tempId: UUID, to realId: UUID) {
+        let mutations = pendingMutations()
+        var rewrittenCount = 0
+        for mutation in mutations {
+            guard let kind = OutboxKind(rawValue: mutation.kind) else { continue }
+            guard let rewritten = rewrittenItemIdPayload(kind: kind, payload: mutation.payload, from: tempId, to: realId) else { continue }
+            mutation.payload = rewritten
+            rewrittenCount += 1
+        }
+        persistChanges()
+        #if DEBUG
+        if rewrittenCount > 0 {
+            print("MusicLibrary.remapQueuedPlaylistItemId: temp=\(tempId) → real=\(realId), rewritten=\(rewrittenCount)")
+        }
+        #endif
+    }
+
+    /// Updates a local item's position — called by the optimistic move path.
+    func moveLocalPlaylistItem(itemId: UUID, newPosition: String) {
+        var descriptor = FetchDescriptor<LibraryPlaylistItem>(predicate: #Predicate { $0.serverId == itemId })
+        descriptor.fetchLimit = 1
+        guard let item = fetch(descriptor)?.first else { return }
+        item.position = newPosition
+        persistChanges()
+        revision += 1
+    }
+
+    private func rewrittenItemIdPayload(kind: OutboxKind, payload: Data, from tempId: UUID, to realId: UUID) -> Data? {
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        switch kind {
+        case .moveItems:
+            guard var p = try? decoder.decode(MoveItemsPayload.self, from: payload) else { return nil }
+            var changed = false
+            p.items = p.items.map { entry in
+                if entry.itemId == tempId {
+                    changed = true
+                    return MoveItemsPayload.Entry(itemId: realId, position: entry.position)
+                }
+                return entry
+            }
+            return changed ? (try? encoder.encode(p)) : nil
+        case .removeItems:
+            guard var p = try? decoder.decode(RemoveItemsPayload.self, from: payload) else { return nil }
+            var changed = false
+            p.itemIds = p.itemIds.map { id in
+                if id == tempId { changed = true; return realId }
+                return id
+            }
+            return changed ? (try? encoder.encode(p)) : nil
+        default:
+            return nil
+        }
     }
 
     private func adjustPlaylistTrackCount(_ playlistId: UUID, delta: Int) {
@@ -395,6 +453,13 @@ extension MusicLibrary {
             return nil
         case .addItems:
             guard var p = try? decoder.decode(AddItemsPayload.self, from: payload) else { return nil }
+            if let mapped = remap[p.playlistId] {
+                p.playlistId = mapped
+                return try? encoder.encode(p)
+            }
+            return nil
+        case .moveItems:
+            guard var p = try? decoder.decode(MoveItemsPayload.self, from: payload) else { return nil }
             if let mapped = remap[p.playlistId] {
                 p.playlistId = mapped
                 return try? encoder.encode(p)
