@@ -517,11 +517,15 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let session = prepareSession
 
         // Build prepare URL
-        guard let baseURL, var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+        guard let baseURL else {
             cleanupPrepare(trackId: trackId, reason: "Not authenticated")
             return
         }
-        components.path = "/transcode/\(trackId.uuidString.lowercased())"
+        let transcodeURL = baseURL.appendingPathComponent("tracks/\(trackId.uuidString.lowercased())/transcode")
+        guard var components = URLComponents(url: transcodeURL, resolvingAgainstBaseURL: false) else {
+            cleanupPrepare(trackId: trackId, reason: "Invalid URL")
+            return
+        }
         components.queryItems = [URLQueryItem(name: "preset", value: preset)]
         guard let prepareURL = components.url, let request = authorizedRequest(prepareURL) else {
             cleanupPrepare(trackId: trackId, reason: "Invalid URL")

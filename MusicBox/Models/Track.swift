@@ -61,7 +61,7 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         albumArtistSortName = try container.decodeIfPresent(String.self, forKey: .albumArtistSortName) ?? artist.sortName
         album = try container.decodeIfPresent(TrackAlbum.self, forKey: .album)
         name = try container.decode(String.self, forKey: .name)
-        disc = try container.decode(Int.self, forKey: .disc)
+        disc = try container.decodeIfPresent(Int.self, forKey: .disc) ?? 1
         number = try container.decodeIfPresent(Int.self, forKey: .number)
         duration = try container.decode(Double.self, forKey: .duration)
         mimetype = try container.decode(String.self, forKey: .mimetype)

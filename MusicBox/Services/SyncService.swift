@@ -70,7 +70,7 @@ extension SyncAlbum: Decodable {
     }
 }
 
-nonisolated struct SyncTrack: Decodable, Sendable {
+nonisolated struct SyncTrack: Sendable {
     var id: UUID
     var artistId: UUID
     var albumArtistId: UUID
@@ -83,6 +83,29 @@ nonisolated struct SyncTrack: Decodable, Sendable {
     var streamUrl: String
     var downloadUrl: String
     var insertedAt: Date
+}
+
+extension SyncTrack: Decodable {
+    nonisolated enum CodingKeys: String, CodingKey {
+        case id, artistId, albumArtistId, albumId, name, disc, number,
+             duration, mimetype, streamUrl, downloadUrl, insertedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        artistId = try container.decode(UUID.self, forKey: .artistId)
+        albumArtistId = try container.decode(UUID.self, forKey: .albumArtistId)
+        albumId = try container.decode(UUID.self, forKey: .albumId)
+        name = try container.decode(String.self, forKey: .name)
+        disc = try container.decodeIfPresent(Int.self, forKey: .disc) ?? 1
+        number = try container.decodeIfPresent(Int.self, forKey: .number)
+        duration = try container.decode(Double.self, forKey: .duration)
+        mimetype = try container.decode(String.self, forKey: .mimetype)
+        streamUrl = try container.decode(String.self, forKey: .streamUrl)
+        downloadUrl = try container.decode(String.self, forKey: .downloadUrl)
+        insertedAt = try container.decode(Date.self, forKey: .insertedAt)
+    }
 }
 
 nonisolated struct SyncDeletion: Decodable, Sendable {
