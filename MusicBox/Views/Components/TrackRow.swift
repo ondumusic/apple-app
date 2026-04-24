@@ -11,9 +11,14 @@ struct TrackRow: View {
     var showArtwork = false
     var showNumber = true
     var onTap: (() -> Void)? = nil
+    /// Optional override for the "currently playing" indicator. When nil, the row falls back
+    /// to matching on track id — which is wrong for lists that can contain the same track
+    /// multiple times (playlists, queue). Such contexts should compute this explicitly and
+    /// pass it in, typically by matching the current queue item's id against a row-unique id.
+    var isCurrentlyPlaying: Bool? = nil
 
     private var isCurrentTrack: Bool {
-        player.currentTrack?.id == track.id
+        isCurrentlyPlaying ?? (player.currentTrack?.id == track.id)
     }
 
     private var artworkUrl: URL? {

@@ -27,6 +27,25 @@ struct PlaylistDetailView: View {
         return tracks.contains { $0.isDownloaded }
     }
 
+    /// Queue items built with each playlist item's id as the `QueueItem.id`. This lets us tell
+    /// "the third occurrence of track A" apart from "the fifth occurrence" when highlighting
+    /// the currently-playing row.
+    private func buildQueueItems() -> [QueueItem] {
+        zip(items, tracks).map { item, track in
+            QueueItem(id: item.id, track: track, artworkURL: track.album?.artworkUrl)
+        }
+    }
+
+    /// Returns the subset of queue items that are currently playable (online or downloaded).
+    private func availableQueueItems() -> [QueueItem] {
+        buildQueueItems().filter { network.isOnline || $0.track.isDownloaded }
+    }
+
+    private func isItemPlaying(_ item: PlaylistItem) -> Bool {
+        guard player.queue.indices.contains(player.effectiveIndex) else { return false }
+        return player.queue[player.effectiveIndex].id == item.id
+    }
+
     var body: some View {
         List {
             Section {
@@ -40,8 +59,8 @@ struct PlaylistDetailView: View {
 
                     HStack(spacing: 12) {
                         Button {
-                            let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
-                            player.requestPlay { player.playNow(tracks: available, artworkURL: nil) }
+                            let available = availableQueueItems()
+                            player.requestPlay { player.playNow(queue: available) }
                         } label: {
                             Image(systemName: "play.fill")
                                 .font(.system(size: 13))
@@ -50,8 +69,8 @@ struct PlaylistDetailView: View {
                         .disabled(!hasPlayable)
 
                         Button {
-                            let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
-                            player.requestPlay { player.playShuffled(tracks: available, artworkURL: nil) }
+                            let available = availableQueueItems()
+                            player.requestPlay { player.playShuffled(queue: available) }
                         } label: {
                             Image(systemName: "shuffle")
                                 .font(.system(size: 13))
@@ -69,20 +88,28 @@ struct PlaylistDetailView: View {
             }
 
             Section {
-                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                    TrackRow(track: track, showArtist: true, showArtwork: true, showNumber: false) {
-                        let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
-                        if let startIndex = available.firstIndex(where: { $0.id == track.id }) {
-                            player.requestPlay { player.playNow(tracks: available, startingAt: startIndex, artworkURL: track.album?.artworkUrl) }
-                        }
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        if let item = items.indices.contains(index) ? items[index] : nil {
-                            Button(role: .destructive) {
-                                controller.removeItem(item.id, from: playlist.id)
-                            } label: {
-                                Label("Remove", systemImage: "minus.circle")
+                // Iterate items (unique ids) rather than tracks (which can duplicate when the same
+                // track appears multiple times in the playlist).
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    let track = tracks[index]
+                    TrackRow(
+                        track: track,
+                        showArtist: true,
+                        showArtwork: true,
+                        showNumber: false,
+                        onTap: {
+                            let available = availableQueueItems()
+                            if let startIndex = available.firstIndex(where: { $0.id == item.id }) {
+                                player.requestPlay { player.playNow(queue: available, startingAt: startIndex) }
                             }
+                        },
+                        isCurrentlyPlaying: isItemPlaying(item)
+                    )
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            controller.removeItem(item.id, from: playlist.id)
+                        } label: {
+                            Label("Remove", systemImage: "minus.circle")
                         }
                     }
                 }
