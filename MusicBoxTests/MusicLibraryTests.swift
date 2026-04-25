@@ -541,10 +541,10 @@ struct MusicLibraryDownloadTests {
         ])
 
         lib.markDownloaded(trackId: t1, relativePath: "p1.m4a")
-        #expect(lib.downloadChanged.contains(t1))
+        #expect(lib.downloadChanged[t1] == true)
 
         lib.markDownloaded(trackId: t2, relativePath: "p2.m4a")
-        #expect(lib.downloadChanged.contains(t2))
+        #expect(lib.downloadChanged[t2] == true)
     }
 
     @Test func applyDownloadChangesUpdatesTracksInPlace() throws {

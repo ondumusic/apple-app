@@ -107,8 +107,7 @@ private func makeService(library: MusicLibrary? = nil, settings: SettingsStore? 
                                         albumId: testAlbumId, name: "Track", disc: 1, number: 1,
                                         duration: 200, mimetype: "audio/mp4",
                                         streamUrl: "/stream/test", downloadUrl: "/download/test",
-                                        insertedAt: now,
-                                        file: SyncTrack.SyncFile(size: 5_000_000, checksum: "abc"))])
+                                        insertedAt: now)])
         library.markDownloaded(trackId: trackId, relativePath: "MusicBox/Downloads/test.mp4")
 
         let service = try makeService(library: library)
