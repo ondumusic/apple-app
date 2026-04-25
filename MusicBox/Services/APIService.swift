@@ -138,7 +138,7 @@ final class APIService: Sendable {
         }
     }
 
-    /// Discriminated error returned as HTTP 400 by PATCH /playlists/{id}/items. The caller
+    /// Discriminated error returned as HTTP 422 by PATCH /playlists/{id}/items. The caller
     /// can recover from `unknownTracks` / `unknownItems` by filtering and retrying; the
     /// conflict cases and `tooManyOperations` are ambiguous enough to surface as errors.
     nonisolated enum PlaylistItemsError: Error, Sendable {
@@ -196,9 +196,9 @@ final class APIService: Sendable {
 
         // Typed recovery for the discriminated error union — callers can inspect which items
         // or tracks the server rejected and retry with them filtered out.
-        if http.statusCode == 400, let typed = PlaylistItemsError.decode(data) {
+        if http.statusCode == 422, let typed = PlaylistItemsError.decode(data) {
             #if DEBUG
-            print("APIService: PATCH /playlists/\(id.uuidString.lowercased())/items 400 — \(typed)")
+            print("APIService: PATCH /playlists/\(id.uuidString.lowercased())/items 422 — \(typed)")
             #endif
             throw typed
         }

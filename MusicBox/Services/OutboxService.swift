@@ -322,10 +322,8 @@ final class OutboxService {
                 depth: depth
             )
         } catch APIError.httpError(422) {
+            // Server returned 422 but the discriminated body didn't decode — fall back to discard.
             return .discard("Some changes were rejected by the server (422).")
-        } catch APIError.httpError(400) {
-            // Unrecognized 400 body — already logged by APIService.
-            return .discard("Some changes couldn't be applied — see console for server details.")
         } catch APIError.httpError(404) where addEntries.isEmpty && moveEntries.isEmpty {
             // Playlist or items gone on a pure-remove call; local removal was still correct.
             return .success
