@@ -78,7 +78,12 @@ final class PlaylistController {
 
     func deletePlaylist(_ id: UUID) {
         musicLibrary.deleteLocalPlaylist(id)
-        outbox.enqueueDeletePlaylist(id)
+        // Drop pending mutations for this playlist. If the playlist was never created
+        // server-side (pending create still queued), there's nothing to delete remotely.
+        let absorbedByPendingCreate = outbox.compactForDeletedPlaylist(id)
+        if !absorbedByPendingCreate {
+            outbox.enqueueDeletePlaylist(id)
+        }
         if lastUsedPlaylistId == id { lastUsedPlaylistId = nil }
     }
 
@@ -119,7 +124,12 @@ final class PlaylistController {
 
     func removeItem(_ itemId: UUID, from playlistId: UUID) {
         musicLibrary.deleteLocalPlaylistItem(itemId)
-        outbox.enqueueRemoveItems(playlistId: playlistId, itemIds: [itemId])
+        // If a pending add_items still holds this temp item, strip it from the payload and
+        // skip enqueueing remove_items — the server never saw the item in the first place.
+        let stillNeedsServer = outbox.compactForRemovedItems([itemId])
+        if !stillNeedsServer.isEmpty {
+            outbox.enqueueRemoveItems(playlistId: playlistId, itemIds: stillNeedsServer)
+        }
     }
 
     /// Caller computes `newPosition` via `FractionalIndex.between(...)` using the two neighboring

@@ -475,6 +475,113 @@ extension MusicLibrary {
         }
     }
 
+    // MARK: - Outbox compaction
+
+    /// Drops every pending mutation whose target is `playlistId`. Returns true when a pending
+    /// `create_playlist` was among them — the playlist never reached the server, so the caller
+    /// should skip enqueueing `delete_playlist`. When false, item-ops queued against a server-
+    /// known playlist are still dropped (the impending delete will cascade them server-side).
+    func compactPendingForDeletedPlaylist(_ playlistId: UUID) -> Bool {
+        let mutations = pendingMutations()
+        let decoder = JSONDecoder()
+        var foundPendingCreate = false
+        var deleted = 0
+
+        for mutation in mutations {
+            guard let kind = OutboxKind(rawValue: mutation.kind) else { continue }
+            let matches: Bool
+            switch kind {
+            case .createPlaylist:
+                let m = (try? decoder.decode(CreatePlaylistPayload.self, from: mutation.payload))?.tempPlaylistId == playlistId
+                if m { foundPendingCreate = true }
+                matches = m
+            case .renamePlaylist:
+                matches = (try? decoder.decode(RenamePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
+            case .deletePlaylist:
+                matches = (try? decoder.decode(DeletePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
+            case .addItems:
+                matches = (try? decoder.decode(AddItemsPayload.self, from: mutation.payload))?.playlistId == playlistId
+            case .moveItems:
+                matches = (try? decoder.decode(MoveItemsPayload.self, from: mutation.payload))?.playlistId == playlistId
+            case .removeItems:
+                matches = (try? decoder.decode(RemoveItemsPayload.self, from: mutation.payload))?.playlistId == playlistId
+            }
+            if matches {
+                modelContext.delete(mutation)
+                deleted += 1
+            }
+        }
+
+        if deleted > 0 {
+            persistChanges()
+            #if DEBUG
+            print("MusicLibrary.compactPendingForDeletedPlaylist: \(playlistId) — dropped \(deleted) pending mutation(s); pendingCreate=\(foundPendingCreate)")
+            #endif
+        }
+        return foundPendingCreate
+    }
+
+    /// Strips each id in `itemIds` from any pending `add_items` and `move_items` payloads.
+    /// Mutations emptied by the strip are deleted. Returns the subset of ids found in a
+    /// pending `add_items` — the server doesn't know those items yet, so the caller should
+    /// skip enqueueing `remove_items` for them.
+    func compactPendingForRemovedItems(_ itemIds: Set<UUID>) -> Set<UUID> {
+        guard !itemIds.isEmpty else { return [] }
+        let mutations = pendingMutations()
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        var foundInPendingAdds: Set<UUID> = []
+        var stripped = 0
+        var deletedMutations = 0
+
+        for mutation in mutations {
+            guard let kind = OutboxKind(rawValue: mutation.kind) else { continue }
+            switch kind {
+            case .addItems:
+                guard var p = try? decoder.decode(AddItemsPayload.self, from: mutation.payload) else { continue }
+                let before = p.items.count
+                for entry in p.items where itemIds.contains(entry.tempItemId) {
+                    foundInPendingAdds.insert(entry.tempItemId)
+                }
+                p.items.removeAll { itemIds.contains($0.tempItemId) }
+                let removed = before - p.items.count
+                if removed > 0 {
+                    stripped += removed
+                    if p.items.isEmpty {
+                        modelContext.delete(mutation)
+                        deletedMutations += 1
+                    } else if let data = try? encoder.encode(p) {
+                        mutation.payload = data
+                    }
+                }
+            case .moveItems:
+                guard var p = try? decoder.decode(MoveItemsPayload.self, from: mutation.payload) else { continue }
+                let before = p.items.count
+                p.items.removeAll { itemIds.contains($0.itemId) }
+                let removed = before - p.items.count
+                if removed > 0 {
+                    stripped += removed
+                    if p.items.isEmpty {
+                        modelContext.delete(mutation)
+                        deletedMutations += 1
+                    } else if let data = try? encoder.encode(p) {
+                        mutation.payload = data
+                    }
+                }
+            default:
+                continue
+            }
+        }
+
+        if stripped > 0 || deletedMutations > 0 {
+            persistChanges()
+            #if DEBUG
+            print("MusicLibrary.compactPendingForRemovedItems: stripped \(stripped) entr(ies); dropped \(deletedMutations) empty mutation(s); absorbed \(foundInPendingAdds.count) temp id(s)")
+            #endif
+        }
+        return foundInPendingAdds
+    }
+
     func deletePlaylistCascade(_ playlistId: UUID) {
         let itemDescriptor = FetchDescriptor<LibraryPlaylistItem>(predicate: #Predicate { $0.playlistId == playlistId })
         for item in (try? modelContext.fetch(itemDescriptor)) ?? [] {

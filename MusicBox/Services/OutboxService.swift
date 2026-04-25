@@ -559,4 +559,29 @@ final class OutboxService {
     private func refreshPendingCount() {
         pendingCount = musicLibrary.pendingMutations().count
     }
+
+    // MARK: - Compaction (called by PlaylistController on local delete/remove)
+
+    /// Compacts the outbox after the user just deleted a playlist locally. Returns true when
+    /// the deletion was fully absorbed by dropping a pending `create_playlist` — caller should
+    /// skip enqueueing `delete_playlist`. Returns false otherwise (caller should enqueue).
+    ///
+    /// While a flush is in progress we can't safely strip a mid-roundtrip mutation, so this
+    /// returns false and lets the normal delete enqueue happen.
+    func compactForDeletedPlaylist(_ playlistId: UUID) -> Bool {
+        guard !isFlushing else { return false }
+        let absorbed = musicLibrary.compactPendingForDeletedPlaylist(playlistId)
+        refreshPendingCount()
+        return absorbed
+    }
+
+    /// Compacts the outbox after the user just removed item(s) locally. Returns the subset of
+    /// `itemIds` that still need a `remove_items` roundtrip — the rest were stripped from
+    /// pending `add_items` (server doesn't know those temp ids).
+    func compactForRemovedItems(_ itemIds: [UUID]) -> [UUID] {
+        guard !isFlushing, !itemIds.isEmpty else { return itemIds }
+        let absorbed = musicLibrary.compactPendingForRemovedItems(Set(itemIds))
+        refreshPendingCount()
+        return itemIds.filter { !absorbed.contains($0) }
+    }
 }
