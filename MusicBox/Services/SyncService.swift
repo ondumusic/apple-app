@@ -131,11 +131,13 @@ nonisolated struct SyncPlaylist: Sendable {
     var name: String
     var trackCount: Int
     var insertedAt: Date
+    var isFolder: Bool
+    var parentId: UUID?
 }
 
 extension SyncPlaylist: Decodable {
     nonisolated enum CodingKeys: String, CodingKey {
-        case id, name, trackCount, insertedAt
+        case id, name, trackCount, insertedAt, isFolder, parentId
     }
 
     init(from decoder: Decoder) throws {
@@ -144,6 +146,8 @@ extension SyncPlaylist: Decodable {
         name = try container.decode(String.self, forKey: .name)
         trackCount = try container.decodeIfPresent(Int.self, forKey: .trackCount) ?? 0
         insertedAt = try container.decode(Date.self, forKey: .insertedAt)
+        isFolder = try container.decodeIfPresent(Bool.self, forKey: .isFolder) ?? false
+        parentId = try container.decodeIfPresent(UUID.self, forKey: .parentId)
     }
 }
 

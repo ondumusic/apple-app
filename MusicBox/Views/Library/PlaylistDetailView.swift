@@ -21,6 +21,7 @@ struct PlaylistDetailView: View {
     @State private var currentName: String
     @State private var hasLoadedOnce: Bool = false
     @State private var showRename = false
+    @State private var showMove = false
     @State private var showDeleteConfirm = false
     @State private var showCancelDownloads = false
     #if os(iOS)
@@ -94,6 +95,12 @@ struct PlaylistDetailView: View {
                             Label("Rename", systemImage: "pencil")
                         }
 
+                        Button {
+                            showMove = true
+                        } label: {
+                            Label("Move to Folder…", systemImage: "folder")
+                        }
+
                         if !tracks.isEmpty {
                             if isFullyDownloaded {
                                 Button(role: .destructive) {
@@ -127,6 +134,9 @@ struct PlaylistDetailView: View {
                     controller.renamePlaylist(playlist.id, name: name)
                     currentName = name
                 }
+            }
+            .sheet(isPresented: $showMove) {
+                MovePlaylistSheet(playlist: musicLibrary.playlist(playlist.id) ?? playlist)
             }
             .confirmationDialog(
                 "Delete \(currentName)?",

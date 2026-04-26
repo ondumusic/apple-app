@@ -249,15 +249,43 @@ final class MusicLibrary {
 
     // MARK: - Query: Playlists
 
+    /// All playlists and folders, alphabetical. Used by views that ignore hierarchy
+    /// (e.g. AddToPlaylistSheet — there we further filter out folders client-side).
     func allPlaylists() -> [Playlist] {
         _ = revision
         let descriptor = FetchDescriptor<LibraryPlaylist>(
             sortBy: [SortDescriptor(\.name, comparator: .localizedStandard)]
         )
-        return (fetch(descriptor) ?? []).map {
-            Playlist(id: $0.serverId, name: $0.name, trackCount: $0.trackCount,
-                     insertedAt: $0.insertedAt, autoDownload: $0.autoDownload)
+        return (fetch(descriptor) ?? []).map(toPlaylist)
+    }
+
+    /// Children of `parentId` (nil = root). Folders sorted before playlists, then alphabetical.
+    func playlists(in parentId: UUID?) -> [Playlist] {
+        _ = revision
+        let descriptor: FetchDescriptor<LibraryPlaylist>
+        if let parentId {
+            descriptor = FetchDescriptor<LibraryPlaylist>(
+                predicate: #Predicate { $0.parentId == parentId }
+            )
+        } else {
+            descriptor = FetchDescriptor<LibraryPlaylist>(
+                predicate: #Predicate { $0.parentId == nil }
+            )
         }
+        let entries = (fetch(descriptor) ?? []).map(toPlaylist)
+        return entries.sorted { a, b in
+            if a.isFolder != b.isFolder { return a.isFolder && !b.isFolder }
+            return a.name.localizedStandardCompare(b.name) == .orderedAscending
+        }
+    }
+
+    /// Number of direct children of a folder — used to render "n items" in folder rows.
+    func childCount(of parentId: UUID) -> Int {
+        _ = revision
+        let descriptor = FetchDescriptor<LibraryPlaylist>(
+            predicate: #Predicate { $0.parentId == parentId }
+        )
+        return (fetch(descriptor) ?? []).count
     }
 
     func playlist(_ id: UUID) -> Playlist? {
@@ -265,8 +293,13 @@ final class MusicLibrary {
         var descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
         guard let lp = fetch(descriptor)?.first else { return nil }
-        return Playlist(id: lp.serverId, name: lp.name, trackCount: lp.trackCount,
-                        insertedAt: lp.insertedAt, autoDownload: lp.autoDownload)
+        return toPlaylist(lp)
+    }
+
+    private func toPlaylist(_ lp: LibraryPlaylist) -> Playlist {
+        Playlist(id: lp.serverId, name: lp.name, trackCount: lp.trackCount,
+                 insertedAt: lp.insertedAt, isFolder: lp.isFolder, parentId: lp.parentId,
+                 autoDownload: lp.autoDownload)
     }
 
     /// Flips a playlist's `autoDownload` flag. Caller is responsible for triggering any

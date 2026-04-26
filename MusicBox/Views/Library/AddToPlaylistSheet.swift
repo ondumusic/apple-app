@@ -10,8 +10,14 @@ struct AddToPlaylistSheet: View {
 
     let trackIds: [UUID]
 
-    @State private var playlists: [Playlist] = []
+    @State private var entries: [PlaylistEntry] = []
     @State private var showCreateAndAdd = false
+
+    private struct PlaylistEntry: Identifiable {
+        let playlist: Playlist
+        let folderPath: String?
+        var id: UUID { playlist.id }
+    }
 
     private var countLabel: String {
         "\(trackIds.count) \(trackIds.count == 1 ? "track" : "tracks")"
@@ -28,19 +34,27 @@ struct AddToPlaylistSheet: View {
                     }
                 }
 
-                if !playlists.isEmpty {
+                if !entries.isEmpty {
                     Section("Add \(countLabel) to") {
-                        ForEach(playlists) { playlist in
+                        ForEach(entries) { entry in
                             Button {
-                                controller.addTracks(trackIds, to: playlist.id)
+                                controller.addTracks(trackIds, to: entry.playlist.id)
                                 dismiss()
                             } label: {
                                 HStack {
                                     Image(systemName: "music.note.list")
                                         .foregroundStyle(.secondary)
-                                    Text(playlist.name)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(entry.playlist.name)
+                                        if let folderPath = entry.folderPath {
+                                            Text(folderPath)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                    }
                                     Spacer()
-                                    Text("\(playlist.trackCount)")
+                                    Text("\(entry.playlist.trackCount)")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .monospacedDigit()
@@ -69,12 +83,48 @@ struct AddToPlaylistSheet: View {
                     }
                 }
             }
-            .onAppear {
-                playlists = musicLibrary.allPlaylists()
-            }
-            .onChange(of: musicLibrary.revision) {
-                playlists = musicLibrary.allPlaylists()
-            }
+            .onAppear { reload() }
+            .onChange(of: musicLibrary.revision) { reload() }
         }
+    }
+
+    private func reload() {
+        let all = musicLibrary.allPlaylists()
+        let folderNames: [UUID: (name: String, parentId: UUID?)] = Dictionary(
+            uniqueKeysWithValues: all
+                .filter { $0.isFolder }
+                .map { ($0.id, ($0.name, $0.parentId)) }
+        )
+        entries = all
+            .filter { !$0.isFolder }
+            .map { playlist in
+                PlaylistEntry(
+                    playlist: playlist,
+                    folderPath: folderPath(for: playlist.parentId, folders: folderNames)
+                )
+            }
+            .sorted { lhs, rhs in
+                // Within a folder, alphabetical; across folders, group by path so siblings cluster.
+                let lhsKey = (lhs.folderPath ?? "")
+                let rhsKey = (rhs.folderPath ?? "")
+                if lhsKey != rhsKey {
+                    return lhsKey.localizedStandardCompare(rhsKey) == .orderedAscending
+                }
+                return lhs.playlist.name.localizedStandardCompare(rhs.playlist.name) == .orderedAscending
+            }
+    }
+
+    /// Builds "Parent › Child" breadcrumb walking up the folder chain. Nil for root playlists.
+    private func folderPath(for parentId: UUID?, folders: [UUID: (name: String, parentId: UUID?)]) -> String? {
+        guard parentId != nil else { return nil }
+        var names: [String] = []
+        var visited: Set<UUID> = []
+        var cursor = parentId
+        while let id = cursor, visited.insert(id).inserted, let entry = folders[id] {
+            names.append(entry.name)
+            cursor = entry.parentId
+        }
+        guard !names.isEmpty else { return nil }
+        return names.reversed().joined(separator: " › ")
     }
 }

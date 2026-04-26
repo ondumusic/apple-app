@@ -44,16 +44,26 @@ final class OutboxService {
 
     // MARK: - Enqueue
 
-    func enqueueCreatePlaylist(tempId: UUID, name: String) {
-        enqueue(.createPlaylist, payload: CreatePlaylistPayload(tempPlaylistId: tempId, name: name))
+    func enqueueCreatePlaylist(tempId: UUID, name: String, parentId: UUID? = nil) {
+        enqueue(.createPlaylist, payload: CreatePlaylistPayload(
+            tempPlaylistId: tempId, name: name, isFolder: false, parentId: parentId))
     }
 
     func enqueueRenamePlaylist(_ id: UUID, name: String) {
         enqueue(.renamePlaylist, payload: RenamePlaylistPayload(playlistId: id, name: name))
     }
 
+    func enqueueMovePlaylist(_ id: UUID, to parentId: UUID?) {
+        enqueue(.movePlaylist, payload: MovePlaylistPayload(playlistId: id, parentId: parentId))
+    }
+
     func enqueueDeletePlaylist(_ id: UUID) {
         enqueue(.deletePlaylist, payload: DeletePlaylistPayload(playlistId: id))
+    }
+
+    func enqueueCreateFolder(tempId: UUID, name: String, parentId: UUID?) {
+        enqueue(.createPlaylist, payload: CreatePlaylistPayload(
+            tempPlaylistId: tempId, name: name, isFolder: true, parentId: parentId))
     }
 
     func enqueueAddItems(playlistId: UUID, entries: [AddItemsPayload.Entry]) {
@@ -419,6 +429,11 @@ final class OutboxService {
                 depth: depth + 1
             )
 
+        case .playlistIsFolder:
+            // The UI shouldn't let users add tracks to a folder, but if a stale local copy
+            // disagrees with the server we drop the operation rather than retrying forever.
+            return .discard("That playlist is a folder — items can only be added to playlists.")
+
         case .tooManyOperations:
             // Our cap (maxOperationsPerBatch) should match the server's. Hitting this means
             // the server lowered its cap without the client being updated. Discard + surface
@@ -458,15 +473,16 @@ final class OutboxService {
                 return .success
             }
             do {
-                let server = try await api.createPlaylist(name: p.name)
+                let server = try await api.createPlaylist(
+                    name: p.name, isFolder: p.isFolder, parentId: p.parentId)
                 #if DEBUG
-                print("OutboxService: create_playlist OK — temp=\(p.tempPlaylistId) → real=\(server.id)")
+                print("OutboxService: create_playlist OK — temp=\(p.tempPlaylistId) → real=\(server.id) (isFolder=\(p.isFolder))")
                 #endif
                 musicLibrary.remapPlaylistId(from: p.tempPlaylistId, to: server)
                 musicLibrary.remapQueuedPlaylistId(from: p.tempPlaylistId, to: server.id)
                 return .success
             } catch APIError.httpError(422) {
-                return .discard("Couldn't create playlist “\(p.name)” — the name is invalid.")
+                return .discard("Couldn't create \(p.isFolder ? "folder" : "playlist") “\(p.name)” — the name is invalid.")
             } catch {
                 return classify(error)
             }
@@ -486,6 +502,27 @@ final class OutboxService {
                 return .success
             } catch APIError.httpError(422) {
                 return .discard("Couldn't rename playlist — the name is invalid.")
+            } catch {
+                return classify(error)
+            }
+
+        case .movePlaylist:
+            guard let p = try? decoder.decode(MovePlaylistPayload.self, from: mutation.payload) else {
+                return .discard("Malformed move_playlist payload")
+            }
+            if musicLibrary.playlist(p.playlistId) == nil {
+                #if DEBUG
+                print("OutboxService: move_playlist skipped — local playlist \(p.playlistId) no longer exists")
+                #endif
+                return .success
+            }
+            do {
+                _ = try await api.movePlaylist(p.playlistId, to: p.parentId)
+                return .success
+            } catch APIError.httpError(422) {
+                return .discard("Couldn't move playlist — the destination folder is invalid.")
+            } catch APIError.httpError(404) {
+                return .success
             } catch {
                 return classify(error)
             }

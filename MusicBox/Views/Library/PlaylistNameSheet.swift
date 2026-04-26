@@ -4,6 +4,7 @@ import SwiftUI
 struct PlaylistNameSheet: View {
     enum Mode {
         case create
+        case createFolder
         case rename(initialName: String)
     }
 
@@ -18,13 +19,14 @@ struct PlaylistNameSheet: View {
     private var title: String {
         switch mode {
         case .create: "New Playlist"
-        case .rename: "Rename Playlist"
+        case .createFolder: "New Folder"
+        case .rename: "Rename"
         }
     }
 
     private var saveLabel: String {
         switch mode {
-        case .create: "Create"
+        case .create, .createFolder: "Create"
         case .rename: "Save"
         }
     }

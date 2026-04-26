@@ -140,13 +140,14 @@ final class APIService: Sendable {
 
     /// Discriminated error returned as HTTP 422 by PATCH /playlists/{id}/items. The caller
     /// can recover from `unknownTracks` / `unknownItems` by filtering and retrying; the
-    /// conflict cases and `tooManyOperations` are ambiguous enough to surface as errors.
+    /// conflict cases, `tooManyOperations`, and `playlistIsFolder` are surfaced as errors.
     nonisolated enum PlaylistItemsError: Error, Sendable {
         case tooManyOperations
         case addMoveConflict(itemIds: [UUID])
         case moveRemoveConflict(itemIds: [UUID])
         case unknownItems(itemIds: [UUID])
         case unknownTracks(trackIds: [UUID])
+        case playlistIsFolder
 
         nonisolated struct DecodedBody: Decodable {
             let error: String
@@ -162,18 +163,66 @@ final class APIService: Sendable {
             case "move_remove_conflict":   return .moveRemoveConflict(itemIds: body.itemIds ?? [])
             case "unknown_items":          return .unknownItems(itemIds: body.itemIds ?? [])
             case "unknown_tracks":         return .unknownTracks(trackIds: body.trackIds ?? [])
+            case "playlist_is_folder":     return .playlistIsFolder
             default:                       return nil
             }
         }
     }
 
-    func createPlaylist(name: String) async throws -> Playlist {
-        let body = try JSONEncoder.api.encode(["name": name])
+    nonisolated struct CreatePlaylistBody: Encodable, Sendable {
+        let name: String
+        let isFolder: Bool
+        let parentId: String?
+
+        init(name: String, isFolder: Bool, parentId: UUID?) {
+            self.name = name
+            self.isFolder = isFolder
+            self.parentId = parentId?.uuidString.lowercased()
+        }
+    }
+
+    nonisolated struct UpdatePlaylistBody: Encodable, Sendable {
+        let name: String?
+        let parentId: String?
+        let parentIdIsExplicit: Bool
+
+        nonisolated enum CodingKeys: String, CodingKey {
+            case name, parentId
+        }
+
+        init(name: String?, parentId: UUID??) {
+            self.name = name
+            // `parentId: UUID??` lets us distinguish "don't touch" (nil outer) from
+            // "set to root" (.some(nil)). The server treats parentId=null as root.
+            switch parentId {
+            case .none:
+                self.parentId = nil
+                self.parentIdIsExplicit = false
+            case .some(let inner):
+                self.parentId = inner?.uuidString.lowercased()
+                self.parentIdIsExplicit = true
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            if let name { try c.encode(name, forKey: .name) }
+            if parentIdIsExplicit { try c.encode(parentId, forKey: .parentId) }
+        }
+    }
+
+    func createPlaylist(name: String, isFolder: Bool = false, parentId: UUID? = nil) async throws -> Playlist {
+        let body = try JSONEncoder.api.encode(CreatePlaylistBody(name: name, isFolder: isFolder, parentId: parentId))
         return try await perform("/playlists", method: "POST", body: body)
     }
 
     func renamePlaylist(_ id: UUID, name: String) async throws -> Playlist {
-        let body = try JSONEncoder.api.encode(["name": name])
+        let body = try JSONEncoder.api.encode(UpdatePlaylistBody(name: name, parentId: nil))
+        return try await perform("/playlists/\(id.uuidString.lowercased())", method: "PATCH", body: body)
+    }
+
+    func movePlaylist(_ id: UUID, to parentId: UUID?) async throws -> Playlist {
+        let body = try JSONEncoder.api.encode(UpdatePlaylistBody(name: nil, parentId: .some(parentId)))
         return try await perform("/playlists/\(id.uuidString.lowercased())", method: "PATCH", body: body)
     }
 

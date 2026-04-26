@@ -59,13 +59,26 @@ final class PlaylistController {
     // MARK: - Playlist CRUD
 
     @discardableResult
-    func createPlaylist(name: String) -> Playlist? {
+    func createPlaylist(name: String, parentId: UUID? = nil) -> Playlist? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
         let tempId = UUID()
-        let optimistic = Playlist(id: tempId, name: trimmed, trackCount: 0, insertedAt: Date())
+        let optimistic = Playlist(id: tempId, name: trimmed, trackCount: 0,
+                                  insertedAt: Date(), isFolder: false, parentId: parentId)
         musicLibrary.insertLocalPlaylist(optimistic)
-        outbox.enqueueCreatePlaylist(tempId: tempId, name: trimmed)
+        outbox.enqueueCreatePlaylist(tempId: tempId, name: trimmed, parentId: parentId)
+        return optimistic
+    }
+
+    @discardableResult
+    func createFolder(name: String, parentId: UUID? = nil) -> Playlist? {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        let tempId = UUID()
+        let optimistic = Playlist(id: tempId, name: trimmed, trackCount: 0,
+                                  insertedAt: Date(), isFolder: true, parentId: parentId)
+        musicLibrary.insertLocalPlaylist(optimistic)
+        outbox.enqueueCreateFolder(tempId: tempId, name: trimmed, parentId: parentId)
         return optimistic
     }
 
@@ -74,6 +87,13 @@ final class PlaylistController {
         guard !trimmed.isEmpty else { return }
         musicLibrary.renameLocalPlaylist(id, name: trimmed)
         outbox.enqueueRenamePlaylist(id, name: trimmed)
+    }
+
+    /// Reparents a playlist or folder. `parentId == nil` moves it to the root.
+    func movePlaylist(_ id: UUID, to parentId: UUID?) {
+        guard id != parentId else { return }
+        musicLibrary.moveLocalPlaylist(id, to: parentId)
+        outbox.enqueueMovePlaylist(id, to: parentId)
     }
 
     func deletePlaylist(_ id: UUID) {

@@ -115,10 +115,13 @@ extension MusicLibrary {
                 lp.name = sp.name
                 lp.trackCount = sp.trackCount
                 lp.insertedAt = sp.insertedAt
+                lp.isFolder = sp.isFolder
+                lp.parentId = sp.parentId
             } else {
                 modelContext.insert(LibraryPlaylist(
                     serverId: sp.id, name: sp.name,
-                    trackCount: sp.trackCount, insertedAt: sp.insertedAt))
+                    trackCount: sp.trackCount, insertedAt: sp.insertedAt,
+                    isFolder: sp.isFolder, parentId: sp.parentId))
                 inserted.insert(sp.id)
             }
         }
@@ -250,7 +253,8 @@ extension MusicLibrary {
     func insertLocalPlaylist(_ playlist: Playlist) {
         modelContext.insert(LibraryPlaylist(
             serverId: playlist.id, name: playlist.name,
-            trackCount: playlist.trackCount, insertedAt: playlist.insertedAt))
+            trackCount: playlist.trackCount, insertedAt: playlist.insertedAt,
+            isFolder: playlist.isFolder, parentId: playlist.parentId))
         persistChanges()
         revision += 1
     }
@@ -264,8 +268,42 @@ extension MusicLibrary {
         revision += 1
     }
 
+    /// Reparents a playlist or folder. `parentId` of nil means root.
+    func moveLocalPlaylist(_ id: UUID, to parentId: UUID?) {
+        var descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { $0.serverId == id })
+        descriptor.fetchLimit = 1
+        guard let lp = fetch(descriptor)?.first else { return }
+        lp.parentId = parentId
+        persistChanges()
+        revision += 1
+    }
+
+    /// Recursively collects this playlist and any nested descendants (for folders) into a flat
+    /// list of ids. Returned in depth-first pre-order. Server forbids cycles, but the visited
+    /// set is a cheap belt-and-suspenders against a malformed local copy.
+    func descendantIds(of playlistId: UUID) -> [UUID] {
+        var result: [UUID] = []
+        var visited: Set<UUID> = []
+        var stack: [UUID] = [playlistId]
+        while let next = stack.popLast() {
+            guard visited.insert(next).inserted else { continue }
+            result.append(next)
+            let descriptor = FetchDescriptor<LibraryPlaylist>(
+                predicate: #Predicate { $0.parentId == next }
+            )
+            for child in (fetch(descriptor) ?? []) {
+                stack.append(child.serverId)
+            }
+        }
+        return result
+    }
+
     func deleteLocalPlaylist(_ id: UUID) {
-        deletePlaylistCascade(id)
+        // For folders, cascade to all nested descendants locally so the optimistic delete
+        // matches what the server will do.
+        for descendantId in descendantIds(of: id) {
+            deletePlaylistCascade(descendantId)
+        }
         persistChanges()
         revision += 1
     }
@@ -372,22 +410,33 @@ extension MusicLibrary {
     }
 
     /// Rewrites a local playlist's identity from a temp UUID to the server-confirmed UUID, cascading
-    /// to dependent items. Called by OutboxService when a queued `create_playlist` finally resolves.
+    /// to dependent items and to any child playlists/folders pointing at the temp id.
+    /// Called by OutboxService when a queued `create_playlist` finally resolves.
     func remapPlaylistId(from tempId: UUID, to confirmed: Playlist) {
         var descriptor = FetchDescriptor<LibraryPlaylist>(predicate: #Predicate { $0.serverId == tempId })
         descriptor.fetchLimit = 1
+        let preservedAutoDownload = fetch(descriptor)?.first?.autoDownload ?? false
         if let playlist = fetch(descriptor)?.first {
             modelContext.delete(playlist)
         }
         modelContext.insert(LibraryPlaylist(
             serverId: confirmed.id, name: confirmed.name,
-            trackCount: confirmed.trackCount, insertedAt: confirmed.insertedAt))
+            trackCount: confirmed.trackCount, insertedAt: confirmed.insertedAt,
+            isFolder: confirmed.isFolder, parentId: confirmed.parentId,
+            autoDownload: preservedAutoDownload))
 
         let itemDescriptor = FetchDescriptor<LibraryPlaylistItem>(
             predicate: #Predicate { $0.playlistId == tempId }
         )
         for item in (try? modelContext.fetch(itemDescriptor)) ?? [] {
             item.playlistId = confirmed.id
+        }
+        // Re-parent any children that referenced the temp folder id.
+        let childDescriptor = FetchDescriptor<LibraryPlaylist>(
+            predicate: #Predicate { $0.parentId == tempId }
+        )
+        for child in (try? modelContext.fetch(childDescriptor)) ?? [] {
+            child.parentId = confirmed.id
         }
         persistChanges()
         revision += 1
@@ -435,7 +484,13 @@ extension MusicLibrary {
 
         switch kind {
         case .createPlaylist:
-            // Temp playlist IDs are already embedded; nothing to rewrite.
+            // The temp playlist id can't change here, but a child folder/playlist may carry
+            // the temp parent id — rewrite parentId.
+            guard var p = try? decoder.decode(CreatePlaylistPayload.self, from: payload) else { return nil }
+            if let parent = p.parentId, let mapped = remap[parent] {
+                p.parentId = mapped
+                return try? encoder.encode(p)
+            }
             return nil
         case .renamePlaylist:
             guard var p = try? decoder.decode(RenamePlaylistPayload.self, from: payload) else { return nil }
@@ -444,6 +499,12 @@ extension MusicLibrary {
                 return try? encoder.encode(p)
             }
             return nil
+        case .movePlaylist:
+            guard var p = try? decoder.decode(MovePlaylistPayload.self, from: payload) else { return nil }
+            var changed = false
+            if let mapped = remap[p.playlistId] { p.playlistId = mapped; changed = true }
+            if let parent = p.parentId, let mapped = remap[parent] { p.parentId = mapped; changed = true }
+            return changed ? (try? encoder.encode(p)) : nil
         case .deletePlaylist:
             guard var p = try? decoder.decode(DeletePlaylistPayload.self, from: payload) else { return nil }
             if let mapped = remap[p.playlistId] {
@@ -497,6 +558,8 @@ extension MusicLibrary {
                 matches = m
             case .renamePlaylist:
                 matches = (try? decoder.decode(RenamePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
+            case .movePlaylist:
+                matches = (try? decoder.decode(MovePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
             case .deletePlaylist:
                 matches = (try? decoder.decode(DeletePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
             case .addItems:

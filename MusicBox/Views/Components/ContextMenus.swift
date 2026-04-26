@@ -304,6 +304,7 @@ struct PlaylistContextMenuItems: View {
     @Environment(NetworkMonitor.self) private var network
 
     let playlist: Playlist
+    var onRequestMove: (() -> Void)? = nil
     var onRequestDelete: (() -> Void)? = nil
 
     /// Builds QueueItems for this playlist in position order, preserving PlaylistItem.id so the
@@ -378,8 +379,15 @@ struct PlaylistContextMenuItems: View {
             }
         }
 
-        if let onRequestDelete {
+        if let onRequestMove {
             Divider()
+            Button(action: onRequestMove) {
+                Label("Move to Folder…", systemImage: "folder")
+            }
+        }
+
+        if let onRequestDelete {
+            if onRequestMove == nil { Divider() }
             Button(role: .destructive, action: onRequestDelete) {
                 Label("Delete Playlist", systemImage: "trash")
             }
