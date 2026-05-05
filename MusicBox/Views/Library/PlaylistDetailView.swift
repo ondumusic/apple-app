@@ -396,6 +396,7 @@ struct PlaylistDetailView: View {
     /// destination. We spread fresh fractional positions across that block.
     private func handleMove(from source: IndexSet, to destination: Int) {
         guard !source.isEmpty else { return }
+        Haptics.light()
 
         var reordered = items
         reordered.move(fromOffsets: source, toOffset: destination)

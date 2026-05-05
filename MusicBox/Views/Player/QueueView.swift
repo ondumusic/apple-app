@@ -46,6 +46,7 @@ struct QueueView: View {
                         player.removeFromQueue(at: offsets)
                     }
                     .onMove { source, destination in
+                        Haptics.light()
                         player.moveQueueItems(from: source, to: destination)
                     }
                 }
