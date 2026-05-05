@@ -4,7 +4,7 @@ struct QueueConfirmationOverlay: ViewModifier {
     @Environment(PlayerService.self) private var player
 
     @State private var showing = false
-    @State private var message = ""
+    @State private var message: LocalizedStringResource = ""
     @State private var dismissTask: Task<Void, Never>?
 
     private var bottomPadding: CGFloat {
@@ -36,9 +36,13 @@ struct QueueConfirmationOverlay: ViewModifier {
 
                 switch confirmation {
                 case .playNext(let count):
-                    message = count == 1 ? "Playing Next" : "Playing \(count) Songs Next"
+                    message = count == 1
+                        ? "Playing Next"
+                        : "Playing ^[\(count) song](inflect: true) Next"
                 case .addedToQueue(let count):
-                    message = count == 1 ? "Added to Queue" : "Added \(count) Songs to Queue"
+                    message = count == 1
+                        ? "Added to Queue"
+                        : "Added ^[\(count) song](inflect: true) to Queue"
                 }
 
                 dismissTask?.cancel()

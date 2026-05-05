@@ -164,11 +164,11 @@ private struct PlaylistRow: View {
         entry.isFolder ? "folder" : "music.note.list"
     }
 
-    private var subtitle: String {
+    private var subtitle: LocalizedStringResource {
         if entry.isFolder {
-            return "\(childCount) \(childCount == 1 ? "item" : "items")"
+            return "^[\(childCount) item](inflect: true)"
         }
-        return "\(entry.trackCount) \(entry.trackCount == 1 ? "song" : "songs")"
+        return "^[\(entry.trackCount) song](inflect: true)"
     }
 
     var body: some View {

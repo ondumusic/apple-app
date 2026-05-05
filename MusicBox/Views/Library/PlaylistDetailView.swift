@@ -295,7 +295,7 @@ struct PlaylistDetailView: View {
                 Text(currentName)
                     .font(.title2.bold())
 
-                Text("\(tracks.count) \(tracks.count == 1 ? "song" : "songs")")
+                Text("^[\(tracks.count) song](inflect: true)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

@@ -20,7 +20,7 @@ struct ArtistCard: View {
                     .lineLimit(1)
 
                 if let count = artist.albumCount {
-                    Text("\(count) \(count == 1 ? "album" : "albums")")
+                    Text("^[\(count) album](inflect: true)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

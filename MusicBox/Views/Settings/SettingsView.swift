@@ -102,7 +102,7 @@ struct SettingsView: View {
                 HStack {
                     Text("Cache Size")
                     Spacer()
-                    Text("\(playbackCache.formattedSize) (\(playbackCache.trackCount) tracks)")
+                    Text("\(playbackCache.formattedSize) (^[\(playbackCache.trackCount) track](inflect: true))")
                         .foregroundStyle(.secondary)
                 }
 

@@ -204,7 +204,7 @@ struct DownloadsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(artist.name)
                                     HStack(spacing: 8) {
-                                        Text("\(artist.albumCount ?? 0) \(artist.albumCount == 1 ? "album" : "albums")")
+                                        Text("^[\(artist.albumCount ?? 0) album](inflect: true)")
                                         if let size = artistSizes[artist.id], size > 0 {
                                             Text(formattedSize(size))
                                         }

@@ -38,9 +38,9 @@ struct AlbumDetailView: View {
 
                         Group {
                             if downloadedOnly && tracks.count < totalTrackCount {
-                                Text("\(tracks.count) of \(totalTrackCount) \(totalTrackCount == 1 ? "song" : "songs") downloaded")
+                                Text("\(tracks.count) of ^[\(totalTrackCount) song](inflect: true) downloaded")
                             } else {
-                                Text("\(totalTrackCount) \(totalTrackCount == 1 ? "song" : "songs")")
+                                Text("^[\(totalTrackCount) song](inflect: true)")
                             }
                         }
                         .font(.caption)

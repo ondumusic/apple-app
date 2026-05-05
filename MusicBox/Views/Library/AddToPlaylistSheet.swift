@@ -19,10 +19,6 @@ struct AddToPlaylistSheet: View {
         var id: UUID { playlist.id }
     }
 
-    private var countLabel: String {
-        "\(trackIds.count) \(trackIds.count == 1 ? "track" : "tracks")"
-    }
-
     var body: some View {
         NavigationStack {
             List {
@@ -35,7 +31,7 @@ struct AddToPlaylistSheet: View {
                 }
 
                 if !entries.isEmpty {
-                    Section("Add \(countLabel) to") {
+                    Section("Add ^[\(trackIds.count) track](inflect: true) to") {
                         ForEach(entries) { entry in
                             Button {
                                 controller.addTracks(trackIds, to: entry.playlist.id)
