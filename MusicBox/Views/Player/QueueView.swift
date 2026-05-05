@@ -51,6 +51,15 @@ struct QueueView: View {
                 }
             }
         }
+        .overlay {
+            if player.queue.isEmpty {
+                ContentUnavailableView(
+                    "Nothing Playing",
+                    systemImage: "music.note.list",
+                    description: Text("Pick something from your library to start listening.")
+                )
+            }
+        }
         .navigationTitle("Queue")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
