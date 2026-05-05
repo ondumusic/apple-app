@@ -1,0 +1,86 @@
+# MusicBox
+
+SwiftUI multiplatform music streaming app (iOS 18+ / macOS 15+) connecting to a self-hosted Elixir/Phoenix server backed by SQLite. iOS is the v1.0 target — the macOS build compiles but its UI is unfinished and **excluded from the first release**. See `TODO.md` for what remains.
+
+## Architecture
+
+### Sync-based library
+
+The full library metadata (artists, albums, tracks, playlists) is synced to on-device SwiftData via `GET /sync?cursor=`. **All browsing is local** — there is no API pagination for browse views. The opaque cursor is persisted in `UserDefaults`.
+
+### Key services
+
+- `Persistence/MusicLibrary.swift` — SwiftData store + query API. Owns the `ModelContainer` (with schema migration fallback) and all download state. Query methods read a `revision` counter; mutations bump it. Returns reconstructed `Artist`/`Album`/`Track`/`Playlist` structs by joining `LibraryArtist`/`LibraryAlbum`/`LibraryTrack` rows.
+- `Services/SyncService.swift` — drives `/sync` paging. `hasCompletedInitialSync` gates the UI behind a progress view. Foreground triggers a delta sync (5-minute cooldown). `sync()` always flushes the outbox first so local mutations land before the server snapshot.
+- `Services/OutboxService.swift` — durable replay queue for playlist mutations. Drains on launch, foreground, connectivity restore, at the top of `sync()`, and after every enqueue. Batches adjacent item-level mutations into one PATCH `/items` call (capped at 250 ops). 422 errors decode into `PlaylistItemsError` for typed recovery.
+- `Services/PlaylistController.swift` — synchronous façade. UI → local SwiftData write → outbox enqueue, returns immediately.
+- `Services/PlayerService.swift` — `AVQueuePlayer` wrapper. Owns shuffle, queue, gapless/crossfade, `AVAudioSession`, `MPNowPlayingInfoCenter`, `MPRemoteCommandCenter`. Audio session uses `routeSharingPolicy: .longFormAudio` (Apple's recommended policy for music apps).
+- `Services/DownloadService.swift` — background `URLSession` named `"com.musicbox.downloads"`. Files at `AppSupport/MusicBox/Downloads/{artistId}/{albumId}/{trackId}.ext`. Download state lives on `LibraryTrack.isDownloaded` + `localFilePath` (relative path).
+- `Services/SmartShuffle.swift` — Fisher-Yates plus a forward-pass spreader that pushes same-album/artist tracks apart. Gated by `SettingsStore.spreadShuffle`.
+
+### Sync flow
+
+1. **Initial sync**: clears local DB, pages through `/sync` until `complete: true`. `ContentView` shows `SyncProgressView` until this finishes.
+2. **Delta syncs**: send cursor, get only changes. Triggered on foreground (5-min cooldown) or pull-to-refresh on any list view.
+3. **Logout**: `SyncService.clearSyncState()` + `musicLibrary.clearAll()`.
+
+### API endpoints
+
+Base URL ends in `/api` (set during login). All bodies send lowercase UUID strings; the server normalizes.
+
+- `POST /auth/login`, `GET /auth/me`, `GET /auth/playtoken`, `DELETE /auth/session`
+- `GET /sync?cursor=`
+- `POST /playlists`, `PATCH /playlists/{id}`, `DELETE /playlists/{id}`
+- `PATCH /playlists/{id}/items` — batched add/move/remove (mixed). 400 returns the discriminated `PlaylistItemsError` union.
+- `GET /tracks/{id}/transcode` — SSE prepare stream.
+- Streaming: `track.streamUrl + ?token=`.
+
+### Playlists
+
+Playlists shipped on `feat/playlists`. Folders are `Playlist`s with `isFolder == true`; `parentId == nil` is root. Item positions use lowercase a–z fractional index strings (`Services/FractionalIndex.swift`). `OutboxService` remaps temp UUIDs to server UUIDs across all queued mutations on `create_playlist` / `add_items` resolves. Local state is never rolled back on outbox discard — the next sync reconciles authoritatively.
+
+## Code conventions
+
+### Hard rules
+
+- `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` is on. New `struct`/`enum`/`@Model` types need `nonisolated`.
+- `@ObservationIgnored` is required for stored closures and non-UI state inside `@Observable` classes.
+- `track.streamUrl` is a `String`, not a `URL`. Convert + resolve relative URLs against `api.baseURL`.
+- Use Nuke's `LazyImage` / `ArtworkView` for artwork — never `AsyncImage`.
+- `@Environment(Type?.self)` does not work — use the `optionalEnvironment()` helper.
+- The `revision` counter pattern: query methods read it, mutations increment it.
+- Filesystem auto-sync is enabled — new Swift files don't need `.pbxproj` edits.
+
+### Don't
+
+- **Don't force logout on auth issues.** Show the `ReAuthView` re-auth dialog. Never delete user data without explicit consent.
+- **Don't add comments that explain WHAT the code does** — names already do that. Only comment WHY when it's non-obvious (a hidden constraint, a workaround, surprising behavior).
+- **Don't reference past tasks/PRs/issues in comments** — that belongs in the PR description and rots in code.
+- **Don't add backwards-compatibility shims, dead-code fallbacks, or speculative validation.** If something is unused, delete it.
+- **Don't use `print` for production logging.** It's only acceptable inside `#if DEBUG` blocks.
+
+### Do
+
+- Follow existing patterns when in doubt — read the nearest sibling file.
+- Prefer `async` / `await` and `@MainActor` over `DispatchQueue`.
+- Keep responses concise. Terse output is preferred; trailing summaries that restate the diff are not.
+- **Maintain tests with code changes.** Add or update tests as part of the same work, not as a separate task. Test files live in `MusicBoxTests/`.
+- **Localize user-facing strings.** SwiftUI's `Text("...")` literal initializer auto-routes through `Localizable.xcstrings`. For dynamic counts, use Apple's inflection markup: `Text("^[\(count) song](inflect: true)")`. Strings stored as `String` and passed to `Text(String)` are **not** localized — use `LocalizedStringResource` instead.
+
+## Build & test
+
+```bash
+# Build for iPhone simulator
+xcodebuild -scheme MusicBox -destination 'platform=iOS Simulator,name=iPhone 17' -quiet build
+
+# Run unit tests
+xcodebuild -scheme MusicBox -destination 'platform=iOS Simulator,name=iPhone 17' test
+```
+
+### SourceKit indexing noise
+
+After file edits, SourceKit often emits transient "Cannot find type X in scope" errors for types defined in the same module (`MusicLibrary`, `PlayerService`, `Track`, etc.). These are stale indexer state, not real errors. Trust `xcodebuild` over live diagnostics.
+
+## See also
+
+- `TODO.md` — deferred work, pre-release polish, post-1.0 ideas.
