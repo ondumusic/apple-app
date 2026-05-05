@@ -147,9 +147,7 @@ final class PlayerService {
     func playShuffled(queue items: [QueueItem]) {
         guard !items.isEmpty else { return }
         queue = items
-        var indices = Array(items.indices)
-        indices.shuffle()
-        shuffledIndices = indices
+        shuffledIndices = SmartShuffle.shuffledIndices(for: items, spread: settings.spreadShuffle)
         currentIndex = 0
         Task { await loadAndPlayCurrent() }
     }
@@ -351,10 +349,10 @@ final class PlayerService {
             currentIndex = realIndex
         } else {
             let realIndex = effectiveIndex
-            var indices = Array(queue.indices)
-            indices.removeAll { $0 == realIndex }
-            indices.shuffle()
-            indices.insert(realIndex, at: 0)
+            var indices = SmartShuffle.shuffledIndices(for: queue, spread: settings.spreadShuffle)
+            if let pos = indices.firstIndex(of: realIndex), pos != 0 {
+                indices.swapAt(0, pos)
+            }
             shuffledIndices = indices
             currentIndex = 0
         }

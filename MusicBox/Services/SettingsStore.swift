@@ -68,6 +68,10 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(isShuffled, forKey: "isShuffled") }
     }
 
+    var spreadShuffle: Bool {
+        didSet { UserDefaults.standard.set(spreadShuffle, forKey: "spreadShuffle") }
+    }
+
     var repeatMode: RepeatMode {
         didSet { UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode") }
     }
@@ -125,6 +129,7 @@ final class SettingsStore {
         self.crossfadeDuration = defaults.object(forKey: "crossfadeDuration") as? Double ?? 1.0
         self.maxConcurrentDownloads = defaults.object(forKey: "maxConcurrentDownloads") as? Int ?? 3
         self.isShuffled = defaults.bool(forKey: "isShuffled")
+        self.spreadShuffle = defaults.object(forKey: "spreadShuffle") as? Bool ?? true
         self.repeatMode = RepeatMode(rawValue: defaults.string(forKey: "repeatMode") ?? "") ?? .off
         self.playbackCacheLimit = defaults.object(forKey: "playbackCacheLimit") as? Int64 ?? (2 * 1024 * 1024 * 1024) // 2 GB default
         self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original

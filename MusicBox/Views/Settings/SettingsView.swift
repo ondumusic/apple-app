@@ -41,6 +41,12 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("Spread Shuffle", isOn: $settings.spreadShuffle)
+            } footer: {
+                Text("Avoids playing tracks from the same album or artist back-to-back when shuffling.")
+            }
+
+            Section {
                 Toggle("Artwork-Tinted Player", isOn: $settings.artworkTintedPlayer)
                 Toggle("Haptic Feedback", isOn: $settings.hapticsEnabled)
             } header: {
