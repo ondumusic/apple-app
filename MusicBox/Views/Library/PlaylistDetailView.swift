@@ -6,6 +6,7 @@ struct PlaylistDetailView: View {
     @Environment(PlaylistController.self) private var controller
     @Environment(DownloadService.self) private var downloadService
     @Environment(NetworkMonitor.self) private var network
+    @Environment(SyncService.self) private var syncService
     @Environment(\.dismiss) private var dismiss
     #if os(iOS)
     /// Read the NavigationStack-provided edit-mode binding so EditButton works with no
@@ -267,11 +268,12 @@ struct PlaylistDetailView: View {
         let selected = items.filter { ids.contains($0.id) }
         guard !selected.isEmpty else { return }
         let firstUnselectedPos = items.first(where: { !ids.contains($0.id) })?.position
-        var cursor: String? = nil
-        for item in selected {
-            let newPos = FractionalIndex.between(cursor, firstUnselectedPos)
+        guard let positions = computePositions(count: selected.count, between: nil, and: firstUnselectedPos) else {
+            abortReorderAndResync()
+            return
+        }
+        for (item, newPos) in zip(selected, positions) {
             controller.moveItem(item.id, to: newPos, within: playlist.id)
-            cursor = newPos
         }
     }
 
@@ -280,11 +282,12 @@ struct PlaylistDetailView: View {
         let selected = items.filter { ids.contains($0.id) }
         guard !selected.isEmpty else { return }
         let lastUnselectedPos = items.last(where: { !ids.contains($0.id) })?.position
-        var cursor = lastUnselectedPos
-        for item in selected {
-            let newPos = FractionalIndex.after(cursor)
+        guard let positions = computePositions(count: selected.count, between: lastUnselectedPos, and: nil) else {
+            abortReorderAndResync()
+            return
+        }
+        for (item, newPos) in zip(selected, positions) {
             controller.moveItem(item.id, to: newPos, within: playlist.id)
-            cursor = newPos
         }
     }
     #endif
@@ -409,19 +412,44 @@ struct PlaylistDetailView: View {
         let beforePos = firstMovedIndex > 0 ? reordered[firstMovedIndex - 1].position : nil
         let afterPos  = lastMovedIndex < reordered.count - 1 ? reordered[lastMovedIndex + 1].position : nil
 
-        // Spread `blockCount` positions strictly between beforePos and afterPos.
-        var newPositions: [String] = []
-        var leftBound = beforePos
-        for _ in 0..<blockCount {
-            let pos = FractionalIndex.between(leftBound, afterPos)
-            newPositions.append(pos)
-            leftBound = pos
+        guard let newPositions = computePositions(count: blockCount, between: beforePos, and: afterPos) else {
+            abortReorderAndResync()
+            return
         }
 
         for (offset, pos) in newPositions.enumerated() {
             let item = reordered[firstMovedIndex + offset]
             controller.moveItem(item.id, to: pos, within: playlist.id)
         }
+    }
+
+    /// Spreads `count` fresh fractional positions strictly between `left` and `right`. Returns
+    /// nil if either neighbor is malformed — local data has drifted from a server-side format
+    /// our `FractionalIndex` doesn't recognize. Caller should bail out and resync.
+    private func computePositions(count: Int, between left: String?, and right: String?) -> [String]? {
+        do {
+            var result: [String] = []
+            result.reserveCapacity(count)
+            var cursor = left
+            for _ in 0..<count {
+                let pos = try FractionalIndex.betweenThrowing(cursor, right)
+                result.append(pos)
+                cursor = pos
+            }
+            return result
+        } catch {
+            #if DEBUG
+            print("PlaylistDetailView: cannot compute positions between \(left ?? "nil") and \(right ?? "nil"): \(error)")
+            #endif
+            return nil
+        }
+    }
+
+    /// Snaps the list back to its previous order (we never wrote the move) and pulls a fresh
+    /// sync, which should overwrite the malformed positions.
+    private func abortReorderAndResync() {
+        reloadTracks()
+        Task { await syncService.sync() }
     }
 
     private func reloadTracks() {
