@@ -429,6 +429,18 @@ final class OutboxService {
                 depth: depth + 1
             )
 
+        case .invalidPositions(let badPositions):
+            // The server's position validator rejected one or more keys (bad format, length
+            // > 100, characters outside the alphabet). FractionalIndex has full coverage of
+            // structural correctness, so the realistic trigger is a key that grew past 100
+            // chars from many concentrated insertions in the same gap — which needs a
+            // playlist-wide rebalance to fix properly. Discard rather than masking the bug
+            // by silently regenerating; surface so we can investigate.
+            #if DEBUG
+            print("OutboxService: invalid_positions — server rejected \(badPositions.count) position(s): \(badPositions)")
+            #endif
+            return .discard("Some playlist positions were rejected by the server.")
+
         case .playlistIsFolder:
             // The UI shouldn't let users add tracks to a folder, but if a stale local copy
             // disagrees with the server we drop the operation rather than retrying forever.

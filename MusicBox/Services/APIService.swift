@@ -143,26 +143,29 @@ final class APIService: Sendable {
     /// conflict cases, `tooManyOperations`, and `playlistIsFolder` are surfaced as errors.
     nonisolated enum PlaylistItemsError: Error, Sendable {
         case tooManyOperations
-        case addMoveConflict(itemIds: [UUID])
+        case addMoveConflict(positions: [String])
         case moveRemoveConflict(itemIds: [UUID])
         case unknownItems(itemIds: [UUID])
         case unknownTracks(trackIds: [UUID])
+        case invalidPositions(positions: [String])
         case playlistIsFolder
 
         nonisolated struct DecodedBody: Decodable {
             let error: String
             let itemIds: [UUID]?
             let trackIds: [UUID]?
+            let positions: [String]?
         }
 
         static func decode(_ data: Data) -> PlaylistItemsError? {
             guard let body = try? JSONDecoder.api.decode(DecodedBody.self, from: data) else { return nil }
             switch body.error {
             case "too_many_operations":    return .tooManyOperations
-            case "add_move_conflict":      return .addMoveConflict(itemIds: body.itemIds ?? [])
+            case "add_move_conflict":      return .addMoveConflict(positions: body.positions ?? [])
             case "move_remove_conflict":   return .moveRemoveConflict(itemIds: body.itemIds ?? [])
             case "unknown_items":          return .unknownItems(itemIds: body.itemIds ?? [])
             case "unknown_tracks":         return .unknownTracks(trackIds: body.trackIds ?? [])
+            case "invalid_positions":      return .invalidPositions(positions: body.positions ?? [])
             case "playlist_is_folder":     return .playlistIsFolder
             default:                       return nil
             }
