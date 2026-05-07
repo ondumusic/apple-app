@@ -23,7 +23,7 @@ struct ContentView: View {
                         await syncService.syncIfNeeded()
                     }
                 #else
-                macOSRootView()
+                MacOSContentView()
                     .task {
                         await outbox.flush()
                         await syncService.syncIfNeeded()
