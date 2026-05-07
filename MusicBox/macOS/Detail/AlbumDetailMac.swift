@@ -34,35 +34,42 @@ struct AlbumDetailMac: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .center, spacing: 14) {
             ArtworkView(url: album.artworkUrl)
-                .frame(width: 120, height: 120)
-            VStack(alignment: .leading, spacing: 4) {
+                .frame(width: 72, height: 72)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(album.name)
-                    .font(.title2.bold())
-                    .lineLimit(2)
-                Text(album.artistName ?? "")
-                    .foregroundStyle(.secondary)
-                if let year = album.releaseYear {
-                    Text(String(year))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                HStack(spacing: 8) {
-                    Button { playAll(shuffle: false) } label: {
-                        Label("Play", systemImage: "play.fill")
+                    .font(.title3.bold())
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    if let artistName = album.artistName {
+                        Text(artistName)
                     }
-                    .disabled(tracks.isEmpty)
-                    Button { playAll(shuffle: true) } label: {
-                        Label("Shuffle", systemImage: "shuffle")
+                    if let year = album.releaseYear {
+                        Text("•").foregroundStyle(.tertiary)
+                        Text(String(year))
                     }
-                    .disabled(tracks.isEmpty)
+                    Text("•").foregroundStyle(.tertiary)
+                    Text("^[\(tracks.count) song](inflect: true)")
                 }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+            HStack(spacing: 6) {
+                Button { playAll(shuffle: false) } label: {
+                    Label("Play", systemImage: "play.fill")
+                }
+                .disabled(tracks.isEmpty)
+                Button { playAll(shuffle: true) } label: {
+                    Label("Shuffle", systemImage: "shuffle")
+                }
+                .disabled(tracks.isEmpty)
+            }
         }
-        .padding(16)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .overlay(alignment: .bottom) { Divider() }
     }
 

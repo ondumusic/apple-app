@@ -116,8 +116,10 @@ final class TracksTableViewController: NSViewController {
         guard a.count == b.count else { return false }
         for (lhs, rhs) in zip(a, b) {
             if lhs.id != rhs.id { return false }
-            if lhs.isDownloaded != rhs.isDownloaded { return false }
         }
+        // Intentionally ignores isDownloaded — a flip there triggers SwiftUI re-renders
+        // mid-click which would call reloadData() and cancel an in-flight double-click.
+        // The downloaded indicator can be refreshed per-row when we add it.
         return true
     }
 
