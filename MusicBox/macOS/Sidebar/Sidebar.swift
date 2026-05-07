@@ -99,12 +99,15 @@ final class SidebarViewController: NSViewController {
         outlineView.allowsMultipleSelection = false
         outlineView.allowsEmptySelection = true
         outlineView.rowSizeStyle = .default
-        outlineView.indentationPerLevel = 14
-        outlineView.indentationMarkerFollowsCell = true
-        outlineView.autoresizesOutlineColumn = false
         outlineView.floatsGroupRows = false
+
+        column.resizingMask = [.autoresizingMask, .userResizingMask]
+        column.minWidth = 100
+        column.width = 220
         outlineView.addTableColumn(column)
         outlineView.outlineTableColumn = column
+        outlineView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+
         outlineView.dataSource = self
         outlineView.delegate = self
 
@@ -230,7 +233,13 @@ extension SidebarViewController: NSOutlineViewDataSource {
 
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
         guard let node = item as? SidebarNode else { return false }
-        return !node.children.isEmpty
+        // Sections are expandable when they have content; folders are always expandable
+        // (so the disclosure triangle shows even on an empty folder, matching Apple Music).
+        switch node.kind {
+        case .section: return !node.children.isEmpty
+        case .category: return false
+        case .playlist(let p): return p.isFolder
+        }
     }
 }
 
@@ -283,6 +292,8 @@ private final class SidebarCell: NSTableCellView {
 
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
+    private var labelLeadingToIcon: NSLayoutConstraint!
+    private var labelLeadingToCell: NSLayoutConstraint!
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -306,14 +317,19 @@ private final class SidebarCell: NSTableCellView {
         addSubview(label)
         textField = label
 
+        labelLeadingToIcon = label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6)
+        // For section headers: pin label directly to cell leading so it visually aligns
+        // with where children's icons sit (children are indented one level by NSOutlineView).
+        labelLeadingToCell = label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 0)
+
         NSLayoutConstraint.activate([
             icon.leadingAnchor.constraint(equalTo: leadingAnchor),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 18),
             icon.heightAnchor.constraint(equalToConstant: 18),
-            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
             label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            labelLeadingToIcon,
         ])
     }
 
@@ -325,12 +341,16 @@ private final class SidebarCell: NSTableCellView {
             label.textColor = .secondaryLabelColor
             icon.image = nil
             icon.isHidden = true
+            labelLeadingToIcon.isActive = false
+            labelLeadingToCell.isActive = true
         case .category(let cat):
             label.stringValue = cat.title
             label.font = .systemFont(ofSize: NSFont.systemFontSize)
             label.textColor = .labelColor
             icon.image = NSImage(systemSymbolName: cat.iconName, accessibilityDescription: cat.title)
             icon.isHidden = false
+            labelLeadingToCell.isActive = false
+            labelLeadingToIcon.isActive = true
         case .playlist(let playlist):
             let symbol = playlist.isFolder ? "folder" : "music.note.list"
             label.stringValue = playlist.name
@@ -338,6 +358,8 @@ private final class SidebarCell: NSTableCellView {
             label.textColor = .labelColor
             icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: playlist.name)
             icon.isHidden = false
+            labelLeadingToCell.isActive = false
+            labelLeadingToIcon.isActive = true
         }
     }
 }
