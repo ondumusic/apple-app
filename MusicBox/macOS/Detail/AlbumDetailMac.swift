@@ -15,6 +15,10 @@ struct AlbumDetailMac: View {
         Set(tracks.map(\.artist.id)).count > 1
     }
 
+    private var trackActions: TrackActions {
+        .standard(player: player, musicLibrary: musicLibrary, network: network, artworkURL: album.artworkUrl)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -22,6 +26,7 @@ struct AlbumDetailMac: View {
                 tracks: tracks,
                 selection: $selection,
                 onPlay: playTrack(at:),
+                actions: trackActions,
                 showArtist: hasMultipleArtists,
                 showAlbum: false
             )

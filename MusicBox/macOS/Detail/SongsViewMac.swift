@@ -14,6 +14,7 @@ struct SongsViewMac: View {
             tracks: tracks,
             selection: $selection,
             onPlay: playTrack(at:),
+            actions: trackActions,
             showArtist: true,
             showAlbum: true
         )
@@ -24,6 +25,10 @@ struct SongsViewMac: View {
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &tracks)
         }
+    }
+
+    private var trackActions: TrackActions {
+        .standard(player: player, musicLibrary: musicLibrary, network: network)
     }
 
     private func playTrack(at index: Int) {

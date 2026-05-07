@@ -12,6 +12,10 @@ struct PlaylistDetailMac: View {
     @State private var tracks: [Track] = []
     @State private var selection: Set<UUID> = []
 
+    private var trackActions: TrackActions {
+        .standard(player: player, musicLibrary: musicLibrary, network: network)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -19,6 +23,7 @@ struct PlaylistDetailMac: View {
                 tracks: tracks,
                 selection: $selection,
                 onPlay: playTrack(at:),
+                actions: trackActions,
                 showArtist: true,
                 showAlbum: true
             )

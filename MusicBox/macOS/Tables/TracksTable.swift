@@ -10,6 +10,7 @@ struct TracksTable: NSViewControllerRepresentable {
     let tracks: [Track]
     @Binding var selection: Set<UUID>
     let onPlay: (Int) -> Void
+    let actions: TrackActions
     /// Whether to render the Artist column. Set false on AlbumDetailView when the album
     /// has a single artist (the column would be redundant).
     var showArtist: Bool = true
@@ -21,10 +22,12 @@ struct TracksTable: NSViewControllerRepresentable {
         let vc = TracksTableViewController()
         vc.onSelectionChange = { ids in selection = ids }
         vc.onPlay = onPlay
+        vc.actions = actions
         return vc
     }
 
     func updateNSViewController(_ vc: TracksTableViewController, context: Context) {
+        vc.actions = actions
         vc.update(
             tracks: tracks,
             externalSelection: selection,
@@ -39,6 +42,7 @@ struct TracksTable: NSViewControllerRepresentable {
 final class TracksTableViewController: NSViewController {
     var onSelectionChange: ((Set<UUID>) -> Void)?
     var onPlay: ((Int) -> Void)?
+    var actions: TrackActions = TrackActions()
 
     private let scrollView = NSScrollView()
     private let tableView = NSTableView()
@@ -75,6 +79,10 @@ final class TracksTableViewController: NSViewController {
         for column in [numberColumn, titleColumn, artistColumn, albumColumn, durationColumn] {
             tableView.addTableColumn(column)
         }
+
+        let menu = NSMenu()
+        menu.delegate = self
+        tableView.menu = menu
 
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
@@ -202,6 +210,71 @@ extension TracksTableViewController: NSTableViewDelegate {
             tracks.indices.contains(idx) ? tracks[idx].id : nil
         })
         onSelectionChange?(ids)
+    }
+}
+
+// MARK: - Context Menu
+
+extension TracksTableViewController: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let targetTracks = tracksForContextAction()
+        guard !targetTracks.isEmpty else { return }
+
+        let isSingle = targetTracks.count == 1
+        let primaryTitle = isSingle ? "Play" : "Play \(targetTracks.count) Songs"
+        addItem(to: menu, title: primaryTitle, action: #selector(menuPlay))
+        addItem(to: menu, title: "Shuffle", action: #selector(menuShuffle))
+        menu.addItem(.separator())
+        addItem(to: menu, title: "Play Next", action: #selector(menuPlayNext))
+        addItem(to: menu, title: "Add to Queue", action: #selector(menuAddToEnd))
+        menu.addItem(.separator())
+        addItem(to: menu, title: "Add to Playlist…", action: #selector(menuAddToPlaylist))
+        if isSingle {
+            menu.addItem(.separator())
+            addItem(to: menu, title: "Go to Album", action: #selector(menuGoToAlbum))
+            addItem(to: menu, title: "Go to Artist", action: #selector(menuGoToArtist))
+        }
+    }
+
+    private func addItem(to menu: NSMenu, title: String, action: Selector) {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+    }
+
+    /// If the right-clicked row is in the current selection, the action applies to the
+    /// whole selection. Otherwise it applies to just the clicked row (and the click also
+    /// selects that row to make the intent visible).
+    private func tracksForContextAction() -> [Track] {
+        let clicked = tableView.clickedRow
+        guard clicked >= 0, clicked < tracks.count else { return [] }
+        if tableView.selectedRowIndexes.contains(clicked) {
+            return tableView.selectedRowIndexes.compactMap { tracks.indices.contains($0) ? tracks[$0] : nil }
+        }
+        // Clicked an unselected row → just that row, and adopt it as selection so subsequent
+        // actions (Play All etc. in the toolbar) target what the user expects.
+        suppressSelectionCallback = true
+        tableView.selectRowIndexes(IndexSet(integer: clicked), byExtendingSelection: false)
+        suppressSelectionCallback = false
+        onSelectionChange?(Set([tracks[clicked].id]))
+        return [tracks[clicked]]
+    }
+
+    @objc private func menuPlay() { actions.play(tracksForContextAction()) }
+    @objc private func menuShuffle() {
+        // Shuffle is "play these in shuffled order" — caller's play() handles ordering, so
+        // we just pass shuffled tracks. Most call sites use playShuffled which re-shuffles.
+        actions.play(tracksForContextAction().shuffled())
+    }
+    @objc private func menuPlayNext() { actions.playNext(tracksForContextAction()) }
+    @objc private func menuAddToEnd() { actions.addToEnd(tracksForContextAction()) }
+    @objc private func menuAddToPlaylist() { actions.addToPlaylist(tracksForContextAction().map(\.id)) }
+    @objc private func menuGoToAlbum() {
+        if let track = tracksForContextAction().first { actions.goToAlbum(track) }
+    }
+    @objc private func menuGoToArtist() {
+        if let track = tracksForContextAction().first { actions.goToArtist(track) }
     }
 }
 
