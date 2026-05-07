@@ -159,6 +159,12 @@ struct MusicBoxApp: App {
                 }
                 .keyboardShortcut("f", modifiers: .command)
             }
+            CommandGroup(after: .windowArrangement) {
+                Button("Mini Player") {
+                    NotificationCenter.default.post(name: .toggleMiniPlayer, object: nil)
+                }
+                .keyboardShortcut("m", modifiers: .command)
+            }
         }
         #endif
 

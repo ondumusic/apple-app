@@ -25,6 +25,14 @@ struct PlayerToolbar: ToolbarContent {
             .help("Queue")
             .disabled(player.currentTrack == nil)
         }
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                NotificationCenter.default.post(name: .toggleMiniPlayer, object: nil)
+            } label: {
+                Image(systemName: "pip")
+            }
+            .help("Mini Player")
+        }
     }
 }
 

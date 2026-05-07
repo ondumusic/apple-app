@@ -16,6 +16,7 @@ struct MacOSContentView: View {
     @State private var renameTarget: Playlist?
     @State private var deleteTarget: Playlist?
     @State private var searchText: String = ""
+    @State private var miniPlayer: MiniPlayerWindowController?
 
     var body: some View {
         NavigationSplitView {
@@ -78,6 +79,9 @@ struct MacOSContentView: View {
             // album/artist detail under a new section.
             detailPath = NavigationPath()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleMiniPlayer)) { _ in
+            toggleMiniPlayer()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
             guard let album = notification.object as? Album else { return }
             detailPath.append(album)
@@ -88,6 +92,16 @@ struct MacOSContentView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 detailPath.append(artist)
             }
+        }
+    }
+
+    private func toggleMiniPlayer() {
+        if let mp = miniPlayer {
+            mp.toggle()
+        } else {
+            let mp = MiniPlayerWindowController(player: player)
+            miniPlayer = mp
+            mp.showWindow(nil)
         }
     }
 
