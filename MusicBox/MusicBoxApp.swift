@@ -148,6 +148,10 @@ struct MusicBoxApp: App {
             }
             #endif
         }
+        #if os(macOS)
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact)
+        #endif
 
         #if os(macOS)
         Settings {
