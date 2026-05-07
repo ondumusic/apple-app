@@ -153,6 +153,9 @@ struct MacOSContentView: View {
         a.createFolder = { parentId in
             pendingCreate = PendingCreate(parentId: parentId, isFolder: true)
         }
+        a.movePlaylist = { playlistId, parentId in
+            playlistController.movePlaylist(playlistId, to: parentId)
+        }
         return a
     }
 }

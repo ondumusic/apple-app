@@ -18,11 +18,16 @@ struct SidebarActions {
     var createPlaylist: (UUID?) -> Void = { _ in }
     /// Trigger naming flow for a new folder; parentId nil = root.
     var createFolder: (UUID?) -> Void = { _ in }
+    /// Move playlist (or folder) into the given parent. Nil parent = root.
+    var movePlaylist: (UUID, UUID?) -> Void = { _, _ in }
 }
 
 extension NSPasteboard.PasteboardType {
     /// Pasteboard type used by track drag operations. Carries one UUID string per
     /// dragged track in NSPasteboardItem(s).
     static let musicBoxTracks = NSPasteboard.PasteboardType("com.musicbox.tracks")
+    /// Pasteboard type used by sidebar playlist drag operations. Distinct from
+    /// musicBoxTracks so a track drag can't accidentally land as a playlist move.
+    static let musicBoxSidebarPlaylist = NSPasteboard.PasteboardType("com.musicbox.sidebar.playlist")
 }
 #endif

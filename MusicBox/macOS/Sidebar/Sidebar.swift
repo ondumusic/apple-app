@@ -128,7 +128,9 @@ final class SidebarViewController: NSViewController {
         menu.delegate = self
         outlineView.menu = menu
 
-        outlineView.registerForDraggedTypes([.musicBoxTracks])
+        outlineView.registerForDraggedTypes([.musicBoxTracks, .musicBoxSidebarPlaylist])
+        outlineView.draggingDestinationFeedbackStyle = .regular
+        outlineView.setDraggingSourceOperationMask(.move, forLocal: true)
 
         scrollView.documentView = outlineView
         scrollView.hasVerticalScroller = true
@@ -355,27 +357,48 @@ extension SidebarViewController: NSOutlineViewDataSource {
         }
     }
 
-    // MARK: - Drag/drop (drop tracks onto a playlist row to add)
+    // MARK: - Drag source (sidebar playlist reorder)
+
+    func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
+        guard let node = item as? SidebarNode, case .playlist(let p) = node.kind else { return nil }
+        let pbItem = NSPasteboardItem()
+        pbItem.setString(p.id.uuidString, forType: .musicBoxSidebarPlaylist)
+        return pbItem
+    }
+
+    // MARK: - Drag/drop validation + accept
 
     func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
+        if let trackOp = validateTrackDrop(info: info, item: item, index: index) { return trackOp }
+        if let moveOp = validatePlaylistMoveDrop(info: info, item: item, index: index) { return moveOp }
+        return []
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
+        if acceptTrackDrop(info: info, item: item) { return true }
+        if acceptPlaylistMoveDrop(info: info, item: item) { return true }
+        return false
+    }
+
+    private func validateTrackDrop(info: NSDraggingInfo, item: Any?, index: Int) -> NSDragOperation? {
+        guard let pasteboard = info.draggingPasteboard.pasteboardItems,
+              pasteboard.contains(where: { $0.string(forType: .musicBoxTracks) != nil })
+        else { return nil }
         // Only accept drops directly onto a non-folder playlist row.
         guard let node = item as? SidebarNode,
               case .playlist(let playlist) = node.kind,
               !playlist.isFolder,
               index == NSOutlineViewDropOnItemIndex
         else { return [] }
-        guard let pasteboard = info.draggingPasteboard.pasteboardItems,
-              pasteboard.contains(where: { $0.string(forType: .musicBoxTracks) != nil })
-        else { return [] }
+        _ = playlist
         return .copy
     }
 
-    func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
+    private func acceptTrackDrop(info: NSDraggingInfo, item: Any?) -> Bool {
         guard let node = item as? SidebarNode,
               case .playlist(let playlist) = node.kind,
               !playlist.isFolder
         else { return false }
-
         let trackIds: [UUID] = (info.draggingPasteboard.pasteboardItems ?? []).compactMap { item in
             guard let s = item.string(forType: .musicBoxTracks) else { return nil }
             return UUID(uuidString: s)
@@ -383,6 +406,71 @@ extension SidebarViewController: NSOutlineViewDataSource {
         guard !trackIds.isEmpty else { return false }
         actions.addTracksToPlaylist(trackIds, playlist)
         return true
+    }
+
+    private func validatePlaylistMoveDrop(info: NSDraggingInfo, item: Any?, index: Int) -> NSDragOperation? {
+        guard let pasteboard = info.draggingPasteboard.pasteboardItems,
+              let raw = pasteboard.first(where: { $0.string(forType: .musicBoxSidebarPlaylist) != nil })?
+                  .string(forType: .musicBoxSidebarPlaylist),
+              let draggedId = UUID(uuidString: raw)
+        else { return nil }
+
+        let destinationParent = resolveDropTarget(item: item, index: index)
+        // Reject self-drops and cycles (folder into its own descendant).
+        if destinationParent == draggedId { return [] }
+        if let dest = destinationParent, descendantIds(of: draggedId).contains(dest) { return [] }
+        // Non-folder targets we treat as "drop alongside" — destinationParent already
+        // equals that row's parent, which means it's a no-op move when source is at the
+        // same level. That's fine; PlaylistController.movePlaylist guards same-parent.
+        return .move
+    }
+
+    private func acceptPlaylistMoveDrop(info: NSDraggingInfo, item: Any?) -> Bool {
+        guard let pasteboard = info.draggingPasteboard.pasteboardItems,
+              let raw = pasteboard.first(where: { $0.string(forType: .musicBoxSidebarPlaylist) != nil })?
+                  .string(forType: .musicBoxSidebarPlaylist),
+              let draggedId = UUID(uuidString: raw)
+        else { return false }
+        let destinationParent = resolveDropTarget(item: item, index: -1)
+        actions.movePlaylist(draggedId, destinationParent)
+        return true
+    }
+
+    /// Map an outline-view drop target to the parentId we should move into.
+    /// - Drop on a folder row → that folder's id
+    /// - Drop on a non-folder row → that row's parentId (move alongside)
+    /// - Drop on the Playlists section header or root → nil (root)
+    private func resolveDropTarget(item: Any?, index: Int) -> UUID? {
+        guard let node = item as? SidebarNode else { return nil }
+        switch node.kind {
+        case .section: return nil
+        case .playlist(let p): return p.isFolder ? p.id : p.parentId
+        case .category: return nil
+        }
+    }
+
+    private func descendantIds(of playlistId: UUID) -> Set<UUID> {
+        guard let node = findPlaylistNode(id: playlistId, in: playlistsSection.children) else { return [] }
+        return collectDescendantIds(node)
+    }
+
+    private func findPlaylistNode(id: UUID, in nodes: [SidebarNode]) -> SidebarNode? {
+        for node in nodes {
+            if case .playlist(let p) = node.kind, p.id == id { return node }
+            if let found = findPlaylistNode(id: id, in: node.children) { return found }
+        }
+        return nil
+    }
+
+    private func collectDescendantIds(_ node: SidebarNode) -> Set<UUID> {
+        var out: Set<UUID> = []
+        for child in node.children {
+            if case .playlist(let p) = child.kind {
+                out.insert(p.id)
+                out.formUnion(collectDescendantIds(child))
+            }
+        }
+        return out
     }
 }
 
