@@ -39,11 +39,8 @@ private struct DetailPlaceholder: View {
                 Text("Detail view for \(cat.title) lands in the tracks/detail step.")
             }
         case .playlist(let id):
-            ContentUnavailableView {
-                Label("Playlist", systemImage: "music.note.list")
-            } description: {
-                Text("Playlist \(id.uuidString.prefix(8))…")
-            }
+            PlaylistDetailMac(playlistId: id)
+                .id(id)
         case .none:
             ContentUnavailableView("Select an Item", systemImage: "sidebar.left")
         }
