@@ -92,6 +92,8 @@ final class SidebarViewController: NSViewController {
     private let outlineView = NSOutlineView()
     private let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
     private let searchField = NSSearchField()
+    private let addButton = NSButton()
+    private let bottomBar = NSView()
 
     private var rootNodes: [SidebarNode] = []
     private var librarySection: SidebarNode!
@@ -144,6 +146,17 @@ final class SidebarViewController: NSViewController {
         searchField.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(searchField)
 
+        addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "New")
+        addButton.bezelStyle = .accessoryBar
+        addButton.isBordered = false
+        addButton.target = self
+        addButton.action = #selector(showAddMenu(_:))
+        addButton.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomBar.translatesAutoresizingMaskIntoConstraints = false
+        bottomBar.addSubview(addButton)
+        view.addSubview(bottomBar)
+
         NSLayoutConstraint.activate([
             // Top inset clears the traffic-light buttons that overlay the sidebar.
             searchField.topAnchor.constraint(equalTo: view.topAnchor, constant: 36),
@@ -152,7 +165,15 @@ final class SidebarViewController: NSViewController {
             scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 6),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
+            bottomBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bottomBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            bottomBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            bottomBar.heightAnchor.constraint(equalToConstant: 30),
+            addButton.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 6),
+            addButton.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
+            addButton.widthAnchor.constraint(equalToConstant: 22),
+            addButton.heightAnchor.constraint(equalToConstant: 22),
         ])
 
         NotificationCenter.default.addObserver(
@@ -184,6 +205,42 @@ final class SidebarViewController: NSViewController {
 
     @objc private func handleFocusSearch() {
         view.window?.makeFirstResponder(searchField)
+    }
+
+    @objc private func showAddMenu(_ sender: NSButton) {
+        let menu = NSMenu()
+
+        // Drop new entry inside the currently-selected folder if one's selected;
+        // otherwise root.
+        let parentId: UUID? = {
+            let row = outlineView.selectedRow
+            guard row >= 0,
+                  let node = outlineView.item(atRow: row) as? SidebarNode,
+                  case .playlist(let p) = node.kind,
+                  p.isFolder
+            else { return nil }
+            return p.id
+        }()
+
+        let newPlaylist = NSMenuItem(title: "New Playlist", action: #selector(menuNewPlaylist(_:)), keyEquivalent: "")
+        newPlaylist.target = self
+        newPlaylist.representedObject = parentId as Any?
+        menu.addItem(newPlaylist)
+
+        let newFolder = NSMenuItem(title: "New Folder", action: #selector(menuNewFolder(_:)), keyEquivalent: "")
+        newFolder.target = self
+        newFolder.representedObject = parentId as Any?
+        menu.addItem(newFolder)
+
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.maxY + 2), in: sender)
+    }
+
+    @objc private func menuNewPlaylist(_ sender: NSMenuItem) {
+        actions.createPlaylist(sender.representedObject as? UUID)
+    }
+
+    @objc private func menuNewFolder(_ sender: NSMenuItem) {
+        actions.createFolder(sender.representedObject as? UUID)
     }
 
     /// Rebuilds the playlist branch and applies any external selection change. Tries to

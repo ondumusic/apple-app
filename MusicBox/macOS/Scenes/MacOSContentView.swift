@@ -15,8 +15,15 @@ struct MacOSContentView: View {
     @State private var detailPath = NavigationPath()
     @State private var renameTarget: Playlist?
     @State private var deleteTarget: Playlist?
+    @State private var pendingCreate: PendingCreate?
     @State private var searchText: String = ""
     @State private var miniPlayer: MiniPlayerWindowController?
+
+    private struct PendingCreate: Identifiable {
+        let id = UUID()
+        let parentId: UUID?
+        let isFolder: Bool
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -52,6 +59,15 @@ struct MacOSContentView: View {
         .sheet(item: $renameTarget) { playlist in
             PlaylistNameSheet(mode: .rename(initialName: playlist.name)) { newName in
                 playlistController.renamePlaylist(playlist.id, name: newName)
+            }
+        }
+        .sheet(item: $pendingCreate) { pending in
+            PlaylistNameSheet(mode: pending.isFolder ? .createFolder : .create) { name in
+                if pending.isFolder {
+                    playlistController.createFolder(name: name, parentId: pending.parentId)
+                } else {
+                    playlistController.createPlaylist(name: name, parentId: pending.parentId)
+                }
             }
         }
         .confirmationDialog(
@@ -127,6 +143,12 @@ struct MacOSContentView: View {
         }
         a.addTracksToPlaylist = { trackIds, playlist in
             playlistController.addTracks(trackIds, to: playlist.id)
+        }
+        a.createPlaylist = { parentId in
+            pendingCreate = PendingCreate(parentId: parentId, isFolder: false)
+        }
+        a.createFolder = { parentId in
+            pendingCreate = PendingCreate(parentId: parentId, isFolder: true)
         }
         return a
     }
