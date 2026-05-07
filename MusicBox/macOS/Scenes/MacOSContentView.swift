@@ -21,6 +21,9 @@ struct MacOSContentView: View {
                     .navigationDestination(for: Album.self) { album in
                         AlbumDetailMac(album: album)
                     }
+                    .navigationDestination(for: Artist.self) { artist in
+                        ArtistDetailMac(artist: artist)
+                    }
             }
         }
         .frame(minWidth: 900, minHeight: 600)
@@ -45,6 +48,8 @@ private struct DetailPlaceholder: View {
             SongsViewMac()
         case .category(.albums):
             AlbumsViewMac()
+        case .category(.artists):
+            ArtistsViewMac()
         case .category(let cat):
             ContentUnavailableView {
                 Label(cat.title, systemImage: cat.iconName)
