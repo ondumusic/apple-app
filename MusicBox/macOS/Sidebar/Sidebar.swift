@@ -8,6 +8,7 @@ import SwiftUI
 /// commits.
 struct Sidebar: NSViewControllerRepresentable {
     @Binding var selection: SidebarSelection?
+    @Binding var searchText: String
     let musicLibrary: MusicLibrary
     let actions: SidebarActions
 
@@ -15,6 +16,9 @@ struct Sidebar: NSViewControllerRepresentable {
         let vc = SidebarViewController()
         vc.onSelectionChange = { newValue in
             selection = newValue
+        }
+        vc.onSearchTextChange = { newText in
+            searchText = newText
         }
         vc.actions = actions
         return vc
@@ -24,6 +28,7 @@ struct Sidebar: NSViewControllerRepresentable {
         // Rebuild the tree from the current library state. allPlaylists() is one fetch;
         // we group by parentId in-memory to materialize the folder hierarchy.
         nsViewController.actions = actions
+        nsViewController.applyExternalSearchText(searchText)
         let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists())
         nsViewController.update(playlistNodes: nodes, externalSelection: selection)
     }
@@ -80,11 +85,13 @@ final class SidebarNode: NSObject {
 
 final class SidebarViewController: NSViewController {
     var onSelectionChange: ((SidebarSelection?) -> Void)?
+    var onSearchTextChange: ((String) -> Void)?
     var actions: SidebarActions = SidebarActions()
 
     private let scrollView = NSScrollView()
     private let outlineView = NSOutlineView()
     private let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
+    private let searchField = NSSearchField()
 
     private var rootNodes: [SidebarNode] = []
     private var librarySection: SidebarNode!
@@ -127,17 +134,54 @@ final class SidebarViewController: NSViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
+        searchField.placeholderString = "Search"
+        searchField.target = self
+        searchField.action = #selector(searchFieldChanged)
+        searchField.sendsSearchStringImmediately = false
+        searchField.sendsWholeSearchString = false
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(searchField)
+
         NSLayoutConstraint.activate([
+            // Top inset clears the traffic-light buttons that overlay the sidebar.
+            searchField.topAnchor.constraint(equalTo: view.topAnchor, constant: 36),
+            searchField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            searchField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 6),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleFocusSearch),
+            name: .focusSearch,
+            object: nil
+        )
 
         buildSkeletonTree()
         outlineView.reloadData()
         outlineView.expandItem(librarySection)
         outlineView.expandItem(playlistsSection)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    func applyExternalSearchText(_ text: String) {
+        if searchField.stringValue != text {
+            searchField.stringValue = text
+        }
+    }
+
+    @objc private func searchFieldChanged() {
+        onSearchTextChange?(searchField.stringValue)
+    }
+
+    @objc private func handleFocusSearch() {
+        view.window?.makeFirstResponder(searchField)
     }
 
     /// Rebuilds the playlist branch and applies any external selection change. Tries to

@@ -151,6 +151,15 @@ struct MusicBoxApp: App {
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
+        .commands {
+            CommandGroup(after: .pasteboard) {
+                Divider()
+                Button("Find") {
+                    NotificationCenter.default.post(name: .focusSearch, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+            }
+        }
         #endif
 
         #if os(macOS)

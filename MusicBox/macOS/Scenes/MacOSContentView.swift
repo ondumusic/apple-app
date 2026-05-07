@@ -15,24 +15,32 @@ struct MacOSContentView: View {
     @State private var detailPath = NavigationPath()
     @State private var renameTarget: Playlist?
     @State private var deleteTarget: Playlist?
+    @State private var searchText: String = ""
 
     var body: some View {
         NavigationSplitView {
             Sidebar(
                 selection: $sidebarSelection,
+                searchText: $searchText,
                 musicLibrary: musicLibrary,
                 actions: sidebarActions
             )
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
             NavigationStack(path: $detailPath) {
-                DetailPlaceholder(selection: sidebarSelection)
-                    .navigationDestination(for: Album.self) { album in
-                        AlbumDetailMac(album: album)
+                Group {
+                    if !searchText.isEmpty {
+                        SearchViewMac(query: searchText)
+                    } else {
+                        DetailPlaceholder(selection: sidebarSelection)
                     }
-                    .navigationDestination(for: Artist.self) { artist in
-                        ArtistDetailMac(artist: artist)
-                    }
+                }
+                .navigationDestination(for: Album.self) { album in
+                    AlbumDetailMac(album: album)
+                }
+                .navigationDestination(for: Artist.self) { artist in
+                    ArtistDetailMac(artist: artist)
+                }
             }
         }
         .frame(minWidth: 900, minHeight: 600)

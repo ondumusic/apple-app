@@ -7,6 +7,7 @@ extension Notification.Name {
     static let sessionExpired = Notification.Name("MusicBox.sessionExpired")
     /// Posted with `object: [UUID]` — the track ids to be added.
     static let requestAddToPlaylist = Notification.Name("MusicBox.requestAddToPlaylist")
+    static let focusSearch = Notification.Name("MusicBox.focusSearch")
 }
 
 struct ContentView: View {
