@@ -1,0 +1,299 @@
+#if os(macOS)
+import AppKit
+import SwiftUI
+
+/// SwiftUI bridge for the AppKit sidebar. Wraps a SidebarViewController that owns the
+/// NSOutlineView and its data source/delegate. Selection is the only piece of state
+/// exposed back to SwiftUI for now — folders, drag/drop, rename land in subsequent
+/// commits.
+struct Sidebar: NSViewControllerRepresentable {
+    @Binding var selection: SidebarSelection?
+    let musicLibrary: MusicLibrary
+
+    func makeNSViewController(context: Context) -> SidebarViewController {
+        let vc = SidebarViewController()
+        vc.onSelectionChange = { newValue in
+            selection = newValue
+        }
+        return vc
+    }
+
+    func updateNSViewController(_ nsViewController: SidebarViewController, context: Context) {
+        // Rebuild the tree from the current library state. Pulls every render — cheap
+        // (a flat fetch) and lets revision-based updates flow through.
+        let playlists = musicLibrary.playlists(in: nil).filter { !$0.isFolder }
+        nsViewController.update(rootPlaylists: playlists, externalSelection: selection)
+    }
+}
+
+// MARK: - Tree model
+
+/// NSObject so NSOutlineView can use reference identity for items.
+final class SidebarNode: NSObject {
+    enum Kind {
+        case section(title: String)
+        case category(SidebarCategory)
+        case playlist(Playlist)
+    }
+
+    let kind: Kind
+    var children: [SidebarNode]
+
+    init(kind: Kind, children: [SidebarNode] = []) {
+        self.kind = kind
+        self.children = children
+    }
+
+    var selectionId: SidebarSelection? {
+        switch kind {
+        case .section: nil
+        case .category(let c): .category(c)
+        case .playlist(let p): .playlist(p.id)
+        }
+    }
+
+    var isGroupHeader: Bool {
+        if case .section = kind { return true }
+        return false
+    }
+}
+
+// MARK: - View Controller
+
+final class SidebarViewController: NSViewController {
+    var onSelectionChange: ((SidebarSelection?) -> Void)?
+
+    private let scrollView = NSScrollView()
+    private let outlineView = NSOutlineView()
+    private let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
+
+    private var rootNodes: [SidebarNode] = []
+    private var librarySection: SidebarNode!
+    private var playlistsSection: SidebarNode!
+
+    /// Set when we're applying an externally-driven selection so we can suppress the
+    /// callback that would otherwise echo it back through the binding.
+    private var suppressSelectionCallback = false
+
+    override func loadView() {
+        view = NSView()
+
+        outlineView.headerView = nil
+        outlineView.style = .sourceList
+        outlineView.selectionHighlightStyle = .sourceList
+        outlineView.allowsMultipleSelection = false
+        outlineView.allowsEmptySelection = true
+        outlineView.rowSizeStyle = .default
+        outlineView.indentationPerLevel = 14
+        outlineView.indentationMarkerFollowsCell = true
+        outlineView.autoresizesOutlineColumn = false
+        outlineView.floatsGroupRows = false
+        outlineView.addTableColumn(column)
+        outlineView.outlineTableColumn = column
+        outlineView.dataSource = self
+        outlineView.delegate = self
+
+        scrollView.documentView = outlineView
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = false
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+
+        NSLayoutConstraint.activate([
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+
+        buildSkeletonTree()
+        outlineView.reloadData()
+        outlineView.expandItem(librarySection)
+        outlineView.expandItem(playlistsSection)
+    }
+
+    /// Rebuilds the playlist branch and applies any external selection change. Tries to
+    /// preserve expansion state across reloads — only the children of the playlists
+    /// section change, so we reload that subtree, not the whole view.
+    func update(rootPlaylists: [Playlist], externalSelection: SidebarSelection?) {
+        let newPlaylistNodes = rootPlaylists.map { SidebarNode(kind: .playlist($0)) }
+        let changed = !nodesMatch(playlistsSection.children, newPlaylistNodes)
+        if changed {
+            playlistsSection.children = newPlaylistNodes
+            outlineView.reloadItem(playlistsSection, reloadChildren: true)
+            outlineView.expandItem(playlistsSection)
+        }
+        applyExternalSelection(externalSelection)
+    }
+
+    private func buildSkeletonTree() {
+        librarySection = SidebarNode(
+            kind: .section(title: "Library"),
+            children: SidebarCategory.allCases.map { SidebarNode(kind: .category($0)) }
+        )
+        playlistsSection = SidebarNode(kind: .section(title: "Playlists"))
+        rootNodes = [librarySection, playlistsSection]
+    }
+
+    private func nodesMatch(_ a: [SidebarNode], _ b: [SidebarNode]) -> Bool {
+        guard a.count == b.count else { return false }
+        for (lhs, rhs) in zip(a, b) {
+            guard lhs.selectionId == rhs.selectionId else { return false }
+            if case .playlist(let lp) = lhs.kind, case .playlist(let rp) = rhs.kind {
+                if lp.name != rp.name { return false }
+            }
+        }
+        return true
+    }
+
+    private func applyExternalSelection(_ selection: SidebarSelection?) {
+        guard let selection else {
+            if outlineView.selectedRow != -1 {
+                suppressSelectionCallback = true
+                outlineView.deselectAll(nil)
+                suppressSelectionCallback = false
+            }
+            return
+        }
+        guard let row = rowForSelection(selection) else { return }
+        if outlineView.selectedRow == row { return }
+        suppressSelectionCallback = true
+        outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        suppressSelectionCallback = false
+    }
+
+    private func rowForSelection(_ selection: SidebarSelection) -> Int? {
+        for index in 0..<outlineView.numberOfRows {
+            guard let node = outlineView.item(atRow: index) as? SidebarNode else { continue }
+            if node.selectionId == selection { return index }
+        }
+        return nil
+    }
+}
+
+// MARK: - NSOutlineViewDataSource
+
+extension SidebarViewController: NSOutlineViewDataSource {
+    func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+        if item == nil { return rootNodes.count }
+        return (item as? SidebarNode)?.children.count ?? 0
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+        if item == nil { return rootNodes[index] }
+        return (item as! SidebarNode).children[index]
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
+        guard let node = item as? SidebarNode else { return false }
+        return !node.children.isEmpty
+    }
+}
+
+// MARK: - NSOutlineViewDelegate
+
+extension SidebarViewController: NSOutlineViewDelegate {
+    func outlineView(_ outlineView: NSOutlineView, isGroupItem item: Any) -> Bool {
+        (item as? SidebarNode)?.isGroupHeader ?? false
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
+        guard let node = item as? SidebarNode else { return false }
+        return !node.isGroupHeader
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+        guard let node = item as? SidebarNode else { return nil }
+
+        let cell = outlineView.makeView(withIdentifier: SidebarCell.identifier, owner: nil) as? SidebarCell
+            ?? SidebarCell()
+        cell.identifier = SidebarCell.identifier
+        cell.configure(for: node)
+        return cell
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
+        if let node = item as? SidebarNode, case .section = node.kind {
+            return 22
+        }
+        return 26
+    }
+
+    func outlineViewSelectionDidChange(_ notification: Notification) {
+        if suppressSelectionCallback { return }
+        let row = outlineView.selectedRow
+        guard row >= 0,
+              let node = outlineView.item(atRow: row) as? SidebarNode
+        else {
+            onSelectionChange?(nil)
+            return
+        }
+        onSelectionChange?(node.selectionId)
+    }
+}
+
+// MARK: - Cell
+
+private final class SidebarCell: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
+
+    private let icon = NSImageView()
+    private let label = NSTextField(labelWithString: "")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+
+    private func setup() {
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.symbolConfiguration = .init(pointSize: 13, weight: .regular)
+        addSubview(icon)
+        imageView = icon
+
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.lineBreakMode = .byTruncatingTail
+        label.cell?.usesSingleLineMode = true
+        addSubview(label)
+        textField = label
+
+        NSLayoutConstraint.activate([
+            icon.leadingAnchor.constraint(equalTo: leadingAnchor),
+            icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 18),
+            icon.heightAnchor.constraint(equalToConstant: 18),
+            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
+    func configure(for node: SidebarNode) {
+        switch node.kind {
+        case .section(let title):
+            label.stringValue = title.uppercased()
+            label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+            label.textColor = .secondaryLabelColor
+            icon.image = nil
+            icon.isHidden = true
+        case .category(let cat):
+            label.stringValue = cat.title
+            label.font = .systemFont(ofSize: NSFont.systemFontSize)
+            label.textColor = .labelColor
+            icon.image = NSImage(systemSymbolName: cat.iconName, accessibilityDescription: cat.title)
+            icon.isHidden = false
+        case .playlist(let playlist):
+            label.stringValue = playlist.name
+            label.font = .systemFont(ofSize: NSFont.systemFontSize)
+            label.textColor = .labelColor
+            icon.image = NSImage(systemSymbolName: "music.note.list", accessibilityDescription: playlist.name)
+            icon.isHidden = false
+        }
+    }
+}
+#endif

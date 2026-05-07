@@ -5,18 +5,45 @@ import SwiftUI
 /// track tables, toolbar, and mini-player. Layout fills in piece by piece — see
 /// project_macos_rebuild_plan.md for the per-surface plan.
 struct MacOSContentView: View {
+    @Environment(MusicLibrary.self) private var musicLibrary
+
     @State private var showQueue = false
+    @State private var sidebarSelection: SidebarSelection? = .category(.artists)
 
     var body: some View {
-        ContentUnavailableView {
-            Label("macOS rebuild in progress", systemImage: "hammer")
-        } description: {
-            Text("Sidebar, track tables, and mini-player land here next.")
+        NavigationSplitView {
+            Sidebar(selection: $sidebarSelection, musicLibrary: musicLibrary)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        } detail: {
+            DetailPlaceholder(selection: sidebarSelection)
         }
         .frame(minWidth: 900, minHeight: 600)
         .toolbar { PlayerToolbar(showQueue: $showQueue) }
         .sheet(isPresented: $showQueue) {
             QueueSheetPlaceholder(isPresented: $showQueue)
+        }
+    }
+}
+
+private struct DetailPlaceholder: View {
+    let selection: SidebarSelection?
+
+    var body: some View {
+        switch selection {
+        case .category(let cat):
+            ContentUnavailableView {
+                Label(cat.title, systemImage: cat.iconName)
+            } description: {
+                Text("Detail view for \(cat.title) lands in the tracks/detail step.")
+            }
+        case .playlist(let id):
+            ContentUnavailableView {
+                Label("Playlist", systemImage: "music.note.list")
+            } description: {
+                Text("Playlist \(id.uuidString.prefix(8))…")
+            }
+        case .none:
+            ContentUnavailableView("Select an Item", systemImage: "sidebar.left")
         }
     }
 }
