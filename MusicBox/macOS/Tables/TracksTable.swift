@@ -155,6 +155,22 @@ final class TracksTableViewController: NSViewController {
     @objc private func handleDoubleClick() {
         let row = tableView.clickedRow
         guard row >= 0, row < tracks.count else { return }
+        let track = tracks[row]
+
+        // iTunes-style: double-click on the Artist column navigates to the artist;
+        // Album column navigates to the album. Anywhere else plays the track.
+        let col = tableView.clickedColumn
+        if col >= 0, col < tableView.tableColumns.count {
+            switch tableView.tableColumns[col].identifier.rawValue {
+            case "artist":
+                actions.goToArtist(track)
+                return
+            case "album":
+                actions.goToAlbum(track)
+                return
+            default: break
+            }
+        }
         onPlay?(row)
     }
 
