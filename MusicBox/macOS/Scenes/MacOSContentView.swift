@@ -125,6 +125,9 @@ struct MacOSContentView: View {
         a.deletePlaylist = { playlist in
             deleteTarget = playlist
         }
+        a.addTracksToPlaylist = { trackIds, playlist in
+            playlistController.addTracks(trackIds, to: playlist.id)
+        }
         return a
     }
 }

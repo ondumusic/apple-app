@@ -84,6 +84,10 @@ final class TracksTableViewController: NSViewController {
         menu.delegate = self
         tableView.menu = menu
 
+        // Drag source: lets tracks be dropped onto sidebar playlist rows.
+        tableView.setDraggingSourceOperationMask(.copy, forLocal: true)
+        tableView.setDraggingSourceOperationMask(.copy, forLocal: false)
+
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
@@ -159,6 +163,13 @@ final class TracksTableViewController: NSViewController {
 extension TracksTableViewController: NSTableViewDataSource {
     func numberOfRows(in tableView: NSTableView) -> Int {
         tracks.count
+    }
+
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard tracks.indices.contains(row) else { return nil }
+        let item = NSPasteboardItem()
+        item.setString(tracks[row].id.uuidString, forType: .musicBoxTracks)
+        return item
     }
 }
 

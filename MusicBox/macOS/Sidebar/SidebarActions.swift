@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import Foundation
 
 /// Actions the sidebar can invoke. Populated by MacOSContentView from its
@@ -10,5 +11,14 @@ struct SidebarActions {
     var shufflePlaylist: (Playlist) -> Void = { _ in }
     var renamePlaylist: (Playlist) -> Void = { _ in }
     var deletePlaylist: (Playlist) -> Void = { _ in }
+    /// Track IDs being dropped onto a (non-folder) playlist row. Caller adds them via
+    /// the playlist controller / outbox.
+    var addTracksToPlaylist: ([UUID], Playlist) -> Void = { _, _ in }
+}
+
+extension NSPasteboard.PasteboardType {
+    /// Pasteboard type used by track drag operations. Carries one UUID string per
+    /// dragged track in NSPasteboardItem(s).
+    static let musicBoxTracks = NSPasteboard.PasteboardType("com.musicbox.tracks")
 }
 #endif

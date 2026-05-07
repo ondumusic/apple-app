@@ -126,6 +126,8 @@ final class SidebarViewController: NSViewController {
         menu.delegate = self
         outlineView.menu = menu
 
+        outlineView.registerForDraggedTypes([.musicBoxTracks])
+
         scrollView.documentView = outlineView
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
@@ -294,6 +296,36 @@ extension SidebarViewController: NSOutlineViewDataSource {
         case .category: return false
         case .playlist(let p): return p.isFolder
         }
+    }
+
+    // MARK: - Drag/drop (drop tracks onto a playlist row to add)
+
+    func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
+        // Only accept drops directly onto a non-folder playlist row.
+        guard let node = item as? SidebarNode,
+              case .playlist(let playlist) = node.kind,
+              !playlist.isFolder,
+              index == NSOutlineViewDropOnItemIndex
+        else { return [] }
+        guard let pasteboard = info.draggingPasteboard.pasteboardItems,
+              pasteboard.contains(where: { $0.string(forType: .musicBoxTracks) != nil })
+        else { return [] }
+        return .copy
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
+        guard let node = item as? SidebarNode,
+              case .playlist(let playlist) = node.kind,
+              !playlist.isFolder
+        else { return false }
+
+        let trackIds: [UUID] = (info.draggingPasteboard.pasteboardItems ?? []).compactMap { item in
+            guard let s = item.string(forType: .musicBoxTracks) else { return nil }
+            return UUID(uuidString: s)
+        }
+        guard !trackIds.isEmpty else { return false }
+        actions.addTracksToPlaylist(trackIds, playlist)
+        return true
     }
 }
 
