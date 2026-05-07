@@ -9,18 +9,21 @@ import SwiftUI
 struct Sidebar: NSViewControllerRepresentable {
     @Binding var selection: SidebarSelection?
     let musicLibrary: MusicLibrary
+    let actions: SidebarActions
 
     func makeNSViewController(context: Context) -> SidebarViewController {
         let vc = SidebarViewController()
         vc.onSelectionChange = { newValue in
             selection = newValue
         }
+        vc.actions = actions
         return vc
     }
 
     func updateNSViewController(_ nsViewController: SidebarViewController, context: Context) {
         // Rebuild the tree from the current library state. allPlaylists() is one fetch;
         // we group by parentId in-memory to materialize the folder hierarchy.
+        nsViewController.actions = actions
         let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists())
         nsViewController.update(playlistNodes: nodes, externalSelection: selection)
     }
@@ -77,6 +80,7 @@ final class SidebarNode: NSObject {
 
 final class SidebarViewController: NSViewController {
     var onSelectionChange: ((SidebarSelection?) -> Void)?
+    var actions: SidebarActions = SidebarActions()
 
     private let scrollView = NSScrollView()
     private let outlineView = NSOutlineView()
@@ -110,6 +114,10 @@ final class SidebarViewController: NSViewController {
 
         outlineView.dataSource = self
         outlineView.delegate = self
+
+        let menu = NSMenu()
+        menu.delegate = self
+        outlineView.menu = menu
 
         scrollView.documentView = outlineView
         scrollView.hasVerticalScroller = true
@@ -284,6 +292,65 @@ extension SidebarViewController: NSOutlineViewDelegate {
             return
         }
         onSelectionChange?(node.selectionId)
+    }
+}
+
+// MARK: - Context Menu
+
+extension SidebarViewController: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let row = outlineView.clickedRow
+        guard row >= 0,
+              let node = outlineView.item(atRow: row) as? SidebarNode,
+              case .playlist(let playlist) = node.kind
+        else { return }
+
+        if !playlist.isFolder {
+            let play = NSMenuItem(title: "Play", action: #selector(menuPlay), keyEquivalent: "")
+            play.target = self
+            play.representedObject = playlist
+            menu.addItem(play)
+
+            let shuffle = NSMenuItem(title: "Shuffle", action: #selector(menuShuffle), keyEquivalent: "")
+            shuffle.target = self
+            shuffle.representedObject = playlist
+            menu.addItem(shuffle)
+
+            menu.addItem(.separator())
+        }
+
+        let rename = NSMenuItem(title: "Rename", action: #selector(menuRename), keyEquivalent: "")
+        rename.target = self
+        rename.representedObject = playlist
+        menu.addItem(rename)
+
+        menu.addItem(.separator())
+
+        let delete = NSMenuItem(
+            title: playlist.isFolder ? "Delete Folder" : "Delete Playlist",
+            action: #selector(menuDelete),
+            keyEquivalent: ""
+        )
+        delete.target = self
+        delete.representedObject = playlist
+        menu.addItem(delete)
+    }
+
+    @objc private func menuPlay(_ sender: NSMenuItem) {
+        if let playlist = sender.representedObject as? Playlist { actions.playPlaylist(playlist) }
+    }
+
+    @objc private func menuShuffle(_ sender: NSMenuItem) {
+        if let playlist = sender.representedObject as? Playlist { actions.shufflePlaylist(playlist) }
+    }
+
+    @objc private func menuRename(_ sender: NSMenuItem) {
+        if let playlist = sender.representedObject as? Playlist { actions.renamePlaylist(playlist) }
+    }
+
+    @objc private func menuDelete(_ sender: NSMenuItem) {
+        if let playlist = sender.representedObject as? Playlist { actions.deletePlaylist(playlist) }
     }
 }
 
