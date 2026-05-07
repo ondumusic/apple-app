@@ -13,7 +13,6 @@ struct MacOSContentView: View {
     @State private var showQueue = false
     @State private var sidebarSelection: SidebarSelection? = .category(.artists)
     @State private var detailPath = NavigationPath()
-    @State private var renameTarget: Playlist?
     @State private var deleteTarget: Playlist?
     @State private var pendingCreate: PendingCreate?
     @State private var searchText: String = ""
@@ -55,11 +54,6 @@ struct MacOSContentView: View {
         .toolbar { PlayerToolbar(showQueue: $showQueue) }
         .sheet(isPresented: $showQueue) {
             QueueSheetPlaceholder(isPresented: $showQueue)
-        }
-        .sheet(item: $renameTarget) { playlist in
-            PlaylistNameSheet(mode: .rename(initialName: playlist.name)) { newName in
-                playlistController.renamePlaylist(playlist.id, name: newName)
-            }
         }
         .sheet(item: $pendingCreate) { pending in
             PlaylistNameSheet(mode: pending.isFolder ? .createFolder : .create) { name in
@@ -138,8 +132,8 @@ struct MacOSContentView: View {
             guard !available.isEmpty else { return }
             player.requestPlay { player.playShuffled(tracks: available) }
         }
-        a.renamePlaylist = { playlist in
-            renameTarget = playlist
+        a.renamePlaylist = { playlist, newName in
+            playlistController.renamePlaylist(playlist.id, name: newName)
         }
         a.deletePlaylist = { playlist in
             deleteTarget = playlist

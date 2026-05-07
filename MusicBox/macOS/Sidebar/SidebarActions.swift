@@ -9,7 +9,9 @@ import Foundation
 struct SidebarActions {
     var playPlaylist: (Playlist) -> Void = { _ in }
     var shufflePlaylist: (Playlist) -> Void = { _ in }
-    var renamePlaylist: (Playlist) -> Void = { _ in }
+    /// Commit a rename. Inline edit fires this when the user presses Enter / blurs the
+    /// inline text field with a non-empty value different from the current name.
+    var renamePlaylist: (Playlist, String) -> Void = { _, _ in }
     var deletePlaylist: (Playlist) -> Void = { _ in }
     /// Track IDs being dropped onto a (non-folder) playlist row. Caller adds them via
     /// the playlist controller / outbox.

@@ -117,6 +117,7 @@ final class SidebarViewController: NSViewController {
         column.resizingMask = [.autoresizingMask, .userResizingMask]
         column.minWidth = 100
         column.width = 220
+        column.isEditable = true
         outlineView.addTableColumn(column)
         outlineView.outlineTableColumn = column
         outlineView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
@@ -492,6 +493,7 @@ extension SidebarViewController: NSOutlineViewDelegate {
         let cell = outlineView.makeView(withIdentifier: SidebarCell.identifier, owner: nil) as? SidebarCell
             ?? SidebarCell()
         cell.identifier = SidebarCell.identifier
+        cell.renameDelegate = self
         cell.configure(for: node)
         return cell
     }
@@ -513,6 +515,35 @@ extension SidebarViewController: NSOutlineViewDelegate {
             return
         }
         onSelectionChange?(node.selectionId)
+    }
+}
+
+// MARK: - Inline rename
+
+extension SidebarViewController: SidebarCellRenameDelegate {
+    func sidebarCell(_ cell: NSTableCellView, commitRenameFor playlistId: UUID, newName: String) {
+        // Resolve the current playlist from the outline tree (may have been updated since
+        // the cell was last configured).
+        guard let node = findPlaylistNode(id: playlistId, in: playlistsSection.children),
+              case .playlist(let playlist) = node.kind
+        else { return }
+        if newName.isEmpty || newName == playlist.name {
+            // Revert the field and skip the round-trip.
+            cell.textField?.stringValue = playlist.name
+            return
+        }
+        actions.renamePlaylist(playlist, newName)
+    }
+
+    func sidebarCellCancelRename(_ cell: NSTableCellView) {
+        // Revert and end editing — caller's representedPlaylistId is still valid.
+        let row = outlineView.row(for: cell)
+        guard row >= 0,
+              let node = outlineView.item(atRow: row) as? SidebarNode,
+              case .playlist(let playlist) = node.kind
+        else { return }
+        cell.textField?.stringValue = playlist.name
+        view.window?.makeFirstResponder(outlineView)
     }
 }
 
@@ -567,7 +598,12 @@ extension SidebarViewController: NSMenuDelegate {
     }
 
     @objc private func menuRename(_ sender: NSMenuItem) {
-        if let playlist = sender.representedObject as? Playlist { actions.renamePlaylist(playlist) }
+        guard let playlist = sender.representedObject as? Playlist,
+              let row = rowForSelection(.playlist(playlist.id))
+        else { return }
+        // Programmatic edit uses NSOutlineView's built-in inline editor on the outline
+        // column. Cell rendering already gave the textField isEditable = true.
+        outlineView.editColumn(0, row: row, with: nil, select: true)
     }
 
     @objc private func menuDelete(_ sender: NSMenuItem) {
@@ -581,9 +617,13 @@ private final class SidebarCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
 
     private let icon = NSImageView()
-    private let label = NSTextField(labelWithString: "")
+    private let label = NSTextField()
     private var labelLeadingToIcon: NSLayoutConstraint!
     private var labelLeadingToCell: NSLayoutConstraint!
+    /// Set when configured with a playlist node — used by the rename commit handler
+    /// to map the edited text back to the right playlist via the outline view.
+    var representedPlaylistId: UUID?
+    weak var renameDelegate: SidebarCellRenameDelegate?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -602,8 +642,16 @@ private final class SidebarCell: NSTableCellView {
         imageView = icon
 
         label.translatesAutoresizingMaskIntoConstraints = false
+        label.isBordered = false
+        label.drawsBackground = false
+        label.isBezeled = false
+        label.isEditable = false   // flipped on per-cell when editing
+        label.isSelectable = false
         label.lineBreakMode = .byTruncatingTail
         label.cell?.usesSingleLineMode = true
+        label.target = self
+        label.action = #selector(commitRename(_:))
+        label.delegate = self
         addSubview(label)
         textField = label
 
@@ -650,7 +698,32 @@ private final class SidebarCell: NSTableCellView {
             icon.isHidden = false
             labelLeadingToCell.isActive = false
             labelLeadingToIcon.isActive = true
+            representedPlaylistId = playlist.id
+            label.isEditable = true   // editable so editColumn(...) starts inline edit
         }
     }
+
+    @objc fileprivate func commitRename(_ sender: NSTextField) {
+        guard let id = representedPlaylistId else { return }
+        let trimmed = sender.stringValue.trimmingCharacters(in: .whitespaces)
+        renameDelegate?.sidebarCell(self, commitRenameFor: id, newName: trimmed)
+    }
+}
+
+extension SidebarCell: NSTextFieldDelegate {
+    /// Escape during editing reverts the text and ends the edit without committing.
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            // Revert the field back to the original name and end editing.
+            renameDelegate?.sidebarCellCancelRename(self)
+            return true
+        }
+        return false
+    }
+}
+
+protocol SidebarCellRenameDelegate: AnyObject {
+    func sidebarCell(_ cell: NSTableCellView, commitRenameFor playlistId: UUID, newName: String)
+    func sidebarCellCancelRename(_ cell: NSTableCellView)
 }
 #endif
