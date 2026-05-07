@@ -19,10 +19,25 @@ struct Sidebar: NSViewControllerRepresentable {
     }
 
     func updateNSViewController(_ nsViewController: SidebarViewController, context: Context) {
-        // Rebuild the tree from the current library state. Pulls every render — cheap
-        // (a flat fetch) and lets revision-based updates flow through.
-        let playlists = musicLibrary.playlists(in: nil).filter { !$0.isFolder }
-        nsViewController.update(rootPlaylists: playlists, externalSelection: selection)
+        // Rebuild the tree from the current library state. allPlaylists() is one fetch;
+        // we group by parentId in-memory to materialize the folder hierarchy.
+        let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists())
+        nsViewController.update(playlistNodes: nodes, externalSelection: selection)
+    }
+
+    private static func buildPlaylistTree(allPlaylists: [Playlist]) -> [SidebarNode] {
+        let byParent = Dictionary(grouping: allPlaylists, by: { $0.parentId })
+        func makeNodes(parent: UUID?) -> [SidebarNode] {
+            let kids = (byParent[parent] ?? []).sorted { a, b in
+                if a.isFolder != b.isFolder { return a.isFolder && !b.isFolder }
+                return a.name.localizedStandardCompare(b.name) == .orderedAscending
+            }
+            return kids.map { playlist in
+                let children = playlist.isFolder ? makeNodes(parent: playlist.id) : []
+                return SidebarNode(kind: .playlist(playlist), children: children)
+            }
+        }
+        return makeNodes(parent: nil)
     }
 }
 
@@ -115,15 +130,42 @@ final class SidebarViewController: NSViewController {
     /// Rebuilds the playlist branch and applies any external selection change. Tries to
     /// preserve expansion state across reloads — only the children of the playlists
     /// section change, so we reload that subtree, not the whole view.
-    func update(rootPlaylists: [Playlist], externalSelection: SidebarSelection?) {
-        let newPlaylistNodes = rootPlaylists.map { SidebarNode(kind: .playlist($0)) }
-        let changed = !nodesMatch(playlistsSection.children, newPlaylistNodes)
+    func update(playlistNodes: [SidebarNode], externalSelection: SidebarSelection?) {
+        let expandedFolderIds = capturedExpandedFolderIds()
+        let changed = !nodeTreesMatch(playlistsSection.children, playlistNodes)
         if changed {
-            playlistsSection.children = newPlaylistNodes
+            playlistsSection.children = playlistNodes
             outlineView.reloadItem(playlistsSection, reloadChildren: true)
             outlineView.expandItem(playlistsSection)
+            restoreExpansion(matching: expandedFolderIds, in: playlistsSection)
         }
         applyExternalSelection(externalSelection)
+    }
+
+    private func capturedExpandedFolderIds() -> Set<UUID> {
+        var ids: Set<UUID> = []
+        func walk(_ nodes: [SidebarNode]) {
+            for node in nodes {
+                if case .playlist(let p) = node.kind, p.isFolder, outlineView.isItemExpanded(node) {
+                    ids.insert(p.id)
+                }
+                walk(node.children)
+            }
+        }
+        walk(playlistsSection.children)
+        return ids
+    }
+
+    private func restoreExpansion(matching ids: Set<UUID>, in section: SidebarNode) {
+        func walk(_ nodes: [SidebarNode]) {
+            for node in nodes {
+                if case .playlist(let p) = node.kind, p.isFolder, ids.contains(p.id) {
+                    outlineView.expandItem(node)
+                }
+                walk(node.children)
+            }
+        }
+        walk(section.children)
     }
 
     private func buildSkeletonTree() {
@@ -135,13 +177,15 @@ final class SidebarViewController: NSViewController {
         rootNodes = [librarySection, playlistsSection]
     }
 
-    private func nodesMatch(_ a: [SidebarNode], _ b: [SidebarNode]) -> Bool {
+    private func nodeTreesMatch(_ a: [SidebarNode], _ b: [SidebarNode]) -> Bool {
         guard a.count == b.count else { return false }
         for (lhs, rhs) in zip(a, b) {
             guard lhs.selectionId == rhs.selectionId else { return false }
             if case .playlist(let lp) = lhs.kind, case .playlist(let rp) = rhs.kind {
                 if lp.name != rp.name { return false }
+                if lp.isFolder != rp.isFolder { return false }
             }
+            if !nodeTreesMatch(lhs.children, rhs.children) { return false }
         }
         return true
     }
@@ -288,10 +332,11 @@ private final class SidebarCell: NSTableCellView {
             icon.image = NSImage(systemSymbolName: cat.iconName, accessibilityDescription: cat.title)
             icon.isHidden = false
         case .playlist(let playlist):
+            let symbol = playlist.isFolder ? "folder" : "music.note.list"
             label.stringValue = playlist.name
             label.font = .systemFont(ofSize: NSFont.systemFontSize)
             label.textColor = .labelColor
-            icon.image = NSImage(systemSymbolName: "music.note.list", accessibilityDescription: playlist.name)
+            icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: playlist.name)
             icon.isHidden = false
         }
     }
