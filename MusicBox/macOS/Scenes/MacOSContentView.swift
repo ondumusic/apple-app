@@ -50,12 +50,8 @@ private struct DetailPlaceholder: View {
             AlbumsViewMac()
         case .category(.artists):
             ArtistsViewMac()
-        case .category(let cat):
-            ContentUnavailableView {
-                Label(cat.title, systemImage: cat.iconName)
-            } description: {
-                Text("Detail view for \(cat.title) lands in the tracks/detail step.")
-            }
+        case .category(.downloads):
+            DownloadsView()
         case .playlist(let id):
             PlaylistDetailMac(playlistId: id)
                 .id(id)
