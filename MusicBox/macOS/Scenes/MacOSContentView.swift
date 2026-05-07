@@ -30,6 +30,8 @@ private struct DetailPlaceholder: View {
 
     var body: some View {
         switch selection {
+        case .category(.songs):
+            SongsViewMac()
         case .category(let cat):
             ContentUnavailableView {
                 Label(cat.title, systemImage: cat.iconName)
