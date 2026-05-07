@@ -45,7 +45,7 @@ final class TracksTableViewController: NSViewController {
     var actions: TrackActions = TrackActions()
 
     private let scrollView = NSScrollView()
-    private let tableView = NSTableView()
+    private let tableView = KeyAwareTableView()
     private(set) var tracks: [Track] = []
 
     private let numberColumn = NSTableColumn(identifier: .init("number"))
@@ -69,6 +69,7 @@ final class TracksTableViewController: NSViewController {
         tableView.doubleAction = #selector(handleDoubleClick)
         tableView.dataSource = self
         tableView.delegate = self
+        tableView.onEnter = { [weak self] in self?.handleEnter() }
 
         configureColumn(numberColumn,   title: "#",        width: 36,  alignment: .right,  resizable: false)
         configureColumn(titleColumn,    title: "Title",    width: 280, alignment: .left,   resizable: true)
@@ -155,6 +156,29 @@ final class TracksTableViewController: NSViewController {
         let row = tableView.clickedRow
         guard row >= 0, row < tracks.count else { return }
         onPlay?(row)
+    }
+
+    private func handleEnter() {
+        // Enter on a single selection plays that row; on multi-selection, plays the
+        // earliest selected row (same semantic as iTunes / Apple Music).
+        guard let firstSelected = tableView.selectedRowIndexes.min(),
+              tracks.indices.contains(firstSelected) else { return }
+        onPlay?(firstSelected)
+    }
+}
+
+// MARK: - Key-aware table
+
+private final class KeyAwareTableView: NSTableView {
+    var onEnter: (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        // 36 = Return, 76 = numpad Enter.
+        if event.keyCode == 36 || event.keyCode == 76 {
+            onEnter?()
+            return
+        }
+        super.keyDown(with: event)
     }
 }
 

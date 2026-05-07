@@ -98,6 +98,9 @@ struct MacOSContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleMiniPlayer)) { _ in
             toggleMiniPlayer()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .togglePlayPause)) { _ in
+            player.togglePlayPause()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
             guard let album = notification.object as? Album else { return }
             detailPath.append(album)

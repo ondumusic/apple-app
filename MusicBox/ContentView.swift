@@ -9,6 +9,7 @@ extension Notification.Name {
     static let requestAddToPlaylist = Notification.Name("MusicBox.requestAddToPlaylist")
     static let focusSearch = Notification.Name("MusicBox.focusSearch")
     static let toggleMiniPlayer = Notification.Name("MusicBox.toggleMiniPlayer")
+    static let togglePlayPause = Notification.Name("MusicBox.togglePlayPause")
 }
 
 struct ContentView: View {

@@ -165,6 +165,12 @@ struct MusicBoxApp: App {
                 }
                 .keyboardShortcut("m", modifiers: .command)
             }
+            CommandMenu("Controls") {
+                Button("Play / Pause") {
+                    NotificationCenter.default.post(name: .togglePlayPause, object: nil)
+                }
+                .keyboardShortcut(.space, modifiers: [])
+            }
         }
         #endif
 
