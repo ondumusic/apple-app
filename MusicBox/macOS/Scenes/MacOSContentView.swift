@@ -9,18 +9,29 @@ struct MacOSContentView: View {
 
     @State private var showQueue = false
     @State private var sidebarSelection: SidebarSelection? = .category(.artists)
+    @State private var detailPath = NavigationPath()
 
     var body: some View {
         NavigationSplitView {
             Sidebar(selection: $sidebarSelection, musicLibrary: musicLibrary)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
-            DetailPlaceholder(selection: sidebarSelection)
+            NavigationStack(path: $detailPath) {
+                DetailPlaceholder(selection: sidebarSelection)
+                    .navigationDestination(for: Album.self) { album in
+                        AlbumDetailMac(album: album)
+                    }
+            }
         }
         .frame(minWidth: 900, minHeight: 600)
         .toolbar { PlayerToolbar(showQueue: $showQueue) }
         .sheet(isPresented: $showQueue) {
             QueueSheetPlaceholder(isPresented: $showQueue)
+        }
+        .onChange(of: sidebarSelection) {
+            // Switching sidebar items resets the drill-in stack so we don't show stale
+            // album/artist detail under a new section.
+            detailPath = NavigationPath()
         }
     }
 }
@@ -32,6 +43,8 @@ private struct DetailPlaceholder: View {
         switch selection {
         case .category(.songs):
             SongsViewMac()
+        case .category(.albums):
+            AlbumsViewMac()
         case .category(let cat):
             ContentUnavailableView {
                 Label(cat.title, systemImage: cat.iconName)
