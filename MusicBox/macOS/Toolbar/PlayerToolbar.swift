@@ -9,10 +9,10 @@ struct PlayerToolbar: ToolbarContent {
     @Binding var showQueue: Bool
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
+        // Group transport + now-playing as adjacent items so the buttons sit right next
+        // to the track label rather than getting pushed to opposite ends of the toolbar.
+        ToolbarItemGroup(placement: .principal) {
             TransportButtons()
-        }
-        ToolbarItem(placement: .principal) {
             NowPlayingLabel()
                 .frame(minWidth: 220, idealWidth: 320)
         }
