@@ -265,15 +265,17 @@ final class SidebarViewController: NSViewController {
         guard let row = rowForSelection(.playlist(playlistId)) else { return }
         outlineView.scrollRowToVisible(row)
         outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        // Force the cell to be materialized so we can grab its text field directly —
-        // editColumn was silently no-op'ing in this codepath, possibly because the
-        // selection-change re-enters updateNSViewController. Direct first-responder
-        // assignment is more deterministic.
-        DispatchQueue.main.async { [weak self] in
+        // Wait long enough for: the menu (if any) to fully close, the selection-change
+        // re-entrance into updateNSViewController to settle, and the cell view to be
+        // attached to a window. selectText fails silently if any of those aren't ready.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             guard let self,
+                  let window = self.view.window,
                   let row = self.rowForSelection(.playlist(playlistId)),
                   let cell = self.outlineView.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCell
             else { return }
+            // Ensure our window is key — the menu just closing may have demoted us.
+            if !window.isKeyWindow { window.makeKey() }
             cell.beginInlineRename()
         }
     }
@@ -868,16 +870,19 @@ private final class SidebarCell: NSTableCellView {
         renameDelegate?.sidebarCell(self, commitRenameFor: id, newName: trimmed)
     }
 
-    /// Direct entry into editing — bypasses NSOutlineView.editColumn, which silently
-    /// no-ops in some call paths (typically when the selection-change is mid-flight).
+    /// Direct entry into editing. selectText(_:) is NSTextField's canonical
+    /// "begin editing" call — internally makes the field first responder, sets up the
+    /// field editor, and selects all text. More reliable than makeFirstResponder +
+    /// manual selectAll, which can leave the field editor in an indeterminate state
+    /// when invoked right after a tree reload.
     func beginInlineRename() {
         label.isEditable = true
         label.isSelectable = true
-        guard let window = self.window else { return }
-        window.makeFirstResponder(label)
-        if let editor = label.currentEditor() as? NSTextView {
-            editor.selectAll(nil)
-        }
+        // Bezel the field while editing — unbezeled labels sometimes refuse the field
+        // editor on macOS. Reset on commit/cancel via configure() running again.
+        label.isBordered = false
+        label.drawsBackground = false
+        label.selectText(nil)
     }
 }
 
