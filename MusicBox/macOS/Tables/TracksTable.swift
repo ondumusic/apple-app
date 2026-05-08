@@ -2,6 +2,23 @@
 import AppKit
 import SwiftUI
 
+/// One album section for sections-mode rendering. The album header is drawn as a
+/// non-selectable group row above the section's tracks. `tracks` should be a slice
+/// of the flat `tracks` array passed to TracksTable, in the same order — selection
+/// indexes refer to that flat array.
+nonisolated struct TracksTableSection: Identifiable, Equatable {
+    let id: UUID  // album id; used as a stable identity when the data updates
+    let album: Album
+    let tracks: [Track]
+
+    static func == (lhs: TracksTableSection, rhs: TracksTableSection) -> Bool {
+        if lhs.id != rhs.id { return false }
+        if lhs.tracks.count != rhs.tracks.count { return false }
+        for (a, b) in zip(lhs.tracks, rhs.tracks) where a.id != b.id { return false }
+        return true
+    }
+}
+
 /// SwiftUI bridge for the AppKit tracks table. Used inside album detail, playlist detail,
 /// search results, and the songs category view. Native multi-select (cmd/shift-click),
 /// double-click to play, type-ahead — all the things SwiftUI's List can't quite get right
@@ -40,6 +57,17 @@ struct TracksTable: NSViewControllerRepresentable {
     /// selection that merges across adjacent selected rows. Use when the table sits
     /// inline inside a parent ScrollView.
     var embeddedStyle: Bool = false
+    /// When non-nil, the table renders one group-row album header per section followed
+    /// by that album's tracks. `tracks` should be the flat concatenation of every
+    /// section's tracks in the same order — selection indexes and onPlay indexes refer
+    /// to that flat array. Selection works natively across all albums (cmd-click /
+    /// shift-range), since it's a single NSTableView.
+    var sections: [TracksTableSection]? = nil
+    /// Caller-supplied SwiftUI view used to render an album header row. The view is
+    /// hosted via NSHostingView. Only consulted when `sections` is set.
+    var sectionHeader: ((Album) -> AnyView)? = nil
+    /// Pixel height of section header rows. Tall enough to fit artwork + title + actions.
+    var sectionHeaderHeight: CGFloat = 80
 
     func makeNSViewController(context: Context) -> TracksTableViewController {
         let vc = TracksTableViewController()
@@ -61,8 +89,11 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.applyEmbeddedStyle(embeddedStyle)
         vc.applyHeaderVisibility(hidden: hidesColumnHeaders)
         vc.applyRowHeight(rowHeight)
+        vc.sectionHeaderHeight = sectionHeaderHeight
+        vc.sectionHeaderBuilder = sectionHeader
         vc.update(
             tracks: tracks,
+            sections: sections,
             externalSelection: selection,
             showArtist: showArtist,
             showAlbum: showAlbum,
@@ -91,6 +122,20 @@ final class TracksTableViewController: NSViewController {
     /// Tracks whether the host asked for artist info in embedded mode. The cell uses
     /// this to decide whether to render an artist subline under the title.
     private var embeddedShowsArtist: Bool = false
+
+    /// What's rendered at each NSTableView row. `.header` is a non-selectable group row
+    /// that hosts a SwiftUI album header; `.track(flatIndex)` references the position in
+    /// the flat `tracks` array (the source of truth for selection / onPlay indices).
+    fileprivate enum DisplayRow {
+        case header(Album)
+        case track(flatIndex: Int)
+    }
+    fileprivate private(set) var displayRows: [DisplayRow] = []
+    /// Reverse lookup: flat track index → row in displayRows. Built alongside displayRows.
+    private var rowForTrackIndex: [Int: Int] = [:]
+    private var sections: [TracksTableSection]? = nil
+    var sectionHeaderBuilder: ((Album) -> AnyView)?
+    var sectionHeaderHeight: CGFloat = 80
 
     private let numberColumn = NSTableColumn(identifier: .init("number"))
     private let titleColumn  = NSTableColumn(identifier: .init("title"))
@@ -184,10 +229,13 @@ final class TracksTableViewController: NSViewController {
         // area symmetrically: ~16pt on the leading side, and the same again on the
         // trailing side reserved for the rounded selection pill. Cells must fit inside
         // [inset, frame.width - inset] or they get clipped when a row is selected.
-        // We measure the left inset from the first cell's frame and double it.
-        let detectedInset: CGFloat = tableView.numberOfRows > 0
-            ? tableView.frameOfCell(atColumn: 0, row: 0).minX
-            : 16
+        // Measure from a track row — header rows span all columns and would report 0.
+        let detectedInset: CGFloat = {
+            for row in 0..<tableView.numberOfRows where flatTrackIndex(forRow: row) != nil {
+                return tableView.frameOfCell(atColumn: 0, row: row).minX
+            }
+            return 16
+        }()
         let titleWidth = max(120, target - 36 - 70 - 2 * detectedInset)
         if abs(titleColumn.width - titleWidth) > 0.5 {
             titleColumn.width = titleWidth
@@ -280,6 +328,9 @@ final class TracksTableViewController: NSViewController {
                 tableView.removeTableColumn(albumColumn)
             }
             tableView.columnAutoresizingStyle = .noColumnAutoresizing
+            // Don't pin album-header group rows to the top during scroll — Apple Music's
+            // artist page lets them scroll away naturally.
+            tableView.floatsGroupRows = false
             scrollView.drawsBackground = false
             scrollView.backgroundColor = .clear
             scrollView.hasVerticalScroller = false
@@ -304,6 +355,7 @@ final class TracksTableViewController: NSViewController {
 
     func update(
         tracks newTracks: [Track],
+        sections newSections: [TracksTableSection]?,
         externalSelection: Set<UUID>,
         showArtist: Bool,
         showAlbum: Bool,
@@ -318,23 +370,29 @@ final class TracksTableViewController: NSViewController {
         artistColumn.isHidden = isEmbedded || !showArtist
         albumColumn.isHidden = !showAlbum
 
-        let changed = !tracksMatch(self.tracks, newTracks)
+        let changed = !tracksMatch(self.tracks, newTracks) || !sectionsMatch(self.sections, newSections)
         let previousCurrent = self.currentlyPlayingTrackId
         let previousPlaying = self.isPlaying
         self.tracks = newTracks
+        self.sections = newSections
         self.currentlyPlayingTrackId = newCurrent
         self.isPlaying = newIsPlaying
 
         if changed {
+            rebuildDisplayRows()
             tableView.reloadData()
         } else if previousCurrent != newCurrent || previousPlaying != newIsPlaying {
             // Only the play indicator needs refreshing — reload just the affected rows
             // so we don't kill in-flight clicks.
             var rows = IndexSet()
-            if let prev = previousCurrent, let row = tracks.firstIndex(where: { $0.id == prev }) {
+            if let prev = previousCurrent,
+               let trackIdx = tracks.firstIndex(where: { $0.id == prev }),
+               let row = rowForTrackIndex[trackIdx] {
                 rows.insert(row)
             }
-            if let cur = newCurrent, let row = tracks.firstIndex(where: { $0.id == cur }) {
+            if let cur = newCurrent,
+               let trackIdx = tracks.firstIndex(where: { $0.id == cur }),
+               let row = rowForTrackIndex[trackIdx] {
                 rows.insert(row)
             }
             if !rows.isEmpty {
@@ -342,6 +400,32 @@ final class TracksTableViewController: NSViewController {
             }
         }
         applyExternalSelection(externalSelection)
+    }
+
+    private func rebuildDisplayRows() {
+        var rows: [DisplayRow] = []
+        var rowForTrack: [Int: Int] = [:]
+        if let sections = self.sections {
+            // Use sections to interleave headers with their tracks. Track flat-index is
+            // walked across sections in order; sections must reflect the same flat order
+            // as `self.tracks`.
+            var flatIdx = 0
+            for section in sections {
+                rows.append(.header(section.album))
+                for _ in section.tracks {
+                    rowForTrack[flatIdx] = rows.count
+                    rows.append(.track(flatIndex: flatIdx))
+                    flatIdx += 1
+                }
+            }
+        } else {
+            for (idx, _) in tracks.enumerated() {
+                rowForTrack[idx] = idx
+                rows.append(.track(flatIndex: idx))
+            }
+        }
+        self.displayRows = rows
+        self.rowForTrackIndex = rowForTrack
     }
 
     private func tracksMatch(_ a: [Track], _ b: [Track]) -> Bool {
@@ -355,6 +439,23 @@ final class TracksTableViewController: NSViewController {
         return true
     }
 
+    private func sectionsMatch(_ a: [TracksTableSection]?, _ b: [TracksTableSection]?) -> Bool {
+        switch (a, b) {
+        case (nil, nil): return true
+        case (let lhs?, let rhs?):
+            guard lhs.count == rhs.count else { return false }
+            return zip(lhs, rhs).allSatisfy { $0 == $1 }
+        default: return false
+        }
+    }
+
+    /// Maps a tableView row to its flat track index, or nil if the row is a section header.
+    fileprivate func flatTrackIndex(forRow row: Int) -> Int? {
+        guard displayRows.indices.contains(row) else { return nil }
+        if case .track(let idx) = displayRows[row] { return idx }
+        return nil
+    }
+
     private func applyExternalSelection(_ ids: Set<UUID>) {
         if ids.isEmpty {
             if !tableView.selectedRowIndexes.isEmpty {
@@ -364,7 +465,10 @@ final class TracksTableViewController: NSViewController {
             }
             return
         }
-        let indices = IndexSet(tracks.enumerated().compactMap { ids.contains($1.id) ? $0 : nil })
+        let indices = IndexSet(tracks.enumerated().compactMap { (idx, track) -> Int? in
+            guard ids.contains(track.id), let row = rowForTrackIndex[idx] else { return nil }
+            return row
+        })
         if indices == tableView.selectedRowIndexes { return }
         suppressSelectionCallback = true
         tableView.selectRowIndexes(indices, byExtendingSelection: false)
@@ -373,8 +477,8 @@ final class TracksTableViewController: NSViewController {
 
     @objc private func handleDoubleClick() {
         let row = tableView.clickedRow
-        guard row >= 0, row < tracks.count else { return }
-        let track = tracks[row]
+        guard let trackIdx = flatTrackIndex(forRow: row) else { return }
+        let track = tracks[trackIdx]
 
         // iTunes-style: double-click on the Artist column navigates to the artist;
         // Album column navigates to the album. Anywhere else plays the track.
@@ -390,15 +494,18 @@ final class TracksTableViewController: NSViewController {
             default: break
             }
         }
-        onPlay?(row)
+        onPlay?(trackIdx)
     }
 
     private func handleEnter() {
         // Enter on a single selection plays that row; on multi-selection, plays the
         // earliest selected row (same semantic as iTunes / Apple Music).
-        guard let firstSelected = tableView.selectedRowIndexes.min(),
-              tracks.indices.contains(firstSelected) else { return }
-        onPlay?(firstSelected)
+        for row in tableView.selectedRowIndexes {
+            if let idx = flatTrackIndex(forRow: row) {
+                onPlay?(idx)
+                return
+            }
+        }
     }
 }
 
@@ -427,19 +534,22 @@ private final class KeyAwareTableView: NSTableView {
 
 extension TracksTableViewController: NSTableViewDataSource {
     func numberOfRows(in tableView: NSTableView) -> Int {
-        tracks.count
+        displayRows.count
     }
 
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
-        guard tracks.indices.contains(row) else { return nil }
+        // Only track rows are draggable; section headers are not.
+        guard let trackIdx = flatTrackIndex(forRow: row) else { return nil }
         let item = NSPasteboardItem()
-        item.setString(tracks[row].id.uuidString, forType: .musicBoxTracks)
+        item.setString(tracks[trackIdx].id.uuidString, forType: .musicBoxTracks)
         return item
     }
 
     func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
-        // Only handle internal reorder drags. Drops onto specific rows aren't supported here.
+        // Reorder is disabled in sections mode — meaning would be ambiguous when dropping
+        // between or onto section headers.
         guard onReorder != nil,
+              sections == nil,
               dropOperation == .above,
               info.draggingSource as? NSTableView === self.tableView
         else { return [] }
@@ -448,6 +558,7 @@ extension TracksTableViewController: NSTableViewDataSource {
 
     func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation dropOperation: NSTableView.DropOperation) -> Bool {
         guard let onReorder,
+              sections == nil,
               dropOperation == .above,
               info.draggingSource as? NSTableView === self.tableView
         else { return false }
@@ -461,6 +572,23 @@ extension TracksTableViewController: NSTableViewDataSource {
 // MARK: - Delegate
 
 extension TracksTableViewController: NSTableViewDelegate {
+    func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
+        guard displayRows.indices.contains(row) else { return false }
+        if case .header = displayRows[row] { return true }
+        return false
+    }
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        // Section headers aren't selectable — only tracks.
+        flatTrackIndex(forRow: row) != nil
+    }
+
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        guard displayRows.indices.contains(row) else { return tableView.rowHeight }
+        if case .header = displayRows[row] { return sectionHeaderHeight }
+        return tableView.rowHeight
+    }
+
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         // In embedded mode, NSTableRowView's default drawBackground paints a backdrop
         // even when tableView.backgroundColor is .clear — that's the residual grey we
@@ -468,13 +596,35 @@ extension TracksTableViewController: NSTableViewDelegate {
         // also paints the inter-row hairline divider.
         guard isEmbedded else { return nil }
         let view = EmbeddedRowView()
-        view.isLastRow = (row == tracks.count - 1)
+        let isHeader = isHeaderRow(row)
+        let nextIsHeader = isHeaderRow(row + 1)
+        // Suppress dividers around section headers and after the last row of the table.
+        view.suppressDivider = isHeader || nextIsHeader || row == displayRows.count - 1
         return view
     }
 
+    private func isHeaderRow(_ row: Int) -> Bool {
+        guard displayRows.indices.contains(row) else { return false }
+        if case .header = displayRows[row] { return true }
+        return false
+    }
+
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard let column = tableColumn, row < tracks.count else { return nil }
-        let track = tracks[row]
+        guard displayRows.indices.contains(row) else { return nil }
+        // Section header: NSTableView calls viewFor with tableColumn=nil for group
+        // rows (when isGroupRow returns true). Return our hosting cell which spans the
+        // full row width.
+        if case .header(let album) = displayRows[row] {
+            let cellId = NSUserInterfaceItemIdentifier("trackSectionHeader")
+            let cell = tableView.makeView(withIdentifier: cellId, owner: nil) as? SectionHeaderCell
+                ?? SectionHeaderCell(identifier: cellId)
+            if let builder = sectionHeaderBuilder {
+                cell.host(view: builder(album))
+            }
+            return cell
+        }
+        guard let column = tableColumn, let trackIdx = flatTrackIndex(forRow: row) else { return nil }
+        let track = tracks[trackIdx]
         let isCurrent = currentlyPlayingTrackId == track.id
 
         switch column.identifier.rawValue {
@@ -486,7 +636,7 @@ extension TracksTableViewController: NSTableViewDelegate {
             } else {
                 let display: String
                 if usesPlaylistPosition {
-                    display = String(row + 1)
+                    display = String(trackIdx + 1)
                 } else {
                     display = track.number.map(String.init) ?? "–"
                 }
@@ -537,8 +687,9 @@ extension TracksTableViewController: NSTableViewDelegate {
 
     func tableViewSelectionDidChange(_ notification: Notification) {
         if suppressSelectionCallback { return }
-        let ids = Set(tableView.selectedRowIndexes.compactMap { idx in
-            tracks.indices.contains(idx) ? tracks[idx].id : nil
+        let ids = Set(tableView.selectedRowIndexes.compactMap { row -> UUID? in
+            guard let trackIdx = flatTrackIndex(forRow: row) else { return nil }
+            return tracks[trackIdx].id
         })
         onSelectionChange?(ids)
     }
@@ -580,20 +731,23 @@ extension TracksTableViewController: NSMenuDelegate {
 
     /// If the right-clicked row is in the current selection, the action applies to the
     /// whole selection. Otherwise it applies to just the clicked row (and the click also
-    /// selects that row to make the intent visible).
+    /// selects that row to make the intent visible). Section header rows return [].
     private func tracksForContextAction() -> [Track] {
         let clicked = tableView.clickedRow
-        guard clicked >= 0, clicked < tracks.count else { return [] }
+        guard let clickedTrackIdx = flatTrackIndex(forRow: clicked) else { return [] }
         if tableView.selectedRowIndexes.contains(clicked) {
-            return tableView.selectedRowIndexes.compactMap { tracks.indices.contains($0) ? tracks[$0] : nil }
+            return tableView.selectedRowIndexes.compactMap { row in
+                guard let idx = flatTrackIndex(forRow: row) else { return nil }
+                return tracks[idx]
+            }
         }
         // Clicked an unselected row → just that row, and adopt it as selection so subsequent
         // actions (Play All etc. in the toolbar) target what the user expects.
         suppressSelectionCallback = true
         tableView.selectRowIndexes(IndexSet(integer: clicked), byExtendingSelection: false)
         suppressSelectionCallback = false
-        onSelectionChange?(Set([tracks[clicked].id]))
-        return [tracks[clicked]]
+        onSelectionChange?(Set([tracks[clickedTrackIdx].id]))
+        return [tracks[clickedTrackIdx]]
     }
 
     @objc private func menuPlay() { actions.play(tracksForContextAction()) }
@@ -628,16 +782,17 @@ extension TracksTableViewController: NSMenuDelegate {
 /// alone doesn't suppress the row-level backdrop the system paints under each row — this
 /// override is what actually makes the parent's color show through.
 private final class EmbeddedRowView: NSTableRowView {
-    /// Set by the delegate so we can suppress the bottom hairline on the final row
-    /// — NSTableRowView itself doesn't know its position in the table.
-    var isLastRow: Bool = false
+    /// Set by the delegate to skip the bottom hairline. Used for the final row,
+    /// section-header rows, and rows immediately above section headers — wherever the
+    /// divider would clash with the table's grouping or the row below.
+    var suppressDivider: Bool = false
 
     override func drawBackground(in dirtyRect: NSRect) {
-        // Subtle hairline divider at the bottom. Skipped on the last row, on selected
+        // Subtle hairline divider at the bottom. Skipped on suppressed rows, on selected
         // rows, and when the row below is selected (so the rounded selection pill never
         // has a line slicing through it). Drawn here because NSTableView with zero
         // intercellSpacing doesn't call drawSeparator.
-        guard !isLastRow, !isSelected, !isNextRowSelected else { return }
+        guard !suppressDivider, !isSelected, !isNextRowSelected else { return }
         let line = NSRect(x: bounds.minX + 8,
                           y: bounds.maxY - 0.5,
                           width: bounds.width - 16,
@@ -647,6 +802,37 @@ private final class EmbeddedRowView: NSTableRowView {
     }
 
     override func drawSeparator(in dirtyRect: NSRect) {}
+}
+
+/// Group-row cell that hosts a SwiftUI view (album header). Used in sections mode so
+/// the caller can render the album title, artwork, action buttons via a familiar
+/// SwiftUI subview while the table itself stays AppKit.
+private final class SectionHeaderCell: NSTableCellView {
+    private var hostingView: NSHostingView<AnyView>?
+
+    init(identifier: NSUserInterfaceItemIdentifier) {
+        super.init(frame: .zero)
+        self.identifier = identifier
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func host(view: AnyView) {
+        if let h = hostingView {
+            h.rootView = view
+            return
+        }
+        let h = NSHostingView(rootView: view)
+        h.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(h)
+        NSLayoutConstraint.activate([
+            h.leadingAnchor.constraint(equalTo: leadingAnchor),
+            h.trailingAnchor.constraint(equalTo: trailingAnchor),
+            h.topAnchor.constraint(equalTo: topAnchor),
+            h.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        hostingView = h
+    }
 }
 
 // MARK: - Cell
