@@ -223,7 +223,7 @@ final class SidebarViewController: NSViewController {
     }
 
     @objc private func handleFocusSearch() {
-        view.window?.makeFirstResponder(searchField)
+//        view.window?.makeFirstResponder(searchField)
     }
 
     private func deleteSelectedPlaylist() {
@@ -239,8 +239,12 @@ final class SidebarViewController: NSViewController {
         guard let id = notification.object as? UUID else { return }
         // Try immediately; if the new row isn't in the outline view yet (tree rebuild
         // hasn't reached us via SwiftUI's update cycle), stash and retry from update().
+        // Either way, dispatch the actual editColumn call to a fresh runloop tick so
+        // we're not editing inside reloadItem's call stack.
         if rowForSelection(.playlist(id)) != nil {
-            startInlineRename(playlistId: id)
+            DispatchQueue.main.async { [weak self] in
+                self?.startInlineRename(playlistId: id)
+            }
         } else {
             pendingInlineRenameId = id
         }
@@ -251,7 +255,15 @@ final class SidebarViewController: NSViewController {
         outlineView.scrollRowToVisible(row)
         outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         view.window?.makeFirstResponder(outlineView)
-        outlineView.editColumn(0, row: row, with: nil, select: true)
+        // Defer one more runloop so the selection change finishes propagating (the
+        // selection-changed callback re-enters updateNSViewController which would
+        // otherwise rebuild around us mid-edit).
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  let row = self.rowForSelection(.playlist(playlistId))
+            else { return }
+            self.outlineView.editColumn(0, row: row, with: nil, select: true)
+        }
     }
 
     @objc private func showAddMenu(_ sender: NSButton) {
@@ -304,10 +316,13 @@ final class SidebarViewController: NSViewController {
         }
         applyExternalSelection(externalSelection)
         // The new playlist/folder might have just appeared in the rebuilt tree —
-        // trigger the deferred inline rename now that the row exists.
+        // trigger the deferred inline rename. Dispatch async so editColumn runs after
+        // the current update settles; calling it inside reloadItem silently no-ops.
         if let id = pendingInlineRenameId, rowForSelection(.playlist(id)) != nil {
             pendingInlineRenameId = nil
-            startInlineRename(playlistId: id)
+            DispatchQueue.main.async { [weak self] in
+                self?.startInlineRename(playlistId: id)
+            }
         }
     }
 
