@@ -107,7 +107,7 @@ private struct MiniPlayerContent: View {
 
     @ViewBuilder
     private var overlay: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             if hovering || track == nil {
                 transportRow
                     .transition(.opacity)
@@ -115,7 +115,7 @@ private struct MiniPlayerContent: View {
 
             // Track info strip — always visible, sits at the bottom over a translucent
             // gradient so it stays readable on any artwork.
-            VStack(spacing: 1) {
+            VStack(spacing: 2) {
                 Text(track?.name ?? "Not Playing")
                     .font(.headline)
                     .foregroundStyle(.white)
@@ -126,8 +126,12 @@ private struct MiniPlayerContent: View {
                         .foregroundStyle(.white.opacity(0.85))
                         .lineLimit(1)
                 }
+                if track != nil, hovering {
+                    MiniScrubber()
+                        .transition(.opacity)
+                }
             }
-            .padding(.bottom, 12)
+            .padding(.bottom, 10)
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity)
         }
@@ -166,6 +170,49 @@ private struct MiniPlayerContent: View {
             .disabled(track == nil || !player.canSkip)
         }
         .padding(.top, 12)
+    }
+}
+
+private struct MiniScrubber: View {
+    @Environment(PlayerService.self) private var player
+    @State private var scrubValue: Double = 0
+    @State private var isScrubbing = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(format(isScrubbing ? scrubValue : player.progress))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 36, alignment: .trailing)
+            Slider(
+                value: Binding(
+                    get: { isScrubbing ? scrubValue : player.progress },
+                    set: { newValue in
+                        scrubValue = newValue
+                        isScrubbing = true
+                    }
+                ),
+                in: 0...max(player.duration, 1),
+                onEditingChanged: { editing in
+                    if !editing {
+                        player.seek(to: scrubValue)
+                        isScrubbing = false
+                    }
+                }
+            )
+            .controlSize(.mini)
+            .tint(.white)
+            Text(format(player.duration))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 36, alignment: .leading)
+        }
+    }
+
+    private func format(_ time: Double) -> String {
+        guard time.isFinite, time >= 0 else { return "0:00" }
+        let total = Int(time.rounded())
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }
 #endif
