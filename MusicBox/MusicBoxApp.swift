@@ -22,21 +22,35 @@ class BackgroundSessionDelegate: NSObject, UIApplicationDelegate {
 
 #if os(macOS)
 final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
+    /// Strong refs so the KVO observers stay alive for the window's lifetime.
+    private var titleObservers: [NSKeyValueObservation] = []
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide the navigationTitle that SwiftUI parks in the title bar — we don't want
-        // the current view's name shown there. Title bar stays present as the toolbar
-        // container; just the text is hidden.
+        // the current view's name shown there. KVO-clamps title to "" so it stays hidden
+        // even when toolbar reconfigures (sidebar toggle, navigation push, etc.) re-set
+        // the window title under the hood.
         for window in NSApp.windows {
-            window.titleVisibility = .hidden
+            attachTitleClamp(to: window)
         }
-        // New windows opened later (login, etc.) get the same treatment.
         NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeMainNotification,
             object: nil,
             queue: .main
-        ) { note in
-            (note.object as? NSWindow)?.titleVisibility = .hidden
+        ) { [weak self] note in
+            guard let window = note.object as? NSWindow else { return }
+            self?.attachTitleClamp(to: window)
         }
+    }
+
+    private func attachTitleClamp(to window: NSWindow) {
+        if !window.title.isEmpty { window.title = "" }
+        window.titleVisibility = .hidden
+        let observation = window.observe(\.title, options: [.new]) { window, _ in
+            if !window.title.isEmpty { window.title = "" }
+            window.titleVisibility = .hidden
+        }
+        titleObservers.append(observation)
     }
 }
 #endif

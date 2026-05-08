@@ -17,9 +17,10 @@ struct MacOSContentView: View {
     @State private var addToPlaylistTrackIds: [UUID] = []
     @State private var searchText: String = ""
     @State private var miniPlayer: MiniPlayerWindowController?
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $sidebarVisibility) {
             Sidebar(
                 selection: $sidebarSelection,
                 searchText: $searchText,
@@ -86,6 +87,13 @@ struct MacOSContentView: View {
             // Switching sidebar items resets the drill-in stack so we don't show stale
             // album/artist detail under a new section.
             detailPath = NavigationPath()
+        }
+        .onChange(of: sidebarVisibility) { _, newValue in
+            // We don't allow the sidebar to be hidden — clamp back to .all if anything
+            // (toolbar button, View menu, keyboard shortcut) tries to collapse it.
+            if newValue != .all {
+                sidebarVisibility = .all
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleMiniPlayer)) { _ in
             toggleMiniPlayer()
