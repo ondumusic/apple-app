@@ -258,12 +258,17 @@ struct DownloadsView: View {
             }
         }
         .navigationTitle("Downloads")
+        // On macOS, MacOSContentView's NavigationStack already registers Artist/Album
+        // destinations — registering them again here causes a duplicate-destination
+        // collision that hangs the navigation push.
+        #if os(iOS)
         .navigationDestination(for: Artist.self) { artist in
             ArtistDetailView(artist: artist, downloadedOnly: true)
         }
         .navigationDestination(for: Album.self) { album in
             AlbumDetailView(album: album, downloadedOnly: true)
         }
+        #endif
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Menu {

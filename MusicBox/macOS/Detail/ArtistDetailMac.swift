@@ -27,7 +27,10 @@ struct ArtistDetailMac: View {
             }
             .padding(20)
         }
-        .background(.background)
+        // Use the content/text backdrop (white in light, ~near-black in dark) instead
+        // of `.background` (which resolves to windowBackgroundColor — that's the grey
+        // tint we don't want under the embedded track tables).
+        .background(Color(NSColor.textBackgroundColor))
         .defaultScrollAnchor(.top)
         .navigationTitle(artist.name)
         .onChange(of: musicLibrary.revision, initial: true) { reload() }

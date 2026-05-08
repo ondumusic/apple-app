@@ -167,6 +167,35 @@ final class TracksTableViewController: NSViewController {
         column.headerCell.alignment = alignment
     }
 
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        guard isEmbedded else { return }
+        // .sourceList highlight inserts NSVisualEffectViews into the row hierarchy for
+        // the rounded selection backdrop. We want the rounded pill but not the blur —
+        // hide the effect views so the parent's solid background shows through.
+        suppressEmbeddedVibrancy(in: scrollView)
+        // Pin the tableView's width to the scrollView's clipView width. NSScrollView
+        // by default sizes the documentView to the sum of column widths, which makes
+        // the table overflow when the parent is narrower than that. Forcing the width
+        // lets columnAutoresizingStyle redistribute across the resizable columns.
+        let target = scrollView.contentView.bounds.width
+        guard target > 0 else { return }
+        // Force documentView width = clipView width. With uniformColumnAutoresizingStyle
+        // and locked min/max widths on the fixed columns, only the title column flexes.
+        if abs(tableView.frame.width - target) > 0.5 {
+            tableView.setFrameSize(NSSize(width: target, height: tableView.frame.height))
+        }
+    }
+
+    private func suppressEmbeddedVibrancy(in view: NSView) {
+        for sub in view.subviews {
+            if let ve = sub as? NSVisualEffectView, ve.alphaValue != 0 {
+                ve.alphaValue = 0
+            }
+            suppressEmbeddedVibrancy(in: sub)
+        }
+    }
+
     func applyHeaderVisibility(hidden: Bool) {
         _ = view  // force loadView so we override its defaults, not the other way around
         if hidden {
@@ -176,8 +205,15 @@ final class TracksTableViewController: NSViewController {
 
     func applyRowHeight(_ rowHeight: CGFloat?) {
         _ = view
-        if let rowHeight, abs(tableView.rowHeight - rowHeight) > 0.5 {
-            tableView.rowHeight = rowHeight
+        if let rowHeight {
+            // .default rowSizeStyle ignores manual rowHeight — flip to .custom so the
+            // override actually takes effect.
+            if tableView.rowSizeStyle != .custom { tableView.rowSizeStyle = .custom }
+            if abs(tableView.rowHeight - rowHeight) > 0.5 {
+                tableView.rowHeight = rowHeight
+            }
+        } else if tableView.rowSizeStyle != .default {
+            tableView.rowSizeStyle = .default
         }
     }
 
@@ -193,20 +229,34 @@ final class TracksTableViewController: NSViewController {
         if embedded {
             // Strip standalone-table chrome — let the parent ScrollView own the scrolling.
             tableView.usesAlternatingRowBackgroundColors = false
-            tableView.style = .plain
+            // .fullWidth (rather than .plain) — .plain still paints a grey container
+            // behind the rows; .fullWidth lets the parent's background show through.
+            tableView.style = .fullWidth
             tableView.gridStyleMask = []
             tableView.intercellSpacing = .zero
             tableView.backgroundColor = .clear
-            // Use the system source-list selection — it natively renders rounded pills
-            // and merges adjacent selected rows the way NSOutlineView's sidebar does.
+            // .sourceList gives the rounded merged-pill selection we want, but it
+            // implicitly inserts an NSVisualEffectView backdrop (the see-through blur).
+            // We zero out those effect views in viewDidLayout — see suppressVibrancy().
             tableView.selectionHighlightStyle = .sourceList
+            // Fixed widths: number (36) and duration (70) are fully locked. Hidden columns
+            // (artist, album) get zero'd out so they don't contribute to the documentView
+            // width — `column.isHidden` alone doesn't suppress that. Title absorbs slack
+            // via uniform autoresize.
+            numberColumn.minWidth = 36; numberColumn.maxWidth = 36; numberColumn.width = 36
+            durationColumn.minWidth = 70; durationColumn.maxWidth = 70; durationColumn.width = 70
+            artistColumn.minWidth = 0; artistColumn.maxWidth = 0; artistColumn.width = 0
+            albumColumn.minWidth = 0; albumColumn.maxWidth = 0; albumColumn.width = 0
+            tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
             scrollView.drawsBackground = false
+            scrollView.backgroundColor = .clear
             scrollView.hasVerticalScroller = false
             scrollView.hasHorizontalScroller = false
             scrollView.verticalScrollElasticity = .none
             scrollView.horizontalScrollElasticity = .none
             scrollView.borderType = .noBorder
             scrollView.contentView.drawsBackground = false
+            scrollView.contentView.backgroundColor = .clear
         } else {
             tableView.usesAlternatingRowBackgroundColors = true
             tableView.style = .inset
@@ -216,7 +266,7 @@ final class TracksTableViewController: NSViewController {
             scrollView.drawsBackground = true
             scrollView.hasVerticalScroller = true
             scrollView.verticalScrollElasticity = .automatic
-        }
+        }       
         tableView.reloadData()
     }
 
@@ -379,6 +429,14 @@ extension TracksTableViewController: NSTableViewDataSource {
 // MARK: - Delegate
 
 extension TracksTableViewController: NSTableViewDelegate {
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        // In embedded mode, NSTableRowView's default drawBackground paints a backdrop
+        // even when tableView.backgroundColor is .clear — that's the residual grey we
+        // were seeing. Custom row view no-ops the draw so the parent shows through.
+        guard isEmbedded else { return nil }
+        return EmbeddedRowView()
+    }
+
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let column = tableColumn, row < tracks.count else { return nil }
         let track = tracks[row]
@@ -414,21 +472,21 @@ extension TracksTableViewController: NSTableViewDelegate {
             cell.label.stringValue = track.artist.name
             cell.label.alignment = .left
             cell.label.font = .systemFont(ofSize: NSFont.systemFontSize)
-            cell.label.textColor = .secondaryLabelColor
+            cell.unselectedColor = .secondaryLabelColor
             return cell
         case "album":
             let cell = textCell(for: column.identifier, in: tableView)
             cell.label.stringValue = track.album?.name ?? ""
             cell.label.alignment = .left
             cell.label.font = .systemFont(ofSize: NSFont.systemFontSize)
-            cell.label.textColor = .secondaryLabelColor
+            cell.unselectedColor = .secondaryLabelColor
             return cell
         case "duration":
             let cell = textCell(for: column.identifier, in: tableView)
             cell.label.stringValue = track.formattedDuration
             cell.label.alignment = .right
             cell.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-            cell.label.textColor = .secondaryLabelColor
+            cell.unselectedColor = .secondaryLabelColor
             return cell
         default:
             return nil
@@ -529,10 +587,25 @@ extension TracksTableViewController: NSMenuDelegate {
     }
 }
 
+// MARK: - Row View
+
+/// Embedded-mode row view that draws no backdrop. NSTableView's `backgroundColor = .clear`
+/// alone doesn't suppress the row-level backdrop the system paints under each row — this
+/// override is what actually makes the parent's color show through.
+private final class EmbeddedRowView: NSTableRowView {
+    override func drawBackground(in dirtyRect: NSRect) {}
+    override func drawSeparator(in dirtyRect: NSRect) {}
+}
+
 // MARK: - Cell
 
 private final class TextCell: NSTableCellView {
     let label = NSTextField(labelWithString: "")
+    /// Color the label uses when the row is not selected. The delegate sets it
+    /// per-column (artist/album/duration are all secondary muted).
+    var unselectedColor: NSColor = .secondaryLabelColor {
+        didSet { applyEmphasis() }
+    }
 
     init(identifier: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
@@ -550,6 +623,16 @@ private final class TextCell: NSTableCellView {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { applyEmphasis() }
+    }
+
+    private func applyEmphasis() {
+        label.textColor = backgroundStyle == .emphasized
+            ? .alternateSelectedControlTextColor
+            : unselectedColor
+    }
 }
 
 /// # column cell. Switches between a track number/position and a speaker glyph for
@@ -598,6 +681,16 @@ private final class NumberOrSpeakerCell: NSTableCellView {
         icon.isHidden = false
         label.isHidden = true
     }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { applyEmphasis() }
+    }
+
+    private func applyEmphasis() {
+        let emphasized = backgroundStyle == .emphasized
+        label.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
+        icon.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .controlAccentColor
+    }
 }
 
 /// Title column cell: track name + (optional) artist subline + downloaded indicator.
@@ -609,6 +702,7 @@ private final class TitleCell: NSTableCellView {
     let label = NSTextField(labelWithString: "")
     let artistLabel = NSTextField(labelWithString: "")
     let downloadedIcon = NSImageView()
+    private var isCurrent: Bool = false
 
     init(identifier: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
@@ -658,12 +752,30 @@ private final class TitleCell: NSTableCellView {
     required init?(coder: NSCoder) { fatalError() }
 
     func configure(track: Track, isCurrent: Bool, showArtistInline: Bool) {
+        self.isCurrent = isCurrent
         label.stringValue = track.name
         label.font = .systemFont(ofSize: NSFont.systemFontSize)
-        label.textColor = isCurrent ? .controlAccentColor : .labelColor
         artistLabel.stringValue = track.artist.name
         artistLabel.isHidden = !showArtistInline
         downloadedIcon.isHidden = !track.isDownloaded
+        applyEmphasis()
+    }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { applyEmphasis() }
+    }
+
+    private func applyEmphasis() {
+        let emphasized = backgroundStyle == .emphasized
+        if emphasized {
+            label.textColor = .alternateSelectedControlTextColor
+            artistLabel.textColor = .alternateSelectedControlTextColor
+            downloadedIcon.contentTintColor = .alternateSelectedControlTextColor
+        } else {
+            label.textColor = isCurrent ? .controlAccentColor : .labelColor
+            artistLabel.textColor = .secondaryLabelColor
+            downloadedIcon.contentTintColor = .secondaryLabelColor
+        }
     }
 }
 #endif
