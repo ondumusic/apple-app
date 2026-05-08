@@ -212,6 +212,17 @@ final class SidebarViewController: NSViewController {
         NotificationCenter.default.removeObserver(self)
     }
 
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        // Without this, the NSSearchField is the window's first focusable view and
+        // the system parks the keyboard focus there on launch — annoying because the
+        // user usually wants to navigate the sidebar with arrow keys, not type a search
+        // they didn't ask for.
+        if view.window?.firstResponder === searchField || view.window?.firstResponder === view.window {
+            view.window?.makeFirstResponder(outlineView)
+        }
+    }
+
     func applyExternalSearchText(_ text: String) {
         if searchField.stringValue != text {
             searchField.stringValue = text
@@ -223,7 +234,7 @@ final class SidebarViewController: NSViewController {
     }
 
     @objc private func handleFocusSearch() {
-//        view.window?.makeFirstResponder(searchField)
+        view.window?.makeFirstResponder(searchField)
     }
 
     private func deleteSelectedPlaylist() {
@@ -254,15 +265,16 @@ final class SidebarViewController: NSViewController {
         guard let row = rowForSelection(.playlist(playlistId)) else { return }
         outlineView.scrollRowToVisible(row)
         outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        view.window?.makeFirstResponder(outlineView)
-        // Defer one more runloop so the selection change finishes propagating (the
-        // selection-changed callback re-enters updateNSViewController which would
-        // otherwise rebuild around us mid-edit).
+        // Force the cell to be materialized so we can grab its text field directly —
+        // editColumn was silently no-op'ing in this codepath, possibly because the
+        // selection-change re-enters updateNSViewController. Direct first-responder
+        // assignment is more deterministic.
         DispatchQueue.main.async { [weak self] in
             guard let self,
-                  let row = self.rowForSelection(.playlist(playlistId))
+                  let row = self.rowForSelection(.playlist(playlistId)),
+                  let cell = self.outlineView.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCell
             else { return }
-            self.outlineView.editColumn(0, row: row, with: nil, select: true)
+            cell.beginInlineRename()
         }
     }
 
@@ -854,6 +866,18 @@ private final class SidebarCell: NSTableCellView {
         guard let id = representedPlaylistId else { return }
         let trimmed = sender.stringValue.trimmingCharacters(in: .whitespaces)
         renameDelegate?.sidebarCell(self, commitRenameFor: id, newName: trimmed)
+    }
+
+    /// Direct entry into editing — bypasses NSOutlineView.editColumn, which silently
+    /// no-ops in some call paths (typically when the selection-change is mid-flight).
+    func beginInlineRename() {
+        label.isEditable = true
+        label.isSelectable = true
+        guard let window = self.window else { return }
+        window.makeFirstResponder(label)
+        if let editor = label.currentEditor() as? NSTextView {
+            editor.selectAll(nil)
+        }
     }
 }
 
