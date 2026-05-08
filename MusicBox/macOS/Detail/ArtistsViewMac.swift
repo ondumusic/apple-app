@@ -8,7 +8,10 @@ struct ArtistsViewMac: View {
     @State private var selectedArtistId: Artist.ID?
 
     var body: some View {
-        NavigationSplitView {
+        // HSplitView instead of nested NavigationSplitView so we don't get an extra
+        // grey "toolbar" chrome above the artist list — the outer detail column already
+        // sits below the window toolbar.
+        HSplitView {
             List(selection: $selectedArtistId) {
                 ForEach(artists) { artist in
                     HStack(spacing: 8) {
@@ -26,17 +29,21 @@ struct ArtistsViewMac: View {
                     }
                 }
             }
-            .listStyle(.inset)
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 360)
-        } detail: {
-            if let id = selectedArtistId, let artist = artists.first(where: { $0.id == id }) {
-                ArtistDetailMac(artist: artist)
-                    .id(artist.id)
-            } else {
-                ContentUnavailableView("Select an Artist", systemImage: "music.mic")
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(.background)
+            .frame(minWidth: 200, idealWidth: 240, maxWidth: 360)
+
+            Group {
+                if let id = selectedArtistId, let artist = artists.first(where: { $0.id == id }) {
+                    ArtistDetailMac(artist: artist)
+                        .id(artist.id)
+                } else {
+                    ContentUnavailableView("Select an Artist", systemImage: "music.mic")
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationSplitViewStyle(.balanced)
         .onChange(of: musicLibrary.revision, initial: true) {
             artists = musicLibrary.allArtists()
             if selectedArtistId == nil {

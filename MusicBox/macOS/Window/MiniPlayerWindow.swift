@@ -184,24 +184,21 @@ private struct MiniScrubber: View {
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.white.opacity(0.85))
                 .frame(width: 36, alignment: .trailing)
-            Slider(
-                value: Binding(
-                    get: { isScrubbing ? scrubValue : player.progress },
-                    set: { newValue in
-                        scrubValue = newValue
-                        isScrubbing = true
-                    }
-                ),
-                in: 0...max(player.duration, 1),
-                onEditingChanged: { editing in
-                    if !editing {
-                        player.seek(to: scrubValue)
-                        isScrubbing = false
-                    }
-                }
+            ProgressTrack(
+                value: isScrubbing ? scrubValue : player.progress,
+                duration: max(player.duration, 1),
+                onScrub: { value in
+                    scrubValue = value
+                    isScrubbing = true
+                },
+                onCommit: {
+                    player.seek(to: scrubValue)
+                    isScrubbing = false
+                },
+                tint: .white,
+                trackColor: .white.opacity(0.3)
             )
-            .controlSize(.mini)
-            .tint(.white)
+            .frame(height: 12)
             Text(format(player.duration))
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.white.opacity(0.85))

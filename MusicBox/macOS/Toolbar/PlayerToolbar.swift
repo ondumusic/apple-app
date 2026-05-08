@@ -158,38 +158,88 @@ private struct ScrubberView: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text(format(time: isScrubbing ? scrubValue : player.progress))
+            Text(format(isScrubbing ? scrubValue : player.progress))
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
-                .frame(minWidth: 32, alignment: .trailing)
-            Slider(
-                value: Binding(
-                    get: { isScrubbing ? scrubValue : player.progress },
-                    set: { newValue in
-                        scrubValue = newValue
-                        isScrubbing = true
-                    }
-                ),
-                in: 0...max(player.duration, 1),
-                onEditingChanged: { editing in
-                    if !editing {
-                        player.seek(to: scrubValue)
-                        isScrubbing = false
-                    }
+                .frame(minWidth: 30, alignment: .trailing)
+            ProgressTrack(
+                value: isScrubbing ? scrubValue : player.progress,
+                duration: max(player.duration, 1),
+                onScrub: { value in
+                    scrubValue = value
+                    isScrubbing = true
+                },
+                onCommit: {
+                    player.seek(to: scrubValue)
+                    isScrubbing = false
                 }
             )
-            .controlSize(.mini)
-            Text(format(time: player.duration))
+            .frame(height: 14)
+            Text(format(player.duration))
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
-                .frame(minWidth: 32, alignment: .leading)
+                .frame(minWidth: 30, alignment: .leading)
         }
     }
 
-    private func format(time: Double) -> String {
+    private func format(_ time: Double) -> String {
         guard time.isFinite, time >= 0 else { return "0:00" }
         let total = Int(time.rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+/// Custom thin progress track with hover-revealed thumb. Replaces SwiftUI Slider so
+/// the scrubber visually integrates with the toolbar pill instead of looking like a
+/// stock control floating on top.
+struct ProgressTrack: View {
+    let value: Double
+    let duration: Double
+    let onScrub: (Double) -> Void
+    let onCommit: () -> Void
+    var tint: Color = .accentColor
+    var trackColor: Color = Color.primary.opacity(0.18)
+
+    @State private var isHovered = false
+
+    private var fraction: Double {
+        guard duration > 0 else { return 0 }
+        return min(max(value / duration, 0), 1)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let trackHeight: CGFloat = isHovered ? 4 : 2
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(trackColor)
+                    .frame(height: trackHeight)
+                Capsule()
+                    .fill(tint)
+                    .frame(width: width * fraction, height: trackHeight)
+                if isHovered {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 10, height: 10)
+                        .shadow(color: .black.opacity(0.2), radius: 2, y: 0.5)
+                        .offset(x: width * fraction - 5)
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .center)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        let clamped = min(max(drag.location.x, 0), width)
+                        let frac = width > 0 ? clamped / width : 0
+                        onScrub(frac * duration)
+                    }
+                    .onEnded { _ in onCommit() }
+            )
+            .animation(.easeInOut(duration: 0.15), value: isHovered)
+        }
+        .onHover { isHovered = $0 }
     }
 }
 #endif

@@ -93,6 +93,8 @@ struct PlaylistDetailMac: View {
         .controlSize(.regular)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.background)
         .overlay(alignment: .bottom) {
             Divider()
         }
