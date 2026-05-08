@@ -89,9 +89,10 @@ private struct AlbumInlineSection: View {
 
     private var tracks: [Track] { album.tracks ?? [] }
     private var hasMultipleArtists: Bool { Set(tracks.map(\.artist.id)).count > 1 }
-    /// Each row's height in the embedded table. Bumped slightly above NSTableView's
-    /// default to give the inline-section context a touch more breathing room.
-    private let rowHeight: CGFloat = 28
+    /// Each row's height in the embedded table. Tall enough to fit a 2-line wrapped
+    /// title and an optional artist subline (shown when the album has tracks from
+    /// multiple artists).
+    private let rowHeight: CGFloat = 40
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

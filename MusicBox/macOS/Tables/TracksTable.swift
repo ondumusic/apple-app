@@ -88,6 +88,9 @@ final class TracksTableViewController: NSViewController {
     private var currentlyPlayingTrackId: UUID?
     private var isPlaying: Bool = false
     private var usesPlaylistPosition: Bool = false
+    /// Tracks whether the host asked for artist info in embedded mode. The cell uses
+    /// this to decide whether to render an artist subline under the title.
+    private var embeddedShowsArtist: Bool = false
 
     private let numberColumn = NSTableColumn(identifier: .init("number"))
     private let titleColumn  = NSTableColumn(identifier: .init("title"))
@@ -165,12 +168,14 @@ final class TracksTableViewController: NSViewController {
     }
 
     func applyHeaderVisibility(hidden: Bool) {
+        _ = view  // force loadView so we override its defaults, not the other way around
         if hidden {
             tableView.headerView = nil
         }
     }
 
     func applyRowHeight(_ rowHeight: CGFloat?) {
+        _ = view
         if let rowHeight, abs(tableView.rowHeight - rowHeight) > 0.5 {
             tableView.rowHeight = rowHeight
         }
@@ -179,6 +184,10 @@ final class TracksTableViewController: NSViewController {
     private(set) var isEmbedded: Bool = false
 
     func applyEmbeddedStyle(_ embedded: Bool) {
+        // makeNSViewController calls these before SwiftUI requests `view`, which is
+        // when loadView runs and sets the standalone defaults. Force the load now so
+        // our embedded overrides win.
+        _ = view
         guard embedded != isEmbedded else { return }
         isEmbedded = embedded
         if embedded {
@@ -221,7 +230,10 @@ final class TracksTableViewController: NSViewController {
         usesPlaylistPosition newUsesPlaylistPosition: Bool
     ) {
         self.usesPlaylistPosition = newUsesPlaylistPosition
-        artistColumn.isHidden = !showArtist
+        self.embeddedShowsArtist = showArtist
+        // Artist column is always hidden in embedded mode — the title cell stacks the
+        // artist beneath the title when needed.
+        artistColumn.isHidden = isEmbedded || !showArtist
         albumColumn.isHidden = !showAlbum
 
         let changed = !tracksMatch(self.tracks, newTracks)
@@ -391,7 +403,11 @@ extension TracksTableViewController: NSTableViewDelegate {
         case "title":
             let cell = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TitleCell
                 ?? TitleCell(identifier: column.identifier)
-            cell.configure(track: track, isCurrent: isCurrent)
+            // In embedded mode we hide the Artist column and stack the artist beneath
+            // the title when the host wanted artist info — consistent with iTunes /
+            // Apple Music layout for inline album sections.
+            let inlineArtist = isEmbedded && embeddedShowsArtist
+            cell.configure(track: track, isCurrent: isCurrent, showArtistInline: inlineArtist)
             return cell
         case "artist":
             let cell = textCell(for: column.identifier, in: tableView)
@@ -584,10 +600,14 @@ private final class NumberOrSpeakerCell: NSTableCellView {
     }
 }
 
-/// Title column cell: track name + (optional) downloaded indicator + (optional)
-/// tinted text when this row is the currently-playing track.
+/// Title column cell: track name + (optional) artist subline + downloaded indicator.
+/// In standalone mode the artist lives in its own column so this cell only needs to
+/// render the title; in embedded mode the artist column is hidden and we stack the
+/// artist beneath the title when relevant. The title supports up to 2 lines either
+/// way so long names wrap instead of truncating.
 private final class TitleCell: NSTableCellView {
     let label = NSTextField(labelWithString: "")
+    let artistLabel = NSTextField(labelWithString: "")
     let downloadedIcon = NSImageView()
 
     init(identifier: NSUserInterfaceItemIdentifier) {
@@ -596,9 +616,19 @@ private final class TitleCell: NSTableCellView {
 
         label.translatesAutoresizingMaskIntoConstraints = false
         label.lineBreakMode = .byTruncatingTail
-        label.cell?.usesSingleLineMode = true
+        label.maximumNumberOfLines = 2
+        label.cell?.wraps = true
         addSubview(label)
         textField = label
+
+        artistLabel.translatesAutoresizingMaskIntoConstraints = false
+        artistLabel.lineBreakMode = .byTruncatingTail
+        artistLabel.maximumNumberOfLines = 1
+        artistLabel.cell?.usesSingleLineMode = true
+        artistLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        artistLabel.textColor = .secondaryLabelColor
+        artistLabel.isHidden = true
+        addSubview(artistLabel)
 
         downloadedIcon.translatesAutoresizingMaskIntoConstraints = false
         downloadedIcon.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: "Downloaded")
@@ -607,10 +637,17 @@ private final class TitleCell: NSTableCellView {
         downloadedIcon.isHidden = true
         addSubview(downloadedIcon)
 
+        let stack = NSStackView(views: [label, artistLabel])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 0
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: downloadedIcon.leadingAnchor, constant: -4),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: downloadedIcon.leadingAnchor, constant: -4),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
             downloadedIcon.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
             downloadedIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
             downloadedIcon.widthAnchor.constraint(equalToConstant: 14),
@@ -620,10 +657,12 @@ private final class TitleCell: NSTableCellView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(track: Track, isCurrent: Bool) {
+    func configure(track: Track, isCurrent: Bool, showArtistInline: Bool) {
         label.stringValue = track.name
         label.font = .systemFont(ofSize: NSFont.systemFontSize)
         label.textColor = isCurrent ? .controlAccentColor : .labelColor
+        artistLabel.stringValue = track.artist.name
+        artistLabel.isHidden = !showArtistInline
         downloadedIcon.isHidden = !track.isDownloaded
     }
 }
