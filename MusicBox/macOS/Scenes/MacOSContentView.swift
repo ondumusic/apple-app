@@ -45,6 +45,9 @@ struct MacOSContentView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 600)
+        .queueConfirmationOverlay()
+        .replaceQueueConfirmation()
+        .toolbar(removing: .sidebarToggle)
         .toolbar { PlayerToolbar(showQueue: $showQueue) }
         .sheet(isPresented: $showQueue) {
             QueueSheet(isPresented: $showQueue)

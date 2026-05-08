@@ -42,6 +42,11 @@ struct MusicBoxApp: App {
 
     init() {
         ImagePipeline.shared = ImagePipeline(configuration: .withDataCache)
+        #if os(macOS)
+        // Disable window-tab grouping (the macOS feature that lets multiple windows
+        // join into Safari-style tabs). MusicBox is single-window.
+        NSWindow.allowsAutomaticWindowTabbing = false
+        #endif
 
         let auth = AuthService()
         auth.observeSessionExpiration()

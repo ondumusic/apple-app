@@ -113,6 +113,10 @@ final class SidebarViewController: NSViewController {
         outlineView.allowsEmptySelection = true
         outlineView.rowSizeStyle = .default
         outlineView.floatsGroupRows = false
+        // Pull child rows closer to their group header — the default ~16pt indent makes
+        // top-level Library categories feel pushed in too far when the section header
+        // text is at indent 0.
+        outlineView.indentationPerLevel = 8
 
         column.resizingMask = [.autoresizingMask, .userResizingMask]
         column.minWidth = 100
@@ -161,8 +165,9 @@ final class SidebarViewController: NSViewController {
         view.addSubview(bottomBar)
 
         NSLayoutConstraint.activate([
-            // Top inset clears the traffic-light buttons that overlay the sidebar.
-            searchField.topAnchor.constraint(equalTo: view.topAnchor, constant: 36),
+            // Window toolbar sits above us already; no need to reserve space for traffic
+            // lights here.
+            searchField.topAnchor.constraint(equalTo: view.topAnchor, constant: 8),
             searchField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
             searchField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
             scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 6),
