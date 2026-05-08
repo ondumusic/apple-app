@@ -97,11 +97,11 @@ struct MacOSContentView: View {
             detailPath.append(album)
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
-            guard let artist = notification.object as? Artist else { return }
+            // Switch to the Artists category. ArtistsViewMac listens for the same
+            // notification and updates its master selection to the requested artist —
+            // we don't push onto the detail stack because the master/detail split
+            // is the canonical home for artists.
             sidebarSelection = .category(.artists)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                detailPath.append(artist)
-            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestAddToPlaylist)) { notification in
             guard let ids = notification.object as? [UUID], !ids.isEmpty else { return }

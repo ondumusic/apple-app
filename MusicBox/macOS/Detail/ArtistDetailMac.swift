@@ -87,21 +87,28 @@ private struct AlbumInlineSection: View {
     private var hasMultipleArtists: Bool { Set(tracks.map(\.artist.id)).count > 1 }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
                 NavigationLink(value: album) {
                     ArtworkView(url: album.artworkUrl)
-                        .frame(width: 160, height: 160)
+                        .frame(width: 64, height: 64)
                 }
                 .buttonStyle(.plain)
-                Text(album.name)
-                    .font(.headline)
-                    .lineLimit(2)
-                if let year = album.releaseYear {
-                    Text(String(year))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(album.name)
+                        .font(.title3.bold())
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        if let year = album.releaseYear {
+                            Text(String(year))
+                        }
+                        Text("•").foregroundStyle(.tertiary)
+                        Text("^[\(tracks.count) song](inflect: true)")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
+                Spacer(minLength: 8)
                 HStack(spacing: 6) {
                     Button { playAlbum(shuffle: false) } label: { Image(systemName: "play.fill") }
                     Button { playAlbum(shuffle: true) } label: { Image(systemName: "shuffle") }
@@ -109,7 +116,6 @@ private struct AlbumInlineSection: View {
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.circle)
             }
-            .frame(width: 180, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(tracks) { track in
