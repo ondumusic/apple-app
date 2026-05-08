@@ -154,7 +154,6 @@ struct MusicBoxApp: App {
             #endif
         }
         #if os(macOS)
-        .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandGroup(after: .pasteboard) {
