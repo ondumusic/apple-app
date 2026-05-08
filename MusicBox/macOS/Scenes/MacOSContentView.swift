@@ -49,6 +49,7 @@ struct MacOSContentView: View {
         .replaceQueueConfirmation()
         .toolbar(removing: .sidebarToggle)
         .toolbar { PlayerToolbar(showQueue: $showQueue) }
+        .toolbarBackground(.visible, for: .windowToolbar)
         .sheet(isPresented: $showQueue) {
             QueueSheet(isPresented: $showQueue)
         }
