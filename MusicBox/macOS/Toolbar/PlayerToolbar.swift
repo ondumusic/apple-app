@@ -97,34 +97,36 @@ private struct NowPlayingLabel: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            artwork
-            VStack(spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(track?.name ?? "Not Playing")
-                        .font(.caption.weight(.medium))
-                        .lineLimit(1)
-                    if let track {
-                        Text("—")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                        Text(track.artist.name)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+        HStack(spacing: 8) {
+            HStack(spacing: 10) {
+                artwork
+                VStack(spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(track?.name ?? "Not Playing")
+                            .font(.caption.weight(.medium))
                             .lineLimit(1)
+                        if let track {
+                            Text("—")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            Text(track.artist.name)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    if track != nil {
+                        ScrubberView()
                     }
                 }
                 .frame(maxWidth: .infinity)
-                if track != nil {
-                    ScrubberView()
-                }
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .frame(maxWidth: .infinity)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .frame(maxWidth: .infinity)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
     }
 
     @ViewBuilder

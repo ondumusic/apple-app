@@ -23,7 +23,7 @@ struct ArtistsViewMac: View {
                         Text(artist.name)
                             .lineLimit(1)
                     }
-                    .padding(.vertical, 1)
+                    .padding(.vertical, 4)
                     .tag(artist.id as Artist.ID?)
                     .contextMenu {
                         ArtistContextMenuItems(artist: artist)
