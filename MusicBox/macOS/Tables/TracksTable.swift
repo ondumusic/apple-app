@@ -180,11 +180,39 @@ final class TracksTableViewController: NSViewController {
         // lets columnAutoresizingStyle redistribute across the resizable columns.
         let target = scrollView.contentView.bounds.width
         guard target > 0 else { return }
-        // Force documentView width = clipView width. With uniformColumnAutoresizingStyle
-        // and locked min/max widths on the fixed columns, only the title column flexes.
+        // NSTableView with .sourceList selection + .fullWidth style insets the column
+        // area symmetrically: ~16pt on the leading side, and the same again on the
+        // trailing side reserved for the rounded selection pill. Cells must fit inside
+        // [inset, frame.width - inset] or they get clipped when a row is selected.
+        // We measure the left inset from the first cell's frame and double it.
+        let detectedInset: CGFloat = tableView.numberOfRows > 0
+            ? tableView.frameOfCell(atColumn: 0, row: 0).minX
+            : 16
+        let titleWidth = max(120, target - 36 - 70 - 2 * detectedInset)
+        if abs(titleColumn.width - titleWidth) > 0.5 {
+            titleColumn.width = titleWidth
+        }
         if abs(tableView.frame.width - target) > 0.5 {
             tableView.setFrameSize(NSSize(width: target, height: tableView.frame.height))
         }
+        #if DEBUG
+        let columnDescriptions = tableView.tableColumns.map { col in
+            "\(col.identifier.rawValue)=\(col.width)(min=\(col.minWidth),max=\(col.maxWidth),hidden=\(col.isHidden))"
+        }.joined(separator: " ")
+        let sum = tableView.tableColumns.reduce(0) { $0 + $1.width }
+        var cellFrames: [String] = []
+        if tableView.numberOfRows > 0 {
+            for col in 0..<tableView.numberOfColumns {
+                let f = tableView.frameOfCell(atColumn: col, row: 0)
+                cellFrames.append("col\(col)=\(Int(f.minX))..\(Int(f.maxX))")
+            }
+        }
+        var rowFrame = "n/a"
+        if let rv = tableView.rowView(atRow: 0, makeIfNecessary: false) {
+            rowFrame = "\(rv.frame)"
+        }
+        print("[TT] target=\(target) titleWidth=\(titleWidth) sum=\(sum) tableFrame.w=\(tableView.frame.width) docVisible=\(scrollView.documentVisibleRect.width) intercell=\(tableView.intercellSpacing.width) style=\(tableView.style.rawValue) cellFrames=[\(cellFrames.joined(separator: " "))] row0Frame=\(rowFrame) cols=[\(columnDescriptions)]")
+        #endif
     }
 
     private func suppressEmbeddedVibrancy(in view: NSView) {
@@ -239,15 +267,19 @@ final class TracksTableViewController: NSViewController {
             // implicitly inserts an NSVisualEffectView backdrop (the see-through blur).
             // We zero out those effect views in viewDidLayout — see suppressVibrancy().
             tableView.selectionHighlightStyle = .sourceList
-            // Fixed widths: number (36) and duration (70) are fully locked. Hidden columns
-            // (artist, album) get zero'd out so they don't contribute to the documentView
-            // width — `column.isHidden` alone doesn't suppress that. Title absorbs slack
-            // via uniform autoresize.
+            // Fixed widths: number (36) and duration (70) are fully locked. Title is
+            // sized manually in viewDidLayout. Remove (not just hide) the artist/album
+            // columns — even with isHidden = true and width = 0 they still contribute
+            // to the documentView width and overflow the clipView.
             numberColumn.minWidth = 36; numberColumn.maxWidth = 36; numberColumn.width = 36
             durationColumn.minWidth = 70; durationColumn.maxWidth = 70; durationColumn.width = 70
-            artistColumn.minWidth = 0; artistColumn.maxWidth = 0; artistColumn.width = 0
-            albumColumn.minWidth = 0; albumColumn.maxWidth = 0; albumColumn.width = 0
-            tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+            if tableView.tableColumns.contains(artistColumn) {
+                tableView.removeTableColumn(artistColumn)
+            }
+            if tableView.tableColumns.contains(albumColumn) {
+                tableView.removeTableColumn(albumColumn)
+            }
+            tableView.columnAutoresizingStyle = .noColumnAutoresizing
             scrollView.drawsBackground = false
             scrollView.backgroundColor = .clear
             scrollView.hasVerticalScroller = false
@@ -432,9 +464,12 @@ extension TracksTableViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         // In embedded mode, NSTableRowView's default drawBackground paints a backdrop
         // even when tableView.backgroundColor is .clear — that's the residual grey we
-        // were seeing. Custom row view no-ops the draw so the parent shows through.
+        // were seeing. Custom row view no-ops the draw so the parent shows through and
+        // also paints the inter-row hairline divider.
         guard isEmbedded else { return nil }
-        return EmbeddedRowView()
+        let view = EmbeddedRowView()
+        view.isLastRow = (row == tracks.count - 1)
+        return view
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -593,7 +628,24 @@ extension TracksTableViewController: NSMenuDelegate {
 /// alone doesn't suppress the row-level backdrop the system paints under each row — this
 /// override is what actually makes the parent's color show through.
 private final class EmbeddedRowView: NSTableRowView {
-    override func drawBackground(in dirtyRect: NSRect) {}
+    /// Set by the delegate so we can suppress the bottom hairline on the final row
+    /// — NSTableRowView itself doesn't know its position in the table.
+    var isLastRow: Bool = false
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        // Subtle hairline divider at the bottom. Skipped on the last row, on selected
+        // rows, and when the row below is selected (so the rounded selection pill never
+        // has a line slicing through it). Drawn here because NSTableView with zero
+        // intercellSpacing doesn't call drawSeparator.
+        guard !isLastRow, !isSelected, !isNextRowSelected else { return }
+        let line = NSRect(x: bounds.minX + 8,
+                          y: bounds.maxY - 0.5,
+                          width: bounds.width - 16,
+                          height: 0.5)
+        NSColor.separatorColor.setFill()
+        line.fill()
+    }
+
     override func drawSeparator(in dirtyRect: NSRect) {}
 }
 
