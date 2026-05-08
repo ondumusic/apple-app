@@ -113,10 +113,10 @@ final class SidebarViewController: NSViewController {
         outlineView.allowsEmptySelection = true
         outlineView.rowSizeStyle = .default
         outlineView.floatsGroupRows = false
-        // Pull child rows closer to their group header — the default ~16pt indent makes
-        // top-level Library categories feel pushed in too far when the section header
-        // text is at indent 0.
-        outlineView.indentationPerLevel = 8
+        // Per-section indenting is overridden in the cell — see shouldCompensateIndent.
+        // We keep the global indent at the file-level constant so folders with disclosure
+        // triangles still have room.
+        outlineView.indentationPerLevel = indentationPerLevel
 
         column.resizingMask = [.autoresizingMask, .userResizingMask]
         column.minWidth = 100
@@ -539,8 +539,51 @@ extension SidebarViewController: NSOutlineViewDelegate {
             ?? SidebarCell()
         cell.identifier = SidebarCell.identifier
         cell.renameDelegate = self
-        cell.configure(for: node)
+        cell.configure(for: node, compensateIndent: shouldCompensateIndent(for: node))
         return cell
+    }
+
+    /// Per-section indent override. NSOutlineView applies one global indentationPerLevel,
+    /// but the library section never wants any indent and the playlists section only wants
+    /// indent when it actually has folders (to leave room for disclosure triangles).
+    private func shouldCompensateIndent(for node: SidebarNode) -> Bool {
+        switch parentSection(of: node) {
+        case .library:
+            return true   // always 0pt indent
+        case .playlistsRoot:
+            return !playlistsHaveAnyFolder
+        case .deeper, .none:
+            return false  // folder children keep their natural nesting indent
+        }
+    }
+
+    private enum ParentSection {
+        case library
+        case playlistsRoot
+        case deeper
+        case none
+    }
+
+    private func parentSection(of node: SidebarNode) -> ParentSection {
+        if librarySection.children.contains(where: { $0 === node }) { return .library }
+        if playlistsSection.children.contains(where: { $0 === node }) { return .playlistsRoot }
+        if isDescendant(node, of: playlistsSection) { return .deeper }
+        return .none
+    }
+
+    private func isDescendant(_ node: SidebarNode, of root: SidebarNode) -> Bool {
+        for child in root.children {
+            if child === node { return true }
+            if isDescendant(node, of: child) { return true }
+        }
+        return false
+    }
+
+    private var playlistsHaveAnyFolder: Bool {
+        playlistsSection.children.contains {
+            if case .playlist(let p) = $0.kind, p.isFolder { return true }
+            return false
+        }
     }
 
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
@@ -658,6 +701,10 @@ extension SidebarViewController: NSMenuDelegate {
 
 // MARK: - Cell
 
+/// Must match outlineView.indentationPerLevel — the cell uses this to compute the
+/// negative offset that cancels NSOutlineView's indent for rows that shouldn't have it.
+private let indentationPerLevel: CGFloat = 8
+
 private final class SidebarCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
 
@@ -665,6 +712,10 @@ private final class SidebarCell: NSTableCellView {
     private let label = NSTextField()
     private var labelLeadingToIcon: NSLayoutConstraint!
     private var labelLeadingToCell: NSLayoutConstraint!
+    /// Anchored to the cell's leading edge, but with a constant we can flip negative
+    /// to compensate for NSOutlineView's per-level indent on rows that shouldn't have
+    /// it (library categories, playlist roots when no folders exist).
+    private var iconLeading: NSLayoutConstraint!
     /// Set when configured with a playlist node — used by the rename commit handler
     /// to map the edited text back to the right playlist via the outline view.
     var representedPlaylistId: UUID?
@@ -705,8 +756,10 @@ private final class SidebarCell: NSTableCellView {
         // with where children's icons sit (children are indented one level by NSOutlineView).
         labelLeadingToCell = label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 0)
 
+        iconLeading = icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 0)
+
         NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: leadingAnchor),
+            iconLeading,
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 18),
             icon.heightAnchor.constraint(equalToConstant: 18),
@@ -716,7 +769,10 @@ private final class SidebarCell: NSTableCellView {
         ])
     }
 
-    func configure(for node: SidebarNode) {
+    func configure(for node: SidebarNode, compensateIndent: Bool = false) {
+        // Negative offset cancels NSOutlineView's per-level indent on rows that
+        // shouldn't have it. Magnitude tracks outlineView.indentationPerLevel.
+        iconLeading.constant = compensateIndent ? -indentationPerLevel : 0
         switch node.kind {
         case .section(let title):
             label.stringValue = title.uppercased()
