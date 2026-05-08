@@ -16,6 +16,10 @@ struct TrackActions {
     }
     var goToAlbum: (Track) -> Void = { _ in }
     var goToArtist: (Track) -> Void = { _ in }
+    /// Set on PlaylistDetailMac so the context menu can offer "Remove from Playlist".
+    /// Receives row indices (not track ids) because playlists can contain duplicates and
+    /// the caller needs the exact item position.
+    var removeFromPlaylistRows: ((IndexSet) -> Void)?
 
     /// Standard wiring used by every detail view that hosts a TracksTable. Detail views
     /// can override individual closures (e.g. AlbumDetailMac passes the album artwork

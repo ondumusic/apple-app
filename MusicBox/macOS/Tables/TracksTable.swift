@@ -25,17 +25,27 @@ struct TracksTable: NSViewControllerRepresentable {
     /// the track's intrinsic number. Useful for PlaylistDetailMac where ordering differs
     /// from album-track-number ordering.
     var usesPlaylistPosition: Bool = false
+    /// Drop target for reorder-within-table drags. Receives the dragged row indices and
+    /// the proposed insertion row index. Nil disables internal reorder.
+    var onReorder: ((IndexSet, Int) -> Void)?
+    /// Backspace / Delete handler. Receives the currently-selected row indices. Nil
+    /// disables keyboard delete.
+    var onDelete: ((IndexSet) -> Void)?
 
     func makeNSViewController(context: Context) -> TracksTableViewController {
         let vc = TracksTableViewController()
         vc.onSelectionChange = { ids in selection = ids }
         vc.onPlay = onPlay
         vc.actions = actions
+        vc.onReorder = onReorder
+        vc.onDelete = onDelete
         return vc
     }
 
     func updateNSViewController(_ vc: TracksTableViewController, context: Context) {
         vc.actions = actions
+        vc.onReorder = onReorder
+        vc.onDelete = onDelete
         vc.update(
             tracks: tracks,
             externalSelection: selection,
@@ -54,6 +64,8 @@ final class TracksTableViewController: NSViewController {
     var onSelectionChange: ((Set<UUID>) -> Void)?
     var onPlay: ((Int) -> Void)?
     var actions: TrackActions = TrackActions()
+    var onReorder: ((IndexSet, Int) -> Void)?
+    var onDelete: ((IndexSet) -> Void)?
 
     private let scrollView = NSScrollView()
     private let tableView = KeyAwareTableView()
@@ -99,9 +111,19 @@ final class TracksTableViewController: NSViewController {
         menu.delegate = self
         tableView.menu = menu
 
-        // Drag source: lets tracks be dropped onto sidebar playlist rows.
-        tableView.setDraggingSourceOperationMask(.copy, forLocal: true)
+        // Drag source: tracks can be dropped onto sidebar playlist rows (.copy externally)
+        // or reordered within this same table (.move locally).
+        tableView.setDraggingSourceOperationMask([.copy, .move], forLocal: true)
         tableView.setDraggingSourceOperationMask(.copy, forLocal: false)
+        // Self-drop target so we can intercept reorder drags.
+        tableView.registerForDraggedTypes([.musicBoxTracks])
+
+        tableView.onDelete = { [weak self] in
+            guard let self, let onDelete = self.onDelete else { return }
+            let rows = self.tableView.selectedRowIndexes
+            guard !rows.isEmpty else { return }
+            onDelete(rows)
+        }
 
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
@@ -228,11 +250,17 @@ final class TracksTableViewController: NSViewController {
 
 private final class KeyAwareTableView: NSTableView {
     var onEnter: (() -> Void)?
+    var onDelete: (() -> Void)?
 
     override func keyDown(with event: NSEvent) {
         // 36 = Return, 76 = numpad Enter.
         if event.keyCode == 36 || event.keyCode == 76 {
             onEnter?()
+            return
+        }
+        // 51 = Delete (Backspace), 117 = forward Delete.
+        if event.keyCode == 51 || event.keyCode == 117 {
+            onDelete?()
             return
         }
         super.keyDown(with: event)
@@ -251,6 +279,26 @@ extension TracksTableViewController: NSTableViewDataSource {
         let item = NSPasteboardItem()
         item.setString(tracks[row].id.uuidString, forType: .musicBoxTracks)
         return item
+    }
+
+    func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        // Only handle internal reorder drags. Drops onto specific rows aren't supported here.
+        guard onReorder != nil,
+              dropOperation == .above,
+              info.draggingSource as? NSTableView === self.tableView
+        else { return [] }
+        return .move
+    }
+
+    func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation dropOperation: NSTableView.DropOperation) -> Bool {
+        guard let onReorder,
+              dropOperation == .above,
+              info.draggingSource as? NSTableView === self.tableView
+        else { return false }
+        let rows = self.tableView.selectedRowIndexes
+        guard !rows.isEmpty else { return false }
+        onReorder(rows, row)
+        return true
     }
 }
 
@@ -342,6 +390,10 @@ extension TracksTableViewController: NSMenuDelegate {
         addItem(to: menu, title: "Add to Queue", action: #selector(menuAddToEnd))
         menu.addItem(.separator())
         addItem(to: menu, title: "Add to Playlist…", action: #selector(menuAddToPlaylist))
+        if actions.removeFromPlaylistRows != nil {
+            let removeTitle = isSingle ? "Remove from Playlist" : "Remove \(targetTracks.count) from Playlist"
+            addItem(to: menu, title: removeTitle, action: #selector(menuRemoveFromPlaylist))
+        }
         if isSingle {
             menu.addItem(.separator())
             addItem(to: menu, title: "Go to Album", action: #selector(menuGoToAlbum))
@@ -387,6 +439,15 @@ extension TracksTableViewController: NSMenuDelegate {
     }
     @objc private func menuGoToArtist() {
         if let track = tracksForContextAction().first { actions.goToArtist(track) }
+    }
+    @objc private func menuRemoveFromPlaylist() {
+        guard let removeFromPlaylistRows = actions.removeFromPlaylistRows else { return }
+        // Use the same row resolution as other actions: clicked row narrows the selection
+        // when not already part of it.
+        _ = tracksForContextAction()
+        let rows = tableView.selectedRowIndexes
+        guard !rows.isEmpty else { return }
+        removeFromPlaylistRows(rows)
     }
 }
 
