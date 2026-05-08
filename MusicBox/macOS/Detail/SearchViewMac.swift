@@ -54,6 +54,7 @@ struct SearchViewMac: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 220)
                 Divider()
@@ -69,8 +70,12 @@ struct SearchViewMac: View {
                     currentlyPlayingTrackId: player.currentTrack?.id,
                     isPlaying: player.isPlaying
                 )
+                .frame(maxHeight: .infinity)
+            } else {
+                Spacer(minLength: 0)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var artistsSection: some View {

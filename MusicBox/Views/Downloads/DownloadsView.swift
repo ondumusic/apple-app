@@ -227,22 +227,22 @@ struct DownloadsView: View {
                             Button(role: .destructive) {
                                 artistToDelete = artist
                             } label: {
-                                Label("Delete Artist", systemImage: "trash")
+                                Label("Remove Downloaded Music", systemImage: "trash")
                             }
                         }
                         .confirmationDialog(
-                            "Delete Artist",
+                            "Remove Downloads",
                             isPresented: Binding(
                                 get: { artistToDelete?.id == artist.id },
                                 set: { if !$0 { artistToDelete = nil } }
                             ),
                             titleVisibility: .visible
                         ) {
-                            Button("Delete", role: .destructive) {
+                            Button("Remove", role: .destructive) {
                                 musicLibrary.markArtistUndownloaded(artistId: artist.id)
                             }
                         } message: {
-                            Text("Remove all downloaded music by \(artist.name)?")
+                            Text("Remove all downloaded files for \(artist.name)? The artist stays in your library and can be re-downloaded.")
                         }
                     }
                 } header: {
