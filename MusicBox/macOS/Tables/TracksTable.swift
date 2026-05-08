@@ -31,6 +31,11 @@ struct TracksTable: NSViewControllerRepresentable {
     /// Backspace / Delete handler. Receives the currently-selected row indices. Nil
     /// disables keyboard delete.
     var onDelete: ((IndexSet) -> Void)?
+    /// Hide the column header row. Useful when embedding the table inside a section that
+    /// already has its own header (e.g. ArtistDetailMac's per-album sections).
+    var hidesColumnHeaders: Bool = false
+    /// Override the default row height. Nil = NSTableView's default for the inset style.
+    var rowHeight: CGFloat?
 
     func makeNSViewController(context: Context) -> TracksTableViewController {
         let vc = TracksTableViewController()
@@ -39,6 +44,8 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.actions = actions
         vc.onReorder = onReorder
         vc.onDelete = onDelete
+        vc.applyHeaderVisibility(hidden: hidesColumnHeaders)
+        vc.applyRowHeight(rowHeight)
         return vc
     }
 
@@ -46,6 +53,8 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.actions = actions
         vc.onReorder = onReorder
         vc.onDelete = onDelete
+        vc.applyHeaderVisibility(hidden: hidesColumnHeaders)
+        vc.applyRowHeight(rowHeight)
         vc.update(
             tracks: tracks,
             externalSelection: selection,
@@ -147,6 +156,18 @@ final class TracksTableViewController: NSViewController {
         column.maxWidth = resizable ? 1000 : width
         column.resizingMask = resizable ? [.userResizingMask, .autoresizingMask] : []
         column.headerCell.alignment = alignment
+    }
+
+    func applyHeaderVisibility(hidden: Bool) {
+        if hidden {
+            tableView.headerView = nil
+        }
+    }
+
+    func applyRowHeight(_ rowHeight: CGFloat?) {
+        if let rowHeight, abs(tableView.rowHeight - rowHeight) > 0.5 {
+            tableView.rowHeight = rowHeight
+        }
     }
 
     func update(

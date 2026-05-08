@@ -83,8 +83,15 @@ private struct AlbumInlineSection: View {
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
 
+    /// Per-section selection state. Multi-select within an album works; cross-album
+    /// selection isn't supported yet (each section is its own NSTableView).
+    @State private var selection: Set<UUID> = []
+
     private var tracks: [Track] { album.tracks ?? [] }
     private var hasMultipleArtists: Bool { Set(tracks.map(\.artist.id)).count > 1 }
+    /// Each row's height in the embedded table. Bumped slightly above NSTableView's
+    /// default to give the inline-section context a touch more breathing room.
+    private let rowHeight: CGFloat = 28
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -117,24 +124,38 @@ private struct AlbumInlineSection: View {
                 .buttonBorderShape(.circle)
             }
 
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(tracks) { track in
-                    TrackRow(track: track, album: album, artist: artist, showArtist: hasMultipleArtists) {
-                        playTrack(track)
-                    }
-                    .padding(.vertical, 4)
-                    Divider()
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            TracksTable(
+                tracks: tracks,
+                selection: $selection,
+                onPlay: playTrack(at:),
+                actions: trackActions,
+                showArtist: hasMultipleArtists,
+                showAlbum: false,
+                currentlyPlayingTrackId: player.currentTrack?.id,
+                isPlaying: player.isPlaying,
+                hidesColumnHeaders: true,
+                rowHeight: rowHeight
+            )
+            .frame(height: tableHeight)
         }
     }
 
-    private func playTrack(_ track: Track) {
+    private var trackActions: TrackActions {
+        .standard(player: player, musicLibrary: musicLibrary, network: network, artworkURL: album.artworkUrl)
+    }
+
+    /// Sized to fit content so the outer ScrollView is the only scroller. +6 for the
+    /// inset listStyle's natural top/bottom padding.
+    private var tableHeight: CGFloat {
+        max(rowHeight, CGFloat(tracks.count) * rowHeight + 6)
+    }
+
+    private func playTrack(at index: Int) {
+        guard tracks.indices.contains(index) else { return }
         let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
-        guard let index = available.firstIndex(where: { $0.id == track.id }) else { return }
+        guard let queueIndex = available.firstIndex(where: { $0.id == tracks[index].id }) else { return }
         player.requestPlay {
-            player.playNow(tracks: available, startingAt: index, artworkURL: album.artworkUrl)
+            player.playNow(tracks: available, startingAt: queueIndex, artworkURL: album.artworkUrl)
         }
     }
 
