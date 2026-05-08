@@ -24,6 +24,7 @@ class BackgroundSessionDelegate: NSObject, UIApplicationDelegate {
 final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     /// Strong refs so the KVO observers stay alive for the window's lifetime.
     private var titleObservers: [NSKeyValueObservation] = []
+    private var didClearLaunchFocus = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide the navigationTitle that SwiftUI parks in the title bar — we don't want
@@ -53,13 +54,20 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
         titleObservers.append(observation)
         #if DEBUG
         let fr = window.firstResponder.map { String(describing: $0) } ?? "nil"
-        print("[focus] attachTitleClamp firstResponder=\(fr)")
+        print("[focus] attachTitleClamp firstResponder=\(fr) didClear=\(didClearLaunchFocus)")
         #endif
-        if window.firstResponder is NSSearchField {
-            window.makeFirstResponder(nil)
-            #if DEBUG
-            print("[focus] cleared search-field firstResponder")
-            #endif
+        // Clear focus once at launch so the system doesn't park keyboard focus on the
+        // sidebar's search field. NSText (the field editor for any text input) is what
+        // actually shows up as firstResponder, not the NSSearchField itself.
+        if !didClearLaunchFocus {
+            didClearLaunchFocus = true
+            if window.firstResponder is NSText || window.firstResponder is NSTextField {
+                window.makeFirstResponder(nil)
+                #if DEBUG
+                print("[focus] cleared launch firstResponder")
+                #endif
+            }
+            // Subsequent didBecomeMain notifications keep whatever the user has focused.
         }
     }
 }
