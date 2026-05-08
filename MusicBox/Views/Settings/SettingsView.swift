@@ -9,7 +9,7 @@ struct SettingsView: View {
     @State private var showClearCacheConfirmation = false
     @State private var showLogoutConfirmation = false
 
-    private static let cacheLimitOptions: [(String, Int64)] = [
+    fileprivate static let cacheLimitOptions: [(String, Int64)] = [
         ("500 MB", 500 * 1024 * 1024),
         ("1 GB", 1024 * 1024 * 1024),
         ("2 GB", 2 * 1024 * 1024 * 1024),
@@ -19,205 +19,268 @@ struct SettingsView: View {
     ]
 
     var body: some View {
-        @Bindable var settings = settings
-
+        #if os(macOS)
+        macTabbedBody
+        #else
         Form {
-            Section {
-                Toggle("Crossfade", isOn: crossfadeEnabled(settings: settings))
+            playbackSection
+            spreadShuffleSection
+            appearanceSection
+            accentColorSection
+            cacheSection
+            qualitySection
+            downloadsSection
+            librarySection
+            accountSection
+        }
+        .navigationTitle("Settings")
+        #endif
+    }
 
-                if settings.crossfadeDuration > 0 {
-                    HStack {
-                        Slider(value: $settings.crossfadeDuration, in: 1...12, step: 1)
-                        Text("\(Int(settings.crossfadeDuration))s")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .frame(width: 30, alignment: .trailing)
-                    }
+    #if os(macOS)
+    @ViewBuilder
+    private var macTabbedBody: some View {
+        TabView {
+            Form {
+                playbackSection
+                spreadShuffleSection
+                qualitySection
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Playback", systemImage: "play.circle") }
+
+            Form {
+                appearanceSection
+                accentColorSection
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Appearance", systemImage: "paintbrush") }
+
+            Form {
+                cacheSection
+                downloadsSection
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Storage", systemImage: "internaldrive") }
+
+            Form {
+                librarySection
+                accountSection
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Account", systemImage: "person.crop.circle") }
+        }
+        .frame(width: 600, height: 480)
+    }
+    #endif
+
+    @ViewBuilder
+    private var playbackSection: some View {
+        @Bindable var settings = settings
+        Section {
+            Toggle("Crossfade", isOn: crossfadeEnabled(settings: settings))
+            if settings.crossfadeDuration > 0 {
+                HStack {
+                    Slider(value: $settings.crossfadeDuration, in: 1...12, step: 1)
+                    Text("\(Int(settings.crossfadeDuration))s")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, alignment: .trailing)
                 }
-            } header: {
-                Text("Playback")
-            } footer: {
-                Text("Smoothly transition between tracks by overlapping the end of one with the start of the next.")
             }
+        } header: {
+            Text("Playback")
+        } footer: {
+            Text("Smoothly transition between tracks by overlapping the end of one with the start of the next.")
+        }
+    }
 
-            Section {
-                Toggle("Spread Shuffle", isOn: $settings.spreadShuffle)
-            } footer: {
-                Text("Avoids playing tracks from the same album or artist back-to-back when shuffling.")
-            }
+    @ViewBuilder
+    private var spreadShuffleSection: some View {
+        @Bindable var settings = settings
+        Section {
+            Toggle("Spread Shuffle", isOn: $settings.spreadShuffle)
+        } footer: {
+            Text("Avoids playing tracks from the same album or artist back-to-back when shuffling.")
+        }
+    }
 
-            Section {
-                Toggle("Artwork-Tinted Player", isOn: $settings.artworkTintedPlayer)
-                Toggle("Haptic Feedback", isOn: $settings.hapticsEnabled)
-            } header: {
-                Text("Appearance")
-            } footer: {
-                Text("Colors the player background based on the current track's album artwork.")
-            }
+    @ViewBuilder
+    private var appearanceSection: some View {
+        @Bindable var settings = settings
+        Section {
+            Toggle("Artwork-Tinted Player", isOn: $settings.artworkTintedPlayer)
+            #if os(iOS)
+            Toggle("Haptic Feedback", isOn: $settings.hapticsEnabled)
+            #endif
+        } header: {
+            Text("Appearance")
+        } footer: {
+            Text("Colors the player background based on the current track's album artwork.")
+        }
+    }
 
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Accent Color")
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
-                        ForEach(AccentColor.allCases, id: \.self) { accentOption in
-                            if accentOption == .custom {
-                                ColorPicker("", selection: customColorBinding(settings: settings), supportsOpacity: false)
-                                    .labelsHidden()
-                                    .frame(width: 32, height: 32)
-                                    .overlay {
-                                        if settings.accentColor == .custom {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 14, weight: .bold))
-                                                .foregroundStyle(.white)
-                                        }
+    @ViewBuilder
+    private var accentColorSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Accent Color")
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
+                    ForEach(AccentColor.allCases, id: \.self) { accentOption in
+                        if accentOption == .custom {
+                            ColorPicker("", selection: customColorBinding(settings: settings), supportsOpacity: false)
+                                .labelsHidden()
+                                .frame(width: 32, height: 32)
+                                .overlay {
+                                    if settings.accentColor == .custom {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundStyle(.white)
                                     }
-                            } else {
-                                Circle()
-                                    .fill(accentOption.color)
-                                    .frame(width: 32, height: 32)
-                                    .overlay {
-                                        if settings.accentColor == accentOption {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 14, weight: .bold))
-                                                .foregroundStyle(.white)
-                                        }
+                                }
+                        } else {
+                            Circle()
+                                .fill(accentOption.color)
+                                .frame(width: 32, height: 32)
+                                .overlay {
+                                    if settings.accentColor == accentOption {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundStyle(.white)
                                     }
-                                    .onTapGesture {
-                                        settings.accentColor = accentOption
-                                    }
-                            }
+                                }
+                                .onTapGesture { settings.accentColor = accentOption }
                         }
                     }
                 }
-                .padding(.vertical, 4)
             }
+            .padding(.vertical, 4)
+        }
+    }
 
-            Section {
-                Picker("Cache Limit", selection: $settings.playbackCacheLimit) {
-                    ForEach(Self.cacheLimitOptions, id: \.1) { label, value in
-                        Text(label).tag(value)
-                    }
+    @ViewBuilder
+    private var cacheSection: some View {
+        @Bindable var settings = settings
+        Section {
+            Picker("Cache Limit", selection: $settings.playbackCacheLimit) {
+                ForEach(Self.cacheLimitOptions, id: \.1) { label, value in
+                    Text(label).tag(value)
                 }
-
-                HStack {
-                    Text("Cache Size")
-                    Spacer()
-                    Text("\(playbackCache.formattedSize) (^[\(playbackCache.trackCount) track](inflect: true))")
-                        .foregroundStyle(.secondary)
-                }
-
-                Button("Clear Cache", role: .destructive) {
-                    showClearCacheConfirmation = true
-                }
+            }
+            HStack {
+                Text("Cache Size")
+                Spacer()
+                Text("\(playbackCache.formattedSize) (^[\(playbackCache.trackCount) track](inflect: true))")
+                    .foregroundStyle(.secondary)
+            }
+            Button("Clear Cache", role: .destructive) { showClearCacheConfirmation = true }
                 .disabled(playbackCache.trackCount == 0)
                 .confirmationDialog("Clear Playback Cache?", isPresented: $showClearCacheConfirmation) {
-                    Button("Clear Cache", role: .destructive) {
-                        playbackCache.clearCache()
-                    }
+                    Button("Clear Cache", role: .destructive) { playbackCache.clearCache() }
                 } message: {
                     Text("This will remove \(playbackCache.formattedSize) of cached audio. Tracks will be re-streamed on next play.")
                 }
-            } header: {
-                Text("Playback Cache")
-            } footer: {
-                Text("Recently played tracks are cached locally to avoid re-streaming. Set a limit or choose Unlimited.")
-            }
+        } header: {
+            Text("Playback Cache")
+        } footer: {
+            Text("Recently played tracks are cached locally to avoid re-streaming. Set a limit or choose Unlimited.")
+        }
+    }
 
-            if SettingsStore.enableDownloadQuality {
-                Section {
-                    Picker("Streaming Quality", selection: $settings.streamingQuality) {
-                        ForEach(StreamingQuality.allCases, id: \.self) { quality in
-                            Text(quality.displayName).tag(quality)
-                        }
-                    }
-
-                    Picker("Download Quality", selection: $settings.downloadQuality) {
-                        ForEach(DownloadQuality.allCases, id: \.self) { quality in
-                            Text(quality.displayName).tag(quality)
-                        }
-                    }
-                } header: {
-                    Text("Quality")
-                } footer: {
-                    Text("Streaming quality applies when playing from the server. Download quality only affects new downloads. Original streams the file as-is.")
-                }
-            }
-
+    @ViewBuilder
+    private var qualitySection: some View {
+        @Bindable var settings = settings
+        if SettingsStore.enableDownloadQuality {
             Section {
-                Picker("Concurrent Downloads", selection: $settings.maxConcurrentDownloads) {
-                    ForEach([1, 2, 3, 4, 6, 8], id: \.self) { count in
-                        Text("\(count)").tag(count)
+                Picker("Streaming Quality", selection: $settings.streamingQuality) {
+                    ForEach(StreamingQuality.allCases, id: \.self) { quality in
+                        Text(quality.displayName).tag(quality)
                     }
                 }
-                
-                Toggle("Auto-Download New Tracks", isOn: $settings.autoDownloadNewTracks)
+                Picker("Download Quality", selection: $settings.downloadQuality) {
+                    ForEach(DownloadQuality.allCases, id: \.self) { quality in
+                        Text(quality.displayName).tag(quality)
+                    }
+                }
             } header: {
-                Text("Downloads")
+                Text("Quality")
             } footer: {
-                Text("Automatically download new tracks added to the server after each sync.")
+                Text("Streaming quality applies when playing from the server. Download quality only affects new downloads.")
             }
+        }
+    }
 
-            Section {
+    @ViewBuilder
+    private var downloadsSection: some View {
+        @Bindable var settings = settings
+        Section {
+            Picker("Concurrent Downloads", selection: $settings.maxConcurrentDownloads) {
+                ForEach([1, 2, 3, 4, 6, 8], id: \.self) { count in
+                    Text("\(count)").tag(count)
+                }
+            }
+            Toggle("Auto-Download New Tracks", isOn: $settings.autoDownloadNewTracks)
+        } header: {
+            Text("Downloads")
+        } footer: {
+            Text("Automatically download new tracks added to the server after each sync.")
+        }
+    }
+
+    @ViewBuilder
+    private var librarySection: some View {
+        Section {
+            HStack {
+                Text("Last Synced")
+                Spacer()
+                if syncService.isSyncing {
+                    ProgressView().controlSize(.small)
+                } else if let date = syncService.lastSyncDate {
+                    Text(date, style: .relative).foregroundStyle(.secondary)
+                } else {
+                    Text("Never").foregroundStyle(.secondary)
+                }
+            }
+            Button {
+                Task { await syncService.sync() }
+            } label: {
                 HStack {
-                    Text("Last Synced")
-                    Spacer()
+                    Text("Sync Now")
                     if syncService.isSyncing {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else if let date = syncService.lastSyncDate {
-                        Text(date, style: .relative)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Never")
-                            .foregroundStyle(.secondary)
+                        Spacer()
+                        ProgressView().controlSize(.small)
                     }
                 }
-
-                Button {
-                    Task { await syncService.sync() }
-                } label: {
-                    HStack {
-                        Text("Sync Now")
-                        if syncService.isSyncing {
-                            Spacer()
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                    }
-                }
-                .disabled(syncService.isSyncing)
-
-                if let error = syncService.syncError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                        .font(.footnote)
-                }
-            } header: {
-                Text("Library")
             }
+            .disabled(syncService.isSyncing)
+            if let error = syncService.syncError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                    .font(.footnote)
+            }
+        } header: {
+            Text("Library")
+        }
+    }
 
-            Section {
-                if let user = auth.currentUser {
-                    HStack {
-                        Text("Signed in as")
-                        Spacer()
-                        Text(user.username)
-                            .foregroundStyle(.secondary)
-                    }
+    @ViewBuilder
+    private var accountSection: some View {
+        Section {
+            if let user = auth.currentUser {
+                HStack {
+                    Text("Signed in as")
+                    Spacer()
+                    Text(user.username).foregroundStyle(.secondary)
                 }
-
-                if let host = auth.apiService?.baseURL.host() {
-                    HStack {
-                        Text("Server")
-                        Spacer()
-                        Text(host)
-                            .foregroundStyle(.secondary)
-                    }
+            }
+            if let host = auth.apiService?.baseURL.host() {
+                HStack {
+                    Text("Server")
+                    Spacer()
+                    Text(host).foregroundStyle(.secondary)
                 }
-
-                Button("Sign Out", role: .destructive) {
-                    showLogoutConfirmation = true
-                }
+            }
+            Button("Sign Out", role: .destructive) { showLogoutConfirmation = true }
                 .confirmationDialog("Sign Out?", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                     Button("Sign Out", role: .destructive) {
                         playbackCache.clearCache()
@@ -226,16 +289,9 @@ struct SettingsView: View {
                 } message: {
                     Text("This will remove all offline data including downloads, cached artwork, and your synced library from this device.")
                 }
-            } header: {
-                Text("Account")
-            }
+        } header: {
+            Text("Account")
         }
-        .navigationTitle("Settings")
-        #if os(macOS)
-        .formStyle(.grouped)
-        .frame(width: 400)
-        .fixedSize()
-        #endif
     }
 
     private func crossfadeEnabled(settings: SettingsStore) -> Binding<Bool> {
