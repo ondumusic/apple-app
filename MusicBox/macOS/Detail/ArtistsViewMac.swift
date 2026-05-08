@@ -8,10 +8,11 @@ struct ArtistsViewMac: View {
     @State private var selectedArtistId: Artist.ID?
 
     var body: some View {
-        // HSplitView instead of nested NavigationSplitView so we don't get an extra
-        // grey "toolbar" chrome above the artist list — the outer detail column already
-        // sits below the window toolbar.
-        HSplitView {
+        // Plain HStack with a manual divider — HSplitView was rendering above the
+        // window toolbar (it doesn't respect the parent's toolbar safe area), and the
+        // nested NavigationSplitView had its own grey chrome problem. A regular HStack
+        // sits cleanly inside the outer detail column.
+        HStack(spacing: 0) {
             List(selection: $selectedArtistId) {
                 ForEach(artists) { artist in
                     HStack(spacing: 8) {
@@ -32,7 +33,9 @@ struct ArtistsViewMac: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(.background)
-            .frame(minWidth: 200, idealWidth: 240, maxWidth: 360)
+            .frame(width: 240)
+
+            Divider()
 
             Group {
                 if let id = selectedArtistId, let artist = artists.first(where: { $0.id == id }) {

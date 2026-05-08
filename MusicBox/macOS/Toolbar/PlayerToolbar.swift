@@ -99,7 +99,7 @@ private struct NowPlayingLabel: View {
     var body: some View {
         HStack(spacing: 10) {
             artwork
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(spacing: 2) {
                 HStack(spacing: 6) {
                     Text(track?.name ?? "Not Playing")
                         .font(.caption.weight(.medium))
@@ -113,16 +113,17 @@ private struct NowPlayingLabel: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
-                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity)
                 if track != nil {
                     ScrubberView()
                 }
             }
+            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
     }
 
@@ -189,9 +190,9 @@ private struct ScrubberView: View {
     }
 }
 
-/// Custom thin progress track with hover-revealed thumb. Replaces SwiftUI Slider so
-/// the scrubber visually integrates with the toolbar pill instead of looking like a
-/// stock control floating on top.
+/// Thin progress track. SwiftUI gesture leaks through to the window's
+/// "isMovableByWindowBackground" drag in the toolbar, so the pointer interaction
+/// is handled in an NSView wrapper that owns the mouseDown/Up events explicitly.
 struct ProgressTrack: View {
     let value: Double
     let duration: Double
@@ -200,46 +201,116 @@ struct ProgressTrack: View {
     var tint: Color = .accentColor
     var trackColor: Color = Color.primary.opacity(0.18)
 
-    @State private var isHovered = false
+    var body: some View {
+        ProgressTrackRepresentable(
+            value: value,
+            duration: duration,
+            tint: NSColor(tint),
+            trackColor: NSColor(trackColor),
+            onScrub: onScrub,
+            onCommit: onCommit
+        )
+    }
+}
 
-    private var fraction: Double {
-        guard duration > 0 else { return 0 }
-        return min(max(value / duration, 0), 1)
+private struct ProgressTrackRepresentable: NSViewRepresentable {
+    let value: Double
+    let duration: Double
+    let tint: NSColor
+    let trackColor: NSColor
+    let onScrub: (Double) -> Void
+    let onCommit: () -> Void
+
+    func makeNSView(context: Context) -> ProgressTrackNSView {
+        ProgressTrackNSView()
     }
 
-    var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            let trackHeight: CGFloat = isHovered ? 4 : 2
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(trackColor)
-                    .frame(height: trackHeight)
-                Capsule()
-                    .fill(tint)
-                    .frame(width: width * fraction, height: trackHeight)
-                if isHovered {
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 10, height: 10)
-                        .shadow(color: .black.opacity(0.2), radius: 2, y: 0.5)
-                        .offset(x: width * fraction - 5)
-                }
-            }
-            .frame(maxHeight: .infinity, alignment: .center)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { drag in
-                        let clamped = min(max(drag.location.x, 0), width)
-                        let frac = width > 0 ? clamped / width : 0
-                        onScrub(frac * duration)
-                    }
-                    .onEnded { _ in onCommit() }
-            )
-            .animation(.easeInOut(duration: 0.15), value: isHovered)
-        }
-        .onHover { isHovered = $0 }
+    func updateNSView(_ nsView: ProgressTrackNSView, context: Context) {
+        nsView.value = value
+        nsView.duration = duration
+        nsView.tint = tint
+        nsView.trackColor = trackColor
+        nsView.onScrub = onScrub
+        nsView.onCommit = onCommit
+        nsView.needsDisplay = true
+    }
+}
+
+final class ProgressTrackNSView: NSView {
+    var value: Double = 0
+    var duration: Double = 1
+    var tint: NSColor = .controlAccentColor
+    var trackColor: NSColor = NSColor.labelColor.withAlphaComponent(0.18)
+    var onScrub: (Double) -> Void = { _ in }
+    var onCommit: () -> Void = { }
+
+    private var isHovered = false
+    private var trackingArea: NSTrackingArea?
+
+    override var wantsUpdateLayer: Bool { false }
+    /// Returning true here — combined with mouseDown/dragged/up — prevents the toolbar's
+    /// window-drag gesture from intercepting our clicks.
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        needsDisplay = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        needsDisplay = true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        scrub(to: convert(event.locationInWindow, from: nil).x)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        scrub(to: convert(event.locationInWindow, from: nil).x)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        onCommit()
+    }
+
+    private func scrub(to x: CGFloat) {
+        guard bounds.width > 0 else { return }
+        let clamped = min(max(x, 0), bounds.width)
+        let frac = clamped / bounds.width
+        onScrub(Double(frac) * duration)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let trackHeight: CGFloat = isHovered ? 4 : 2
+        let centerY = bounds.midY
+        let trackRect = NSRect(x: 0, y: centerY - trackHeight / 2, width: bounds.width, height: trackHeight)
+        let radius = trackHeight / 2
+        let path = NSBezierPath(roundedRect: trackRect, xRadius: radius, yRadius: radius)
+        trackColor.setFill()
+        path.fill()
+
+        let fraction = duration > 0 ? min(max(value / duration, 0), 1) : 0
+        let fillWidth = bounds.width * CGFloat(fraction)
+        guard fillWidth > 0 else { return }
+        let fillRect = NSRect(x: 0, y: centerY - trackHeight / 2, width: fillWidth, height: trackHeight)
+        let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: radius, yRadius: radius)
+        tint.setFill()
+        fillPath.fill()
     }
 }
 #endif
