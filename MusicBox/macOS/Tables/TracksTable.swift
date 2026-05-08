@@ -36,6 +36,10 @@ struct TracksTable: NSViewControllerRepresentable {
     var hidesColumnHeaders: Bool = false
     /// Override the default row height. Nil = NSTableView's default for the inset style.
     var rowHeight: CGFloat?
+    /// "Embedded" styling: no scrollbar gutter, no alternating row backgrounds, rounded
+    /// selection that merges across adjacent selected rows. Use when the table sits
+    /// inline inside a parent ScrollView.
+    var embeddedStyle: Bool = false
 
     func makeNSViewController(context: Context) -> TracksTableViewController {
         let vc = TracksTableViewController()
@@ -44,6 +48,7 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.actions = actions
         vc.onReorder = onReorder
         vc.onDelete = onDelete
+        vc.applyEmbeddedStyle(embeddedStyle)
         vc.applyHeaderVisibility(hidden: hidesColumnHeaders)
         vc.applyRowHeight(rowHeight)
         return vc
@@ -53,6 +58,7 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.actions = actions
         vc.onReorder = onReorder
         vc.onDelete = onDelete
+        vc.applyEmbeddedStyle(embeddedStyle)
         vc.applyHeaderVisibility(hidden: hidesColumnHeaders)
         vc.applyRowHeight(rowHeight)
         vc.update(
@@ -168,6 +174,26 @@ final class TracksTableViewController: NSViewController {
         if let rowHeight, abs(tableView.rowHeight - rowHeight) > 0.5 {
             tableView.rowHeight = rowHeight
         }
+    }
+
+    private(set) var isEmbedded: Bool = false
+
+    func applyEmbeddedStyle(_ embedded: Bool) {
+        guard embedded != isEmbedded else { return }
+        isEmbedded = embedded
+        if embedded {
+            tableView.usesAlternatingRowBackgroundColors = false
+            tableView.style = .plain
+            tableView.intercellSpacing = NSSize(width: 0, height: 2)
+            scrollView.hasVerticalScroller = false
+            scrollView.hasHorizontalScroller = false
+            scrollView.verticalScrollElasticity = .none
+        } else {
+            tableView.usesAlternatingRowBackgroundColors = true
+            tableView.style = .inset
+            scrollView.hasVerticalScroller = true
+        }
+        tableView.reloadData()
     }
 
     func update(
@@ -326,6 +352,11 @@ extension TracksTableViewController: NSTableViewDataSource {
 // MARK: - Delegate
 
 extension TracksTableViewController: NSTableViewDelegate {
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        guard isEmbedded else { return nil }
+        return RoundedSelectionRowView()
+    }
+
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let column = tableColumn, row < tracks.count else { return nil }
         let track = tracks[row]
@@ -469,6 +500,67 @@ extension TracksTableViewController: NSMenuDelegate {
         let rows = tableView.selectedRowIndexes
         guard !rows.isEmpty else { return }
         removeFromPlaylistRows(rows)
+    }
+}
+
+// MARK: - Embedded selection row
+
+/// Custom row view used in embeddedStyle. Draws the selection background as a rounded
+/// rectangle that "merges" with adjacent selected rows: the corner radius collapses on
+/// the edge that touches another selected row, so a multi-row selection reads as one
+/// continuous pill instead of stacked separate pills.
+private final class RoundedSelectionRowView: NSTableRowView {
+    private let cornerRadius: CGFloat = 5
+    private let horizontalInset: CGFloat = 6
+
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard isSelected else { return }
+        let rect = bounds.insetBy(dx: horizontalInset, dy: 1)
+        let topRound = !isPreviousRowSelected
+        let bottomRound = !isNextRowSelected
+        let path = roundedPath(in: rect, topRound: topRound, bottomRound: bottomRound)
+        let fill = NSColor.controlAccentColor.withAlphaComponent(0.20)
+        fill.setFill()
+        path.fill()
+    }
+
+    private func roundedPath(in rect: NSRect, topRound: Bool, bottomRound: Bool) -> NSBezierPath {
+        let r = cornerRadius
+        let topR: CGFloat = topRound ? r : 0
+        let botR: CGFloat = bottomRound ? r : 0
+        let path = NSBezierPath()
+        // Counter-clockwise from bottom-left, AppKit (flipped=false) y-up.
+        path.move(to: NSPoint(x: rect.minX, y: rect.minY + botR))
+        path.line(to: NSPoint(x: rect.minX, y: rect.maxY - topR))
+        if topRound {
+            path.appendArc(
+                withCenter: NSPoint(x: rect.minX + topR, y: rect.maxY - topR),
+                radius: topR, startAngle: 180, endAngle: 90, clockwise: true
+            )
+        }
+        path.line(to: NSPoint(x: rect.maxX - topR, y: rect.maxY))
+        if topRound {
+            path.appendArc(
+                withCenter: NSPoint(x: rect.maxX - topR, y: rect.maxY - topR),
+                radius: topR, startAngle: 90, endAngle: 0, clockwise: true
+            )
+        }
+        path.line(to: NSPoint(x: rect.maxX, y: rect.minY + botR))
+        if bottomRound {
+            path.appendArc(
+                withCenter: NSPoint(x: rect.maxX - botR, y: rect.minY + botR),
+                radius: botR, startAngle: 0, endAngle: 270, clockwise: true
+            )
+        }
+        path.line(to: NSPoint(x: rect.minX + botR, y: rect.minY))
+        if bottomRound {
+            path.appendArc(
+                withCenter: NSPoint(x: rect.minX + botR, y: rect.minY + botR),
+                radius: botR, startAngle: 270, endAngle: 180, clockwise: true
+            )
+        }
+        path.close()
+        return path
     }
 }
 

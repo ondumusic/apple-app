@@ -134,7 +134,8 @@ private struct AlbumInlineSection: View {
                 currentlyPlayingTrackId: player.currentTrack?.id,
                 isPlaying: player.isPlaying,
                 hidesColumnHeaders: true,
-                rowHeight: rowHeight
+                rowHeight: rowHeight,
+                embeddedStyle: true
             )
             .frame(height: tableHeight)
         }
