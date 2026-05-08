@@ -20,10 +20,34 @@ class BackgroundSessionDelegate: NSObject, UIApplicationDelegate {
 }
 #endif
 
+#if os(macOS)
+final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Hide the navigationTitle that SwiftUI parks in the title bar — we don't want
+        // the current view's name shown there. Title bar stays present as the toolbar
+        // container; just the text is hidden.
+        for window in NSApp.windows {
+            window.titleVisibility = .hidden
+        }
+        // New windows opened later (login, etc.) get the same treatment.
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeMainNotification,
+            object: nil,
+            queue: .main
+        ) { note in
+            (note.object as? NSWindow)?.titleVisibility = .hidden
+        }
+    }
+}
+#endif
+
 @main
 struct MusicBoxApp: App {
     #if os(iOS)
     @UIApplicationDelegateAdaptor(BackgroundSessionDelegate.self) private var appDelegate
+    #endif
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(MacOSAppDelegate.self) private var macAppDelegate
     #endif
 
     @State private var auth: AuthService
