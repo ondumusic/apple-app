@@ -89,7 +89,7 @@ final class SidebarViewController: NSViewController {
     var actions: SidebarActions = SidebarActions()
 
     private let scrollView = NSScrollView()
-    private let outlineView = NSOutlineView()
+    private let outlineView = KeyAwareOutlineView()
     private let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
     private let searchField = NSSearchField()
     private let addButton = NSButton()
@@ -128,6 +128,7 @@ final class SidebarViewController: NSViewController {
 
         outlineView.dataSource = self
         outlineView.delegate = self
+        outlineView.onDelete = { [weak self] in self?.deleteSelectedPlaylist() }
 
         let menu = NSMenu()
         menu.delegate = self
@@ -219,6 +220,15 @@ final class SidebarViewController: NSViewController {
 
     @objc private func handleFocusSearch() {
         view.window?.makeFirstResponder(searchField)
+    }
+
+    private func deleteSelectedPlaylist() {
+        let row = outlineView.selectedRow
+        guard row >= 0,
+              let node = outlineView.item(atRow: row) as? SidebarNode,
+              case .playlist(let playlist) = node.kind
+        else { return }
+        actions.deletePlaylist(playlist)
     }
 
     @objc private func handleStartInlineRename(_ notification: Notification) {
@@ -754,6 +764,28 @@ extension SidebarCell: NSTextFieldDelegate {
             return true
         }
         return false
+    }
+}
+
+/// NSOutlineView subclass that fires onDelete on Backspace / forward Delete when the
+/// selection isn't being inline-edited. Keeps the rest of NSOutlineView's keyDown
+/// (arrow nav, expand/collapse) intact.
+private final class KeyAwareOutlineView: NSOutlineView {
+    var onDelete: (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        // 51 = delete (backspace), 117 = forward delete.
+        if event.keyCode == 51 || event.keyCode == 117 {
+            // Don't intercept when a cell text-editor is the first responder — let it
+            // handle the keystroke normally.
+            if let responder = window?.firstResponder, responder is NSText {
+                super.keyDown(with: event)
+                return
+            }
+            onDelete?()
+            return
+        }
+        super.keyDown(with: event)
     }
 }
 
