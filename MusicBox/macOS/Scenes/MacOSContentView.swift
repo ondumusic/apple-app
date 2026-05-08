@@ -119,6 +119,42 @@ struct MacOSContentView: View {
         }
     }
 
+    /// Posts the inline-rename trigger for a freshly-created playlist/folder. The
+    /// outbox can flush + remap the temp id to the real id within a few ms — faster
+    /// than SwiftUI's tree rebuild — so we listen for .playlistIdRemapped during the
+    /// settle window and post whichever id is current. If the remap doesn't happen
+    /// (offline), we post the temp id at the timeout.
+    private func scheduleInlineRename(forTempId tempId: UUID) {
+        var posted = false
+        var observer: NSObjectProtocol?
+        let post: (UUID) -> Void = { id in
+            guard !posted else { return }
+            posted = true
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            #if DEBUG
+            print("[rename] posting startInlineRename for id=\(id)")
+            #endif
+            NotificationCenter.default.post(name: .startInlineRename, object: id)
+        }
+        observer = NotificationCenter.default.addObserver(
+            forName: .playlistIdRemapped,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let info = note.userInfo,
+                  let temp = info["temp"] as? UUID, temp == tempId,
+                  let real = info["real"] as? UUID
+            else { return }
+            #if DEBUG
+            print("[rename] remap caught: \(temp) → \(real)")
+            #endif
+            post(real)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            post(tempId)
+        }
+    }
+
     private func toggleMiniPlayer() {
         if let mp = miniPlayer {
             mp.toggle()
@@ -153,30 +189,12 @@ struct MacOSContentView: View {
             playlistController.addTracks(trackIds, to: playlist.id)
         }
         a.createPlaylist = { parentId in
-            // Optimistically create with a placeholder name and immediately enter inline
-            // rename in the sidebar — same UX as iTunes / Apple Music.
             guard let new = playlistController.createPlaylist(name: "Untitled Playlist", parentId: parentId) else { return }
-            #if DEBUG
-            print("[rename] createPlaylist returned id=\(new.id)")
-            #endif
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                #if DEBUG
-                print("[rename] posting startInlineRename for id=\(new.id)")
-                #endif
-                NotificationCenter.default.post(name: .startInlineRename, object: new.id)
-            }
+            scheduleInlineRename(forTempId: new.id)
         }
         a.createFolder = { parentId in
             guard let new = playlistController.createFolder(name: "New Folder", parentId: parentId) else { return }
-            #if DEBUG
-            print("[rename] createFolder returned id=\(new.id)")
-            #endif
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                #if DEBUG
-                print("[rename] posting startInlineRename for id=\(new.id)")
-                #endif
-                NotificationCenter.default.post(name: .startInlineRename, object: new.id)
-            }
+            scheduleInlineRename(forTempId: new.id)
         }
         a.movePlaylist = { playlistId, parentId in
             playlistController.movePlaylist(playlistId, to: parentId)

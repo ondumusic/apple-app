@@ -440,6 +440,11 @@ extension MusicLibrary {
         }
         persistChanges()
         revision += 1
+        NotificationCenter.default.post(
+            name: .playlistIdRemapped,
+            object: nil,
+            userInfo: ["temp": tempId, "real": confirmed.id]
+        )
     }
 
     // MARK: - Pending mutations (outbox)

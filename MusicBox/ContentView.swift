@@ -13,6 +13,9 @@ extension Notification.Name {
     /// Posted with `object: UUID` — the playlist/folder id that should enter inline rename
     /// mode in the macOS sidebar (used for "create + immediately rename" flow).
     static let startInlineRename = Notification.Name("MusicBox.startInlineRename")
+    /// Posted by MusicLibrary.remapPlaylistId when an optimistic playlist's temp id is
+    /// rewritten to the server-assigned id. userInfo: ["temp": UUID, "real": UUID].
+    static let playlistIdRemapped = Notification.Name("MusicBox.playlistIdRemapped")
 }
 
 struct ContentView: View {
