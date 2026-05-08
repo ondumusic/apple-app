@@ -102,6 +102,10 @@ final class SidebarViewController: NSViewController {
     /// Set when we're applying an externally-driven selection so we can suppress the
     /// callback that would otherwise echo it back through the binding.
     private var suppressSelectionCallback = false
+    /// Inline rename request that arrived before the row was in the outline view (the
+    /// new playlist hadn't been picked up by the next tree rebuild yet). We trigger as
+    /// soon as the row appears in update().
+    private var pendingInlineRenameId: UUID?
 
     override func loadView() {
         view = NSView()
@@ -233,25 +237,20 @@ final class SidebarViewController: NSViewController {
 
     @objc private func handleStartInlineRename(_ notification: Notification) {
         guard let id = notification.object as? UUID else { return }
-        // Tree might still be rebuilding from the create — give SwiftUI a tick.
-        DispatchQueue.main.async { [weak self] in
-            self?.startInlineRename(playlistId: id)
+        // Try immediately; if the new row isn't in the outline view yet (tree rebuild
+        // hasn't reached us via SwiftUI's update cycle), stash and retry from update().
+        if rowForSelection(.playlist(id)) != nil {
+            startInlineRename(playlistId: id)
+        } else {
+            pendingInlineRenameId = id
         }
     }
 
     private func startInlineRename(playlistId: UUID) {
-        guard let row = rowForSelection(.playlist(playlistId)) else {
-            // Row not visible yet (e.g. inside collapsed folder) — give it one more tick.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                guard let self,
-                      let row = self.rowForSelection(.playlist(playlistId))
-                else { return }
-                self.outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-                self.outlineView.editColumn(0, row: row, with: nil, select: true)
-            }
-            return
-        }
+        guard let row = rowForSelection(.playlist(playlistId)) else { return }
+        outlineView.scrollRowToVisible(row)
         outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        view.window?.makeFirstResponder(outlineView)
         outlineView.editColumn(0, row: row, with: nil, select: true)
     }
 
@@ -304,6 +303,12 @@ final class SidebarViewController: NSViewController {
             restoreExpansion(matching: expandedFolderIds, in: playlistsSection)
         }
         applyExternalSelection(externalSelection)
+        // The new playlist/folder might have just appeared in the rebuilt tree —
+        // trigger the deferred inline rename now that the row exists.
+        if let id = pendingInlineRenameId, rowForSelection(.playlist(id)) != nil {
+            pendingInlineRenameId = nil
+            startInlineRename(playlistId: id)
+        }
     }
 
     private func capturedExpandedFolderIds() -> Set<UUID> {
@@ -641,40 +646,66 @@ extension SidebarViewController: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         let row = outlineView.clickedRow
-        guard row >= 0,
-              let node = outlineView.item(atRow: row) as? SidebarNode,
-              case .playlist(let playlist) = node.kind
-        else { return }
+        let clickedPlaylist: Playlist? = {
+            guard row >= 0,
+                  let node = outlineView.item(atRow: row) as? SidebarNode,
+                  case .playlist(let p) = node.kind
+            else { return nil }
+            return p
+        }()
 
-        if !playlist.isFolder {
-            let play = NSMenuItem(title: "Play", action: #selector(menuPlay), keyEquivalent: "")
-            play.target = self
-            play.representedObject = playlist
-            menu.addItem(play)
+        if let playlist = clickedPlaylist {
+            if !playlist.isFolder {
+                let play = NSMenuItem(title: "Play", action: #selector(menuPlay), keyEquivalent: "")
+                play.target = self
+                play.representedObject = playlist
+                menu.addItem(play)
 
-            let shuffle = NSMenuItem(title: "Shuffle", action: #selector(menuShuffle), keyEquivalent: "")
-            shuffle.target = self
-            shuffle.representedObject = playlist
-            menu.addItem(shuffle)
+                let shuffle = NSMenuItem(title: "Shuffle", action: #selector(menuShuffle), keyEquivalent: "")
+                shuffle.target = self
+                shuffle.representedObject = playlist
+                menu.addItem(shuffle)
+
+                menu.addItem(.separator())
+            }
+
+            let rename = NSMenuItem(title: "Rename", action: #selector(menuRename), keyEquivalent: "")
+            rename.target = self
+            rename.representedObject = playlist
+            menu.addItem(rename)
 
             menu.addItem(.separator())
+
+            let delete = NSMenuItem(
+                title: playlist.isFolder ? "Delete Folder" : "Delete Playlist",
+                action: #selector(menuDelete),
+                keyEquivalent: ""
+            )
+            delete.target = self
+            delete.representedObject = playlist
+            menu.addItem(delete)
+
+            if playlist.isFolder {
+                menu.addItem(.separator())
+                addCreateItems(to: menu, parentId: playlist.id)
+            }
+        } else {
+            // Empty space, section header, or library category — offer to create at
+            // root.
+            addCreateItems(to: menu, parentId: nil)
         }
+    }
 
-        let rename = NSMenuItem(title: "Rename", action: #selector(menuRename), keyEquivalent: "")
-        rename.target = self
-        rename.representedObject = playlist
-        menu.addItem(rename)
+    private func addCreateItems(to menu: NSMenu, parentId: UUID?) {
+        let newPlaylist = NSMenuItem(title: "New Playlist", action: #selector(menuNewPlaylist(_:)), keyEquivalent: "")
+        newPlaylist.target = self
+        newPlaylist.representedObject = parentId as Any?
+        menu.addItem(newPlaylist)
 
-        menu.addItem(.separator())
-
-        let delete = NSMenuItem(
-            title: playlist.isFolder ? "Delete Folder" : "Delete Playlist",
-            action: #selector(menuDelete),
-            keyEquivalent: ""
-        )
-        delete.target = self
-        delete.representedObject = playlist
-        menu.addItem(delete)
+        let newFolder = NSMenuItem(title: "New Folder", action: #selector(menuNewFolder(_:)), keyEquivalent: "")
+        newFolder.target = self
+        newFolder.representedObject = parentId as Any?
+        menu.addItem(newFolder)
     }
 
     @objc private func menuPlay(_ sender: NSMenuItem) {
