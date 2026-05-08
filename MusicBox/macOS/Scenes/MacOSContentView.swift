@@ -27,6 +27,7 @@ struct MacOSContentView: View {
                 musicLibrary: musicLibrary,
                 actions: sidebarActions
             )
+            .toolbar(removing: .sidebarToggle)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
             NavigationStack(path: $detailPath) {
@@ -155,13 +156,25 @@ struct MacOSContentView: View {
             // Optimistically create with a placeholder name and immediately enter inline
             // rename in the sidebar — same UX as iTunes / Apple Music.
             guard let new = playlistController.createPlaylist(name: "Untitled Playlist", parentId: parentId) else { return }
+            #if DEBUG
+            print("[rename] createPlaylist returned id=\(new.id)")
+            #endif
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                #if DEBUG
+                print("[rename] posting startInlineRename for id=\(new.id)")
+                #endif
                 NotificationCenter.default.post(name: .startInlineRename, object: new.id)
             }
         }
         a.createFolder = { parentId in
             guard let new = playlistController.createFolder(name: "New Folder", parentId: parentId) else { return }
+            #if DEBUG
+            print("[rename] createFolder returned id=\(new.id)")
+            #endif
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                #if DEBUG
+                print("[rename] posting startInlineRename for id=\(new.id)")
+                #endif
                 NotificationCenter.default.post(name: .startInlineRename, object: new.id)
             }
         }

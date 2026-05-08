@@ -51,10 +51,15 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
             window.titleVisibility = .hidden
         }
         titleObservers.append(observation)
-        // Park the initial first responder somewhere harmless so the system doesn't
-        // auto-focus the sidebar's NSSearchField on launch.
-        if window.firstResponder is NSSearchField || window.firstResponder === window {
+        #if DEBUG
+        let fr = window.firstResponder.map { String(describing: $0) } ?? "nil"
+        print("[focus] attachTitleClamp firstResponder=\(fr)")
+        #endif
+        if window.firstResponder is NSSearchField {
             window.makeFirstResponder(nil)
+            #if DEBUG
+            print("[focus] cleared search-field firstResponder")
+            #endif
         }
     }
 }

@@ -248,11 +248,11 @@ final class SidebarViewController: NSViewController {
 
     @objc private func handleStartInlineRename(_ notification: Notification) {
         guard let id = notification.object as? UUID else { return }
-        // Try immediately; if the new row isn't in the outline view yet (tree rebuild
-        // hasn't reached us via SwiftUI's update cycle), stash and retry from update().
-        // Either way, dispatch the actual editColumn call to a fresh runloop tick so
-        // we're not editing inside reloadItem's call stack.
-        if rowForSelection(.playlist(id)) != nil {
+        let immediateRow = rowForSelection(.playlist(id))
+        #if DEBUG
+        print("[rename] handleStartInlineRename id=\(id) immediateRow=\(immediateRow as Any)")
+        #endif
+        if immediateRow != nil {
             DispatchQueue.main.async { [weak self] in
                 self?.startInlineRename(playlistId: id)
             }
@@ -262,19 +262,46 @@ final class SidebarViewController: NSViewController {
     }
 
     private func startInlineRename(playlistId: UUID) {
-        guard let row = rowForSelection(.playlist(playlistId)) else { return }
+        guard let row = rowForSelection(.playlist(playlistId)) else {
+            #if DEBUG
+            print("[rename] startInlineRename: no row for \(playlistId)")
+            #endif
+            return
+        }
+        #if DEBUG
+        print("[rename] startInlineRename row=\(row)")
+        #endif
         outlineView.scrollRowToVisible(row)
         outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        // Wait long enough for: the menu (if any) to fully close, the selection-change
-        // re-entrance into updateNSViewController to settle, and the cell view to be
-        // attached to a window. selectText fails silently if any of those aren't ready.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            guard let self,
-                  let window = self.view.window,
-                  let row = self.rowForSelection(.playlist(playlistId)),
-                  let cell = self.outlineView.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCell
-            else { return }
-            // Ensure our window is key — the menu just closing may have demoted us.
+            guard let self else { return }
+            guard let window = self.view.window else {
+                #if DEBUG
+                print("[rename] no window")
+                #endif
+                return
+            }
+            guard let row = self.rowForSelection(.playlist(playlistId)) else {
+                #if DEBUG
+                print("[rename] row vanished by 50ms")
+                #endif
+                return
+            }
+            guard let cellRaw = self.outlineView.view(atColumn: 0, row: row, makeIfNecessary: true) else {
+                #if DEBUG
+                print("[rename] view(atColumn:row:) returned nil row=\(row)")
+                #endif
+                return
+            }
+            guard let cell = cellRaw as? SidebarCell else {
+                #if DEBUG
+                print("[rename] cell not SidebarCell, got \(type(of: cellRaw))")
+                #endif
+                return
+            }
+            #if DEBUG
+            print("[rename] window.isKey=\(window.isKeyWindow) firstResponder=\(window.firstResponder.map { String(describing: $0) } ?? "nil")")
+            #endif
             if !window.isKeyWindow { window.makeKey() }
             cell.beginInlineRename()
         }
@@ -329,11 +356,11 @@ final class SidebarViewController: NSViewController {
             restoreExpansion(matching: expandedFolderIds, in: playlistsSection)
         }
         applyExternalSelection(externalSelection)
-        // The new playlist/folder might have just appeared in the rebuilt tree —
-        // trigger the deferred inline rename. Dispatch async so editColumn runs after
-        // the current update settles; calling it inside reloadItem silently no-ops.
         if let id = pendingInlineRenameId, rowForSelection(.playlist(id)) != nil {
             pendingInlineRenameId = nil
+            #if DEBUG
+            print("[rename] pending->fire id=\(id)")
+            #endif
             DispatchQueue.main.async { [weak self] in
                 self?.startInlineRename(playlistId: id)
             }
@@ -878,11 +905,14 @@ private final class SidebarCell: NSTableCellView {
     func beginInlineRename() {
         label.isEditable = true
         label.isSelectable = true
-        // Bezel the field while editing — unbezeled labels sometimes refuse the field
-        // editor on macOS. Reset on commit/cancel via configure() running again.
         label.isBordered = false
         label.drawsBackground = false
+        let beforeResponder = window?.firstResponder
         label.selectText(nil)
+        let afterResponder = window?.firstResponder
+        #if DEBUG
+        print("[rename] beginInlineRename label.isEditable=\(label.isEditable) inWindow=\(window != nil) before=\(beforeResponder.map { String(describing: $0) } ?? "nil") after=\(afterResponder.map { String(describing: $0) } ?? "nil")")
+        #endif
     }
 }
 
