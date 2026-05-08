@@ -21,6 +21,10 @@ struct TracksTable: NSViewControllerRepresentable {
     /// instead of the track number.
     var currentlyPlayingTrackId: UUID?
     var isPlaying: Bool = false
+    /// When true, the # column shows the row's 1-based position (1, 2, 3…) instead of
+    /// the track's intrinsic number. Useful for PlaylistDetailMac where ordering differs
+    /// from album-track-number ordering.
+    var usesPlaylistPosition: Bool = false
 
     func makeNSViewController(context: Context) -> TracksTableViewController {
         let vc = TracksTableViewController()
@@ -38,7 +42,8 @@ struct TracksTable: NSViewControllerRepresentable {
             showArtist: showArtist,
             showAlbum: showAlbum,
             currentlyPlayingTrackId: currentlyPlayingTrackId,
-            isPlaying: isPlaying
+            isPlaying: isPlaying,
+            usesPlaylistPosition: usesPlaylistPosition
         )
     }
 }
@@ -55,6 +60,7 @@ final class TracksTableViewController: NSViewController {
     private(set) var tracks: [Track] = []
     private var currentlyPlayingTrackId: UUID?
     private var isPlaying: Bool = false
+    private var usesPlaylistPosition: Bool = false
 
     private let numberColumn = NSTableColumn(identifier: .init("number"))
     private let titleColumn  = NSTableColumn(identifier: .init("title"))
@@ -127,8 +133,10 @@ final class TracksTableViewController: NSViewController {
         showArtist: Bool,
         showAlbum: Bool,
         currentlyPlayingTrackId newCurrent: UUID?,
-        isPlaying newIsPlaying: Bool
+        isPlaying newIsPlaying: Bool,
+        usesPlaylistPosition newUsesPlaylistPosition: Bool
     ) {
+        self.usesPlaylistPosition = newUsesPlaylistPosition
         artistColumn.isHidden = !showArtist
         albumColumn.isHidden = !showAlbum
 
@@ -252,40 +260,60 @@ extension TracksTableViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let column = tableColumn, row < tracks.count else { return nil }
         let track = tracks[row]
-
-        let cell = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TextCell
-            ?? TextCell(identifier: column.identifier)
+        let isCurrent = currentlyPlayingTrackId == track.id
 
         switch column.identifier.rawValue {
         case "number":
-            cell.label.stringValue = track.number.map(String.init) ?? "–"
-            cell.label.alignment = .right
-            cell.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-            cell.label.textColor = .secondaryLabelColor
+            let cell = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? NumberOrSpeakerCell
+                ?? NumberOrSpeakerCell(identifier: column.identifier)
+            if isCurrent {
+                cell.showSpeaker(playing: isPlaying)
+            } else {
+                let display: String
+                if usesPlaylistPosition {
+                    display = String(row + 1)
+                } else {
+                    display = track.number.map(String.init) ?? "–"
+                }
+                cell.showNumber(display)
+            }
+            return cell
         case "title":
-            cell.label.stringValue = track.name
-            cell.label.alignment = .left
-            cell.label.font = .systemFont(ofSize: NSFont.systemFontSize)
-            cell.label.textColor = .labelColor
+            let cell = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TitleCell
+                ?? TitleCell(identifier: column.identifier)
+            cell.configure(track: track, isCurrent: isCurrent)
+            return cell
         case "artist":
+            let cell = textCell(for: column.identifier, in: tableView)
             cell.label.stringValue = track.artist.name
             cell.label.alignment = .left
             cell.label.font = .systemFont(ofSize: NSFont.systemFontSize)
             cell.label.textColor = .secondaryLabelColor
+            return cell
         case "album":
+            let cell = textCell(for: column.identifier, in: tableView)
             cell.label.stringValue = track.album?.name ?? ""
             cell.label.alignment = .left
             cell.label.font = .systemFont(ofSize: NSFont.systemFontSize)
             cell.label.textColor = .secondaryLabelColor
+            return cell
         case "duration":
+            let cell = textCell(for: column.identifier, in: tableView)
             cell.label.stringValue = track.formattedDuration
             cell.label.alignment = .right
             cell.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
             cell.label.textColor = .secondaryLabelColor
+            return cell
         default:
-            cell.label.stringValue = ""
+            return nil
         }
-        return cell
+    }
+
+    private func textCell(for identifier: NSUserInterfaceItemIdentifier, in tableView: NSTableView) -> TextCell {
+        if let existing = tableView.makeView(withIdentifier: identifier, owner: nil) as? TextCell {
+            return existing
+        }
+        return TextCell(identifier: identifier)
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
@@ -383,5 +411,97 @@ private final class TextCell: NSTableCellView {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+}
+
+/// # column cell. Switches between a track number/position and a speaker glyph for
+/// the currently-playing row.
+private final class NumberOrSpeakerCell: NSTableCellView {
+    let label = NSTextField(labelWithString: "")
+    let icon = NSImageView()
+
+    init(identifier: NSUserInterfaceItemIdentifier) {
+        super.init(frame: .zero)
+        self.identifier = identifier
+
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.alignment = .right
+        label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        label.textColor = .secondaryLabelColor
+        addSubview(label)
+
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
+        icon.contentTintColor = .controlAccentColor
+        icon.isHidden = true
+        addSubview(icon)
+
+        NSLayoutConstraint.activate([
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            icon.centerXAnchor.constraint(equalTo: centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 14),
+            icon.heightAnchor.constraint(equalToConstant: 14),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func showNumber(_ text: String) {
+        label.stringValue = text
+        label.isHidden = false
+        icon.isHidden = true
+    }
+
+    func showSpeaker(playing: Bool) {
+        let symbol = playing ? "speaker.wave.2.fill" : "speaker.fill"
+        icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        icon.isHidden = false
+        label.isHidden = true
+    }
+}
+
+/// Title column cell: track name + (optional) downloaded indicator + (optional)
+/// tinted text when this row is the currently-playing track.
+private final class TitleCell: NSTableCellView {
+    let label = NSTextField(labelWithString: "")
+    let downloadedIcon = NSImageView()
+
+    init(identifier: NSUserInterfaceItemIdentifier) {
+        super.init(frame: .zero)
+        self.identifier = identifier
+
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.lineBreakMode = .byTruncatingTail
+        label.cell?.usesSingleLineMode = true
+        addSubview(label)
+        textField = label
+
+        downloadedIcon.translatesAutoresizingMaskIntoConstraints = false
+        downloadedIcon.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: "Downloaded")
+        downloadedIcon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
+        downloadedIcon.contentTintColor = .secondaryLabelColor
+        downloadedIcon.isHidden = true
+        addSubview(downloadedIcon)
+
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: downloadedIcon.leadingAnchor, constant: -4),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            downloadedIcon.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            downloadedIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            downloadedIcon.widthAnchor.constraint(equalToConstant: 14),
+            downloadedIcon.heightAnchor.constraint(equalToConstant: 14),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(track: Track, isCurrent: Bool) {
+        label.stringValue = track.name
+        label.font = .systemFont(ofSize: NSFont.systemFontSize)
+        label.textColor = isCurrent ? .controlAccentColor : .labelColor
+        downloadedIcon.isHidden = !track.isDownloaded
+    }
 }
 #endif

@@ -28,7 +28,9 @@ struct AlbumDetailMac: View {
                 onPlay: playTrack(at:),
                 actions: trackActions,
                 showArtist: hasMultipleArtists,
-                showAlbum: false
+                showAlbum: false,
+                currentlyPlayingTrackId: player.currentTrack?.id,
+                isPlaying: player.isPlaying
             )
         }
         .navigationTitle(album.name)

@@ -25,7 +25,10 @@ struct PlaylistDetailMac: View {
                 onPlay: playTrack(at:),
                 actions: trackActions,
                 showArtist: true,
-                showAlbum: true
+                showAlbum: true,
+                currentlyPlayingTrackId: player.currentTrack?.id,
+                isPlaying: player.isPlaying,
+                usesPlaylistPosition: true
             )
         }
         .navigationTitle(playlist?.name ?? "Playlist")

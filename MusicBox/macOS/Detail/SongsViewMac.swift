@@ -16,7 +16,9 @@ struct SongsViewMac: View {
             onPlay: playTrack(at:),
             actions: trackActions,
             showArtist: true,
-            showAlbum: true
+            showAlbum: true,
+            currentlyPlayingTrackId: player.currentTrack?.id,
+            isPlaying: player.isPlaying
         )
         .navigationTitle("Songs")
         .onChange(of: musicLibrary.revision, initial: true) {
