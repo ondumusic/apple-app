@@ -17,6 +17,10 @@ struct TracksTable: NSViewControllerRepresentable {
     /// Whether to render the Album column. Set true on Songs/Search views, false in
     /// album detail (already obvious).
     var showAlbum: Bool = false
+    /// Currently-playing track id; the matching row's # column shows a speaker glyph
+    /// instead of the track number.
+    var currentlyPlayingTrackId: UUID?
+    var isPlaying: Bool = false
 
     func makeNSViewController(context: Context) -> TracksTableViewController {
         let vc = TracksTableViewController()
@@ -32,7 +36,9 @@ struct TracksTable: NSViewControllerRepresentable {
             tracks: tracks,
             externalSelection: selection,
             showArtist: showArtist,
-            showAlbum: showAlbum
+            showAlbum: showAlbum,
+            currentlyPlayingTrackId: currentlyPlayingTrackId,
+            isPlaying: isPlaying
         )
     }
 }
@@ -47,6 +53,8 @@ final class TracksTableViewController: NSViewController {
     private let scrollView = NSScrollView()
     private let tableView = KeyAwareTableView()
     private(set) var tracks: [Track] = []
+    private var currentlyPlayingTrackId: UUID?
+    private var isPlaying: Bool = false
 
     private let numberColumn = NSTableColumn(identifier: .init("number"))
     private let titleColumn  = NSTableColumn(identifier: .init("title"))
@@ -113,14 +121,39 @@ final class TracksTableViewController: NSViewController {
         column.headerCell.alignment = alignment
     }
 
-    func update(tracks newTracks: [Track], externalSelection: Set<UUID>, showArtist: Bool, showAlbum: Bool) {
+    func update(
+        tracks newTracks: [Track],
+        externalSelection: Set<UUID>,
+        showArtist: Bool,
+        showAlbum: Bool,
+        currentlyPlayingTrackId newCurrent: UUID?,
+        isPlaying newIsPlaying: Bool
+    ) {
         artistColumn.isHidden = !showArtist
         albumColumn.isHidden = !showAlbum
 
         let changed = !tracksMatch(self.tracks, newTracks)
+        let previousCurrent = self.currentlyPlayingTrackId
+        let previousPlaying = self.isPlaying
         self.tracks = newTracks
+        self.currentlyPlayingTrackId = newCurrent
+        self.isPlaying = newIsPlaying
+
         if changed {
             tableView.reloadData()
+        } else if previousCurrent != newCurrent || previousPlaying != newIsPlaying {
+            // Only the play indicator needs refreshing — reload just the affected rows
+            // so we don't kill in-flight clicks.
+            var rows = IndexSet()
+            if let prev = previousCurrent, let row = tracks.firstIndex(where: { $0.id == prev }) {
+                rows.insert(row)
+            }
+            if let cur = newCurrent, let row = tracks.firstIndex(where: { $0.id == cur }) {
+                rows.insert(row)
+            }
+            if !rows.isEmpty {
+                tableView.reloadData(forRowIndexes: rows, columnIndexes: IndexSet(integer: 0))
+            }
         }
         applyExternalSelection(externalSelection)
     }

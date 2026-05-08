@@ -14,15 +14,9 @@ struct MacOSContentView: View {
     @State private var sidebarSelection: SidebarSelection? = .category(.artists)
     @State private var detailPath = NavigationPath()
     @State private var deleteTarget: Playlist?
-    @State private var pendingCreate: PendingCreate?
+    @State private var addToPlaylistTrackIds: [UUID] = []
     @State private var searchText: String = ""
     @State private var miniPlayer: MiniPlayerWindowController?
-
-    private struct PendingCreate: Identifiable {
-        let id = UUID()
-        let parentId: UUID?
-        let isFolder: Bool
-    }
 
     var body: some View {
         NavigationSplitView {
@@ -53,16 +47,16 @@ struct MacOSContentView: View {
         .frame(minWidth: 900, minHeight: 600)
         .toolbar { PlayerToolbar(showQueue: $showQueue) }
         .sheet(isPresented: $showQueue) {
-            QueueSheetPlaceholder(isPresented: $showQueue)
+            QueueSheet(isPresented: $showQueue)
         }
-        .sheet(item: $pendingCreate) { pending in
-            PlaylistNameSheet(mode: pending.isFolder ? .createFolder : .create) { name in
-                if pending.isFolder {
-                    playlistController.createFolder(name: name, parentId: pending.parentId)
-                } else {
-                    playlistController.createPlaylist(name: name, parentId: pending.parentId)
-                }
-            }
+        .sheet(
+            isPresented: Binding(
+                get: { !addToPlaylistTrackIds.isEmpty },
+                set: { if !$0 { addToPlaylistTrackIds = [] } }
+            )
+        ) {
+            AddToPlaylistSheet(trackIds: addToPlaylistTrackIds)
+                .frame(minWidth: 420, minHeight: 420)
         }
         .confirmationDialog(
             deleteTarget.map { "Delete \($0.name)?" } ?? "",
@@ -106,6 +100,10 @@ struct MacOSContentView: View {
                 detailPath.append(artist)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .requestAddToPlaylist)) { notification in
+            guard let ids = notification.object as? [UUID], !ids.isEmpty else { return }
+            addToPlaylistTrackIds = ids
+        }
     }
 
     private func toggleMiniPlayer() {
@@ -142,10 +140,18 @@ struct MacOSContentView: View {
             playlistController.addTracks(trackIds, to: playlist.id)
         }
         a.createPlaylist = { parentId in
-            pendingCreate = PendingCreate(parentId: parentId, isFolder: false)
+            // Optimistically create with a placeholder name and immediately enter inline
+            // rename in the sidebar — same UX as iTunes / Apple Music.
+            guard let new = playlistController.createPlaylist(name: "Untitled Playlist", parentId: parentId) else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                NotificationCenter.default.post(name: .startInlineRename, object: new.id)
+            }
         }
         a.createFolder = { parentId in
-            pendingCreate = PendingCreate(parentId: parentId, isFolder: true)
+            guard let new = playlistController.createFolder(name: "New Folder", parentId: parentId) else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                NotificationCenter.default.post(name: .startInlineRename, object: new.id)
+            }
         }
         a.movePlaylist = { playlistId, parentId in
             playlistController.movePlaylist(playlistId, to: parentId)
@@ -176,21 +182,70 @@ private struct DetailPlaceholder: View {
     }
 }
 
-private struct QueueSheetPlaceholder: View {
+private struct QueueSheet: View {
+    @Environment(PlayerService.self) private var player
     @Binding var isPresented: Bool
 
     var body: some View {
-        VStack(spacing: 12) {
-            Text("Queue")
-                .font(.headline)
-            Text("QueueView will be re-wired to NSTableView in the tracks step.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("Done") { isPresented = false }
-                .keyboardShortcut(.cancelAction)
+        VStack(spacing: 0) {
+            HStack {
+                Text("Queue")
+                    .font(.headline)
+                Spacer()
+                Button("Done") { isPresented = false }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            Divider()
+            if player.queue.isEmpty {
+                ContentUnavailableView(
+                    "Queue Empty",
+                    systemImage: "list.bullet",
+                    description: Text("Play something to populate the queue.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(Array(player.queue.enumerated()), id: \.offset) { index, item in
+                        HStack(spacing: 8) {
+                            if index == player.effectiveIndex {
+                                Image(systemName: player.isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
+                                    .foregroundStyle(.tint)
+                                    .frame(width: 16)
+                            } else {
+                                Text("\(index + 1)")
+                                    .monospacedDigit()
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 24, alignment: .trailing)
+                            }
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.track.name).lineLimit(1)
+                                Text(item.track.artist.name)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Text(item.track.formattedDuration)
+                                .monospacedDigit()
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            player.requestPlay {
+                                player.playNow(queue: player.queue, startingAt: index)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.inset)
+            }
         }
-        .padding(20)
-        .frame(width: 320, height: 200)
+        .frame(width: 460, height: 540)
     }
 }
 #endif

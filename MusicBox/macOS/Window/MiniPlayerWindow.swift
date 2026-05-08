@@ -2,22 +2,22 @@
 import AppKit
 import SwiftUI
 
-/// NSPanel-backed mini player. SwiftUI's WindowGroup can't give us a HUD-style
-/// always-on-top utility window, so we drop down to AppKit. The window's content is
-/// still SwiftUI via NSHostingView.
+/// NSPanel-backed mini player. Floating HUD-style window so it can stay above the main
+/// window across spaces. Content is SwiftUI via NSHostingView.
 @MainActor
 final class MiniPlayerWindowController: NSWindowController {
     private let hostingView: NSHostingView<AnyView>
 
     init(player: PlayerService) {
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 116),
-            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .utilityWindow, .hudWindow],
+        let panel = MiniPlayerPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 260, height: 260),
+            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel, .utilityWindow, .hudWindow],
             backing: .buffered,
             defer: false
         )
         panel.title = ""
         panel.titlebarAppearsTransparent = true
+        panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = true
         panel.isFloatingPanel = true
         panel.level = .floating
@@ -25,7 +25,10 @@ final class MiniPlayerWindowController: NSWindowController {
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.isReleasedWhenClosed = false
-        panel.minSize = NSSize(width: 280, height: 100)
+        panel.minSize = NSSize(width: 220, height: 220)
+        panel.aspectRatio = NSSize(width: 1, height: 1)
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
 
         let content = MiniPlayerContent()
             .environment(player)
@@ -59,8 +62,16 @@ final class MiniPlayerWindowController: NSWindowController {
     }
 }
 
+/// Custom NSPanel that can become key — needed so the user can close it with Cmd+W.
+private final class MiniPlayerPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+/// Apple Music-style mini player. Square window dominated by the artwork; track info
+/// overlays the bottom; transport controls fade in on hover.
 private struct MiniPlayerContent: View {
     @Environment(PlayerService.self) private var player
+    @State private var hovering = false
 
     private var track: Track? { player.currentTrack }
     private var artworkURL: URL? {
@@ -69,60 +80,97 @@ private struct MiniPlayerContent: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                if track != nil {
-                    ArtworkView(url: artworkURL, cornerRadius: 4)
-                        .frame(width: 56, height: 56)
-                } else {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(.tertiary)
-                        .frame(width: 56, height: 56)
-                        .overlay {
-                            Image(systemName: "music.note")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                        }
-                }
+        ZStack(alignment: .bottom) {
+            artwork
+            overlay
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black)
+        .onHover { hovering = $0 }
+    }
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(track?.name ?? "Not Playing")
-                        .font(.headline)
-                        .lineLimit(1)
-                    if let track {
-                        Text(track.artist.name)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            HStack(spacing: 14) {
-                Button { player.back() } label: {
-                    Image(systemName: "backward.fill").font(.title3)
-                }
-                .buttonStyle(.plain)
-                .disabled(track == nil || !player.canGoBack)
-
-                Button { player.togglePlayPause() } label: {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.title)
-                }
-                .buttonStyle(.plain)
-                .disabled(track == nil)
-
-                Button { player.skip() } label: {
-                    Image(systemName: "forward.fill").font(.title3)
-                }
-                .buttonStyle(.plain)
-                .disabled(track == nil || !player.canSkip)
+    @ViewBuilder
+    private var artwork: some View {
+        if track != nil, let url = artworkURL {
+            ArtworkView(url: url)
+                .aspectRatio(1, contentMode: .fill)
+                .clipped()
+        } else {
+            // Empty state — subtle gradient, music note in center
+            LinearGradient(
+                colors: [.gray.opacity(0.35), .gray.opacity(0.55)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .overlay {
+                Image(systemName: "music.note")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.white.opacity(0.4))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var overlay: some View {
+        VStack(spacing: 8) {
+            if hovering || track == nil {
+                transportRow
+                    .transition(.opacity)
+            }
+
+            // Track info strip — always visible, sits at the bottom over a translucent
+            // gradient so it stays readable on any artwork.
+            VStack(spacing: 1) {
+                Text(track?.name ?? "Not Playing")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                if let track {
+                    Text(track.artist.name)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.bottom, 12)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
+        }
+        .background(
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.3), .black.opacity(0.7)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .animation(.easeInOut(duration: 0.18), value: hovering)
+    }
+
+    private var transportRow: some View {
+        HStack(spacing: 24) {
+            Button { player.back() } label: {
+                Image(systemName: "backward.fill").font(.title)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .disabled(track == nil || !player.canGoBack)
+
+            Button { player.togglePlayPause() } label: {
+                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 36))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .disabled(track == nil)
+
+            Button { player.skip() } label: {
+                Image(systemName: "forward.fill").font(.title)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .disabled(track == nil || !player.canSkip)
+        }
+        .padding(.top, 12)
     }
 }
 #endif

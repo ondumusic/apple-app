@@ -185,6 +185,12 @@ final class SidebarViewController: NSViewController {
             name: .focusSearch,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleStartInlineRename(_:)),
+            name: .startInlineRename,
+            object: nil
+        )
 
         buildSkeletonTree()
         outlineView.reloadData()
@@ -208,6 +214,30 @@ final class SidebarViewController: NSViewController {
 
     @objc private func handleFocusSearch() {
         view.window?.makeFirstResponder(searchField)
+    }
+
+    @objc private func handleStartInlineRename(_ notification: Notification) {
+        guard let id = notification.object as? UUID else { return }
+        // Tree might still be rebuilding from the create — give SwiftUI a tick.
+        DispatchQueue.main.async { [weak self] in
+            self?.startInlineRename(playlistId: id)
+        }
+    }
+
+    private func startInlineRename(playlistId: UUID) {
+        guard let row = rowForSelection(.playlist(playlistId)) else {
+            // Row not visible yet (e.g. inside collapsed folder) — give it one more tick.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                guard let self,
+                      let row = self.rowForSelection(.playlist(playlistId))
+                else { return }
+                self.outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+                self.outlineView.editColumn(0, row: row, with: nil, select: true)
+            }
+            return
+        }
+        outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        outlineView.editColumn(0, row: row, with: nil, select: true)
     }
 
     @objc private func showAddMenu(_ sender: NSButton) {
