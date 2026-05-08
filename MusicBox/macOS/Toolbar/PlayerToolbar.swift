@@ -25,14 +25,6 @@ struct PlayerToolbar: ToolbarContent {
             .help("Queue")
             .disabled(player.currentTrack == nil)
         }
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                NotificationCenter.default.post(name: .toggleMiniPlayer, object: nil)
-            } label: {
-                Image(systemName: "pip")
-            }
-            .help("Mini Player")
-        }
     }
 }
 
@@ -95,19 +87,26 @@ private struct NowPlayingLabel: View {
 
     @ViewBuilder
     private var artwork: some View {
-        if track != nil {
-            ArtworkView(url: artworkURL, cornerRadius: 3)
-                .frame(width: 22, height: 22)
-        } else {
-            RoundedRectangle(cornerRadius: 3)
-                .fill(.tertiary)
-                .frame(width: 22, height: 22)
-                .overlay {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                }
+        Group {
+            if track != nil {
+                ArtworkView(url: artworkURL, cornerRadius: 3)
+                    .frame(width: 22, height: 22)
+            } else {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.tertiary)
+                    .frame(width: 22, height: 22)
+                    .overlay {
+                        Image(systemName: "music.note")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+            }
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            NotificationCenter.default.post(name: .toggleMiniPlayer, object: nil)
+        }
+        .help("Open Mini Player")
     }
 }
 #endif

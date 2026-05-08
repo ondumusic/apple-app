@@ -21,6 +21,9 @@ struct ArtistsViewMac: View {
                     }
                     .padding(.vertical, 1)
                     .tag(artist.id as Artist.ID?)
+                    .contextMenu {
+                        ArtistContextMenuItems(artist: artist)
+                    }
                 }
             }
             .listStyle(.inset)

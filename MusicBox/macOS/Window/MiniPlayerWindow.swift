@@ -9,21 +9,21 @@ final class MiniPlayerWindowController: NSWindowController {
     private let hostingView: NSHostingView<AnyView>
 
     init(player: PlayerService) {
-        let panel = MiniPlayerPanel(
+        // Plain resizable NSWindow (not a panel) so it behaves like any other window —
+        // not always-on-top by default. Title bar hidden so the artwork can fill the
+        // square content area; traffic lights overlay the top-left corner.
+        let panel = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 260, height: 260),
-            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel, .utilityWindow, .hudWindow],
+            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        panel.title = ""
+        panel.title = "Now Playing"
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
         panel.isMovableByWindowBackground = true
-        panel.isFloatingPanel = true
-        panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
-        panel.becomesKeyOnlyIfNeeded = true
         panel.isReleasedWhenClosed = false
         panel.minSize = NSSize(width: 220, height: 220)
         panel.aspectRatio = NSSize(width: 1, height: 1)
@@ -60,11 +60,6 @@ final class MiniPlayerWindowController: NSWindowController {
             showWindow(nil)
         }
     }
-}
-
-/// Custom NSPanel that can become key — needed so the user can close it with Cmd+W.
-private final class MiniPlayerPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
 }
 
 /// Apple Music-style mini player. Square window dominated by the artwork; track info

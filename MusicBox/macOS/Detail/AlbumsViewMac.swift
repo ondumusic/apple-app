@@ -16,6 +16,9 @@ struct AlbumsViewMac: View {
                         AlbumCard(album: album)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        AlbumContextMenuItems(album: album)
+                    }
                 }
             }
             .padding(20)
