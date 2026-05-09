@@ -243,6 +243,16 @@ final class SidebarViewController: NSViewController {
         }
     }
 
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        // NSOutlineView's columnAutoresizingStyle doesn't always re-tile on the very
+        // first layout pass — the column keeps its declared width (220pt) which can
+        // exceed the initial clipView width and produce a horizontal scroll until the
+        // user resizes the split. sizeLastColumnToFit() forces the column to match
+        // the visible area on every layout.
+        outlineView.sizeLastColumnToFit()
+    }
+
     func applyExternalSearchText(_ text: String) {
         if searchField.stringValue != text {
             searchField.stringValue = text
@@ -894,9 +904,13 @@ private final class SidebarCell: NSTableCellView {
     }
 
     func configure(for node: SidebarNode, compensateIndent: Bool = false, badgeCount: Int? = nil) {
-        // Negative offset cancels NSOutlineView's per-level indent on rows that
-        // shouldn't have it. Magnitude tracks outlineView.indentationPerLevel.
-        iconLeading.constant = compensateIndent ? -indentationPerLevel : 0
+        // Stay at NSOutlineView's natural indent for the row's depth — pulling icons
+        // back with a negative offset (the previous behavior) overshot into the
+        // selection pill's left inset, making icons hug the pill edge and sit left of
+        // the section header text. compensateIndent is kept on the API for callers
+        // but its only effect now is signaling intent.
+        _ = compensateIndent
+        iconLeading.constant = 0
         if let count = badgeCount, count > 0 {
             badge.stringValue = "\(count)"
             badge.isHidden = false
