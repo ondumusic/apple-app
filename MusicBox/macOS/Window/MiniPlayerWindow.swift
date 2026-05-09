@@ -487,8 +487,7 @@ private struct TransportRow: View {
 }
 
 /// Inline queue rendered below the player in the mini window when the queue toggle
-/// is on. Shows up-next only (items after the currently-playing index) with
-/// artwork thumbnails. Editable via swipe-to-remove + drag-to-reorder.
+/// is on. Reuses the main slide-over's QueueList so interaction behavior matches.
 private struct InlineQueue: View {
     @Environment(PlayerService.self) private var player
 
@@ -516,62 +515,8 @@ private struct InlineQueue: View {
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {
-                List {
-                    ForEach(upNext, id: \.item.id) { entry in
-                        InlineQueueRow(originalIndex: entry.originalIndex, item: entry.item)
-                            .focusEffectDisabled()
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    player.removeFromQueue(at: IndexSet(integer: entry.originalIndex))
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
-                                }
-                            }
-                    }
-                    .onMove { source, destination in
-                        let originalSource = IndexSet(source.compactMap {
-                            upNext.indices.contains($0) ? upNext[$0].originalIndex : nil
-                        })
-                        let originalDest: Int = {
-                            if destination >= upNext.count {
-                                return (upNext.last?.originalIndex ?? player.effectiveIndex) + 1
-                            }
-                            return upNext[destination].originalIndex
-                        }()
-                        player.moveQueueItems(from: originalSource, to: originalDest)
-                    }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                QueueList(upNext: upNext, rowHeight: 40, showsDuration: false)
             }
-        }
-    }
-}
-
-private struct InlineQueueRow: View {
-    @Environment(PlayerService.self) private var player
-    let originalIndex: Int
-    let item: QueueItem
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ArtworkView(url: item.artworkURL, cornerRadius: 3)
-                .frame(width: 32, height: 32)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(item.track.name)
-                    .font(.system(size: 12))
-                    .lineLimit(1)
-                Text(item.track.artist.name)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-        }
-        .padding(.vertical, 2)
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            player.skipTo(queueIndex: originalIndex)
         }
     }
 }

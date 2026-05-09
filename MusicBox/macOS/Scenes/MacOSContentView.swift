@@ -1,5 +1,6 @@
 #if os(macOS)
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Root macOS content view. SwiftUI shell that hosts the AppKit-backed sidebar,
 /// track tables, toolbar, and mini-player. Layout fills in piece by piece — see
@@ -255,16 +256,13 @@ private struct DetailPlaceholder: View {
 }
 
 /// Slide-over queue panel — anchored to the right edge of the window, overlays
-/// detail content (no push). Shows the "up next" portion of the queue (items after
-/// the current index). Editable: drag to reorder, swipe to remove. Double-click
-/// jumps to that track in the existing queue (uses skipTo, not playNow, so the
-/// "replace queue" prompt doesn't fire).
+/// detail content (no push). Shows the "up next" portion of the queue with
+/// artwork thumbnails. Each row has a visible trash button (remove); double-
+/// click skips to the track; right-click for context menu.
 struct QueuePanel: View {
     @Environment(PlayerService.self) private var player
     @Binding var isPresented: Bool
 
-    /// Items after the currently-playing index, paired with their original queue
-    /// index so reorder / remove actions still target the right rows.
     private var upNext: [(originalIndex: Int, item: QueueItem)] {
         let current = player.effectiveIndex
         return player.queue.enumerated()
@@ -299,55 +297,71 @@ struct QueuePanel: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List {
-                    ForEach(upNext, id: \.item.id) { entry in
-                        QueuePanelRow(originalIndex: entry.originalIndex, item: entry.item)
-                            .focusEffectDisabled()
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    player.removeFromQueue(at: IndexSet(integer: entry.originalIndex))
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
-                                }
-                            }
-                            .contextMenu {
-                                Button("Play") {
-                                    player.skipTo(queueIndex: entry.originalIndex)
-                                }
-                                Button(role: .destructive) {
-                                    player.removeFromQueue(at: IndexSet(integer: entry.originalIndex))
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
-                                }
-                            }
-                    }
-                    .onMove { source, destination in
-                        // Filtered indices → original queue indices.
-                        let originalSource = IndexSet(source.compactMap {
-                            upNext.indices.contains($0) ? upNext[$0].originalIndex : nil
-                        })
-                        let originalDest: Int = {
-                            if destination >= upNext.count {
-                                return (upNext.last?.originalIndex ?? player.effectiveIndex) + 1
-                            }
-                            return upNext[destination].originalIndex
-                        }()
-                        player.moveQueueItems(from: originalSource, to: originalDest)
-                    }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                QueueList(upNext: upNext, rowHeight: 48, showsDuration: true)
             }
         }
     }
 }
 
-/// One row in the queue panel — artwork thumbnail + title/artist. Double-click
-/// jumps to the track in the existing queue (skipTo, not playNow).
-private struct QueuePanelRow: View {
+/// Reusable queue list — used by both the main slide-over and the mini player's
+/// inline panel. ScrollView + LazyVStack with per-row visible Remove button +
+/// double-click to skip + context menu + draggable for reorder.
+struct QueueList: View {
+    @Environment(PlayerService.self) private var player
+
+    let upNext: [(originalIndex: Int, item: QueueItem)]
+    let rowHeight: CGFloat
+    let showsDuration: Bool
+    @State private var hoveredId: UUID?
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(upNext, id: \.item.id) { entry in
+                    QueueListRow(
+                        originalIndex: entry.originalIndex,
+                        item: entry.item,
+                        isHovered: hoveredId == entry.item.id,
+                        showsDuration: showsDuration
+                    )
+                    .onHover { hovering in
+                        hoveredId = hovering ? entry.item.id : (hoveredId == entry.item.id ? nil : hoveredId)
+                    }
+                    .draggable(QueueDragPayload(itemId: entry.item.id, originalIndex: entry.originalIndex))
+                    .dropDestination(for: QueueDragPayload.self) { payloads, _ in
+                        guard let payload = payloads.first,
+                              payload.itemId != entry.item.id else { return false }
+                        player.moveQueueItems(
+                            from: IndexSet(integer: payload.originalIndex),
+                            to: entry.originalIndex
+                        )
+                        return true
+                    }
+                    Divider().opacity(0.5)
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+    }
+}
+
+/// Pasteboard payload used for in-queue drag-to-reorder.
+struct QueueDragPayload: Codable, Transferable {
+    let itemId: UUID
+    let originalIndex: Int
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .data)
+    }
+}
+
+/// One queue row. Title + artist + (optional) duration + remove button.
+struct QueueListRow: View {
     @Environment(PlayerService.self) private var player
     let originalIndex: Int
     let item: QueueItem
+    let isHovered: Bool
+    let showsDuration: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -361,15 +375,40 @@ private struct QueuePanelRow: View {
                     .lineLimit(1)
             }
             Spacer()
-            Text(item.track.formattedDuration)
-                .monospacedDigit()
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if showsDuration && !isHovered {
+                Text(item.track.formattedDuration)
+                    .monospacedDigit()
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if isHovered {
+                Button {
+                    player.removeFromQueue(at: IndexSet(integer: originalIndex))
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Remove from queue")
+            }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
+        .background(isHovered ? Color.secondary.opacity(0.08) : Color.clear)
         .onTapGesture(count: 2) {
             player.skipTo(queueIndex: originalIndex)
+        }
+        .contextMenu {
+            Button("Play") {
+                player.skipTo(queueIndex: originalIndex)
+            }
+            Button(role: .destructive) {
+                player.removeFromQueue(at: IndexSet(integer: originalIndex))
+            } label: {
+                Label("Remove", systemImage: "trash")
+            }
         }
     }
 }
