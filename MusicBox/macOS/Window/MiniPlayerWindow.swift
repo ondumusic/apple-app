@@ -5,15 +5,19 @@ import SwiftUI
 /// NSPanel-backed mini player. Floating HUD-style window so it can stay above the main
 /// window across spaces. Content is SwiftUI via NSHostingView.
 @MainActor
-final class MiniPlayerWindowController: NSWindowController {
+final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     private let hostingView: NSHostingView<AnyView>
+    /// Set when the queue panel is open below the player; non-nil = the height to
+    /// restore when the queue panel collapses again.
+    private var heightBeforeQueueExpand: CGFloat?
+    private static let queuePanelHeight: CGFloat = 280
 
     init(player: PlayerService) {
-        // Plain resizable NSWindow (not a panel) so it behaves like any other window —
-        // not always-on-top by default. Title bar hidden so the artwork can fill the
-        // square content area; traffic lights overlay the top-left corner.
+        // Plain NSWindow with hidden title bar so the artwork extends edge-to-edge.
+        // The window is non-square — artwork on top, transport controls below — and
+        // can be resized along both axes within minSize bounds.
         let panel = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 260, height: 260),
+            contentRect: NSRect(x: 0, y: 0, width: 280, height: 340),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -25,27 +29,36 @@ final class MiniPlayerWindowController: NSWindowController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.minSize = NSSize(width: 220, height: 220)
-        panel.aspectRatio = NSSize(width: 1, height: 1)
+        panel.minSize = NSSize(width: 240, height: 56)
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
 
-        let content = MiniPlayerContent()
-            .environment(player)
-        hostingView = NSHostingView(rootView: AnyView(content))
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        // Hosting view set up first; queue toggle plumbed in after super.init so we
+        // can capture self.
+        let host = NSHostingView(rootView: AnyView(EmptyView()))
+        host.translatesAutoresizingMaskIntoConstraints = false
         if let cv = panel.contentView {
-            cv.addSubview(hostingView)
+            cv.addSubview(host)
             NSLayoutConstraint.activate([
-                hostingView.leadingAnchor.constraint(equalTo: cv.leadingAnchor),
-                hostingView.trailingAnchor.constraint(equalTo: cv.trailingAnchor),
-                hostingView.topAnchor.constraint(equalTo: cv.topAnchor),
-                hostingView.bottomAnchor.constraint(equalTo: cv.bottomAnchor),
+                host.leadingAnchor.constraint(equalTo: cv.leadingAnchor),
+                host.trailingAnchor.constraint(equalTo: cv.trailingAnchor),
+                host.topAnchor.constraint(equalTo: cv.topAnchor),
+                host.bottomAnchor.constraint(equalTo: cv.bottomAnchor),
             ])
         }
-
+        self.hostingView = host
         panel.center()
         super.init(window: panel)
+        panel.delegate = self
+
+        // Now that self exists we can wire the queue toggle through. The SwiftUI view
+        // owns whether the queue is visible (for layout); the callback only resizes
+        // the window to accommodate it.
+        let content = MiniPlayerContent(onToggleQueue: { [weak self] expanded in
+            self?.applyQueueExpansion(expanded: expanded)
+        })
+        .environment(player)
+        host.rootView = AnyView(content)
     }
 
     @available(*, unavailable)
@@ -60,13 +73,55 @@ final class MiniPlayerWindowController: NSWindowController {
             showWindow(nil)
         }
     }
+
+    /// Grows the window downward to reveal the inline queue panel, or collapses
+    /// back to the previous height. Anchored to the top edge so the artwork stays
+    /// in place visually.
+    private func applyQueueExpansion(expanded: Bool) {
+        guard let window else { return }
+        var frame = window.frame
+        if expanded {
+            guard heightBeforeQueueExpand == nil else { return }
+            heightBeforeQueueExpand = frame.height
+            let topY = frame.maxY
+            frame.size.height += Self.queuePanelHeight
+            frame.origin.y = topY - frame.size.height
+        } else {
+            guard let saved = heightBeforeQueueExpand else { return }
+            let topY = frame.maxY
+            frame.size.height = saved
+            frame.origin.y = topY - saved
+            heightBeforeQueueExpand = nil
+        }
+        window.setFrame(frame, display: true, animate: true)
+    }
+
+    /// Window resize/zoom can drop us below the queue panel's expand threshold —
+    /// keep `heightBeforeQueueExpand` in sync so the next toggle still does the
+    /// right thing.
+    nonisolated func windowDidEndLiveResize(_ notification: Notification) {
+        Task { @MainActor in
+            // If the user manually shrank the window below where queue would fit,
+            // forget the saved height so subsequent toggles use current state.
+            guard let window = self.window else { return }
+            if let saved = heightBeforeQueueExpand, window.frame.height < saved + 40 {
+                heightBeforeQueueExpand = nil
+            }
+        }
+    }
 }
 
-/// Apple Music-style mini player. Square window dominated by the artwork; track info
-/// overlays the bottom; transport controls fade in on hover.
+/// Three layout states based on window height:
+///   compact (<= 80pt): toolbar-style row — tiny artwork, title, transport
+///   standard (80–360pt): square artwork on top, transport row below
+///   expanded (> 360pt): tall artwork dominates, transport overlays on hover
+/// When the queue toggle is on, the inline queue list renders below the standard
+/// layout (window height grows by queuePanelHeight).
 private struct MiniPlayerContent: View {
     @Environment(PlayerService.self) private var player
-    @State private var hovering = false
+    /// Notifies the window controller to grow / shrink to fit the queue panel.
+    let onToggleQueue: (Bool) -> Void
+    @State private var showQueue: Bool = false
 
     private var track: Track? { player.currentTrack }
     private var artworkURL: URL? {
@@ -75,12 +130,110 @@ private struct MiniPlayerContent: View {
     }
 
     var body: some View {
+        GeometryReader { geo in
+            let h = geo.size.height
+            VStack(spacing: 0) {
+                Group {
+                    if h <= 80 {
+                        CompactLayout(track: track, artworkURL: artworkURL)
+                    } else if showQueue {
+                        // Queue inline forces the standard layout — expanded mode
+                        // (artwork-dominated) doesn't make sense alongside a queue.
+                        StandardLayout(track: track, artworkURL: artworkURL, showQueue: showQueue, toggleQueue: toggleQueue)
+                    } else if h >= 360 {
+                        ExpandedLayout(track: track, artworkURL: artworkURL, showQueue: showQueue, toggleQueue: toggleQueue)
+                    } else {
+                        StandardLayout(track: track, artworkURL: artworkURL, showQueue: showQueue, toggleQueue: toggleQueue)
+                    }
+                }
+                if showQueue, h > 80 {
+                    Divider()
+                    InlineQueue()
+                        .frame(maxHeight: .infinity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        // ignoresSafeArea — the window uses .fullSizeContentView so the contentView
+        // extends under the title bar. SwiftUI's default safe-area inset would push
+        // our artwork down by the title-bar height; bypassing it lets the artwork
+        // genuinely fill the top of the window.
+        .ignoresSafeArea()
+        .background(Color.black)
+    }
+
+    private func toggleQueue() {
+        showQueue.toggle()
+        onToggleQueue(showQueue)
+    }
+}
+
+// MARK: - Standard layout (default)
+
+/// Square artwork on top, transport row below. The default mini-player look.
+private struct StandardLayout: View {
+    @Environment(PlayerService.self) private var player
+    let track: Track?
+    let artworkURL: URL?
+    let showQueue: Bool
+    let toggleQueue: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            artwork
+                .aspectRatio(1, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+            TransportRow(track: track, showQueue: showQueue, toggleQueue: toggleQueue)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(.regularMaterial)
+        }
+    }
+
+    @ViewBuilder
+    private var artwork: some View {
+        if track != nil, let url = artworkURL {
+            ArtworkView(url: url)
+                .clipped()
+        } else {
+            ArtworkPlaceholder()
+        }
+    }
+}
+
+// MARK: - Expanded layout (tall window)
+
+/// Artwork fills available space, transport controls slide in over the bottom on
+/// hover — same behavior as macOS's full-screen Now Playing.
+private struct ExpandedLayout: View {
+    @Environment(PlayerService.self) private var player
+    let track: Track?
+    let artworkURL: URL?
+    let showQueue: Bool
+    let toggleQueue: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
         ZStack(alignment: .bottom) {
             artwork
-            overlay
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+            if hovering {
+                TransportRow(track: track, showQueue: showQueue, toggleQueue: toggleQueue, tintForeground: .white)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 14)
+                    .background(
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.55)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .transition(.opacity)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
+        .animation(.easeInOut(duration: 0.18), value: hovering)
         .onHover { hovering = $0 }
     }
 
@@ -88,88 +241,229 @@ private struct MiniPlayerContent: View {
     private var artwork: some View {
         if track != nil, let url = artworkURL {
             ArtworkView(url: url)
-                .aspectRatio(1, contentMode: .fill)
-                .clipped()
         } else {
-            // Empty state — subtle gradient, music note in center
-            LinearGradient(
-                colors: [.gray.opacity(0.35), .gray.opacity(0.55)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .overlay {
-                Image(systemName: "music.note")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.white.opacity(0.4))
-            }
+            ArtworkPlaceholder()
         }
     }
+}
 
-    @ViewBuilder
-    private var overlay: some View {
-        VStack(spacing: 6) {
-            if hovering || track == nil {
-                transportRow
-                    .transition(.opacity)
+// MARK: - Compact layout (toolbar height)
+
+/// Tight horizontal layout for when the window is squashed to toolbar height. Tiny
+/// artwork on the left, title in the middle, transport buttons on the right.
+private struct CompactLayout: View {
+    @Environment(PlayerService.self) private var player
+    let track: Track?
+    let artworkURL: URL?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                if let url = artworkURL {
+                    ArtworkView(url: url)
+                } else {
+                    Rectangle().fill(Color.gray.opacity(0.4))
+                }
             }
+            .frame(width: 40, height: 40)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
 
-            // Track info strip — always visible, sits at the bottom over a translucent
-            // gradient so it stays readable on any artwork.
+            VStack(alignment: .leading, spacing: 1) {
+                Text(track?.name ?? "Not Playing")
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                if let track {
+                    Text(track.artist.name)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 4)
+            HStack(spacing: 12) {
+                Button { player.back() } label: {
+                    Image(systemName: "backward.fill")
+                }
+                .disabled(track == nil || !player.canGoBack)
+                Button { player.togglePlayPause() } label: {
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 14))
+                }
+                .disabled(track == nil)
+                Button { player.skip() } label: {
+                    Image(systemName: "forward.fill")
+                }
+                .disabled(track == nil || !player.canSkip)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(.regularMaterial)
+    }
+}
+
+// MARK: - Transport row (used by standard + expanded layouts)
+
+private struct TransportRow: View {
+    @Environment(PlayerService.self) private var player
+    let track: Track?
+    let showQueue: Bool
+    let toggleQueue: () -> Void
+    var tintForeground: Color? = nil
+
+    var body: some View {
+        VStack(spacing: 6) {
             VStack(spacing: 2) {
                 Text(track?.name ?? "Not Playing")
                     .font(.headline)
-                    .foregroundStyle(.white)
                     .lineLimit(1)
                 if let track {
                     Text(track.artist.name)
                         .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(tintForeground.map { $0.opacity(0.85) } ?? Color.secondary)
                         .lineLimit(1)
                 }
-                if track != nil, hovering {
-                    MiniScrubber()
-                        .transition(.opacity)
+            }
+            .foregroundStyle(tintForeground ?? Color.primary)
+
+            HStack(spacing: 28) {
+                Button { player.back() } label: {
+                    Image(systemName: "backward.fill").font(.title3)
                 }
+                .disabled(track == nil || !player.canGoBack)
+                Button { player.togglePlayPause() } label: {
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 28))
+                }
+                .disabled(track == nil)
+                Button { player.skip() } label: {
+                    Image(systemName: "forward.fill").font(.title3)
+                }
+                .disabled(track == nil || !player.canSkip)
             }
-            .padding(.bottom, 10)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
+            .buttonStyle(.plain)
+            .foregroundStyle(tintForeground ?? Color.primary)
+
+            if track != nil {
+                MiniScrubber(tint: tintForeground)
+            }
+
+            HStack {
+                Spacer()
+                Button { toggleQueue() } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 12))
+                        .foregroundStyle(showQueue
+                            ? Color.accentColor
+                            : tintForeground.map { $0.opacity(0.8) } ?? Color.secondary)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .background(
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.3), .black.opacity(0.7)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-        .animation(.easeInOut(duration: 0.18), value: hovering)
     }
+}
 
-    private var transportRow: some View {
-        HStack(spacing: 24) {
-            Button { player.back() } label: {
-                Image(systemName: "backward.fill").font(.title)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.white)
-            .disabled(track == nil || !player.canGoBack)
+/// Inline queue rendered below the player in the mini window when the queue toggle
+/// is on. Editable via swipe-to-remove + drag-to-reorder, same as the main app's
+/// slide-over queue.
+private struct InlineQueue: View {
+    @Environment(PlayerService.self) private var player
 
-            Button { player.togglePlayPause() } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 36))
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Up Next")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.white)
-            .disabled(track == nil)
-
-            Button { player.skip() } label: {
-                Image(systemName: "forward.fill").font(.title)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+            if player.queue.isEmpty {
+                Spacer()
+                Text("Queue is empty")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            } else {
+                List {
+                    ForEach(Array(player.queue.enumerated()), id: \.element.id) { index, item in
+                        InlineQueueRow(index: index, item: item)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    player.removeFromQueue(at: IndexSet(integer: index))
+                                } label: {
+                                    Label("Remove", systemImage: "trash")
+                                }
+                            }
+                    }
+                    .onMove { source, destination in
+                        player.moveQueueItems(from: source, to: destination)
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.white)
-            .disabled(track == nil || !player.canSkip)
         }
-        .padding(.top, 12)
+        .background(.regularMaterial)
+    }
+}
+
+private struct InlineQueueRow: View {
+    @Environment(PlayerService.self) private var player
+    let index: Int
+    let item: QueueItem
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if index == player.effectiveIndex {
+                Image(systemName: player.isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
+                    .foregroundStyle(.tint)
+                    .font(.caption)
+                    .frame(width: 14)
+            } else {
+                Text("\(index + 1)")
+                    .monospacedDigit()
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18, alignment: .trailing)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(item.track.name)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                Text(item.track.artist.name)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            player.requestPlay {
+                player.playNow(queue: player.queue, startingAt: index)
+            }
+        }
+    }
+}
+
+private struct ArtworkPlaceholder: View {
+    var body: some View {
+        LinearGradient(
+            colors: [.gray.opacity(0.35), .gray.opacity(0.55)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .overlay {
+            Image(systemName: "music.note")
+                .font(.system(size: 36))
+                .foregroundStyle(.white.opacity(0.4))
+        }
     }
 }
 
@@ -177,12 +471,15 @@ private struct MiniScrubber: View {
     @Environment(PlayerService.self) private var player
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
+    var tint: Color? = nil
 
     var body: some View {
+        let resolvedTint = tint ?? Color.accentColor
+        let trackColor = (tint ?? .secondary).opacity(0.3)
         HStack(spacing: 6) {
             Text(format(isScrubbing ? scrubValue : player.progress))
                 .font(.caption2.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(tint?.opacity(0.85) ?? Color.secondary)
                 .frame(width: 36, alignment: .trailing)
             ProgressTrack(
                 value: isScrubbing ? scrubValue : player.progress,
@@ -195,13 +492,13 @@ private struct MiniScrubber: View {
                     player.seek(to: scrubValue)
                     isScrubbing = false
                 },
-                tint: .white,
-                trackColor: .white.opacity(0.3)
+                tint: resolvedTint,
+                trackColor: trackColor
             )
             .frame(height: 12)
             Text(format(player.duration))
                 .font(.caption2.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(tint?.opacity(0.85) ?? Color.secondary)
                 .frame(width: 36, alignment: .leading)
         }
     }
