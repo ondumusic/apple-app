@@ -7,6 +7,7 @@ struct AlbumDetailMac: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
+    @Environment(DownloadService.self) private var downloadService
 
     @State private var tracks: [Track] = []
     @State private var selection: Set<UUID> = []
@@ -16,7 +17,7 @@ struct AlbumDetailMac: View {
     }
 
     private var trackActions: TrackActions {
-        .standard(player: player, musicLibrary: musicLibrary, network: network, artworkURL: album.artworkUrl)
+        .standard(player: player, musicLibrary: musicLibrary, network: network, downloadService: downloadService, artworkURL: album.artworkUrl)
     }
 
     var body: some View {

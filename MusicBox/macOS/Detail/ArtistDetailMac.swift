@@ -7,6 +7,7 @@ struct ArtistDetailMac: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
+    @Environment(DownloadService.self) private var downloadService
 
     @State private var albums: [Album] = []
     /// Selection is hoisted up to the artist level so the single TracksTable can carry
@@ -45,11 +46,20 @@ struct ArtistDetailMac: View {
                 embeddedStyle: true,
                 sections: sections,
                 sectionHeader: { album in
-                    AnyView(AlbumSectionHeader(
-                        album: album,
-                        onPlay: { playAlbum(album, shuffle: false) },
-                        onShuffle: { playAlbum(album, shuffle: true) }
-                    ))
+                    AnyView(
+                        AlbumSectionHeader(
+                            album: album,
+                            onPlay: { playAlbum(album, shuffle: false) },
+                            onShuffle: { playAlbum(album, shuffle: true) },
+                            onDownload: { downloadAlbum(album) },
+                            onCancelDownload: { cancelAlbumDownload(album) }
+                        )
+                        // Inject services so the header can reflect download state live —
+                        // NSHostingView creates its own environment scope, so we need to
+                        // pass these explicitly.
+                        .environment(musicLibrary)
+                        .environment(downloadService)
+                    )
                 },
                 sectionHeaderHeight: 80,
                 artwork: { album in
@@ -76,14 +86,16 @@ struct ArtistDetailMac: View {
             Spacer()
             HStack(spacing: 8) {
                 Button { playAll(shuffle: false) } label: {
-                    Label("Play", systemImage: "play.fill")
+                    Image(systemName: "play.fill")
                 }
                 .disabled(albums.isEmpty)
                 Button { playAll(shuffle: true) } label: {
-                    Label("Shuffle", systemImage: "shuffle")
+                    Image(systemName: "shuffle")
                 }
                 .disabled(albums.isEmpty)
             }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.circle)
             .controlSize(.large)
         }
     }
@@ -91,7 +103,7 @@ struct ArtistDetailMac: View {
     private var trackActions: TrackActions {
         // Album-specific artwork URL is supplied per call inside playTrack/playAlbum;
         // generic actions fall back to no artwork — fine for context-menu-driven playback.
-        .standard(player: player, musicLibrary: musicLibrary, network: network, artworkURL: nil)
+        .standard(player: player, musicLibrary: musicLibrary, network: network, downloadService: downloadService)
     }
 
     private func reload() {
@@ -122,6 +134,17 @@ struct ArtistDetailMac: View {
         }
     }
 
+    private func downloadAlbum(_ album: Album) {
+        guard let fullAlbum = musicLibrary.albumWithTracks(album.id) else { return }
+        let albumArtist = musicLibrary.artist(album.artistId)
+            ?? Artist(id: album.artistId, name: artist.name, sortName: artist.sortName, slug: artist.slug)
+        downloadService.download(album: fullAlbum, artist: albumArtist)
+    }
+
+    private func cancelAlbumDownload(_ album: Album) {
+        downloadService.cancelAlbumDownloads(albumId: album.id)
+    }
+
     private func playAlbum(_ album: Album, shuffle: Bool) {
         let tracks = album.tracks ?? []
         let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
@@ -134,13 +157,28 @@ struct ArtistDetailMac: View {
     }
 }
 
-/// Right-side metadata for an album section: title, year, play/shuffle buttons. The
-/// album artwork is drawn separately as a left-edge overlay (`AlbumArtworkOverlay`)
+/// Right-side metadata for an album section: title, year, play/shuffle/download buttons.
+/// The album artwork is drawn separately as a left-edge overlay (`AlbumArtworkOverlay`)
 /// over multiple track rows — iTunes-style split layout.
 private struct AlbumSectionHeader: View {
     let album: Album
     let onPlay: () -> Void
     let onShuffle: () -> Void
+    let onDownload: () -> Void
+    let onCancelDownload: () -> Void
+
+    @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(DownloadService.self) private var downloadService
+
+    /// Three states the trailing download button can be in: actively downloading
+    /// (spinner + cancel-on-click), some tracks not yet on disk (download icon), or
+    /// fully downloaded (button hidden).
+    private enum DownloadState { case downloading, partial, complete }
+    private var downloadState: DownloadState {
+        if downloadService.isAlbumDownloading(albumId: album.id) { return .downloading }
+        if musicLibrary.isAlbumFullyDownloaded(albumId: album.id) { return .complete }
+        return .partial
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -156,18 +194,40 @@ private struct AlbumSectionHeader: View {
             }
             Spacer(minLength: 12)
             HStack(spacing: 8) {
-                Button { onPlay() } label: { Label("Play", systemImage: "play.fill") }
-                Button { onShuffle() } label: { Label("Shuffle", systemImage: "shuffle") }
+                Button { onPlay() } label: {
+                    Image(systemName: "play.fill")
+                }
+                Button { onShuffle() } label: {
+                    Image(systemName: "shuffle")
+                }
+                switch downloadState {
+                case .downloading:
+                    Button { onCancelDownload() } label: {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 14, height: 14)
+                    }
+                case .partial:
+                    Button { onDownload() } label: {
+                        Image(systemName: "arrow.down")
+                    }
+                case .complete:
+                    EmptyView()
+                }
             }
             .buttonStyle(.bordered)
-            .controlSize(.regular)
+            .buttonBorderShape(.circle)
+            .controlSize(.large)
         }
         // Push past the spacer column (artworkSize 160 + 2 × inset 20 = 200) AND past
         // the number column (36) plus the title cell's leading text inset (4) — so the
         // album title sits in the same x position as the track titles below.
         .padding(.leading, 240)
         .padding(.trailing, 20)
-        .padding(.vertical, 12)
+        // Top padding matches artworkInset (20) so the title baseline aligns with the
+        // top edge of the artwork.
+        .padding(.top, 20)
+        .padding(.bottom, 8)
     }
 }
 

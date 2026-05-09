@@ -5,6 +5,7 @@ struct SongsViewMac: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
+    @Environment(DownloadService.self) private var downloadService
 
     @State private var tracks: [Track] = []
     @State private var selection: Set<UUID> = []
@@ -30,7 +31,7 @@ struct SongsViewMac: View {
     }
 
     private var trackActions: TrackActions {
-        .standard(player: player, musicLibrary: musicLibrary, network: network)
+        .standard(player: player, musicLibrary: musicLibrary, network: network, downloadService: downloadService)
     }
 
     private func playTrack(at index: Int) {

@@ -402,6 +402,18 @@ final class TracksTableViewController: NSViewController {
         albumColumn.isHidden = !showAlbum
 
         let changed = !tracksMatch(self.tracks, newTracks) || !sectionsMatch(self.sections, newSections)
+        // Detect rows whose `isDownloaded` flipped without otherwise changing — we want
+        // to refresh those cells (the downloaded indicator) without triggering a full
+        // reloadData (which would reset the whole table mid-interaction).
+        var downloadStateChangedRows = IndexSet()
+        if !changed {
+            for (idx, (oldTrack, newTrack)) in zip(self.tracks, newTracks).enumerated()
+            where oldTrack.isDownloaded != newTrack.isDownloaded {
+                if let row = rowForTrackIndex[idx] {
+                    downloadStateChangedRows.insert(row)
+                }
+            }
+        }
         let previousCurrent = self.currentlyPlayingTrackId
         let previousPlaying = self.isPlaying
         self.tracks = newTracks
@@ -412,22 +424,26 @@ final class TracksTableViewController: NSViewController {
         if changed {
             rebuildDisplayRows()
             tableView.reloadData()
-        } else if previousCurrent != newCurrent || previousPlaying != newIsPlaying {
-            // Only the play indicator needs refreshing — reload just the affected rows
-            // so we don't kill in-flight clicks.
-            var rows = IndexSet()
-            if let prev = previousCurrent,
-               let trackIdx = tracks.firstIndex(where: { $0.id == prev }),
-               let row = rowForTrackIndex[trackIdx] {
-                rows.insert(row)
-            }
-            if let cur = newCurrent,
-               let trackIdx = tracks.firstIndex(where: { $0.id == cur }),
-               let row = rowForTrackIndex[trackIdx] {
-                rows.insert(row)
+        } else {
+            // Same row set — refresh just the cells that need it.
+            var rows = downloadStateChangedRows
+            if previousCurrent != newCurrent || previousPlaying != newIsPlaying {
+                if let prev = previousCurrent,
+                   let trackIdx = tracks.firstIndex(where: { $0.id == prev }),
+                   let row = rowForTrackIndex[trackIdx] {
+                    rows.insert(row)
+                }
+                if let cur = newCurrent,
+                   let trackIdx = tracks.firstIndex(where: { $0.id == cur }),
+                   let row = rowForTrackIndex[trackIdx] {
+                    rows.insert(row)
+                }
             }
             if !rows.isEmpty {
-                tableView.reloadData(forRowIndexes: rows, columnIndexes: IndexSet(integer: 0))
+                // Reload all column indexes for the affected rows — title column carries
+                // the downloaded indicator, number column carries the play indicator.
+                let allColumns = IndexSet(0..<tableView.numberOfColumns)
+                tableView.reloadData(forRowIndexes: rows, columnIndexes: allColumns)
             }
         }
         applyExternalSelection(externalSelection)
@@ -897,6 +913,19 @@ extension TracksTableViewController: NSMenuDelegate {
             let removeTitle = isSingle ? "Remove from Playlist" : "Remove \(targetTracks.count) from Playlist"
             addItem(to: menu, title: removeTitle, action: #selector(menuRemoveFromPlaylist))
         }
+        if actions.supportsDownload {
+            menu.addItem(.separator())
+            // "Remove" if every selected track is already downloaded; "Download" otherwise.
+            // Mixed selections show "Download" — the action skips already-downloaded tracks.
+            let allDownloaded = targetTracks.allSatisfy { $0.isDownloaded }
+            if allDownloaded {
+                let title = isSingle ? "Remove Download" : "Remove \(targetTracks.count) Downloads"
+                addItem(to: menu, title: title, action: #selector(menuRemoveDownload))
+            } else {
+                let title = isSingle ? "Download" : "Download \(targetTracks.count)"
+                addItem(to: menu, title: title, action: #selector(menuDownload))
+            }
+        }
         if isSingle {
             menu.addItem(.separator())
             addItem(to: menu, title: "Go to Album", action: #selector(menuGoToAlbum))
@@ -946,6 +975,8 @@ extension TracksTableViewController: NSMenuDelegate {
     @objc private func menuGoToArtist() {
         if let track = tracksForContextAction().first { actions.goToArtist(track) }
     }
+    @objc private func menuDownload() { actions.download(tracksForContextAction()) }
+    @objc private func menuRemoveDownload() { actions.removeDownload(tracksForContextAction()) }
     @objc private func menuRemoveFromPlaylist() {
         guard let removeFromPlaylistRows = actions.removeFromPlaylistRows else { return }
         // Use the same row resolution as other actions: clicked row narrows the selection

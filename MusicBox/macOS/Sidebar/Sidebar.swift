@@ -11,6 +11,8 @@ struct Sidebar: NSViewControllerRepresentable {
     @Binding var searchText: String
     let musicLibrary: MusicLibrary
     let actions: SidebarActions
+    /// Active + queued downloads — surfaces as a badge on the Downloads category cell.
+    var downloadingCount: Int = 0
 
     func makeNSViewController(context: Context) -> SidebarViewController {
         let vc = SidebarViewController()
@@ -29,6 +31,7 @@ struct Sidebar: NSViewControllerRepresentable {
         // we group by parentId in-memory to materialize the folder hierarchy.
         nsViewController.actions = actions
         nsViewController.applyExternalSearchText(searchText)
+        nsViewController.applyDownloadingCount(downloadingCount)
         let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists())
         nsViewController.update(playlistNodes: nodes, externalSelection: selection)
     }
@@ -98,6 +101,23 @@ final class SidebarViewController: NSViewController {
     private var rootNodes: [SidebarNode] = []
     private var librarySection: SidebarNode!
     private var playlistsSection: SidebarNode!
+    /// Active + queued downloads. Surfaced as a numeric badge on the Downloads category
+    /// cell when > 0.
+    private var downloadingCount: Int = 0
+
+    func applyDownloadingCount(_ count: Int) {
+        guard count != downloadingCount else { return }
+        downloadingCount = count
+        // Find and reload just the .downloads category row so the badge refreshes
+        // without disturbing other rows or selection.
+        guard let library = librarySection else { return }
+        for child in library.children {
+            if case .category(let cat) = child.kind, cat == .downloads {
+                outlineView.reloadItem(child)
+                break
+            }
+        }
+    }
 
     /// Set when we're applying an externally-driven selection so we can suppress the
     /// callback that would otherwise echo it back through the binding.
@@ -600,7 +620,13 @@ extension SidebarViewController: NSOutlineViewDelegate {
             ?? SidebarCell()
         cell.identifier = SidebarCell.identifier
         cell.renameDelegate = self
-        cell.configure(for: node, compensateIndent: shouldCompensateIndent(for: node))
+        let badge: Int? = {
+            if case .category(let cat) = node.kind, cat == .downloads, downloadingCount > 0 {
+                return downloadingCount
+            }
+            return nil
+        }()
+        cell.configure(for: node, compensateIndent: shouldCompensateIndent(for: node), badgeCount: badge)
         return cell
     }
 
@@ -818,6 +844,8 @@ private final class SidebarCell: NSTableCellView {
         setup()
     }
 
+    private let badge = NSTextField(labelWithString: "")
+
     private func setup() {
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.symbolConfiguration = .init(pointSize: 13, weight: .regular)
@@ -838,6 +866,13 @@ private final class SidebarCell: NSTableCellView {
         addSubview(label)
         textField = label
 
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        badge.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
+        badge.textColor = .secondaryLabelColor
+        badge.alignment = .right
+        badge.isHidden = true
+        addSubview(badge)
+
         labelLeadingToIcon = label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6)
         // For section headers: pin label directly to cell leading so it visually aligns
         // with where children's icons sit (children are indented one level by NSOutlineView).
@@ -850,16 +885,24 @@ private final class SidebarCell: NSTableCellView {
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 18),
             icon.heightAnchor.constraint(equalToConstant: 18),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            badge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            badge.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: badge.leadingAnchor, constant: -6),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             labelLeadingToIcon,
         ])
     }
 
-    func configure(for node: SidebarNode, compensateIndent: Bool = false) {
+    func configure(for node: SidebarNode, compensateIndent: Bool = false, badgeCount: Int? = nil) {
         // Negative offset cancels NSOutlineView's per-level indent on rows that
         // shouldn't have it. Magnitude tracks outlineView.indentationPerLevel.
         iconLeading.constant = compensateIndent ? -indentationPerLevel : 0
+        if let count = badgeCount, count > 0 {
+            badge.stringValue = "\(count)"
+            badge.isHidden = false
+        } else {
+            badge.isHidden = true
+        }
         switch node.kind {
         case .section(let title):
             label.stringValue = title.uppercased()

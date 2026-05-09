@@ -7,6 +7,7 @@ struct SearchViewMac: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
+    @Environment(DownloadService.self) private var downloadService
 
     @State private var results: (artists: [Artist], albums: [Album], tracks: [Track]) = ([], [], [])
     @State private var displayedQuery: String = ""
@@ -131,7 +132,7 @@ struct SearchViewMac: View {
     }
 
     private var trackActions: TrackActions {
-        .standard(player: player, musicLibrary: musicLibrary, network: network)
+        .standard(player: player, musicLibrary: musicLibrary, network: network, downloadService: downloadService)
     }
 
     private func playTrack(at index: Int) {

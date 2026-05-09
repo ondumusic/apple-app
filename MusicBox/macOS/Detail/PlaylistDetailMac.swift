@@ -8,6 +8,7 @@ struct PlaylistDetailMac: View {
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
     @Environment(PlaylistController.self) private var playlistController
+    @Environment(DownloadService.self) private var downloadService
 
     @State private var playlist: Playlist?
     @State private var items: [PlaylistItem] = []
@@ -20,7 +21,8 @@ struct PlaylistDetailMac: View {
         var a = TrackActions.standard(
             player: player,
             musicLibrary: musicLibrary,
-            network: network
+            network: network,
+            downloadService: downloadService
         )
         a.removeFromPlaylistRows = { rows in
             removeRows(rows)

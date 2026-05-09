@@ -9,6 +9,7 @@ struct MacOSContentView: View {
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
     @Environment(PlaylistController.self) private var playlistController
+    @Environment(DownloadService.self) private var downloadService
 
     @State private var showQueue = false
     @State private var sidebarSelection: SidebarSelection? = .category(.artists)
@@ -25,7 +26,8 @@ struct MacOSContentView: View {
                 selection: $sidebarSelection,
                 searchText: $searchText,
                 musicLibrary: musicLibrary,
-                actions: sidebarActions
+                actions: sidebarActions,
+                downloadingCount: downloadService.activeDownloads.count + downloadService.pendingQueue.count
             )
             .toolbar(removing: .sidebarToggle)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)

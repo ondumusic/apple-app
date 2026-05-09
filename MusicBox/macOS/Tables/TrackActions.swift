@@ -20,6 +20,13 @@ struct TrackActions {
     /// Receives row indices (not track ids) because playlists can contain duplicates and
     /// the caller needs the exact item position.
     var removeFromPlaylistRows: ((IndexSet) -> Void)?
+    /// Download / remove-download for the given tracks. Wired by `standard` when a
+    /// DownloadService is supplied; otherwise no-ops and the context menu skips them.
+    var download: ([Track]) -> Void = { _ in }
+    var removeDownload: ([Track]) -> Void = { _ in }
+    /// True if download wiring is available — context menu uses this to decide whether
+    /// to offer the Download / Remove Download item.
+    var supportsDownload: Bool = false
 
     /// Standard wiring used by every detail view that hosts a TracksTable. Detail views
     /// can override individual closures (e.g. AlbumDetailMac passes the album artwork
@@ -28,6 +35,7 @@ struct TrackActions {
         player: PlayerService,
         musicLibrary: MusicLibrary,
         network: NetworkMonitor,
+        downloadService: DownloadService? = nil,
         artworkURL: URL? = nil
     ) -> TrackActions {
         var a = TrackActions()
@@ -50,6 +58,22 @@ struct TrackActions {
         a.goToArtist = { track in
             if let artist = musicLibrary.artist(track.artistId) {
                 NotificationCenter.default.post(name: .navigateToArtist, object: artist)
+            }
+        }
+        if let downloadService {
+            a.supportsDownload = true
+            a.download = { tracks in
+                for track in tracks where !musicLibrary.isDownloaded(trackId: track.id) {
+                    guard let album = musicLibrary.album(track.albumId),
+                          let artist = musicLibrary.artist(album.artistId) ?? Optional(track.artist)
+                    else { continue }
+                    downloadService.download(track: track, album: album, artist: artist)
+                }
+            }
+            a.removeDownload = { tracks in
+                let ids = Set(tracks.filter { musicLibrary.isDownloaded(trackId: $0.id) }.map(\.id))
+                guard !ids.isEmpty else { return }
+                musicLibrary.markTracksUndownloaded(trackIds: ids)
             }
         }
         return a
