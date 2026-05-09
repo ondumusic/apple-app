@@ -68,6 +68,16 @@ struct TracksTable: NSViewControllerRepresentable {
     var sectionHeader: ((Album) -> AnyView)? = nil
     /// Pixel height of section header rows. Tall enough to fit artwork + title + actions.
     var sectionHeaderHeight: CGFloat = 80
+    /// Caller-supplied SwiftUI view used to render the album artwork as an overlay on
+    /// the left edge of the table — spans from the section's header row down through
+    /// the first few track rows (iTunes-style split layout). Sized to `artworkSize` ×
+    /// `artworkSize`. When nil, no overlay is drawn.
+    var artwork: ((Album) -> AnyView)? = nil
+    /// Pixel size of the square artwork overlay (also drives the leftmost spacer column
+    /// width = artworkSize + 2 × artworkInset).
+    var artworkSize: CGFloat = 120
+    /// Horizontal padding from the table's left edge to the artwork's left edge.
+    var artworkInset: CGFloat = 20
 
     func makeNSViewController(context: Context) -> TracksTableViewController {
         let vc = TracksTableViewController()
@@ -91,6 +101,9 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.applyRowHeight(rowHeight)
         vc.sectionHeaderHeight = sectionHeaderHeight
         vc.sectionHeaderBuilder = sectionHeader
+        vc.artworkBuilder = artwork
+        vc.artworkSize = artworkSize
+        vc.artworkInset = artworkInset
         vc.update(
             tracks: tracks,
             sections: sections,
@@ -136,7 +149,19 @@ final class TracksTableViewController: NSViewController {
     private var sections: [TracksTableSection]? = nil
     var sectionHeaderBuilder: ((Album) -> AnyView)?
     var sectionHeaderHeight: CGFloat = 80
+    var artworkBuilder: ((Album) -> AnyView)?
+    var artworkSize: CGFloat = 120
+    var artworkInset: CGFloat = 20
+    /// One NSHostingView per album, keyed by album id. Subviews of `tableView` so they
+    /// scroll with the document; positioned in `viewDidLayout` to anchor at each
+    /// section's header row.
+    private var artworkOverlays: [UUID: NSHostingView<AnyView>] = [:]
+    /// Width reserved on the left for the artwork overlay in sections mode (= artworkSize
+    /// + 2 × artworkInset). Track row content starts here; the selection pill draws
+    /// from here too. Computed from artworkSize/artworkInset on each layout.
+    private var sectionsLeftInset: CGFloat = 0
 
+    private let spacerColumn = NSTableColumn(identifier: .init("sectionSpacer"))
     private let numberColumn = NSTableColumn(identifier: .init("number"))
     private let titleColumn  = NSTableColumn(identifier: .init("title"))
     private let artistColumn = NSTableColumn(identifier: .init("artist"))
@@ -219,6 +244,7 @@ final class TracksTableViewController: NSViewController {
         // the rounded selection backdrop. We want the rounded pill but not the blur —
         // hide the effect views so the parent's solid background shows through.
         suppressEmbeddedVibrancy(in: scrollView)
+        updateArtworkOverlayPositions()
         // Pin the tableView's width to the scrollView's clipView width. NSScrollView
         // by default sizes the documentView to the sum of column widths, which makes
         // the table overflow when the parent is narrower than that. Forcing the width
@@ -232,11 +258,16 @@ final class TracksTableViewController: NSViewController {
         // Measure from a track row — header rows span all columns and would report 0.
         let detectedInset: CGFloat = {
             for row in 0..<tableView.numberOfRows where flatTrackIndex(forRow: row) != nil {
-                return tableView.frameOfCell(atColumn: 0, row: row).minX
+                // In sections mode the spacer column shifts cell origins by sectionsLeftInset;
+                // subtract it so we get the inset NSTableView itself adds.
+                return tableView.frameOfCell(atColumn: tableView.column(withIdentifier: numberColumn.identifier),
+                                              row: row).minX - sectionsLeftInset
             }
             return 16
         }()
-        let titleWidth = max(120, target - 36 - 70 - 2 * detectedInset)
+        // Title absorbs the remainder after the locked-width columns and the source-list
+        // insets (and the spacer column when in sections mode).
+        let titleWidth = max(120, target - sectionsLeftInset - 36 - 70 - 2 * detectedInset)
         if abs(titleColumn.width - titleWidth) > 0.5 {
             titleColumn.width = titleWidth
         }
@@ -426,6 +457,96 @@ final class TracksTableViewController: NSViewController {
         }
         self.displayRows = rows
         self.rowForTrackIndex = rowForTrack
+        applySectionsColumns()
+        rebuildArtworkOverlays()
+    }
+
+    /// Adds (or removes) the leftmost spacer column based on whether we're in sections
+    /// mode. The spacer reserves horizontal space for the artwork overlay so track row
+    /// content doesn't overlap it. Also flips selectionHighlightStyle to `.none` so the
+    /// native source-list pill (which paints full-width and ignores our `drawSelection`
+    /// override) gets out of our way — EmbeddedRowView draws the inset pill itself.
+    private func applySectionsColumns() {
+        let needsSpacer = sections != nil && artworkBuilder != nil
+        sectionsLeftInset = needsSpacer ? (artworkSize + 2 * artworkInset) : 0
+        if needsSpacer {
+            spacerColumn.title = ""
+            spacerColumn.minWidth = sectionsLeftInset
+            spacerColumn.maxWidth = sectionsLeftInset
+            spacerColumn.width = sectionsLeftInset
+            spacerColumn.resizingMask = []
+            if !tableView.tableColumns.contains(spacerColumn) {
+                tableView.addTableColumn(spacerColumn)
+            }
+            if let idx = tableView.tableColumns.firstIndex(of: spacerColumn), idx != 0 {
+                tableView.moveColumn(idx, toColumn: 0)
+            }
+            // .none — NSTableView paints both .regular and .sourceList selection itself
+            // and never delegates to row view's drawSelection. With .none, NSTableView
+            // tracks selection state but draws nothing; EmbeddedRowView's drawBackground
+            // paints the inset pill manually.
+            tableView.selectionHighlightStyle = .none
+            // Suppress the focus ring NSTableView paints around right-clicked rows —
+            // it ignores our row-level draw overrides and would span the artwork zone.
+            tableView.focusRingType = .none
+            scrollView.focusRingType = .none
+        } else {
+            if tableView.tableColumns.contains(spacerColumn) {
+                tableView.removeTableColumn(spacerColumn)
+            }
+            tableView.selectionHighlightStyle = isEmbedded ? .sourceList : .regular
+        }
+    }
+
+    /// Creates / updates / removes one NSHostingView per album for the artwork overlay.
+    /// Positioning happens in viewDidLayout once row frames are known.
+    private func rebuildArtworkOverlays() {
+        let activeIds = Set(sections?.map(\.id) ?? [])
+        for (id, view) in artworkOverlays where !activeIds.contains(id) {
+            view.removeFromSuperview()
+            artworkOverlays.removeValue(forKey: id)
+        }
+        guard let sections = sections, let builder = artworkBuilder else { return }
+        for section in sections {
+            if let existing = artworkOverlays[section.id] {
+                existing.rootView = builder(section.album)
+            } else {
+                let host = NSHostingView(rootView: builder(section.album))
+                host.translatesAutoresizingMaskIntoConstraints = true
+                tableView.addSubview(host)
+                artworkOverlays[section.id] = host
+            }
+        }
+    }
+
+    /// Anchors each artwork overlay to its section's header-row position. Brings overlays
+    /// to the front of tableView's subviews so reused row views (added during scroll)
+    /// don't draw on top of them.
+    private func updateArtworkOverlayPositions() {
+        guard sections != nil, !artworkOverlays.isEmpty else { return }
+        var rowIdx = 0
+        let sections = self.sections ?? []
+        for section in sections {
+            guard rowIdx < displayRows.count, case .header = displayRows[rowIdx] else {
+                rowIdx += 1 + section.tracks.count
+                continue
+            }
+            let headerFrame = tableView.rect(ofRow: rowIdx)
+            if let view = artworkOverlays[section.id] {
+                // Width = artworkSize (artwork itself); the SwiftUI overlay can render
+                // a caption below it, so reserve a bit of vertical space for that too.
+                view.frame = NSRect(
+                    x: artworkInset,
+                    y: headerFrame.minY + artworkInset,
+                    width: artworkSize,
+                    height: artworkSize + 40
+                )
+            }
+            rowIdx += 1 + section.tracks.count
+        }
+        for (_, view) in artworkOverlays {
+            tableView.addSubview(view, positioned: .above, relativeTo: nil)
+        }
     }
 
     private func tracksMatch(_ a: [Track], _ b: [Track]) -> Bool {
@@ -514,6 +635,26 @@ final class TracksTableViewController: NSViewController {
 private final class KeyAwareTableView: NSTableView {
     var onEnter: (() -> Void)?
     var onDelete: (() -> Void)?
+    /// Right-clicked row recorded by our own rightMouseDown override (which bypasses
+    /// NSTableView's default handler to suppress its full-row outline highlight).
+    /// `clickedRow` returns this when set, otherwise falls through to super.
+    private var manualClickedRow: Int = -1
+
+    override var clickedRow: Int {
+        manualClickedRow != -1 ? manualClickedRow : super.clickedRow
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        // NSTableView's default rightMouseDown draws a full-row "menu target" outline
+        // on the right-clicked row that ignores our custom-pill bounds. Bypass it —
+        // record the clicked row ourselves and pop the contextual menu directly.
+        let point = convert(event.locationInWindow, from: nil)
+        manualClickedRow = self.row(at: point)
+        defer { manualClickedRow = -1 }
+        if let menu = self.menu {
+            NSMenu.popUpContextMenu(menu, with: event, for: self)
+        }
+    }
 
     override func keyDown(with event: NSEvent) {
         // 36 = Return, 76 = numpad Enter.
@@ -600,6 +741,12 @@ extension TracksTableViewController: NSTableViewDelegate {
         let nextIsHeader = isHeaderRow(row + 1)
         // Suppress dividers around section headers and after the last row of the table.
         view.suppressDivider = isHeader || nextIsHeader || row == displayRows.count - 1
+        // In sections mode, draw selection pill from where track cells actually begin —
+        // that's spacer column width + NSTableView's own ~16pt cell-area inset. Without
+        // the +16, the pill extends 16pt back into the artwork zone.
+        if sectionsLeftInset > 0 {
+            view.customSelectionLeftInset = sectionsLeftInset + 16
+        }
         return view
     }
 
@@ -626,13 +773,27 @@ extension TracksTableViewController: NSTableViewDelegate {
         guard let column = tableColumn, let trackIdx = flatTrackIndex(forRow: row) else { return nil }
         let track = tracks[trackIdx]
         let isCurrent = currentlyPlayingTrackId == track.id
+        // sections mode uses selectionHighlightStyle = .none, so NSTableView doesn't
+        // propagate emphasis to cells. Set it explicitly based on the row's selection
+        // state so cells flip text colors correctly even after scroll-recycle.
+        let emphasized = sectionsLeftInset > 0 && tableView.selectedRowIndexes.contains(row)
+        let cellStyle: NSView.BackgroundStyle = emphasized ? .emphasized : .normal
 
+        // Spacer column (sections mode): empty cell — the artwork overlay paints over
+        // this region as a tableView subview.
+        if column === spacerColumn {
+            let cellId = NSUserInterfaceItemIdentifier("trackSectionSpacer")
+            return tableView.makeView(withIdentifier: cellId, owner: nil)
+                ?? { let v = NSView(); v.identifier = cellId; return v }()
+        }
+
+        let cell: NSTableCellView?
         switch column.identifier.rawValue {
         case "number":
-            let cell = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? NumberOrSpeakerCell
+            let c = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? NumberOrSpeakerCell
                 ?? NumberOrSpeakerCell(identifier: column.identifier)
             if isCurrent {
-                cell.showSpeaker(playing: isPlaying)
+                c.showSpeaker(playing: isPlaying)
             } else {
                 let display: String
                 if usesPlaylistPosition {
@@ -640,42 +801,47 @@ extension TracksTableViewController: NSTableViewDelegate {
                 } else {
                     display = track.number.map(String.init) ?? "–"
                 }
-                cell.showNumber(display)
+                c.showNumber(display)
             }
-            return cell
+            cell = c
         case "title":
-            let cell = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TitleCell
+            let c = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TitleCell
                 ?? TitleCell(identifier: column.identifier)
             // In embedded mode we hide the Artist column and stack the artist beneath
             // the title when the host wanted artist info — consistent with iTunes /
             // Apple Music layout for inline album sections.
             let inlineArtist = isEmbedded && embeddedShowsArtist
-            cell.configure(track: track, isCurrent: isCurrent, showArtistInline: inlineArtist)
-            return cell
+            c.configure(track: track, isCurrent: isCurrent, showArtistInline: inlineArtist)
+            cell = c
         case "artist":
-            let cell = textCell(for: column.identifier, in: tableView)
-            cell.label.stringValue = track.artist.name
-            cell.label.alignment = .left
-            cell.label.font = .systemFont(ofSize: NSFont.systemFontSize)
-            cell.unselectedColor = .secondaryLabelColor
-            return cell
+            let c = textCell(for: column.identifier, in: tableView)
+            c.label.stringValue = track.artist.name
+            c.label.alignment = .left
+            c.label.font = .systemFont(ofSize: NSFont.systemFontSize)
+            c.unselectedColor = .secondaryLabelColor
+            cell = c
         case "album":
-            let cell = textCell(for: column.identifier, in: tableView)
-            cell.label.stringValue = track.album?.name ?? ""
-            cell.label.alignment = .left
-            cell.label.font = .systemFont(ofSize: NSFont.systemFontSize)
-            cell.unselectedColor = .secondaryLabelColor
-            return cell
+            let c = textCell(for: column.identifier, in: tableView)
+            c.label.stringValue = track.album?.name ?? ""
+            c.label.alignment = .left
+            c.label.font = .systemFont(ofSize: NSFont.systemFontSize)
+            c.unselectedColor = .secondaryLabelColor
+            cell = c
         case "duration":
-            let cell = textCell(for: column.identifier, in: tableView)
-            cell.label.stringValue = track.formattedDuration
-            cell.label.alignment = .right
-            cell.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-            cell.unselectedColor = .secondaryLabelColor
-            return cell
+            let c = textCell(for: column.identifier, in: tableView)
+            c.label.stringValue = track.formattedDuration
+            c.label.alignment = .right
+            c.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            c.unselectedColor = .secondaryLabelColor
+            // Extra right padding so the duration text has breathing room to the
+            // selection pill's right edge instead of touching it.
+            c.labelTrailingInset = 12
+            cell = c
         default:
-            return nil
+            cell = nil
         }
+        cell?.backgroundStyle = cellStyle
+        return cell
     }
 
     private func textCell(for identifier: NSUserInterfaceItemIdentifier, in tableView: NSTableView) -> TextCell {
@@ -686,6 +852,21 @@ extension TracksTableViewController: NSTableViewDelegate {
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
+        // selectionHighlightStyle = .none (sections mode) tells NSTableView not to redraw
+        // rows on selection changes and not to flip cell backgroundStyle to .emphasized.
+        // Both jobs fall to us: trigger the redraw and propagate emphasis to cells so
+        // their text colors flip to white.
+        if sectionsLeftInset > 0 {
+            tableView.enumerateAvailableRowViews { rowView, _ in
+                rowView.needsDisplay = true
+                let style: NSView.BackgroundStyle = rowView.isSelected ? .emphasized : .normal
+                for col in 0..<rowView.numberOfColumns {
+                    if let cell = rowView.view(atColumn: col) as? NSTableCellView {
+                        cell.backgroundStyle = style
+                    }
+                }
+            }
+        }
         if suppressSelectionCallback { return }
         let ids = Set(tableView.selectedRowIndexes.compactMap { row -> UUID? in
             guard let trackIdx = flatTrackIndex(forRow: row) else { return nil }
@@ -787,11 +968,45 @@ private final class EmbeddedRowView: NSTableRowView {
     /// divider would clash with the table's grouping or the row below.
     var suppressDivider: Bool = false
 
+    override var focusRingType: NSFocusRingType {
+        get { .none }
+        set { /* ignore — pinned to .none so NSTableView's right-click target ring
+              doesn't paint a full-row outline ignoring our custom selection bounds. */ }
+    }
+
+    override var isSelected: Bool {
+        get { super.isSelected }
+        set {
+            super.isSelected = newValue
+            // Propagate emphasis to cells synchronously, before the pending row redraw,
+            // so cells' text flips to white in the same frame the pill appears (no flash
+            // from black to white during shift-range selection).
+            let style: NSView.BackgroundStyle = newValue ? .emphasized : .normal
+            for col in 0..<numberOfColumns {
+                if let cell = view(atColumn: col) as? NSTableCellView, cell.backgroundStyle != style {
+                    cell.backgroundStyle = style
+                }
+            }
+        }
+    }
+    /// When non-nil, NSTableView's native source-list selection pill is replaced with
+    /// a custom one that starts `customSelectionLeftInset` from the leading edge —
+    /// used in sections mode so the pill doesn't extend behind the artwork overlay.
+    var customSelectionLeftInset: CGFloat? = nil
+    /// Trailing inset used with `customSelectionLeftInset`. Mirrors source-list's ~16pt
+    /// trailing inset so the pill ends symmetrically.
+    var customSelectionRightInset: CGFloat = 16
+
     override func drawBackground(in dirtyRect: NSRect) {
-        // Subtle hairline divider at the bottom. Skipped on suppressed rows, on selected
-        // rows, and when the row below is selected (so the rounded selection pill never
-        // has a line slicing through it). Drawn here because NSTableView with zero
-        // intercellSpacing doesn't call drawSeparator.
+        // Custom selection pill — drawn in drawBackground because NSTableView's selection
+        // rendering happens at the table level (not delegated to the row's drawSelection)
+        // for both .regular and .sourceList highlight styles. We rely on selectionHighlight
+        // Style = .none on the table so nothing else paints over us.
+        if isSelected, let leftInset = customSelectionLeftInset {
+            drawCustomSelectionPill(leftInset: leftInset)
+        }
+        // Inter-row hairline. Skipped on suppressed rows, selected rows, and rows above
+        // a selected row so the pill stays clean.
         guard !suppressDivider, !isSelected, !isNextRowSelected else { return }
         let line = NSRect(x: bounds.minX + 8,
                           y: bounds.maxY - 0.5,
@@ -802,6 +1017,76 @@ private final class EmbeddedRowView: NSTableRowView {
     }
 
     override func drawSeparator(in dirtyRect: NSRect) {}
+
+    override func drawDraggingDestinationFeedback(in dirtyRect: NSRect) {}
+
+    /// Replace the default draw pipeline (which paints a full-row context-menu outline
+    /// when right-clicked) with just our background. Selection drawing is handled inside
+    /// drawBackground; other phases are no-ops above.
+    override func draw(_ dirtyRect: NSRect) {
+        drawBackground(in: dirtyRect)
+    }
+
+    /// Cells consult their row view's `interiorBackgroundStyle` to choose text colors.
+    /// With selectionHighlightStyle = .none, the default returns `.normal` even when
+    /// the row is selected — so cells draw black text. Override to surface the
+    /// emphasized state when the row carries a custom inset (sections mode).
+    override var interiorBackgroundStyle: NSView.BackgroundStyle {
+        if isSelected && customSelectionLeftInset != nil {
+            return .emphasized
+        }
+        return super.interiorBackgroundStyle
+    }
+
+    private func drawCustomSelectionPill(leftInset: CGFloat) {
+        let radius: CGFloat = 6
+        let topRadius: CGFloat = isPreviousRowSelected ? 0 : radius
+        let bottomRadius: CGFloat = isNextRowSelected ? 0 : radius
+        let rect = NSRect(
+            x: bounds.minX + leftInset,
+            y: bounds.minY,
+            width: max(0, bounds.width - leftInset - customSelectionRightInset),
+            height: bounds.height
+        )
+        guard rect.width > 0 else { return }
+        let path = roundedRectPath(rect, topRadius: topRadius, bottomRadius: bottomRadius)
+        NSColor.selectedContentBackgroundColor.setFill()
+        path.fill()
+    }
+
+    /// Rounded-rect with selectable corner radii on top/bottom — uses `appendArc(from:to:)`
+    /// so the geometry is correct in either flipped or non-flipped coordinate systems.
+    private func roundedRectPath(_ rect: NSRect, topRadius: CGFloat, bottomRadius: CGFloat) -> NSBezierPath {
+        let path = NSBezierPath()
+        let minX = rect.minX, maxX = rect.maxX, minY = rect.minY, maxY = rect.maxY
+        path.move(to: NSPoint(x: minX + topRadius, y: minY))
+        path.line(to: NSPoint(x: maxX - topRadius, y: minY))
+        if topRadius > 0 {
+            path.appendArc(from: NSPoint(x: maxX, y: minY),
+                           to: NSPoint(x: maxX, y: minY + topRadius),
+                           radius: topRadius)
+        }
+        path.line(to: NSPoint(x: maxX, y: maxY - bottomRadius))
+        if bottomRadius > 0 {
+            path.appendArc(from: NSPoint(x: maxX, y: maxY),
+                           to: NSPoint(x: maxX - bottomRadius, y: maxY),
+                           radius: bottomRadius)
+        }
+        path.line(to: NSPoint(x: minX + bottomRadius, y: maxY))
+        if bottomRadius > 0 {
+            path.appendArc(from: NSPoint(x: minX, y: maxY),
+                           to: NSPoint(x: minX, y: maxY - bottomRadius),
+                           radius: bottomRadius)
+        }
+        path.line(to: NSPoint(x: minX, y: minY + topRadius))
+        if topRadius > 0 {
+            path.appendArc(from: NSPoint(x: minX, y: minY),
+                           to: NSPoint(x: minX + topRadius, y: minY),
+                           radius: topRadius)
+        }
+        path.close()
+        return path
+    }
 }
 
 /// Group-row cell that hosts a SwiftUI view (album header). Used in sections mode so
@@ -844,6 +1129,17 @@ private final class TextCell: NSTableCellView {
     var unselectedColor: NSColor = .secondaryLabelColor {
         didSet { applyEmphasis() }
     }
+    /// Trailing inset between the cell's right edge and the label's right edge.
+    /// Defaults to 4 for tight cells; the duration column bumps this up to give
+    /// breathing room next to the selection pill.
+    var labelTrailingInset: CGFloat = 4 {
+        didSet {
+            if abs(oldValue - labelTrailingInset) > 0.5 {
+                trailingConstraint?.constant = -labelTrailingInset
+            }
+        }
+    }
+    private var trailingConstraint: NSLayoutConstraint?
 
     init(identifier: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
@@ -853,9 +1149,11 @@ private final class TextCell: NSTableCellView {
         label.cell?.usesSingleLineMode = true
         addSubview(label)
         textField = label
+        let trailing = label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -labelTrailingInset)
+        trailingConstraint = trailing
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            trailing,
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
