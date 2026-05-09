@@ -4,9 +4,17 @@ import SwiftUI
 
 /// NSPanel-backed mini player. Floating HUD-style window so it can stay above the main
 /// window across spaces. Content is SwiftUI via NSHostingView.
+/// SwiftUI-observable window state — surfaces facts the layout needs to know
+/// (whether the user is currently resizing) without the SwiftUI side polling.
+@Observable @MainActor
+final class MiniPlayerState {
+    var isResizing: Bool = false
+}
+
 @MainActor
 final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     private let hostingView: NSHostingView<AnyView>
+    private let state = MiniPlayerState()
     /// Last height the user had when queue was visible (h > snap point). Restored
     /// when the queue toggle re-opens the queue. nil = use the default queue height.
     private var savedQueueOpenHeight: CGFloat?
@@ -62,14 +70,24 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: panel)
         panel.delegate = self
 
-        // Now that self exists we can wire the queue toggle through. The SwiftUI view
-        // owns whether the queue is visible (for layout); the callback only resizes
-        // the window to accommodate it.
-        let content = MiniPlayerContent(onToggleQueue: { [weak self] expanded in
-            self?.applyQueueExpansion(expanded: expanded)
+        // Now that self exists we can wire the queue toggle through. Toggle is
+        // intent-only — the controller decides expand vs collapse based on the
+        // current window height, which keeps SwiftUI state in sync with reality
+        // even after the user resizes manually.
+        let content = MiniPlayerContent(onQueueToggleRequest: { [weak self] in
+            self?.toggleQueueByWindowState()
         })
         .environment(player)
+        .environment(state)
         host.rootView = AnyView(content)
+    }
+
+    /// Derives current queue-visibility from window height and flips it.
+    private func toggleQueueByWindowState() {
+        guard let window else { return }
+        let snapPoint = window.frame.width + Self.transportRowHeight
+        let isVisible = window.frame.height > snapPoint
+        applyQueueExpansion(expanded: !isVisible)
     }
 
     @available(*, unavailable)
@@ -127,6 +145,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     /// Both snaps are animated.
     nonisolated func windowDidEndLiveResize(_ notification: Notification) {
         Task { @MainActor in
+            self.state.isResizing = false
             guard let window = self.window else { return }
             let frame = window.frame
             let w = frame.width
@@ -161,6 +180,10 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
 
     nonisolated func windowDidMove(_ notification: Notification) {
         Task { @MainActor in self.saveCurrentFrame() }
+    }
+
+    nonisolated func windowWillStartLiveResize(_ notification: Notification) {
+        Task { @MainActor in self.state.isResizing = true }
     }
 
     private func updateSavedQueueHeights(currentHeight h: CGFloat) {
@@ -199,9 +222,10 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
 /// the stacked threshold the queue area becomes visible naturally.
 private struct MiniPlayerContent: View {
     @Environment(PlayerService.self) private var player
-    /// Notifies the window controller to grow / shrink to fit the queue panel.
-    let onToggleQueue: (Bool) -> Void
-    @State private var showQueue: Bool = false
+    /// Asks the window controller to flip queue visibility. Controller decides
+    /// expand vs collapse based on actual current window height — keeps SwiftUI
+    /// state in sync with reality even after a manual resize.
+    let onQueueToggleRequest: () -> Void
 
     private var track: Track? { player.currentTrack }
     private var artworkURL: URL? {
@@ -227,8 +251,7 @@ private struct MiniPlayerContent: View {
                     artworkURL: artworkURL,
                     width: w,
                     height: h,
-                    showQueue: showQueue,
-                    toggleQueue: toggleQueue
+                    onQueueToggleRequest: onQueueToggleRequest
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -239,11 +262,6 @@ private struct MiniPlayerContent: View {
         // genuinely fill the top of the window.
         .ignoresSafeArea()
         .background(Color(NSColor.windowBackgroundColor))
-    }
-
-    private func toggleQueue() {
-        showQueue.toggle()
-        onToggleQueue(showQueue)
     }
 }
 
@@ -262,12 +280,12 @@ private struct MiniPlayerContent: View {
 /// One stable view structure across the entire range — no mode swap, no flicker.
 private struct UnifiedLayout: View {
     @Environment(PlayerService.self) private var player
+    @Environment(MiniPlayerState.self) private var windowState
     let track: Track?
     let artworkURL: URL?
     let width: CGFloat
     let height: CGFloat
-    let showQueue: Bool
-    let toggleQueue: () -> Void
+    let onQueueToggleRequest: () -> Void
 
     @State private var isHovering = false
     @State private var hideTask: Task<Void, Never>?
@@ -282,10 +300,12 @@ private struct UnifiedLayout: View {
     private var queueAreaHeight: CGFloat {
         max(0, height - artworkHeight - MiniPlayerContent.transportRowHeight)
     }
-    /// Transport visible unless it's overlapping the artwork AND the user isn't
-    /// currently interacting (hovering). Below-artwork transport is always shown.
+    private var isQueueVisible: Bool { queueAreaHeight > 0 }
+    /// Transport visible when below the artwork (always), or when the user is
+    /// hovering, or while the window is being resized (so it stays glued to the
+    /// bottom edge during the drag instead of fading away mid-resize).
     private var transportVisible: Bool {
-        !transportOverlapsArtwork || isHovering
+        !transportOverlapsArtwork || isHovering || windowState.isResizing
     }
 
     var body: some View {
@@ -299,8 +319,8 @@ private struct UnifiedLayout: View {
                 Color.clear.frame(height: transportTopY)
                 TransportRow(
                     track: track,
-                    showQueue: showQueue,
-                    toggleQueue: toggleQueue
+                    isQueueVisible: isQueueVisible,
+                    onQueueToggleRequest: onQueueToggleRequest
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
@@ -416,8 +436,8 @@ private struct CompactLayout: View {
 private struct TransportRow: View {
     @Environment(PlayerService.self) private var player
     let track: Track?
-    let showQueue: Bool
-    let toggleQueue: () -> Void
+    let isQueueVisible: Bool
+    let onQueueToggleRequest: () -> Void
     var tintForeground: Color? = nil
 
     var body: some View {
@@ -463,14 +483,14 @@ private struct TransportRow: View {
                 }
                 HStack(spacing: 0) {
                     Spacer()
-                    Button { toggleQueue() } label: {
+                    Button { onQueueToggleRequest() } label: {
                         Image(systemName: "list.bullet")
                             .font(.system(size: 14))
                             .frame(width: 36, height: 36)
                             .contentShape(Rectangle())
                     }
                     .disabled(track == nil)
-                    .foregroundStyle(showQueue
+                    .foregroundStyle(isQueueVisible
                         ? AnyShapeStyle(Color.accentColor)
                         : tintForeground.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
                 }
