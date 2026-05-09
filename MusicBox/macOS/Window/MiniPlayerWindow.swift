@@ -269,6 +269,9 @@ private struct UnifiedLayout: View {
     let showQueue: Bool
     let toggleQueue: () -> Void
 
+    @State private var isHovering = false
+    @State private var hideTask: Task<Void, Never>?
+
     private var artworkHeight: CGFloat { min(width, height) }
     private var transportTopY: CGFloat {
         // Transport stays glued to the window's bottom edge until it would dip
@@ -278,6 +281,11 @@ private struct UnifiedLayout: View {
     private var transportOverlapsArtwork: Bool { transportTopY < artworkHeight }
     private var queueAreaHeight: CGFloat {
         max(0, height - artworkHeight - MiniPlayerContent.transportRowHeight)
+    }
+    /// Transport visible unless it's overlapping the artwork AND the user isn't
+    /// currently interacting (hovering). Below-artwork transport is always shown.
+    private var transportVisible: Bool {
+        !transportOverlapsArtwork || isHovering
     }
 
     var body: some View {
@@ -298,6 +306,8 @@ private struct UnifiedLayout: View {
                 .padding(.vertical, 10)
                 .padding(.horizontal, 14)
                 .background(transportBackground)
+                .opacity(transportVisible ? 1 : 0)
+                .animation(.easeInOut(duration: 0.18), value: transportVisible)
                 if queueAreaHeight > 0 {
                     Divider()
                     InlineQueue()
@@ -307,6 +317,18 @@ private struct UnifiedLayout: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onHover { hovering in
+            hideTask?.cancel()
+            if hovering {
+                isHovering = true
+            } else {
+                hideTask = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1.5))
+                    guard !Task.isCancelled else { return }
+                    isHovering = false
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -578,11 +600,15 @@ private struct MiniScrubber: View {
     var body: some View {
         let resolvedTint = tint ?? Color.accentColor
         let trackColor = (tint ?? .secondary).opacity(0.3)
-        HStack(spacing: 6) {
-            Text(format(isScrubbing ? scrubValue : player.progress))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(tint?.opacity(0.85) ?? Color.secondary)
-                .frame(width: 36, alignment: .trailing)
+        let labelColor: Color = tint?.opacity(0.85) ?? Color.secondary
+        VStack(spacing: 2) {
+            HStack(spacing: 0) {
+                Text(format(isScrubbing ? scrubValue : player.progress))
+                Spacer()
+                Text(format(player.duration))
+            }
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(labelColor)
             ProgressTrack(
                 value: isScrubbing ? scrubValue : player.progress,
                 duration: max(player.duration, 1),
@@ -597,11 +623,7 @@ private struct MiniScrubber: View {
                 tint: resolvedTint,
                 trackColor: trackColor
             )
-            .frame(height: 12)
-            Text(format(player.duration))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(tint?.opacity(0.85) ?? Color.secondary)
-                .frame(width: 36, alignment: .leading)
+            .frame(height: 10)
         }
     }
 

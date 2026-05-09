@@ -161,11 +161,14 @@ private struct ScrubberView: View {
     @State private var isScrubbing = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(format(isScrubbing ? scrubValue : player.progress))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 30, alignment: .trailing)
+        VStack(spacing: 1) {
+            HStack(spacing: 0) {
+                Text(format(isScrubbing ? scrubValue : player.progress))
+                Spacer()
+                Text(format(player.duration))
+            }
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
             ProgressTrack(
                 value: isScrubbing ? scrubValue : player.progress,
                 duration: max(player.duration, 1),
@@ -178,11 +181,7 @@ private struct ScrubberView: View {
                     isScrubbing = false
                 }
             )
-            .frame(height: 14)
-            Text(format(player.duration))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 30, alignment: .leading)
+            .frame(height: 8)
         }
     }
 
