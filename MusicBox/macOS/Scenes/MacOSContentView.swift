@@ -53,25 +53,7 @@ struct MacOSContentView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 600)
-        .overlay(alignment: .trailing) {
-            // Slide-over queue panel — overlays detail content from the right edge,
-            // doesn't push other content away. Use HStack (not ZStack with transparent
-            // backdrop) so the dismiss-area is genuinely separate from the panel; a
-            // ZStack backdrop was capturing clicks meant for the queue list.
-            if showQueue {
-                HStack(spacing: 0) {
-                    Color.clear
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                        .onTapGesture { showQueue = false }
-                    QueuePanel(isPresented: $showQueue)
-                        .frame(width: 360)
-                        .background(Color(NSColor.windowBackgroundColor))
-                        .shadow(color: Color.black.opacity(0.18), radius: 8, x: -2, y: 0)
-                        .transition(.move(edge: .trailing))
-                }
-            }
-        }
+        .overlay(alignment: .trailing) { queueSlideOver }
         .animation(.easeInOut(duration: 0.22), value: showQueue)
         .queueConfirmationOverlay()
         .replaceQueueConfirmation()
@@ -190,6 +172,27 @@ struct MacOSContentView: View {
         }
     }
 
+    /// Slide-over queue panel — overlays detail content from the right edge, doesn't
+    /// push other content away. Side-by-side HStack so the dismiss area is genuinely
+    /// separate from the panel (no invisible click-catcher overlapping the list).
+    @ViewBuilder
+    private var queueSlideOver: some View {
+        if showQueue {
+            HStack(spacing: 0) {
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .onTapGesture { showQueue = false }
+                QueuePanel(isPresented: $showQueue)
+                    .frame(width: 360)
+                    .frame(maxHeight: .infinity)
+                    .background(Color(NSColor.windowBackgroundColor))
+                    .shadow(color: Color.black.opacity(0.18), radius: 8, x: -2, y: 0)
+                    .transition(.move(edge: .trailing))
+            }
+        }
+    }
+
     private var sidebarActions: SidebarActions {
         var a = SidebarActions()
         a.playPlaylist = { playlist in
@@ -252,9 +255,10 @@ private struct DetailPlaceholder: View {
 }
 
 /// Slide-over queue panel — anchored to the right edge of the window, overlays
-/// detail content (no push). Shows the currently-playing track at the top and the
-/// "up next" portion of the queue (items after the current index). Editable: drag
-/// to reorder, swipe to remove.
+/// detail content (no push). Shows the "up next" portion of the queue (items after
+/// the current index). Editable: drag to reorder, swipe to remove. Double-click
+/// jumps to that track in the existing queue (uses skipTo, not playNow, so the
+/// "replace queue" prompt doesn't fire).
 struct QueuePanel: View {
     @Environment(PlayerService.self) private var player
     @Binding var isPresented: Bool
@@ -287,14 +291,6 @@ struct QueuePanel: View {
             .padding(.vertical, 12)
             Divider()
 
-            if let current = player.currentTrack, player.queue.indices.contains(player.effectiveIndex) {
-                let currentItem = player.queue[player.effectiveIndex]
-                NowPlayingHeader(track: current, artworkURL: currentItem.artworkURL)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                Divider()
-            }
-
             if upNext.isEmpty {
                 ContentUnavailableView(
                     "Nothing Up Next",
@@ -306,6 +302,7 @@ struct QueuePanel: View {
                 List {
                     ForEach(upNext, id: \.item.id) { entry in
                         QueuePanelRow(originalIndex: entry.originalIndex, item: entry.item)
+                            .focusEffectDisabled()
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
                                     player.removeFromQueue(at: IndexSet(integer: entry.originalIndex))
@@ -315,9 +312,7 @@ struct QueuePanel: View {
                             }
                             .contextMenu {
                                 Button("Play") {
-                                    player.requestPlay {
-                                        player.playNow(queue: player.queue, startingAt: entry.originalIndex)
-                                    }
+                                    player.skipTo(queueIndex: entry.originalIndex)
                                 }
                                 Button(role: .destructive) {
                                     player.removeFromQueue(at: IndexSet(integer: entry.originalIndex))
@@ -347,34 +342,8 @@ struct QueuePanel: View {
     }
 }
 
-/// Header strip showing the currently-playing track inside the queue panel.
-private struct NowPlayingHeader: View {
-    let track: Track
-    let artworkURL: URL?
-
-    var body: some View {
-        HStack(spacing: 10) {
-            ArtworkView(url: artworkURL, cornerRadius: 4)
-                .frame(width: 44, height: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Now Playing")
-                    .font(.caption.bold())
-                    .foregroundStyle(.tint)
-                Text(track.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                Text(track.artist.name)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-        }
-    }
-}
-
 /// One row in the queue panel — artwork thumbnail + title/artist. Double-click
-/// jumps to the track in the queue.
+/// jumps to the track in the existing queue (skipTo, not playNow).
 private struct QueuePanelRow: View {
     @Environment(PlayerService.self) private var player
     let originalIndex: Int
@@ -400,9 +369,7 @@ private struct QueuePanelRow: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
-            player.requestPlay {
-                player.playNow(queue: player.queue, startingAt: originalIndex)
-            }
+            player.skipTo(queueIndex: originalIndex)
         }
     }
 }

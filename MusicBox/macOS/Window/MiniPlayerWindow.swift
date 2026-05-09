@@ -159,9 +159,12 @@ private struct MiniPlayerContent: View {
 // MARK: - Standard layout (default)
 
 /// Square artwork on top, transport row below. The default mini-player look.
-/// Big mode: square artwork pinned to the top, transport row below, optional inline
-/// queue below that. The default look when the queue panel is open or the window
-/// is significantly taller than wide.
+/// Big mode: square artwork pinned to the top (always full window width), transport
+/// row below, queue list always rendered at the bottom. When the window is just tall
+/// enough for artwork + transport, the queue takes 0pt and is invisible. Dragging
+/// the window taller (or pressing the queue toggle) reveals the queue area
+/// progressively — no separate "show queue" rendering path that would force a
+/// re-layout / artwork flicker.
 private struct StackedLayout: View {
     @Environment(PlayerService.self) private var player
     let track: Track?
@@ -170,19 +173,23 @@ private struct StackedLayout: View {
     let toggleQueue: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            artwork
-                .aspectRatio(1, contentMode: .fit)
-                .frame(maxWidth: .infinity)
-            TransportRow(track: track, showQueue: showQueue, toggleQueue: toggleQueue)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 14)
-                .background(Color(NSColor.windowBackgroundColor))
-            if showQueue {
+        // GeometryReader at the outer level so artwork can be pinned to the window's
+        // exact width — `.aspectRatio(1, contentMode: .fit)` was shrinking artwork to
+        // a centered square at narrower-than-tall windows.
+        GeometryReader { geo in
+            let w = geo.size.width
+            VStack(spacing: 0) {
+                artwork
+                    .frame(width: w, height: w)
+                    .clipped()
+                TransportRow(track: track, showQueue: showQueue, toggleQueue: toggleQueue)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 14)
+                    .background(Color(NSColor.windowBackgroundColor))
                 Divider()
                 InlineQueue()
-                    .frame(maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(NSColor.windowBackgroundColor))
             }
         }
@@ -192,7 +199,6 @@ private struct StackedLayout: View {
     private var artwork: some View {
         if track != nil, let url = artworkURL {
             ArtworkView(url: url, cornerRadius: 0)
-                .clipped()
         } else {
             ArtworkPlaceholder()
         }
@@ -327,31 +333,37 @@ private struct TransportRow: View {
             }
             .foregroundStyle(tintForeground ?? Color.primary)
 
-            HStack(spacing: 22) {
-                Button { player.back() } label: {
-                    Image(systemName: "backward.fill").font(.title3)
+            // Two-layer ZStack so the play button stays centered horizontally even
+            // though the queue toggle lives to the right. Centered HStack holds the
+            // main transport; the trailing HStack pushes the queue button to the
+            // right edge without affecting the centered layout.
+            ZStack {
+                HStack(spacing: 26) {
+                    Button { player.back() } label: {
+                        Image(systemName: "backward.fill").font(.title3)
+                    }
+                    .disabled(track == nil || !player.canGoBack)
+                    Button { player.togglePlayPause() } label: {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 28))
+                    }
+                    .disabled(track == nil)
+                    Button { player.skip() } label: {
+                        Image(systemName: "forward.fill").font(.title3)
+                    }
+                    .disabled(track == nil || !player.canSkip)
                 }
-                .disabled(track == nil || !player.canGoBack)
-                Button { player.togglePlayPause() } label: {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 28))
+                HStack {
+                    Spacer()
+                    Button { toggleQueue() } label: {
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 14))
+                    }
+                    .disabled(track == nil)
+                    .foregroundStyle(showQueue
+                        ? AnyShapeStyle(Color.accentColor)
+                        : tintForeground.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
                 }
-                .disabled(track == nil)
-                Button { player.skip() } label: {
-                    Image(systemName: "forward.fill").font(.title3)
-                }
-                .disabled(track == nil || !player.canSkip)
-                // Queue toggle sits to the right of skip — far enough that it
-                // doesn't get hit by accident when reaching for the next button.
-                Button { toggleQueue() } label: {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 14))
-                        .padding(.leading, 6)
-                }
-                .disabled(track == nil)
-                .foregroundStyle(showQueue
-                    ? AnyShapeStyle(Color.accentColor)
-                    : tintForeground.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
             }
             .buttonStyle(.plain)
             .foregroundStyle(tintForeground ?? Color.primary)
@@ -396,6 +408,7 @@ private struct InlineQueue: View {
                 List {
                     ForEach(upNext, id: \.item.id) { entry in
                         InlineQueueRow(originalIndex: entry.originalIndex, item: entry.item)
+                            .focusEffectDisabled()
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
                                     player.removeFromQueue(at: IndexSet(integer: entry.originalIndex))
@@ -447,9 +460,7 @@ private struct InlineQueueRow: View {
         .padding(.vertical, 2)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
-            player.requestPlay {
-                player.playNow(queue: player.queue, startingAt: originalIndex)
-            }
+            player.skipTo(queueIndex: originalIndex)
         }
     }
 }
