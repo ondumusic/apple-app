@@ -7,19 +7,27 @@ import SwiftUI
 @MainActor
 final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     private let hostingView: NSHostingView<AnyView>
-    /// Set when the queue panel is open below the player; non-nil = the height to
-    /// restore when the queue panel collapses again.
-    private var heightBeforeQueueExpand: CGFloat?
-    private static let queuePanelHeight: CGFloat = 280
+    /// Last height the user had when queue was visible (h > snap point). Restored
+    /// when the queue toggle re-opens the queue. nil = use the default queue height.
+    private var savedQueueOpenHeight: CGFloat?
+    /// Last height the user had with queue collapsed. Restored when the queue
+    /// toggle closes the queue.
+    private var savedQueueClosedHeight: CGFloat?
+    private static let defaultQueueOpenHeight: CGFloat = 580
+
+    /// UserDefaults key for the persisted window frame.
+    private static let frameDefaultsKey = "MiniPlayerWindowFrame"
+    /// Default frame — square (width × width), which puts the user in overlay mode
+    /// where the artwork dominates and transport overlays at the bottom.
+    private static let defaultFrame = NSRect(x: 0, y: 0, width: 300, height: 300)
 
     init(player: PlayerService) {
         // Plain NSWindow with hidden title bar so the artwork extends edge-to-edge.
-        // Default 300×380 — comfortable square-ish artwork + transport. Min size
-        // accommodates the compact toolbar layout (240×64) up through the stacked
-        // layout with revealed queue. Max biased so the window can't get absurdly
-        // tall while staying narrow.
+        // Restore the user's last frame, or fall back to the square overlay default.
+        let savedFrame = Self.loadSavedFrame()
+        let initialFrame = savedFrame ?? Self.defaultFrame
         let panel = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 380),
+            contentRect: initialFrame,
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -50,7 +58,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
             ])
         }
         self.hostingView = host
-        panel.center()
+        if savedFrame == nil { panel.center() }
         super.init(window: panel)
         panel.delegate = self
 
@@ -77,26 +85,37 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    /// Grows the window downward to reveal the inline queue panel, or collapses
-    /// back to the previous height. Anchored to the top edge so the artwork stays
-    /// in place visually.
+    /// Resizes the window to show or hide the inline queue panel. Remembers the
+    /// height the user had with queue closed so toggling-off restores it; remembers
+    /// the height with queue open so toggling-on later returns to the same size.
     private func applyQueueExpansion(expanded: Bool) {
         guard let window else { return }
         var frame = window.frame
+        let topY = frame.maxY
         if expanded {
-            guard heightBeforeQueueExpand == nil else { return }
-            heightBeforeQueueExpand = frame.height
-            let topY = frame.maxY
-            frame.size.height += Self.queuePanelHeight
-            frame.origin.y = topY - frame.size.height
+            // Save current as "queue closed" height; apply saved or default open
+            // height.
+            savedQueueClosedHeight = frame.height
+            let target = savedQueueOpenHeight ?? Self.defaultQueueOpenHeight
+            frame.size.height = target
         } else {
-            guard let saved = heightBeforeQueueExpand else { return }
-            let topY = frame.maxY
-            frame.size.height = saved
-            frame.origin.y = topY - saved
-            heightBeforeQueueExpand = nil
+            // Save current as "queue open" height; apply saved or snap-point
+            // closed height.
+            savedQueueOpenHeight = frame.height
+            let snapPoint = frame.width + Self.transportRowHeight
+            frame.size.height = savedQueueClosedHeight ?? snapPoint
         }
-        window.setFrame(frame, display: true, animate: true)
+        frame.origin.y = topY - frame.size.height
+        animateFrameChange(window: window, to: frame, duration: 0.18)
+    }
+
+    /// Faster window-size animation than `setFrame(_:display:animate:)` default.
+    private func animateFrameChange(window: NSWindow, to frame: NSRect, duration: TimeInterval) {
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = duration
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().setFrame(frame, display: true)
+        }
     }
 
     /// On resize-end, snap into one of three resting positions:
@@ -131,13 +150,38 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
                 let topY = frame.maxY
                 newFrame.size.height = target
                 newFrame.origin.y = topY - target
-                window.setFrame(newFrame, display: true, animate: true)
+                animateFrameChange(window: window, to: newFrame, duration: 0.18)
             }
 
-            if let saved = heightBeforeQueueExpand, window.frame.height < saved + 40 {
-                heightBeforeQueueExpand = nil
-            }
+            // After settle, persist new frame and update queue-height memory.
+            saveCurrentFrame()
+            updateSavedQueueHeights(currentHeight: window.frame.height)
         }
+    }
+
+    nonisolated func windowDidMove(_ notification: Notification) {
+        Task { @MainActor in self.saveCurrentFrame() }
+    }
+
+    private func updateSavedQueueHeights(currentHeight h: CGFloat) {
+        guard let window else { return }
+        let snapPoint = window.frame.width + Self.transportRowHeight
+        if h > snapPoint {
+            savedQueueOpenHeight = h
+        } else {
+            savedQueueClosedHeight = h
+        }
+    }
+
+    private func saveCurrentFrame() {
+        guard let window else { return }
+        UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: Self.frameDefaultsKey)
+    }
+
+    private static func loadSavedFrame() -> NSRect? {
+        guard let str = UserDefaults.standard.string(forKey: Self.frameDefaultsKey) else { return nil }
+        let rect = NSRectFromString(str)
+        return rect.width > 0 && rect.height > 0 ? rect : nil
     }
 
     /// Heights that the SwiftUI layout uses too — must match
