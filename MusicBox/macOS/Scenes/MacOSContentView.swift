@@ -304,15 +304,19 @@ struct QueuePanel: View {
 }
 
 /// Reusable queue list — used by both the main slide-over and the mini player's
-/// inline panel. ScrollView + LazyVStack with per-row visible Remove button +
-/// double-click to skip + context menu + draggable for reorder.
+/// inline panel. ScrollView + LazyVStack with selection (click + cmd-click),
+/// per-row hover-revealed Remove, double-click to skip, drag-to-reorder with
+/// insertion-line indicator, multi-drag of selected items.
 struct QueueList: View {
     @Environment(PlayerService.self) private var player
 
     let upNext: [(originalIndex: Int, item: QueueItem)]
     let rowHeight: CGFloat
     let showsDuration: Bool
+
+    @State private var selection: Set<UUID> = []
     @State private var hoveredId: UUID?
+    @State private var dropTargetId: UUID?
 
     var body: some View {
         ScrollView {
@@ -322,20 +326,29 @@ struct QueueList: View {
                         originalIndex: entry.originalIndex,
                         item: entry.item,
                         isHovered: hoveredId == entry.item.id,
-                        showsDuration: showsDuration
+                        isSelected: selection.contains(entry.item.id),
+                        isDropTarget: dropTargetId == entry.item.id,
+                        showsDuration: showsDuration,
+                        onTap: { handleTap(entry) },
+                        onRemove: { remove(entry) }
                     )
                     .onHover { hovering in
-                        hoveredId = hovering ? entry.item.id : (hoveredId == entry.item.id ? nil : hoveredId)
+                        if hovering { hoveredId = entry.item.id }
+                        else if hoveredId == entry.item.id { hoveredId = nil }
                     }
-                    .draggable(QueueDragPayload(itemId: entry.item.id, originalIndex: entry.originalIndex))
+                    .draggable(payload(for: entry))
                     .dropDestination(for: QueueDragPayload.self) { payloads, _ in
-                        guard let payload = payloads.first,
-                              payload.itemId != entry.item.id else { return false }
-                        player.moveQueueItems(
-                            from: IndexSet(integer: payload.originalIndex),
-                            to: entry.originalIndex
-                        )
+                        defer { dropTargetId = nil }
+                        guard let payload = payloads.first else { return false }
+                        let sources = IndexSet(payload.originalIndices)
+                        guard !sources.isEmpty,
+                              !payload.itemIds.contains(entry.item.id)
+                        else { return false }
+                        player.moveQueueItems(from: sources, to: entry.originalIndex)
                         return true
+                    } isTargeted: { hovering in
+                        if hovering { dropTargetId = entry.item.id }
+                        else if dropTargetId == entry.item.id { dropTargetId = nil }
                     }
                     Divider().opacity(0.5)
                 }
@@ -343,35 +356,89 @@ struct QueueList: View {
         }
         .scrollContentBackground(.hidden)
     }
+
+    private func payload(for entry: (originalIndex: Int, item: QueueItem)) -> QueueDragPayload {
+        // Drag the whole selection if the dragged row is part of it; otherwise
+        // just the dragged row.
+        if selection.contains(entry.item.id), selection.count > 1 {
+            let entries = upNext.filter { selection.contains($0.item.id) }
+            return QueueDragPayload(
+                itemIds: entries.map { $0.item.id },
+                originalIndices: entries.map { $0.originalIndex }
+            )
+        }
+        return QueueDragPayload(itemIds: [entry.item.id], originalIndices: [entry.originalIndex])
+    }
+
+    private func handleTap(_ entry: (originalIndex: Int, item: QueueItem)) {
+        let modifiers = NSEvent.modifierFlags
+        if modifiers.contains(.command) {
+            if selection.contains(entry.item.id) {
+                selection.remove(entry.item.id)
+            } else {
+                selection.insert(entry.item.id)
+            }
+        } else if modifiers.contains(.shift), let last = selection.first,
+                  let lastIdx = upNext.firstIndex(where: { $0.item.id == last }),
+                  let curIdx = upNext.firstIndex(where: { $0.item.id == entry.item.id }) {
+            let lo = min(lastIdx, curIdx)
+            let hi = max(lastIdx, curIdx)
+            selection.formUnion(upNext[lo...hi].map(\.item.id))
+        } else {
+            selection = [entry.item.id]
+        }
+    }
+
+    private func remove(_ entry: (originalIndex: Int, item: QueueItem)) {
+        // If the removed row is in the selection, remove all selected — otherwise
+        // remove just this one.
+        let targets: [Int]
+        if selection.contains(entry.item.id) {
+            targets = upNext.filter { selection.contains($0.item.id) }.map(\.originalIndex)
+            selection.removeAll()
+        } else {
+            targets = [entry.originalIndex]
+        }
+        player.removeFromQueue(at: IndexSet(targets))
+    }
 }
 
-/// Pasteboard payload used for in-queue drag-to-reorder.
+/// Pasteboard payload used for in-queue drag-to-reorder. Carries one or more
+/// item ids + their original queue indices so multi-drag works.
 struct QueueDragPayload: Codable, Transferable {
-    let itemId: UUID
-    let originalIndex: Int
+    let itemIds: [UUID]
+    let originalIndices: [Int]
 
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .data)
     }
 }
 
-/// One queue row. Title + artist + (optional) duration + remove button.
+/// One queue row. Title + artist + (optional) duration + remove button. Visual
+/// states: hover (subtle bg), selected (accent tint), drop target (top insertion
+/// line).
 struct QueueListRow: View {
     @Environment(PlayerService.self) private var player
     let originalIndex: Int
     let item: QueueItem
     let isHovered: Bool
+    let isSelected: Bool
+    let isDropTarget: Bool
     let showsDuration: Bool
+    let onTap: () -> Void
+    let onRemove: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
             ArtworkView(url: item.artworkURL, cornerRadius: 3)
                 .frame(width: 36, height: 36)
             VStack(alignment: .leading, spacing: 1) {
-                Text(item.track.name).lineLimit(1)
+                Text(item.track.name)
+                    .lineLimit(1)
+                    .foregroundStyle(isSelected ? Color.white : Color.primary)
                 Text(item.track.artist.name)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
                     .lineLimit(1)
             }
             Spacer()
@@ -379,15 +446,13 @@ struct QueueListRow: View {
                 Text(item.track.formattedDuration)
                     .monospacedDigit()
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
             }
             if isHovered {
-                Button {
-                    player.removeFromQueue(at: IndexSet(integer: originalIndex))
-                } label: {
+                Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isSelected ? Color.white : Color.secondary)
                 }
                 .buttonStyle(.plain)
                 .help("Remove from queue")
@@ -396,19 +461,36 @@ struct QueueListRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
         .contentShape(Rectangle())
-        .background(isHovered ? Color.secondary.opacity(0.08) : Color.clear)
+        .background(rowBackground)
+        .overlay(alignment: .top) {
+            if isDropTarget {
+                Rectangle()
+                    .fill(Color.accentColor)
+                    .frame(height: 2)
+            }
+        }
         .onTapGesture(count: 2) {
             player.skipTo(queueIndex: originalIndex)
         }
+        .simultaneousGesture(TapGesture().onEnded { onTap() })
         .contextMenu {
             Button("Play") {
                 player.skipTo(queueIndex: originalIndex)
             }
-            Button(role: .destructive) {
-                player.removeFromQueue(at: IndexSet(integer: originalIndex))
-            } label: {
-                Label("Remove", systemImage: "trash")
+            Button(role: .destructive, action: onRemove) {
+                Label(isSelected ? "Remove Selected" : "Remove", systemImage: "trash")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var rowBackground: some View {
+        if isSelected {
+            Color.accentColor
+        } else if isHovered {
+            Color.secondary.opacity(0.08)
+        } else {
+            Color.clear
         }
     }
 }

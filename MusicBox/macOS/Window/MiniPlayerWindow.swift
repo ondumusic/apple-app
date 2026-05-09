@@ -43,7 +43,10 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         panel.title = "Now Playing"
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
-        panel.isMovableByWindowBackground = true
+        // Movable-by-window-background was capturing drags meant for queue rows
+        // (drag-to-reorder also moved the window). Window can still be dragged
+        // from the title bar strip at the top.
+        panel.isMovableByWindowBackground = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
