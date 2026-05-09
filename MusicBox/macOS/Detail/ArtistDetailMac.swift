@@ -55,7 +55,7 @@ struct ArtistDetailMac: View {
                 artwork: { album in
                     AnyView(AlbumArtworkOverlay(album: album))
                 },
-                artworkSize: 120,
+                artworkSize: 160,
                 artworkInset: 20
             )
         }
@@ -162,10 +162,10 @@ private struct AlbumSectionHeader: View {
             .buttonStyle(.bordered)
             .controlSize(.regular)
         }
-        // Push past the spacer column (160) AND past the number column (36) plus the
-        // title cell's leading text inset (4) — so the album title sits in the same
-        // x position as the track titles below.
-        .padding(.leading, 200)
+        // Push past the spacer column (artworkSize 160 + 2 × inset 20 = 200) AND past
+        // the number column (36) plus the title cell's leading text inset (4) — so the
+        // album title sits in the same x position as the track titles below.
+        .padding(.leading, 240)
         .padding(.trailing, 20)
         .padding(.vertical, 12)
     }
@@ -195,14 +195,14 @@ private struct AlbumArtworkOverlay: View {
         VStack(alignment: .leading, spacing: 6) {
             NavigationLink(value: album) {
                 ArtworkView(url: album.artworkUrl)
-                    .frame(width: 120, height: 120)
+                    .frame(width: 160, height: 160)
             }
             .buttonStyle(.plain)
             Text("^[\(trackCount) song](inflect: true), \(formattedDuration)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
-                .frame(width: 120, alignment: .leading)
+                .frame(width: 160, alignment: .leading)
         }
     }
 }
