@@ -35,9 +35,10 @@ struct PlayerToolbar: ToolbarContent {
             .disabled(player.queue.isEmpty)
 
             Button {
-                showQueue = true
+                showQueue.toggle()
             } label: {
                 Image(systemName: "list.bullet")
+                    .foregroundStyle(showQueue ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             }
             .help("Queue")
             .disabled(player.currentTrack == nil)

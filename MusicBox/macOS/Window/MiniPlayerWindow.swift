@@ -113,10 +113,9 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
 
 /// Three layout states based on window height:
 ///   compact (<= 80pt): toolbar-style row — tiny artwork, title, transport
-///   standard (80–360pt): square artwork on top, transport row below
-///   expanded (> 360pt): tall artwork dominates, transport overlays on hover
-/// When the queue toggle is on, the inline queue list renders below the standard
-/// layout (window height grows by queuePanelHeight).
+///   medium (80–460pt, no queue): artwork covers window, transport overlays on hover
+///   big (>= 460pt OR queue toggled): square artwork on top, transport stacked below,
+///       optional queue list at the bottom
 private struct MiniPlayerContent: View {
     @Environment(PlayerService.self) private var player
     /// Notifies the window controller to grow / shrink to fit the queue panel.
@@ -132,24 +131,13 @@ private struct MiniPlayerContent: View {
     var body: some View {
         GeometryReader { geo in
             let h = geo.size.height
-            VStack(spacing: 0) {
-                Group {
-                    if h <= 80 {
-                        CompactLayout(track: track, artworkURL: artworkURL)
-                    } else if showQueue {
-                        // Queue inline forces the standard layout — expanded mode
-                        // (artwork-dominated) doesn't make sense alongside a queue.
-                        StandardLayout(track: track, artworkURL: artworkURL, showQueue: showQueue, toggleQueue: toggleQueue)
-                    } else if h >= 360 {
-                        ExpandedLayout(track: track, artworkURL: artworkURL, showQueue: showQueue, toggleQueue: toggleQueue)
-                    } else {
-                        StandardLayout(track: track, artworkURL: artworkURL, showQueue: showQueue, toggleQueue: toggleQueue)
-                    }
-                }
-                if showQueue, h > 80 {
-                    Divider()
-                    InlineQueue()
-                        .frame(maxHeight: .infinity)
+            Group {
+                if h <= 80 {
+                    CompactLayout(track: track, artworkURL: artworkURL)
+                } else if showQueue || h >= 460 {
+                    StackedLayout(track: track, artworkURL: artworkURL, showQueue: showQueue, toggleQueue: toggleQueue)
+                } else {
+                    OverlayLayout(track: track, artworkURL: artworkURL, showQueue: showQueue, toggleQueue: toggleQueue)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -159,7 +147,7 @@ private struct MiniPlayerContent: View {
         // our artwork down by the title-bar height; bypassing it lets the artwork
         // genuinely fill the top of the window.
         .ignoresSafeArea()
-        .background(Color.black)
+        .background(Color(NSColor.windowBackgroundColor))
     }
 
     private func toggleQueue() {
@@ -171,7 +159,10 @@ private struct MiniPlayerContent: View {
 // MARK: - Standard layout (default)
 
 /// Square artwork on top, transport row below. The default mini-player look.
-private struct StandardLayout: View {
+/// Big mode: square artwork pinned to the top, transport row below, optional inline
+/// queue below that. The default look when the queue panel is open or the window
+/// is significantly taller than wide.
+private struct StackedLayout: View {
     @Environment(PlayerService.self) private var player
     let track: Track?
     let artworkURL: URL?
@@ -185,16 +176,22 @@ private struct StandardLayout: View {
                 .frame(maxWidth: .infinity)
             TransportRow(track: track, showQueue: showQueue, toggleQueue: toggleQueue)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(.regularMaterial)
+                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .background(Color(NSColor.windowBackgroundColor))
+            if showQueue {
+                Divider()
+                InlineQueue()
+                    .frame(maxHeight: .infinity)
+                    .background(Color(NSColor.windowBackgroundColor))
+            }
         }
     }
 
     @ViewBuilder
     private var artwork: some View {
         if track != nil, let url = artworkURL {
-            ArtworkView(url: url)
+            ArtworkView(url: url, cornerRadius: 0)
                 .clipped()
         } else {
             ArtworkPlaceholder()
@@ -206,7 +203,9 @@ private struct StandardLayout: View {
 
 /// Artwork fills available space, transport controls slide in over the bottom on
 /// hover — same behavior as macOS's full-screen Now Playing.
-private struct ExpandedLayout: View {
+/// Medium mode: artwork covers the whole window (background-cover style), transport
+/// controls fade in over the bottom on hover. Apple Music's default mini look.
+private struct OverlayLayout: View {
     @Environment(PlayerService.self) private var player
     let track: Track?
     let artworkURL: URL?
@@ -240,7 +239,7 @@ private struct ExpandedLayout: View {
     @ViewBuilder
     private var artwork: some View {
         if track != nil, let url = artworkURL {
-            ArtworkView(url: url)
+            ArtworkView(url: url, cornerRadius: 0)
         } else {
             ArtworkPlaceholder()
         }
@@ -328,7 +327,7 @@ private struct TransportRow: View {
             }
             .foregroundStyle(tintForeground ?? Color.primary)
 
-            HStack(spacing: 28) {
+            HStack(spacing: 22) {
                 Button { player.back() } label: {
                     Image(systemName: "backward.fill").font(.title3)
                 }
@@ -342,6 +341,17 @@ private struct TransportRow: View {
                     Image(systemName: "forward.fill").font(.title3)
                 }
                 .disabled(track == nil || !player.canSkip)
+                // Queue toggle sits to the right of skip — far enough that it
+                // doesn't get hit by accident when reaching for the next button.
+                Button { toggleQueue() } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 14))
+                        .padding(.leading, 6)
+                }
+                .disabled(track == nil)
+                .foregroundStyle(showQueue
+                    ? AnyShapeStyle(Color.accentColor)
+                    : tintForeground.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
             }
             .buttonStyle(.plain)
             .foregroundStyle(tintForeground ?? Color.primary)
@@ -349,27 +359,21 @@ private struct TransportRow: View {
             if track != nil {
                 MiniScrubber(tint: tintForeground)
             }
-
-            HStack {
-                Spacer()
-                Button { toggleQueue() } label: {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 12))
-                        .foregroundStyle(showQueue
-                            ? Color.accentColor
-                            : tintForeground.map { $0.opacity(0.8) } ?? Color.secondary)
-                }
-                .buttonStyle(.plain)
-            }
         }
     }
 }
 
 /// Inline queue rendered below the player in the mini window when the queue toggle
-/// is on. Editable via swipe-to-remove + drag-to-reorder, same as the main app's
-/// slide-over queue.
+/// is on. Shows up-next only (items after the currently-playing index) with
+/// artwork thumbnails. Editable via swipe-to-remove + drag-to-reorder.
 private struct InlineQueue: View {
     @Environment(PlayerService.self) private var player
+
+    private var upNext: [(originalIndex: Int, item: QueueItem)] {
+        let current = player.effectiveIndex
+        return player.queue.enumerated()
+            .compactMap { current >= 0 && $0.offset > current ? ($0.offset, $0.element) : nil }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -382,55 +386,53 @@ private struct InlineQueue: View {
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .padding(.bottom, 4)
-            if player.queue.isEmpty {
+            if upNext.isEmpty {
                 Spacer()
-                Text("Queue is empty")
+                Text("Nothing up next")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {
                 List {
-                    ForEach(Array(player.queue.enumerated()), id: \.element.id) { index, item in
-                        InlineQueueRow(index: index, item: item)
+                    ForEach(upNext, id: \.item.id) { entry in
+                        InlineQueueRow(originalIndex: entry.originalIndex, item: entry.item)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
-                                    player.removeFromQueue(at: IndexSet(integer: index))
+                                    player.removeFromQueue(at: IndexSet(integer: entry.originalIndex))
                                 } label: {
                                     Label("Remove", systemImage: "trash")
                                 }
                             }
                     }
                     .onMove { source, destination in
-                        player.moveQueueItems(from: source, to: destination)
+                        let originalSource = IndexSet(source.compactMap {
+                            upNext.indices.contains($0) ? upNext[$0].originalIndex : nil
+                        })
+                        let originalDest: Int = {
+                            if destination >= upNext.count {
+                                return (upNext.last?.originalIndex ?? player.effectiveIndex) + 1
+                            }
+                            return upNext[destination].originalIndex
+                        }()
+                        player.moveQueueItems(from: originalSource, to: originalDest)
                     }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
         }
-        .background(.regularMaterial)
     }
 }
 
 private struct InlineQueueRow: View {
     @Environment(PlayerService.self) private var player
-    let index: Int
+    let originalIndex: Int
     let item: QueueItem
 
     var body: some View {
         HStack(spacing: 8) {
-            if index == player.effectiveIndex {
-                Image(systemName: player.isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
-                    .foregroundStyle(.tint)
-                    .font(.caption)
-                    .frame(width: 14)
-            } else {
-                Text("\(index + 1)")
-                    .monospacedDigit()
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 18, alignment: .trailing)
-            }
+            ArtworkView(url: item.artworkURL, cornerRadius: 3)
+                .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: 0) {
                 Text(item.track.name)
                     .font(.system(size: 12))
@@ -446,7 +448,7 @@ private struct InlineQueueRow: View {
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             player.requestPlay {
-                player.playNow(queue: player.queue, startingAt: index)
+                player.playNow(queue: player.queue, startingAt: originalIndex)
             }
         }
     }

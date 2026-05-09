@@ -55,11 +55,12 @@ struct MacOSContentView: View {
         .frame(minWidth: 900, minHeight: 600)
         .overlay(alignment: .trailing) {
             // Slide-over queue panel — overlays detail content from the right edge,
-            // doesn't push other content away. Click outside or the close button to
-            // dismiss.
+            // doesn't push other content away. Use HStack (not ZStack with transparent
+            // backdrop) so the dismiss-area is genuinely separate from the panel; a
+            // ZStack backdrop was capturing clicks meant for the queue list.
             if showQueue {
-                ZStack(alignment: .trailing) {
-                    Color.black.opacity(0.001)
+                HStack(spacing: 0) {
+                    Color.clear
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
                         .onTapGesture { showQueue = false }
@@ -251,10 +252,20 @@ private struct DetailPlaceholder: View {
 }
 
 /// Slide-over queue panel — anchored to the right edge of the window, overlays
-/// detail content (no push). Editable: drag to reorder, swipe to remove.
+/// detail content (no push). Shows the currently-playing track at the top and the
+/// "up next" portion of the queue (items after the current index). Editable: drag
+/// to reorder, swipe to remove.
 struct QueuePanel: View {
     @Environment(PlayerService.self) private var player
     @Binding var isPresented: Bool
+
+    /// Items after the currently-playing index, paired with their original queue
+    /// index so reorder / remove actions still target the right rows.
+    private var upNext: [(originalIndex: Int, item: QueueItem)] {
+        let current = player.effectiveIndex
+        return player.queue.enumerated()
+            .compactMap { current >= 0 && $0.offset > current ? ($0.offset, $0.element) : nil }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -275,20 +286,29 @@ struct QueuePanel: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             Divider()
-            if player.queue.isEmpty {
+
+            if let current = player.currentTrack, player.queue.indices.contains(player.effectiveIndex) {
+                let currentItem = player.queue[player.effectiveIndex]
+                NowPlayingHeader(track: current, artworkURL: currentItem.artworkURL)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                Divider()
+            }
+
+            if upNext.isEmpty {
                 ContentUnavailableView(
-                    "Queue Empty",
+                    "Nothing Up Next",
                     systemImage: "list.bullet",
-                    description: Text("Play something to populate the queue.")
+                    description: Text("Add tracks to the queue to see them here.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    ForEach(Array(player.queue.enumerated()), id: \.element.id) { index, item in
-                        QueuePanelRow(index: index, item: item)
+                    ForEach(upNext, id: \.item.id) { entry in
+                        QueuePanelRow(originalIndex: entry.originalIndex, item: entry.item)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
-                                    player.removeFromQueue(at: IndexSet(integer: index))
+                                    player.removeFromQueue(at: IndexSet(integer: entry.originalIndex))
                                 } label: {
                                     Label("Remove", systemImage: "trash")
                                 }
@@ -296,18 +316,28 @@ struct QueuePanel: View {
                             .contextMenu {
                                 Button("Play") {
                                     player.requestPlay {
-                                        player.playNow(queue: player.queue, startingAt: index)
+                                        player.playNow(queue: player.queue, startingAt: entry.originalIndex)
                                     }
                                 }
                                 Button(role: .destructive) {
-                                    player.removeFromQueue(at: IndexSet(integer: index))
+                                    player.removeFromQueue(at: IndexSet(integer: entry.originalIndex))
                                 } label: {
                                     Label("Remove", systemImage: "trash")
                                 }
                             }
                     }
                     .onMove { source, destination in
-                        player.moveQueueItems(from: source, to: destination)
+                        // Filtered indices → original queue indices.
+                        let originalSource = IndexSet(source.compactMap {
+                            upNext.indices.contains($0) ? upNext[$0].originalIndex : nil
+                        })
+                        let originalDest: Int = {
+                            if destination >= upNext.count {
+                                return (upNext.last?.originalIndex ?? player.effectiveIndex) + 1
+                            }
+                            return upNext[destination].originalIndex
+                        }()
+                        player.moveQueueItems(from: originalSource, to: originalDest)
                     }
                 }
                 .listStyle(.plain)
@@ -317,26 +347,43 @@ struct QueuePanel: View {
     }
 }
 
-/// One row in the queue panel — extracted so the row hit-testing for double-click
-/// doesn't conflict with List's swipe / drag gestures.
+/// Header strip showing the currently-playing track inside the queue panel.
+private struct NowPlayingHeader: View {
+    let track: Track
+    let artworkURL: URL?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ArtworkView(url: artworkURL, cornerRadius: 4)
+                .frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Now Playing")
+                    .font(.caption.bold())
+                    .foregroundStyle(.tint)
+                Text(track.name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Text(track.artist.name)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+    }
+}
+
+/// One row in the queue panel — artwork thumbnail + title/artist. Double-click
+/// jumps to the track in the queue.
 private struct QueuePanelRow: View {
     @Environment(PlayerService.self) private var player
-    let index: Int
+    let originalIndex: Int
     let item: QueueItem
 
     var body: some View {
         HStack(spacing: 10) {
-            if index == player.effectiveIndex {
-                Image(systemName: player.isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
-                    .foregroundStyle(.tint)
-                    .frame(width: 16)
-            } else {
-                Text("\(index + 1)")
-                    .monospacedDigit()
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, alignment: .trailing)
-            }
+            ArtworkView(url: item.artworkURL, cornerRadius: 3)
+                .frame(width: 36, height: 36)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.track.name).lineLimit(1)
                 Text(item.track.artist.name)
@@ -347,14 +394,14 @@ private struct QueuePanelRow: View {
             Spacer()
             Text(item.track.formattedDuration)
                 .monospacedDigit()
-                .font(.callout)
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             player.requestPlay {
-                player.playNow(queue: player.queue, startingAt: index)
+                player.playNow(queue: player.queue, startingAt: originalIndex)
             }
         }
     }
