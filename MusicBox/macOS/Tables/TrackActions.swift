@@ -56,7 +56,9 @@ struct TrackActions {
             }
         }
         a.goToArtist = { track in
-            if let artist = musicLibrary.artist(track.artistId) {
+            // Navigate to the album artist — track-level artists (e.g. featurings)
+            // aren't in the Artists list and would fail to resolve.
+            if let artist = musicLibrary.artist(track.albumArtistId) {
                 NotificationCenter.default.post(name: .navigateToArtist, object: artist)
             }
         }

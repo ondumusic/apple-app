@@ -6,6 +6,7 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
     var albumArtistId: UUID
     var albumId: UUID
     var artist: Artist
+    var albumArtistName: String
     var albumArtistSortName: String
     var album: TrackAlbum?
     var name: String
@@ -30,7 +31,8 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
     }
 
     init(id: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
-         artist: Artist, albumArtistSortName: String, album: TrackAlbum? = nil,
+         artist: Artist, albumArtistName: String? = nil, albumArtistSortName: String,
+         album: TrackAlbum? = nil,
          name: String, disc: Int, number: Int?, duration: Double,
          mimetype: String, streamUrl: String, downloadUrl: String = "",
          isDownloaded: Bool = false) {
@@ -39,6 +41,7 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         self.albumArtistId = albumArtistId
         self.albumId = albumId
         self.artist = artist
+        self.albumArtistName = albumArtistName ?? artist.name
         self.albumArtistSortName = albumArtistSortName
         self.album = album
         self.name = name
@@ -58,6 +61,7 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         albumArtistId = try container.decode(UUID.self, forKey: .albumArtistId)
         albumId = try container.decode(UUID.self, forKey: .albumId)
         artist = try container.decode(Artist.self, forKey: .artist)
+        albumArtistName = try container.decodeIfPresent(String.self, forKey: .albumArtistName) ?? artist.name
         albumArtistSortName = try container.decodeIfPresent(String.self, forKey: .albumArtistSortName) ?? artist.sortName
         album = try container.decodeIfPresent(TrackAlbum.self, forKey: .album)
         name = try container.decode(String.self, forKey: .name)

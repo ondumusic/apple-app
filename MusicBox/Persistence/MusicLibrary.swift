@@ -528,11 +528,13 @@ final class MusicLibrary {
             Track.TrackAlbum(id: $0.serverId, name: $0.name, artworkUrl: $0.artworkUrl)
         }
 
+        let albumArtistName = artistMap[lt.albumArtistId]?.name ?? artist.name
         let albumArtistSortName = artistMap[lt.albumArtistId]?.sortName ?? artist.sortName
 
         return Track(
             id: lt.serverId, artistId: lt.artistId, albumArtistId: lt.albumArtistId,
-            albumId: lt.albumId, artist: artist, albumArtistSortName: albumArtistSortName,
+            albumId: lt.albumId, artist: artist,
+            albumArtistName: albumArtistName, albumArtistSortName: albumArtistSortName,
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
             mimetype: lt.mimetype, streamUrl: lt.streamUrl, downloadUrl: lt.downloadUrl,
@@ -550,11 +552,13 @@ final class MusicLibrary {
             Track.TrackAlbum(id: $0.id, name: $0.name, artworkUrl: $0.artworkUrl)
         }
 
+        let albumArtistName = albumArtist?.name ?? artistModel.name
         let albumArtistSortName = albumArtist?.sortName ?? artistModel.sortName
 
         return Track(
             id: lt.serverId, artistId: lt.artistId, albumArtistId: lt.albumArtistId,
-            albumId: lt.albumId, artist: artistModel, albumArtistSortName: albumArtistSortName,
+            albumId: lt.albumId, artist: artistModel,
+            albumArtistName: albumArtistName, albumArtistSortName: albumArtistSortName,
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
             mimetype: lt.mimetype, streamUrl: lt.streamUrl, downloadUrl: lt.downloadUrl,

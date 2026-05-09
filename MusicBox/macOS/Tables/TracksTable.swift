@@ -205,6 +205,9 @@ final class TracksTableViewController: NSViewController {
         tableView.setDraggingSourceOperationMask(.copy, forLocal: false)
         // Self-drop target so we can intercept reorder drags.
         tableView.registerForDraggedTypes([.musicBoxTracks])
+        // Show a gap-line indicator at the insertion point so users know reorder drops
+        // happen between rows, not onto them.
+        tableView.draggingDestinationFeedbackStyle = .gap
 
         tableView.onDelete = { [weak self] in
             guard let self, let onDelete = self.onDelete else { return }
@@ -707,21 +710,34 @@ extension TracksTableViewController: NSTableViewDataSource {
         // between or onto section headers.
         guard onReorder != nil,
               sections == nil,
-              dropOperation == .above,
               info.draggingSource as? NSTableView === self.tableView
         else { return [] }
+        // Force the operation to .above so dropping anywhere (even directly on a row)
+        // becomes "insert between rows" instead of "drop onto row" (which we don't
+        // support and would silently fail).
+        if dropOperation != .above {
+            tableView.setDropRow(row, dropOperation: .above)
+        }
         return .move
     }
 
     func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation dropOperation: NSTableView.DropOperation) -> Bool {
         guard let onReorder,
               sections == nil,
-              dropOperation == .above,
               info.draggingSource as? NSTableView === self.tableView
         else { return false }
-        let rows = self.tableView.selectedRowIndexes
-        guard !rows.isEmpty else { return false }
-        onReorder(rows, row)
+        // Dragged rows aren't necessarily in selectedRowIndexes — NSTableView lets you
+        // click-and-drag an unselected row directly. Read the dragged track ids out of
+        // the pasteboard items we wrote in pasteboardWriterForRow and resolve them
+        // back to row indices in the current `tracks` array.
+        let draggedTrackIds: [UUID] = info.draggingPasteboard.pasteboardItems?.compactMap { item in
+            item.string(forType: .musicBoxTracks).flatMap(UUID.init)
+        } ?? []
+        let draggedRows = IndexSet(draggedTrackIds.compactMap { id in
+            tracks.firstIndex(where: { $0.id == id })
+        })
+        guard !draggedRows.isEmpty else { return false }
+        onReorder(draggedRows, row)
         return true
     }
 }
@@ -831,7 +847,11 @@ extension TracksTableViewController: NSTableViewDelegate {
             cell = c
         case "artist":
             let c = textCell(for: column.identifier, in: tableView)
-            c.label.stringValue = track.artist.name
+            // Show album artist (not track artist) — only album artists exist in the
+            // Artists list, so this is the only value double-click navigation can resolve.
+            // Featuring / track-level artist info is surfaced via the title cell's
+            // optional inline subline (showArtistInline).
+            c.label.stringValue = track.albumArtistName
             c.label.alignment = .left
             c.label.font = .systemFont(ofSize: NSFont.systemFontSize)
             c.unselectedColor = .secondaryLabelColor

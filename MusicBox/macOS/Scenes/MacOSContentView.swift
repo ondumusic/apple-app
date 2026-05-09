@@ -13,6 +13,10 @@ struct MacOSContentView: View {
 
     @State private var showQueue = false
     @State private var sidebarSelection: SidebarSelection? = .category(.artists)
+    /// Set when navigating to a specific artist (e.g. "Go to Artist" on a track).
+    /// ArtistsViewMac reads it on its first load to skip the default first-artist
+    /// selection — avoids the visible flicker the previous async re-post had.
+    @State private var pendingArtistNavigation: UUID?
     @State private var detailPath = NavigationPath()
     @State private var deleteTarget: Playlist?
     @State private var addToPlaylistTrackIds: [UUID] = []
@@ -37,7 +41,7 @@ struct MacOSContentView: View {
                     if !searchText.isEmpty {
                         SearchViewMac(query: searchText)
                     } else {
-                        DetailPlaceholder(selection: sidebarSelection)
+                        DetailPlaceholder(selection: sidebarSelection, pendingArtistNavigation: $pendingArtistNavigation)
                     }
                 }
                 .navigationDestination(for: Album.self) { album in
@@ -109,10 +113,12 @@ struct MacOSContentView: View {
             detailPath.append(album)
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
-            // Switch to the Artists category. ArtistsViewMac listens for the same
-            // notification and updates its master selection to the requested artist —
-            // we don't push onto the detail stack because the master/detail split
-            // is the canonical home for artists.
+            // Switch to the Artists category and record which artist to land on. The
+            // pendingArtistNavigation binding lets ArtistsViewMac skip its default
+            // first-artist selection on first mount (no flicker).
+            if let artist = notification.object as? Artist {
+                pendingArtistNavigation = artist.id
+            }
             sidebarSelection = .category(.artists)
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestAddToPlaylist)) { notification in
@@ -207,6 +213,7 @@ struct MacOSContentView: View {
 
 private struct DetailPlaceholder: View {
     let selection: SidebarSelection?
+    @Binding var pendingArtistNavigation: UUID?
 
     var body: some View {
         switch selection {
@@ -215,7 +222,7 @@ private struct DetailPlaceholder: View {
         case .category(.albums):
             AlbumsViewMac()
         case .category(.artists):
-            ArtistsViewMac()
+            ArtistsViewMac(pendingArtistSelection: $pendingArtistNavigation)
         case .category(.downloads):
             DownloadsView()
         case .playlist(let id):

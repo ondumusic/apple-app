@@ -83,16 +83,20 @@ struct PlaylistDetailMac: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button { playAll(shuffle: false) } label: {
-                Label("Play", systemImage: "play.fill")
+            HStack(spacing: 8) {
+                Button { playAll(shuffle: false) } label: {
+                    Image(systemName: "play.fill")
+                }
+                .disabled(tracks.isEmpty)
+                Button { playAll(shuffle: true) } label: {
+                    Image(systemName: "shuffle")
+                }
+                .disabled(tracks.isEmpty)
             }
-            .disabled(tracks.isEmpty)
-            Button { playAll(shuffle: true) } label: {
-                Label("Shuffle", systemImage: "shuffle")
-            }
-            .disabled(tracks.isEmpty)
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.circle)
+            .controlSize(.large)
         }
-        .controlSize(.regular)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -161,6 +165,9 @@ struct PlaylistDetailMac: View {
     /// individual moveItem calls; positions are computed via FractionalIndex.between
     /// using the gap created at the target.
     private func reorderRows(_ rows: IndexSet, to target: Int) {
+        #if DEBUG
+        print("[PL] reorderRows rows=\(Array(rows)) target=\(target) itemCount=\(items.count)")
+        #endif
         // Build the post-move ordering of items so we can compute a fresh position for
         // each moved row. NSTableView's `target` is the row index AFTER the drop in the
         // current ordering, so we need to translate it.
@@ -173,8 +180,14 @@ struct PlaylistDetailMac: View {
 
         var prevPosition: String? = clampedTarget > 0 ? stayingItems[clampedTarget - 1].position : nil
         let endPosition: String? = clampedTarget < stayingItems.count ? stayingItems[clampedTarget].position : nil
+        #if DEBUG
+        print("[PL] stayingTargetIdx=\(stayingTargetIdx) clampedTarget=\(clampedTarget) prev=\(prevPosition ?? "nil") end=\(endPosition ?? "nil")")
+        #endif
         for moved in movedItems {
             let newPosition = FractionalIndex.between(prevPosition, endPosition)
+            #if DEBUG
+            print("[PL] moveItem id=\(moved.id) oldPos=\(moved.position) newPos=\(newPosition)")
+            #endif
             playlistController.moveItem(moved.id, to: newPosition, within: playlistId)
             prevPosition = newPosition
         }

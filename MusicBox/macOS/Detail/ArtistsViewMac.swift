@@ -2,6 +2,12 @@
 import SwiftUI
 
 struct ArtistsViewMac: View {
+    /// When non-nil, the master list selects this artist on first load instead of
+    /// defaulting to artists.first. MacOSContentView sets it from .navigateToArtist
+    /// so opening this view from "Go to Artist" lands directly on the right artist
+    /// without flickering through the default first-artist selection.
+    @Binding var pendingArtistSelection: UUID?
+
     @Environment(MusicLibrary.self) private var musicLibrary
 
     @State private var artists: [Artist] = []
@@ -49,15 +55,21 @@ struct ArtistsViewMac: View {
         }
         .onChange(of: musicLibrary.revision, initial: true) {
             artists = musicLibrary.allArtists()
-            if selectedArtistId == nil {
-                selectedArtistId = artists.first?.id
-            } else if !artists.contains(where: { $0.id == selectedArtistId }) {
+            // Prefer a pending navigation request, then keep current, then fall back
+            // to the first artist. The pending value is consumed once.
+            if let pending = pendingArtistSelection, artists.contains(where: { $0.id == pending }) {
+                selectedArtistId = pending
+                pendingArtistSelection = nil
+            } else if selectedArtistId == nil || !artists.contains(where: { $0.id == selectedArtistId }) {
                 selectedArtistId = artists.first?.id
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
-            guard let artist = notification.object as? Artist else { return }
-            selectedArtistId = artist.id
+        .onChange(of: pendingArtistSelection) { _, newValue in
+            // Late navigation while ArtistsViewMac is already onscreen.
+            if let id = newValue, artists.contains(where: { $0.id == id }) {
+                selectedArtistId = id
+                pendingArtistSelection = nil
+            }
         }
     }
 }

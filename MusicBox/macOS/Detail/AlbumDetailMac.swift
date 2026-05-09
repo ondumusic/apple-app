@@ -20,67 +20,62 @@ struct AlbumDetailMac: View {
         .standard(player: player, musicLibrary: musicLibrary, network: network, downloadService: downloadService, artworkURL: album.artworkUrl)
     }
 
+    /// Single-section view of this album — same iTunes split layout as ArtistDetailMac
+    /// uses for each of an artist's albums. Album metadata + buttons live in the
+    /// section header; artwork is overlaid on the left.
+    private var sections: [TracksTableSection] {
+        [TracksTableSection(id: album.id, album: albumWithLoadedTracks, tracks: tracks)]
+    }
+
+    /// `album` from the navigation destination doesn't have `.tracks` populated —
+    /// rebuild a copy with the loaded tracks so the artwork overlay's caption
+    /// (track count, total duration) is accurate.
+    private var albumWithLoadedTracks: Album {
+        var copy = album
+        copy.tracks = tracks
+        return copy
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            TracksTable(
-                tracks: tracks,
-                selection: $selection,
-                onPlay: playTrack(at:),
-                actions: trackActions,
-                showArtist: hasMultipleArtists,
-                showAlbum: false,
-                currentlyPlayingTrackId: player.currentTrack?.id,
-                isPlaying: player.isPlaying
-            )
-        }
+        TracksTable(
+            tracks: tracks,
+            selection: $selection,
+            onPlay: playTrack(at:),
+            actions: trackActions,
+            showArtist: hasMultipleArtists,
+            showAlbum: false,
+            currentlyPlayingTrackId: player.currentTrack?.id,
+            isPlaying: player.isPlaying,
+            hidesColumnHeaders: true,
+            rowHeight: 40,
+            embeddedStyle: true,
+            sections: sections,
+            sectionHeader: { sectionAlbum in
+                AnyView(
+                    AlbumSectionHeader(
+                        album: sectionAlbum,
+                        onPlay: { playAll(shuffle: false) },
+                        onShuffle: { playAll(shuffle: true) },
+                        onDownload: { downloadAlbum() },
+                        onCancelDownload: { downloadService.cancelAlbumDownloads(albumId: album.id) }
+                    )
+                    .environment(musicLibrary)
+                    .environment(downloadService)
+                )
+            },
+            sectionHeaderHeight: 80,
+            artwork: { sectionAlbum in
+                AnyView(AlbumArtworkOverlay(album: sectionAlbum))
+            },
+            artworkSize: 160,
+            artworkInset: 20
+        )
+        .background(Color(NSColor.textBackgroundColor))
         .navigationTitle(album.name)
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &tracks)
         }
-    }
-
-    private var header: some View {
-        HStack(alignment: .center, spacing: 14) {
-            ArtworkView(url: album.artworkUrl)
-                .frame(width: 72, height: 72)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(album.name)
-                    .font(.title3.bold())
-                    .lineLimit(1)
-                HStack(spacing: 6) {
-                    if let artistName = album.artistName {
-                        Text(artistName)
-                    }
-                    if let year = album.releaseYear {
-                        Text("•").foregroundStyle(.tertiary)
-                        Text(String(year))
-                    }
-                    Text("•").foregroundStyle(.tertiary)
-                    Text("^[\(tracks.count) song](inflect: true)")
-                }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            HStack(spacing: 6) {
-                Button { playAll(shuffle: false) } label: {
-                    Label("Play", systemImage: "play.fill")
-                }
-                .disabled(tracks.isEmpty)
-                Button { playAll(shuffle: true) } label: {
-                    Label("Shuffle", systemImage: "shuffle")
-                }
-                .disabled(tracks.isEmpty)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background)
-        .overlay(alignment: .bottom) { Divider() }
     }
 
     private func reload() {
@@ -104,6 +99,13 @@ struct AlbumDetailMac: View {
         } else {
             player.requestPlay { player.playNow(tracks: available, artworkURL: album.artworkUrl) }
         }
+    }
+
+    private func downloadAlbum() {
+        guard let fullAlbum = musicLibrary.albumWithTracks(album.id) else { return }
+        let artist = musicLibrary.artist(album.artistId)
+            ?? Artist(id: album.artistId, name: album.artistName ?? "", sortName: album.artistName ?? "", slug: "")
+        downloadService.download(album: fullAlbum, artist: artist)
     }
 }
 #endif
