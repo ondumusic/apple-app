@@ -14,7 +14,6 @@ final class KeyboardObserver {
 
     /// Keyboard end frame in screen coordinates; nil while the keyboard is hidden.
     private(set) var keyboardFrame: CGRect?
-    private(set) var animationDuration: Double = 0.25
 
     private init() {
         let center = NotificationCenter.default
@@ -29,19 +28,11 @@ final class KeyboardObserver {
     }
 
     @objc private func keyboardWillChangeFrame(_ note: Notification) {
-        updateDuration(from: note)
         keyboardFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
     }
 
     @objc private func keyboardWillHide(_ note: Notification) {
-        updateDuration(from: note)
         keyboardFrame = nil
-    }
-
-    private func updateDuration(from note: Notification) {
-        if let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double, duration > 0 {
-            animationDuration = duration
-        }
     }
 }
 
