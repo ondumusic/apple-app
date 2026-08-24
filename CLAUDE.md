@@ -67,6 +67,13 @@ Playlists shipped on `feat/playlists`. Folders are `Playlist`s with `isFolder ==
 - **Maintain tests with code changes.** Add or update tests as part of the same work, not as a separate task. Test files live in `MusicBoxTests/`.
 - **Localize user-facing strings.** SwiftUI's `Text("...")` literal initializer auto-routes through `Localizable.xcstrings`. For dynamic counts, use Apple's inflection markup: `Text("^[\(count) song](inflect: true)")`. Strings stored as `String` and passed to `Text(String)` are **not** localized — use `LocalizedStringResource` instead.
 
+## Commit messages
+
+- Subject: `area: what changed`, imperative, terse, no trailing period (e.g. `downloads: fix foreground-migration concurrency bug`). No generic messages (`fix`, `wip`, `updates`, `more tests`, `attempt 2`) — say what actually changed.
+- Body: only when it adds real information beyond the subject — bullet points of what/why. Skip it for genuinely simple commits.
+- When a commit is authored or co-authored by Claude Code, add `Co-Authored-By: <model name> <noreply@anthropic.com>` as the last line, naming the model actually in use at commit time.
+- A `commit-msg` hook (`.githooks/commit-msg`) rejects generic/junk subjects at commit time. It's installed at `.git/hooks/commit-msg` in this clone; a fresh clone needs to copy or symlink it in (see the hook's header comment) since git doesn't version hooks.
+
 ## Build & test
 
 ```bash

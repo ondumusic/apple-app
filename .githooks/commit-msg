@@ -1,0 +1,43 @@
+#!/bin/sh
+# Rejects generic/junk commit subjects (see CLAUDE.md "Commit messages").
+#
+# Not versioned as an active hook by git itself — this file lives in the repo
+# for reference and for `git config core.hooksPath` setups, but the copy that
+# actually runs is .git/hooks/commit-msg. A fresh clone should either:
+#   cp .githooks/commit-msg .git/hooks/commit-msg && chmod +x .git/hooks/commit-msg
+# or symlink it in the same way.
+
+msg_file="$1"
+subject=$(sed -n '1p' "$msg_file" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+case "$subject" in
+    "Merge "*|"Revert "*|"fixup! "*|"squash! "*)
+        exit 0
+        ;;
+esac
+
+lower=$(printf '%s' "$subject" | tr '[:upper:]' '[:lower:]')
+
+junk_regex='^(fix|fixes|fixed|wip|wip fixes|update|updates|tweak|tweaks|misc|stuff|cleanup|changes|improvements?|test|tests|more tests|another attempt|next attempt|attempt|attempt [0-9]+|attempt at fix(ing)?|some fixes|various fixes|various improvements|more fixes|more improvements|more changes|minor fixes|small fixes|final fixes|temp|temp commit|checkpoint|save|wip commit)$'
+
+reject() {
+    echo "commit-msg hook: rejected subject \"$subject\"" >&2
+    echo "  $1" >&2
+    echo "  Convention (see CLAUDE.md): \"area: what changed\", specific and terse." >&2
+    echo "  Bypass with 'git commit --no-verify' if this is intentional." >&2
+    exit 1
+}
+
+if [ -z "$subject" ]; then
+    reject "empty subject line"
+fi
+
+if printf '%s' "$lower" | grep -Eq "$junk_regex"; then
+    reject "too generic to explain what changed"
+fi
+
+if [ "${#subject}" -lt 10 ]; then
+    reject "too short to be descriptive (${#subject} chars)"
+fi
+
+exit 0
