@@ -332,13 +332,20 @@ final class TracksTableViewController: NSViewController {
     }
 
     private(set) var isEmbedded: Bool = false
+    /// nil until the first style pass. Without it the equality guard below skips
+    /// configuration for a standalone table, since `embedded` and `isEmbedded` are both
+    /// false to begin with — which left the scroll view transparent over the window's
+    /// material, so its labels were vibrancy-blended and greyed out whenever the window
+    /// wasn't key.
+    private var appliedEmbeddedStyle: Bool?
 
     func applyEmbeddedStyle(_ embedded: Bool) {
         // makeNSViewController calls these before SwiftUI requests `view`, which is
         // when loadView runs and sets the standalone defaults. Force the load now so
         // our embedded overrides win.
         _ = view
-        guard embedded != isEmbedded else { return }
+        guard appliedEmbeddedStyle != embedded else { return }
+        appliedEmbeddedStyle = embedded
         isEmbedded = embedded
         if embedded {
             // Strip standalone-table chrome — let the parent ScrollView own the scrolling.
