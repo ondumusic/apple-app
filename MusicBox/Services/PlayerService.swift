@@ -55,7 +55,7 @@ final class PlayerService {
 
     // MARK: - Private
 
-    @ObservationIgnored private let api: APIService
+    @ObservationIgnored private var api: APIService
     @ObservationIgnored private let settings: SettingsStore
     @ObservationIgnored private let musicLibrary: MusicLibrary?
     @ObservationIgnored private let playbackCache: PlaybackCache?
@@ -112,6 +112,14 @@ final class PlayerService {
         setupEndObserver()
         setupAudioSession()
         setupRemoteCommands()
+    }
+
+    /// Adopts a freshly minted API service after re-auth. Rebuilding the player instead
+    /// would drop the queue and stop playback mid-track.
+    func update(api: APIService) {
+        self.api = api
+        // Any item already queued for gapless carries the old bearer token.
+        invalidateGaplessState()
     }
 
     deinit {

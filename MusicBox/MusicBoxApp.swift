@@ -162,12 +162,19 @@ struct MusicBoxApp: App {
                     downloadService.configure(baseURL: api.baseURL, sessionToken: api.sessionToken)
                     // If downloads were paused due to a prior 401, let them resume under the new token.
                     if downloadService.isPaused { downloadService.resumeAll() }
+                    // Re-auth mints a new APIService — hand it to the running player rather than
+                    // rebuilding one, which would drop the queue and stop playback mid-track.
+                    if let player {
+                        player.update(api: api)
+                    } else {
+                        player = PlayerService(api: api, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache)
+                    }
                 } else {
                     SyncService.clearSyncState()
                     musicLibrary.clearAll()
                     downloadService.clearAuth()
+                    player = nil
                 }
-                player = auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) }
                 let newOutbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
                 outboxService = newOutbox
                 syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService, outbox: newOutbox) }
