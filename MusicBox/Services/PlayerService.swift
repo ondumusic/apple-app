@@ -451,6 +451,7 @@ final class PlayerService {
             isLoadingTrack = false
             isPlaying = true
 
+
             updateNowPlayingPlaybackState()
             await prefetchNextTrackAsync()
             setupGaplessOrCrossfade()
