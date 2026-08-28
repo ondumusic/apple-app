@@ -9,6 +9,7 @@ private func makeTestLibrary() throws -> MusicLibrary {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try ModelContainer(
         for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
+             LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
         configurations: config
     )
     return MusicLibrary(container: container)
