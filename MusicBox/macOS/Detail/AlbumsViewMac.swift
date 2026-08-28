@@ -13,13 +13,10 @@ struct AlbumsViewMac: View {
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
 
     var body: some View {
-        ScrollView {
-            HStack {
-                Spacer()
-                sortMenu
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
+        VStack(spacing: 0) {
+            header
+            Divider()
+            ScrollView {
 
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(albums) { album in
@@ -32,13 +29,30 @@ struct AlbumsViewMac: View {
                     }
                 }
             }
-            .padding(20)
+                .padding(20)
+            }
         }
         .navigationTitle("Albums")
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }
         .onChange(of: sortOption) { reload() }
         .onChange(of: sortAscending) { reload() }
+    }
+
+    /// Pinned rather than scrolling with the grid, and carrying the count — the control
+    /// was previously floating over the artwork with nothing to anchor it.
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text("Albums")
+                .font(.headline)
+            Text("^[\(albums.count) album](inflect: true)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            sortMenu
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
     }
 
     private var sortMenu: some View {
@@ -60,16 +74,12 @@ struct AlbumsViewMac: View {
                 }
             }
         } label: {
-            Label(sortLabel, systemImage: "arrow.up.arrow.down")
+            Label(sortOption.rawValue, systemImage: sortAscending ? "arrow.up" : "arrow.down")
                 .font(.callout)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Sort Albums")
-    }
-
-    private var sortLabel: String {
-        "\(sortOption.rawValue) · \(sortAscending ? sortOption.ascendingLabel : sortOption.descendingLabel)"
+        .help(sortAscending ? sortOption.ascendingLabel : sortOption.descendingLabel)
     }
 
     private func reload() {

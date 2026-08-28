@@ -96,7 +96,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         })
         .environment(player)
         .environment(state)
-        .accentColor(settings.resolvedAccentColor)
+        .environment(settings)
         host.rootView = AnyView(content)
     }
 
@@ -290,6 +290,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
 /// the stacked threshold the queue area becomes visible naturally.
 private struct MiniPlayerContent: View {
     @Environment(PlayerService.self) private var player
+    @Environment(SettingsStore.self) private var settings
     /// Asks the window controller to flip queue visibility. Controller decides
     /// expand vs collapse based on actual current window height — keeps SwiftUI
     /// state in sync with reality even after a manual resize.
@@ -333,6 +334,7 @@ private struct MiniPlayerContent: View {
         // genuinely fill the top of the window.
         .ignoresSafeArea()
         .background(Color(NSColor.windowBackgroundColor))
+        .accentColor(settings.resolvedAccentColor)
     }
 }
 
