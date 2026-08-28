@@ -132,8 +132,11 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
             // Save current as "queue closed" height; apply saved or default open
             // height.
             savedQueueClosedHeight = frame.height
-            let target = savedQueueOpenHeight ?? defaultQueueOpenHeight
-            frame.size.height = target
+            // Has to clear the not-committed band, or the resize-end snap immediately
+            // pulls it shut again — which looked like the button toggling by a few px
+            // and closing itself.
+            let minOpen = frame.width + MiniPlayerContent.transportRowHeight + Self.minCommittedQueueHeight
+            frame.size.height = max(savedQueueOpenHeight ?? defaultQueueOpenHeight, minOpen)
         } else {
             // Save current as "queue open" height; apply saved or snap-point
             // closed height.
@@ -182,7 +185,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
             let h = frame.height
             let transport = Self.transportRowHeight
             let snapPoint = w + transport
-            let minCommittedQueueHeight: CGFloat = 100
+            let minCommittedQueueHeight = Self.minCommittedQueueHeight
 
             var targetHeight: CGFloat? = nil
             if h > w && h <= snapPoint {
@@ -244,9 +247,11 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     private func updateSavedQueueHeights(currentHeight h: CGFloat) {
         guard let window else { return }
         let snapPoint = window.frame.width + Self.transportRowHeight
-        if h > snapPoint {
+        // Only remember a height that actually shows a queue; a sliver above the snap
+        // point would be restored on the next open and then snapped shut.
+        if h >= snapPoint + Self.minCommittedQueueHeight {
             savedQueueOpenHeight = h
-        } else {
+        } else if h <= snapPoint {
             savedQueueClosedHeight = h
         }
     }
@@ -261,6 +266,10 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         let rect = NSRectFromString(str)
         return rect.width > 0 && rect.height > 0 ? rect : nil
     }
+
+    /// Below this much queue showing, the panel isn't really open — resizing snaps back
+    /// rather than leaving a sliver, and expanding must clear it or the two rules fight.
+    static let minCommittedQueueHeight: CGFloat = 100
 
     /// Long enough to read as motion, eased at both ends. The previous 0.18s easeOut
     /// put 40% of the travel in the first frame, so the window appeared to jump.
