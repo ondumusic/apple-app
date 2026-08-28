@@ -21,7 +21,12 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     /// Last height the user had with queue collapsed. Restored when the queue
     /// toggle closes the queue.
     private var savedQueueClosedHeight: CGFloat?
-    private static let defaultQueueOpenHeight: CGFloat = 580
+    /// Enough room below the artwork for the transport plus a few queue rows. Relative
+    /// to the artwork rather than absolute, so opening the queue adds space underneath
+    /// instead of resizing the artwork.
+    private var defaultQueueOpenHeight: CGFloat {
+        (window?.frame.width ?? 300) + MiniPlayerContent.transportRowHeight + 220
+    }
 
     /// UserDefaults key for the persisted window frame.
     private static let frameDefaultsKey = "MiniPlayerWindowFrame"
@@ -117,14 +122,13 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
             // Save current as "queue closed" height; apply saved or default open
             // height.
             savedQueueClosedHeight = frame.height
-            let target = savedQueueOpenHeight ?? Self.defaultQueueOpenHeight
+            let target = savedQueueOpenHeight ?? defaultQueueOpenHeight
             frame.size.height = target
         } else {
             // Save current as "queue open" height; apply saved or snap-point
             // closed height.
             savedQueueOpenHeight = frame.height
-            let snapPoint = frame.width + Self.transportRowHeight
-            frame.size.height = savedQueueClosedHeight ?? snapPoint
+            frame.size.height = savedQueueClosedHeight ?? frame.width
         }
         frame.origin.y = topY - frame.size.height
         animateFrameChange(window: window, to: frame, duration: 0.18)
@@ -187,6 +191,21 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
 
     nonisolated func windowWillStartLiveResize(_ notification: Notification) {
         Task { @MainActor in self.state.isResizing = true }
+    }
+
+    /// The artwork is a square sized by the window's width, so a window shorter than it
+    /// is wide could only ever crop it into a meaningless band. Height below the artwork
+    /// is what reveals the transport and queue; drag well past the artwork and the window
+    /// collapses to the compact bar instead.
+    nonisolated func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        var size = frameSize
+        let compactMax = MiniPlayerContent.compactMaxHeight
+        if size.height < size.width * 0.4 {
+            size.height = min(max(size.height, sender.minSize.height), compactMax)
+        } else {
+            size.height = max(size.height, size.width)
+        }
+        return size
     }
 
     private func updateSavedQueueHeights(currentHeight h: CGFloat) {
@@ -295,7 +314,10 @@ private struct UnifiedLayout: View {
     @State private var isHovering = false
     @State private var hideTask: Task<Void, Never>?
 
-    private var artworkHeight: CGFloat { min(width, height) }
+    /// Square, sized by width alone. Deriving it from height too meant a short window
+    /// cropped the artwork into a band, and anything that changed the height — opening
+    /// the queue, for one — resized the artwork with it.
+    private var artworkHeight: CGFloat { width }
     private var transportTopY: CGFloat {
         // Transport stays glued to the window's bottom edge until it would dip
         // below the artwork; from there on it locks at the artwork's bottom.
