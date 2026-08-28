@@ -56,6 +56,11 @@ final class SettingsStore {
 
     // MARK: - Settings
 
+    /// Output volume, 0...1. Applied to the AVPlayers rather than the system volume.
+    var volume: Double {
+        didSet { UserDefaults.standard.set(volume, forKey: "volume") }
+    }
+
     var crossfadeDuration: Double {
         didSet { UserDefaults.standard.set(crossfadeDuration, forKey: "crossfadeDuration") }
     }
@@ -126,6 +131,7 @@ final class SettingsStore {
 
     init() {
         let defaults = UserDefaults.standard
+        self.volume = defaults.object(forKey: "volume") as? Double ?? 1.0
         self.crossfadeDuration = defaults.object(forKey: "crossfadeDuration") as? Double ?? 1.0
         self.maxConcurrentDownloads = defaults.object(forKey: "maxConcurrentDownloads") as? Int ?? 3
         self.isShuffled = defaults.bool(forKey: "isShuffled")

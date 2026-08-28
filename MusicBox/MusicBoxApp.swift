@@ -216,7 +216,7 @@ struct MusicBoxApp: App {
             #endif
         }
         #if os(macOS)
-        .windowToolbarStyle(.unifiedCompact)
+        .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(after: .pasteboard) {
                 Divider()

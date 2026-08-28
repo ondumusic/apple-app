@@ -506,6 +506,25 @@ private struct CompactLayout: View {
 
 // MARK: - Transport row (used by standard + expanded layouts)
 
+private struct MiniVolume: View {
+    @Environment(PlayerService.self) private var player
+    let tint: Color?
+
+    var body: some View {
+        @Bindable var player = player
+        HStack(spacing: 4) {
+            Image(systemName: "speaker.fill")
+                .font(.system(size: 10))
+            Slider(value: $player.volume, in: 0...1)
+                .controlSize(.mini)
+                .frame(width: 52)
+        }
+        .foregroundStyle(tint.map { $0.opacity(0.85) } ?? Color.secondary)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Volume")
+    }
+}
+
 private struct TransportRow: View {
     @Environment(PlayerService.self) private var player
     let track: Track?
@@ -553,6 +572,12 @@ private struct TransportRow: View {
                             .frame(width: 24, height: 24)
                     }
                     .disabled(track == nil || !player.canSkip)
+                }
+                // Mirrors the queue toggle on the opposite side so the play button stays
+                // centred between them.
+                HStack(spacing: 0) {
+                    MiniVolume(tint: tintForeground)
+                    Spacer()
                 }
                 HStack(spacing: 0) {
                     Spacer()

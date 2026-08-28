@@ -15,6 +15,8 @@ struct PlayerToolbar: ToolbarContent {
                 .frame(minWidth: 260, idealWidth: 360)
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            VolumeControl()
+
             Button {
                 player.toggleShuffle()
             } label: {
@@ -109,9 +111,11 @@ private struct NowPlayingLabel: View {
         HStack(spacing: 8) {
             HStack(spacing: 10) {
                 artwork
-                VStack(spacing: 2) {
-                    HStack(spacing: 6) {
-                        if let error = player.playbackError {
+                // Title and artist on their own lines, the way Music.app's display reads.
+                // One line with a dash crammed everything against the top edge.
+                VStack(spacing: 1) {
+                    if let error = player.playbackError {
+                        HStack(spacing: 5) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.caption2)
                                 .foregroundStyle(.orange)
@@ -119,7 +123,9 @@ private struct NowPlayingLabel: View {
                                 .font(.caption.weight(.medium))
                                 .lineLimit(1)
                                 .help(error)
-                        } else {
+                        }
+                    } else {
+                        HStack(spacing: 5) {
                             if player.isBuffering {
                                 ProgressView()
                                     .controlSize(.small)
@@ -127,30 +133,24 @@ private struct NowPlayingLabel: View {
                                     .frame(width: 12, height: 12)
                             }
                             Text(track?.name ?? "Not Playing")
-                                .font(.caption.weight(.medium))
+                                .font(.system(size: 12, weight: .medium))
                                 .lineLimit(1)
-                            if let track {
-                                Text("—")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                                Text(track.artist.name)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
                         }
+                        Text(track?.artist.name ?? " ")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
-                    .frame(maxWidth: .infinity)
                     if track != nil {
                         ScrubberView()
                     }
                 }
                 .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
         }
     }
 
@@ -158,12 +158,12 @@ private struct NowPlayingLabel: View {
     private var artwork: some View {
         Group {
             if track != nil {
-                ArtworkView(url: artworkURL, cornerRadius: 3)
-                    .frame(width: 28, height: 28)
+                ArtworkView(url: artworkURL, cornerRadius: 4)
+                    .frame(width: 38, height: 38)
             } else {
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: 4)
                     .fill(.tertiary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 38, height: 38)
                     .overlay {
                         Image(systemName: "music.note")
                             .font(.system(size: 11))
@@ -176,6 +176,28 @@ private struct NowPlayingLabel: View {
             NotificationCenter.default.post(name: .toggleMiniPlayer, object: nil)
         }
         .help("Open Mini Player")
+    }
+}
+
+private struct VolumeControl: View {
+    @Environment(PlayerService.self) private var player
+
+    var body: some View {
+        @Bindable var player = player
+        HStack(spacing: 5) {
+            Image(systemName: "speaker.fill")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Slider(value: $player.volume, in: 0...1)
+                .controlSize(.small)
+                .frame(width: 72)
+            Image(systemName: "speaker.wave.3.fill")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Volume")
+        .help("Volume")
     }
 }
 

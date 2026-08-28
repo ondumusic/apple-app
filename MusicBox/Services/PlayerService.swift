@@ -29,6 +29,14 @@ final class PlayerService {
     private(set) var isQueueUserModified: Bool = false
     /// True while a track is being prepared — a stream can take seconds to buffer.
     private(set) var isBuffering: Bool = false
+    /// Output volume, 0...1. Scales everything the crossfade ramp does rather than
+    /// competing with it, so a fade still lands at the level the user chose.
+    var volume: Double = 1.0 {
+        didSet {
+            settings.volume = volume
+            applyVolume()
+        }
+    }
     var showReplaceQueueConfirmation: Bool = false
     @ObservationIgnored private var pendingPlayAction: (() -> Void)?
 
@@ -124,11 +132,18 @@ final class PlayerService {
         self.playbackCache = playbackCache
         self.stateStore = stateStore
         self.repeatMode = settings.repeatMode
+        self.volume = settings.volume
+        applyVolume()
         setupTimeObserver()
         setupEndObserver()
         setupAudioSession()
         setupRemoteCommands()
         restoreState()
+    }
+
+    private func applyVolume() {
+        primaryPlayer.volume = Float(volume)
+        secondaryPlayer?.volume = Float(volume)
     }
 
     /// Adopts a freshly minted API service after re-auth. Rebuilding the player instead
@@ -470,7 +485,7 @@ final class PlayerService {
                 await primaryPlayer.seek(to: CMTime(seconds: resumeTime, preferredTimescale: 600),
                                          toleranceBefore: .zero, toleranceAfter: .zero)
             }
-            primaryPlayer.volume = 1.0
+            primaryPlayer.volume = Float(volume)
             primaryPlayer.play()
             isLoadingTrack = false
             isPlaying = true
@@ -858,8 +873,8 @@ final class PlayerService {
             }
             let elapsed = Date().timeIntervalSince(startTime)
             let progress = min(Float(elapsed / fadeDuration), 1.0)
-            self.primaryPlayer.volume = cos(progress * .pi * 0.5)
-            secondary.volume = sin(progress * .pi * 0.5)
+            self.primaryPlayer.volume = Float(self.volume) * cos(progress * .pi * 0.5)
+            secondary.volume = Float(self.volume) * sin(progress * .pi * 0.5)
 
             if progress >= 1.0 {
                 timer.invalidate()
@@ -890,7 +905,7 @@ final class PlayerService {
         if let secondary = secondaryPlayer {
             // Promote secondary directly — it's already an AVQueuePlayer playing at the correct position.
             // No pause/recreate/seek needed, which avoids stutter/rewind artifacts.
-            secondary.volume = 1.0
+            secondary.volume = Float(volume)
             primaryPlayer = secondary
             currentPlayerItem = secondary.currentItem
             gaplessPlayerItem = nil
