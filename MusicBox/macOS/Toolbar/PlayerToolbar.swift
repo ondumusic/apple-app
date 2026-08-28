@@ -7,8 +7,25 @@ import SwiftUI
 struct PlayerToolbar: ToolbarContent {
     @Environment(PlayerService.self) private var player
     @Binding var showQueue: Bool
+    @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
 
     var body: some ToolbarContent {
+        // Leading, with the other view controls — this filters the library, not playback,
+        // so it doesn't belong beside the transport. Same symbols as the iOS filter.
+        ToolbarItem(placement: .navigation) {
+            Menu {
+                Picker("Filter", selection: $libraryFilter) {
+                    Text("All Music").tag(LibraryFilter.all)
+                    Text("Downloaded").tag(LibraryFilter.downloaded)
+                }
+                .pickerStyle(.inline)
+            } label: {
+                Image(systemName: libraryFilter == .downloaded
+                      ? "line.3.horizontal.decrease.circle.fill"
+                      : "line.3.horizontal.decrease.circle")
+            }
+            .help(libraryFilter == .downloaded ? "Showing Downloaded Only" : "Filter Library")
+        }
         ToolbarItemGroup(placement: .principal) {
             TransportButtons()
             NowPlayingLabel()

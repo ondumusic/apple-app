@@ -131,15 +131,28 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
             frame.size.height = savedQueueClosedHeight ?? frame.width
         }
         frame.origin.y = topY - frame.size.height
-        animateFrameChange(window: window, to: frame, duration: 0.18)
+        // The transport travels from overlaying the artwork to sitting below it during
+        // this animation. Without the resizing flag it is hover-gated for part of that
+        // journey and blinks out halfway.
+        state.isResizing = true
+        animateFrameChange(window: window, to: frame, duration: 0.18) { [weak self] in
+            self?.state.isResizing = false
+        }
     }
 
     /// Faster window-size animation than `setFrame(_:display:animate:)` default.
-    private func animateFrameChange(window: NSWindow, to frame: NSRect, duration: TimeInterval) {
+    private func animateFrameChange(
+        window: NSWindow,
+        to frame: NSRect,
+        duration: TimeInterval,
+        completion: (@MainActor () -> Void)? = nil
+    ) {
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = duration
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             window.animator().setFrame(frame, display: true)
+        } completionHandler: {
+            MainActor.assumeIsolated { completion?() }
         }
     }
 

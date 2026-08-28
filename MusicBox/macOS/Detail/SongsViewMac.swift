@@ -19,7 +19,6 @@ struct SongsViewMac: View {
             actions: trackActions,
             showArtist: true,
             showAlbum: true,
-            showTrackNumber: false,
             currentlyPlayingTrackId: player.currentTrack?.id,
             isPlaying: player.isPlaying
         )
