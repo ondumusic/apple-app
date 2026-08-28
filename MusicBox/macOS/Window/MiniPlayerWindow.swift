@@ -510,18 +510,45 @@ private struct MiniVolume: View {
     @Environment(PlayerService.self) private var player
     let tint: Color?
 
+    @State private var showingSlider = false
+
+    /// An always-visible slider crowds a window that can be 240pt wide, so this follows
+    /// Music.app: a speaker button that reflects the level and opens the slider on click.
     var body: some View {
         @Bindable var player = player
-        HStack(spacing: 4) {
-            Image(systemName: "speaker.fill")
-                .font(.system(size: 10))
-            Slider(value: $player.volume, in: 0...1)
-                .controlSize(.mini)
-                .frame(width: 52)
+        Button { showingSlider.toggle() } label: {
+            Image(systemName: iconName)
+                .font(.system(size: 13))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .foregroundStyle(tint.map { $0.opacity(0.85) } ?? Color.secondary)
-        .accessibilityElement(children: .combine)
+        .help("Volume")
         .accessibilityLabel("Volume")
+        .popover(isPresented: $showingSlider, arrowEdge: .bottom) {
+            HStack(spacing: 8) {
+                Image(systemName: "speaker.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Slider(value: $player.volume, in: 0...1)
+                    .frame(width: 130)
+                Image(systemName: "speaker.wave.3.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private var iconName: String {
+        switch player.volume {
+        case ..<0.01: "speaker.slash.fill"
+        case ..<0.34: "speaker.fill"
+        case ..<0.67: "speaker.wave.1.fill"
+        default: "speaker.wave.2.fill"
+        }
     }
 }
 

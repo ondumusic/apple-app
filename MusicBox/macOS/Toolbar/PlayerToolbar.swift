@@ -9,10 +9,12 @@ struct PlayerToolbar: ToolbarContent {
     @Binding var showQueue: Bool
 
     var body: some ToolbarContent {
-        ToolbarItemGroup(placement: .principal) {
+        ToolbarItemGroup(placement: .navigation) {
             TransportButtons()
+        }
+        ToolbarItem(placement: .principal) {
             NowPlayingLabel()
-                .frame(minWidth: 260, idealWidth: 360)
+                .frame(minWidth: 260, idealWidth: 420, maxWidth: 460)
         }
         ToolbarItemGroup(placement: .primaryAction) {
             VolumeControl()
@@ -133,11 +135,11 @@ private struct NowPlayingLabel: View {
                                     .frame(width: 12, height: 12)
                             }
                             Text(track?.name ?? "Not Playing")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
                                 .lineLimit(1)
                         }
                         Text(track?.artist.name ?? " ")
-                            .font(.system(size: 11))
+                            .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -147,8 +149,8 @@ private struct NowPlayingLabel: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
             .frame(maxWidth: .infinity)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
         }
@@ -158,12 +160,12 @@ private struct NowPlayingLabel: View {
     private var artwork: some View {
         Group {
             if track != nil {
-                ArtworkView(url: artworkURL, cornerRadius: 4)
-                    .frame(width: 38, height: 38)
+                ArtworkView(url: artworkURL, cornerRadius: 3)
+                    .frame(width: 30, height: 30)
             } else {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: 3)
                     .fill(.tertiary)
-                    .frame(width: 38, height: 38)
+                    .frame(width: 30, height: 30)
                     .overlay {
                         Image(systemName: "music.note")
                             .font(.system(size: 11))
@@ -181,23 +183,39 @@ private struct NowPlayingLabel: View {
 
 private struct VolumeControl: View {
     @Environment(PlayerService.self) private var player
+    @State private var showingSlider = false
 
     var body: some View {
         @Bindable var player = player
-        HStack(spacing: 5) {
-            Image(systemName: "speaker.fill")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Slider(value: $player.volume, in: 0...1)
-                .controlSize(.small)
-                .frame(width: 72)
-            Image(systemName: "speaker.wave.3.fill")
-                .font(.caption2)
+        Button { showingSlider.toggle() } label: {
+            Image(systemName: iconName)
                 .foregroundStyle(.secondary)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Volume")
         .help("Volume")
+        .accessibilityLabel("Volume")
+        .popover(isPresented: $showingSlider, arrowEdge: .bottom) {
+            HStack(spacing: 8) {
+                Image(systemName: "speaker.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Slider(value: $player.volume, in: 0...1)
+                    .frame(width: 130)
+                Image(systemName: "speaker.wave.3.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private var iconName: String {
+        switch player.volume {
+        case ..<0.01: "speaker.slash.fill"
+        case ..<0.34: "speaker.fill"
+        case ..<0.67: "speaker.wave.1.fill"
+        default: "speaker.wave.2.fill"
+        }
     }
 }
 
