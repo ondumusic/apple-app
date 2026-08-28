@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 /// project_macos_rebuild_plan.md for the per-surface plan.
 struct MacOSContentView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(SettingsStore.self) private var settings
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
     @Environment(PlaylistController.self) private var playlistController
@@ -197,7 +198,7 @@ struct MacOSContentView: View {
         if let mp = miniPlayer {
             mp.toggle()
         } else {
-            let mp = MiniPlayerWindowController(player: player)
+            let mp = MiniPlayerWindowController(player: player, settings: settings)
             miniPlayer = mp
             mp.showWindow(nil)
             UserDefaults.standard.set(true, forKey: MiniPlayerWindowController.visibleDefaultsKey)

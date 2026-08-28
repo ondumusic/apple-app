@@ -37,7 +37,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     /// where the artwork dominates and transport overlays at the bottom.
     private static let defaultFrame = NSRect(x: 0, y: 0, width: 300, height: 300)
 
-    init(player: PlayerService) {
+    init(player: PlayerService, settings: SettingsStore) {
         // Plain NSWindow with hidden title bar so the artwork extends edge-to-edge.
         // Restore the user's last frame, or fall back to the square overlay default.
         let savedFrame = Self.loadSavedFrame()
@@ -96,6 +96,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         })
         .environment(player)
         .environment(state)
+        .accentColor(settings.resolvedAccentColor)
         host.rootView = AnyView(content)
     }
 
@@ -602,8 +603,11 @@ private struct TransportRow: View {
                 }
                 // Mirrors the queue toggle on the opposite side so the play button stays
                 // centred between them.
-                HStack(spacing: 0) {
+                HStack(spacing: 2) {
                     MiniVolume(tint: tintForeground)
+                    AirPlayPicker(size: 16)
+                        .frame(width: 16, height: 16)
+                        .help("AirPlay")
                     Spacer()
                 }
                 HStack(spacing: 0) {
@@ -644,15 +648,28 @@ private struct InlineQueue: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            Divider()
+            HStack(spacing: 6) {
                 Text("Up Next")
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
+                if !upNext.isEmpty {
+                    Text("\(upNext.count)")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
                 Spacer()
+                if !upNext.isEmpty {
+                    Button("Clear") { player.clearUpNext() }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help("Remove everything after the current track")
+                }
             }
             .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            .padding(.vertical, 7)
+
             if upNext.isEmpty {
                 Spacer()
                 Text("Nothing up next")
@@ -663,6 +680,9 @@ private struct InlineQueue: View {
                 QueueList(upNext: upNext, rowHeight: 40, showsDuration: false)
             }
         }
+        // Its own surface, so the queue reads as a separate region rather than more
+        // of the transport block.
+        .background(.quinary)
     }
 }
 

@@ -21,6 +21,10 @@ struct PlayerToolbar: ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             VolumeControl()
 
+            AirPlayPicker()
+                .frame(width: 20, height: 20)
+                .help("AirPlay")
+
             Button {
                 showQueue.toggle()
             } label: {
@@ -87,6 +91,8 @@ private struct TransportButtons: View {
 
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 17))
+                    .frame(width: 24)
             }
             .disabled(player.currentTrack == nil)
             .help(player.isPlaying ? "Pause" : "Play")
