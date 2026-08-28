@@ -22,7 +22,10 @@ private func makeQueueItem(name: String = "Track", albumId: UUID = UUID(),
 private func makePlayer() -> PlayerService {
     let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
     let settings = SettingsStore()
-    return PlayerService(api: api, settings: settings)
+    // Scratch snapshot file so queue tests don't touch the real playback state.
+    let stateURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("player-queue-tests/\(UUID().uuidString).json")
+    return PlayerService(api: api, settings: settings, stateStore: PlaybackStateStore(fileURL: stateURL))
 }
 
 // MARK: - Play Now

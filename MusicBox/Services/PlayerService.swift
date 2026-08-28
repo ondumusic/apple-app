@@ -59,6 +59,11 @@ final class PlayerService {
     @ObservationIgnored private let settings: SettingsStore
     @ObservationIgnored private let musicLibrary: MusicLibrary?
     @ObservationIgnored private let playbackCache: PlaybackCache?
+    @ObservationIgnored private let stateStore: PlaybackStateStore
+    @ObservationIgnored private var lastPositionSave: Date = .distantPast
+    /// Position to resume at, from a restored snapshot. Keyed by track so a skip before
+    /// the first play doesn't seek the wrong track.
+    @ObservationIgnored private var pendingResume: (trackId: UUID, time: Double)?
     @ObservationIgnored private var primaryPlayer = AVQueuePlayer()
     @ObservationIgnored private var secondaryPlayer: AVQueuePlayer?
     @ObservationIgnored private var timeObserver: Any?
@@ -102,16 +107,19 @@ final class PlayerService {
 
     // MARK: - Init
 
-    init(api: APIService, settings: SettingsStore, musicLibrary: MusicLibrary? = nil, playbackCache: PlaybackCache? = nil) {
+    init(api: APIService, settings: SettingsStore, musicLibrary: MusicLibrary? = nil,
+         playbackCache: PlaybackCache? = nil, stateStore: PlaybackStateStore = PlaybackStateStore()) {
         self.api = api
         self.settings = settings
         self.musicLibrary = musicLibrary
         self.playbackCache = playbackCache
+        self.stateStore = stateStore
         self.repeatMode = settings.repeatMode
         setupTimeObserver()
         setupEndObserver()
         setupAudioSession()
         setupRemoteCommands()
+        restoreState()
     }
 
     /// Adopts a freshly minted API service after re-auth. Rebuilding the player instead
@@ -137,6 +145,7 @@ final class PlayerService {
         queue = tracks.map { QueueItem(track: $0, artworkURL: artworkURL ?? $0.album?.artworkUrl) }
         shuffledIndices = nil
         currentIndex = index
+        savePlaybackState()
         Task { await loadAndPlayCurrent() }
     }
 
@@ -144,6 +153,7 @@ final class PlayerService {
         queue = items
         shuffledIndices = nil
         currentIndex = index
+        savePlaybackState()
         Task { await loadAndPlayCurrent() }
     }
 
@@ -157,6 +167,7 @@ final class PlayerService {
         queue = items
         shuffledIndices = SmartShuffle.shuffledIndices(for: items, spread: settings.spreadShuffle)
         currentIndex = 0
+        savePlaybackState()
         Task { await loadAndPlayCurrent() }
     }
 
@@ -184,6 +195,7 @@ final class PlayerService {
         }
         queueConfirmation = .playNext(items.count)
         invalidateGaplessState()
+        savePlaybackState()
     }
 
     func addToEnd(tracks: [Track], artworkURL: URL? = nil) {
@@ -205,6 +217,7 @@ final class PlayerService {
             shuffledIndices = shuffled
         }
         queueConfirmation = .addedToQueue(items.count)
+        savePlaybackState()
     }
 
     func skip() {
@@ -240,6 +253,7 @@ final class PlayerService {
             progress = 0
             updateNowPlayingInfo()
             updateNowPlayingPlaybackState()
+            savePlaybackState()
         }
     }
 
@@ -280,6 +294,7 @@ final class PlayerService {
             isPlaying = true
         }
         updateNowPlayingPlaybackState()
+        savePlaybackPosition()
     }
 
     func seek(to time: Double) {
@@ -307,6 +322,7 @@ final class PlayerService {
             queue = Array(queue.prefix(keep))
         }
         invalidateGaplessState()
+        savePlaybackState()
     }
 
     func removeFromQueue(at offsets: IndexSet) {
@@ -332,6 +348,7 @@ final class PlayerService {
             }
         }
         invalidateGaplessState()
+        savePlaybackState()
     }
 
     func moveQueueItems(from source: IndexSet, to destination: Int) {
@@ -346,6 +363,7 @@ final class PlayerService {
             queue.move(fromOffsets: sourceReal, toOffset: destReal)
         }
         invalidateGaplessState()
+        savePlaybackState()
     }
 
     // MARK: - Shuffle
@@ -366,6 +384,7 @@ final class PlayerService {
         }
         settings.isShuffled = isShuffled
         invalidateGaplessState()
+        savePlaybackState()
     }
 
     func cycleRepeatMode() {
@@ -395,14 +414,18 @@ final class PlayerService {
         }
         #endif
 
+        let resumeTime = pendingResume.flatMap { $0.trackId == track.id ? $0.time : nil } ?? 0
+        pendingResume = nil
+
         isLoadingTrack = true
         isSeeking = false
         currentTrack = track
-        progress = 0
+        progress = resumeTime
         duration = track.duration
         hasQueuedGaplessItem = false
 
         updateNowPlayingInfo()
+        savePlaybackState()
 
         // Stop current playback — remove all items from AVQueuePlayer
         primaryPlayer.pause()
@@ -419,6 +442,10 @@ final class PlayerService {
             currentPlayerItem = item
             gaplessPlayerItem = nil
             primaryPlayer.insert(item, after: nil)
+            if resumeTime > 0 {
+                await primaryPlayer.seek(to: CMTime(seconds: resumeTime, preferredTimescale: 600),
+                                         toleranceBefore: .zero, toleranceAfter: .zero)
+            }
             primaryPlayer.volume = 1.0
             primaryPlayer.play()
             isLoadingTrack = false
@@ -631,6 +658,7 @@ final class PlayerService {
                     self.duration = dur
                 }
             }
+            self.savePositionIfDue()
         }
     }
 
@@ -677,6 +705,7 @@ final class PlayerService {
         isPlaying = true
 
         updateNowPlayingInfo()
+        savePlaybackState()
         Task {
             await prefetchNextTrackAsync()
             setupGaplessOrCrossfade()
@@ -804,6 +833,7 @@ final class PlayerService {
         setupTimeObserver()
         setupEndObserver()
         updateNowPlayingInfo()
+        savePlaybackState()
         Task {
             await prefetchNextTrackAsync()
             setupGaplessOrCrossfade()
@@ -823,6 +853,69 @@ final class PlayerService {
         if endObserver == nil {
             setupEndObserver()
         }
+    }
+
+    // MARK: - State Persistence
+
+    /// Minimum gap between position writes driven by the periodic time observer.
+    private static let positionSaveInterval: TimeInterval = 5
+
+    /// Writes the queue so a relaunch can pick playback back up. iOS suspends a paused app
+    /// and may terminate it minutes later, and nothing about the queue lives anywhere but
+    /// memory otherwise. Call whenever the queue or the current index changes.
+    func savePlaybackState() {
+        guard !queue.isEmpty else { return }
+        stateStore.save(PlaybackState(
+            trackIds: queue.map(\.track.id),
+            currentIndex: currentIndex,
+            shuffledIndices: shuffledIndices
+        ))
+        savePlaybackPosition()
+    }
+
+    /// Writes just how far into the current track playback has got — the half that changes
+    /// continuously, kept out of the queue file so it isn't rewritten every few seconds.
+    func savePlaybackPosition() {
+        guard let track = currentTrack else { return }
+        lastPositionSave = .now
+        stateStore.savePosition(PlaybackPosition(trackId: track.id, elapsed: progress))
+    }
+
+    private func savePositionIfDue() {
+        guard Date.now.timeIntervalSince(lastPositionSave) >= Self.positionSaveInterval else { return }
+        savePlaybackPosition()
+    }
+
+    private func restoreState() {
+        guard let musicLibrary, let state = stateStore.load(), !state.trackIds.isEmpty else { return }
+
+        let tracks = state.trackIds.compactMap { musicLibrary.track($0) }
+        // A partial restore would shift every index, including the shuffle order. The
+        // snapshot is a convenience, so drop it rather than reconstruct a different queue.
+        guard tracks.count == state.trackIds.count else { return }
+
+        queue = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+        if let shuffled = state.shuffledIndices, shuffled.count == queue.count {
+            shuffledIndices = shuffled
+        }
+        currentIndex = min(max(state.currentIndex, 0), queue.count - 1)
+
+        let idx = effectiveIndex
+        guard idx < queue.count else {
+            queue = []
+            shuffledIndices = nil
+            currentIndex = 0
+            return
+        }
+        let track = queue[idx].track
+        currentTrack = track
+        duration = track.duration
+
+        // The position is written separately and may lag the queue by a few seconds; ignore
+        // it unless it belongs to the track the queue says is current.
+        guard let position = stateStore.loadPosition(), position.trackId == track.id else { return }
+        progress = position.elapsed
+        pendingResume = (track.id, position.elapsed)
     }
 
     // MARK: - Audio Session (iOS)

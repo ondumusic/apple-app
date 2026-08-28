@@ -173,6 +173,7 @@ struct MusicBoxApp: App {
                     SyncService.clearSyncState()
                     musicLibrary.clearAll()
                     downloadService.clearAuth()
+                    PlaybackStateStore.clearPersisted()
                     player = nil
                 }
                 let newOutbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
@@ -191,6 +192,7 @@ struct MusicBoxApp: App {
             #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
                 playbackCache.flushMetadataIfNeeded()
+                player?.savePlaybackState()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 if !auth.isLoggedIn {
