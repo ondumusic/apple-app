@@ -36,7 +36,8 @@ struct MacOSContentView: View {
                 musicLibrary: musicLibrary,
                 actions: sidebarActions,
                 downloadingCount: downloadService.activeDownloads.count + downloadService.pendingQueue.count,
-                filter: $libraryFilter
+                filter: $libraryFilter,
+                accent: settings.resolvedAccentColor
             )
             .toolbar(removing: .sidebarToggle)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)

@@ -19,7 +19,11 @@ struct PlayerToolbar: ToolbarContent {
                 .frame(minWidth: 260, idealWidth: 420, maxWidth: 460)
         }
         ToolbarItemGroup(placement: .primaryAction) {
-            OutputControl()
+            VolumeControl()
+
+            AirPlayPicker()
+                .frame(width: 18, height: 18)
+                .help("AirPlay")
 
             Button {
                 showQueue.toggle()
@@ -80,8 +84,9 @@ private struct TransportButtons: View {
         HStack(spacing: 4) {
             Button { player.back() } label: {
                 Image(systemName: "backward.fill")
-                    .font(.system(size: 12))
-                    .frame(width: 20)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
             }
             .disabled(!player.canGoBack || player.currentTrack == nil)
             .help("Previous")
@@ -89,8 +94,9 @@ private struct TransportButtons: View {
 
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 19))
-                    .frame(width: 26, height: 22)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 19, height: 19)
             }
             .disabled(player.currentTrack == nil)
             .help(player.isPlaying ? "Pause" : "Play")
@@ -98,8 +104,9 @@ private struct TransportButtons: View {
 
             Button { player.skip() } label: {
                 Image(systemName: "forward.fill")
-                    .font(.system(size: 12))
-                    .frame(width: 20)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
             }
             .disabled(!player.canSkip || player.currentTrack == nil)
             .help("Next")
@@ -192,10 +199,9 @@ private struct NowPlayingLabel: View {
     }
 }
 
-/// One output popover holding volume and the route picker, the way Music.app pairs
-/// them — the system picker's own menu lists devices but can't be given a volume
-/// slider, so the slider sits beside it rather than inside it.
-struct OutputControl: View {
+/// Volume only. The system route picker gets its own button: nesting it inside this
+/// popover meant clicking it opened a second popover over the first.
+struct VolumeControl: View {
     @Environment(PlayerService.self) private var player
     @State private var showingSlider = false
     var iconSize: CGFloat? = nil
@@ -207,30 +213,21 @@ struct OutputControl: View {
                 .font(iconSize.map { .system(size: $0) })
                 .foregroundStyle(.secondary)
         }
-        .help("Volume and Output")
-        .accessibilityLabel("Volume and Output")
+        .help("Volume")
+        .accessibilityLabel("Volume")
         .popover(isPresented: $showingSlider, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "speaker.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Slider(value: $player.volume, in: 0...1)
-                        .frame(width: 150)
-                    Image(systemName: "speaker.wave.3.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Divider()
-                HStack(spacing: 8) {
-                    AirPlayPicker(size: 18)
-                        .frame(width: 18, height: 18)
-                    Text("Output Device")
-                        .font(.callout)
-                    Spacer(minLength: 0)
-                }
+            HStack(spacing: 8) {
+                Image(systemName: "speaker.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Slider(value: $player.volume, in: 0...1)
+                    .frame(width: 150)
+                Image(systemName: "speaker.wave.3.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
-            .padding(14)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
     }
 

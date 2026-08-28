@@ -1108,13 +1108,23 @@ private final class EmbeddedRowView: NSTableRowView {
 
     override func drawSeparator(in dirtyRect: NSRect) {}
 
-    override func drawDraggingDestinationFeedback(in dirtyRect: NSRect) {}
+    override func drawDraggingDestinationFeedback(in dirtyRect: NSRect) {
+        // Standalone tables support drag-to-reorder (playlists), so they need the drop
+        // indicator; embedded ones don't reorder and suppressed it deliberately.
+        guard drawsRowBackground else { return }
+        super.drawDraggingDestinationFeedback(in: dirtyRect)
+    }
 
     /// Replace the default draw pipeline (which paints a full-row context-menu outline
     /// when right-clicked) with just our background. Selection drawing is handled inside
     /// drawBackground; other phases are no-ops above.
     override func draw(_ dirtyRect: NSRect) {
-        drawBackground(in: dirtyRect)
+        if drawsRowBackground {
+            // Full pipeline: our drawBackground paints the pill, super handles the rest.
+            super.draw(dirtyRect)
+        } else {
+            drawBackground(in: dirtyRect)
+        }
     }
 
     /// Cells consult their row view's `interiorBackgroundStyle` to choose text colors.

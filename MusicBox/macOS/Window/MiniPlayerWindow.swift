@@ -557,11 +557,14 @@ private struct TransportRow: View {
                 }
                 // Mirrors the queue toggle on the opposite side so the play button stays
                 // centred between them.
-                HStack(spacing: 0) {
-                    OutputControl(iconSize: 13)
+                HStack(spacing: 2) {
+                    VolumeControl(iconSize: 13)
                         .buttonStyle(.plain)
                         .foregroundStyle(tintForeground.map { $0.opacity(0.85) } ?? Color.secondary)
-                        .frame(width: 28, height: 28)
+                        .frame(width: 26, height: 26)
+                    AirPlayPicker(size: 15)
+                        .frame(width: 15, height: 15)
+                        .help("AirPlay")
                     Spacer()
                 }
                 HStack(spacing: 0) {

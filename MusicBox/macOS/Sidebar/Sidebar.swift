@@ -16,6 +16,9 @@ struct Sidebar: NSViewControllerRepresentable {
     /// Library scope. Lives here rather than the window toolbar: it filters the library
     /// the sidebar navigates, and the toolbar is the player's.
     @Binding var filter: LibraryFilter
+    /// The app accent. .sourceList selection would otherwise paint the system accent,
+    /// the way the track tables used to.
+    var accent: Color = .accentColor
 
     func makeNSViewController(context: Context) -> SidebarViewController {
         let vc = SidebarViewController()
@@ -35,6 +38,7 @@ struct Sidebar: NSViewControllerRepresentable {
         // we group by parentId in-memory to materialize the folder hierarchy.
         nsViewController.actions = actions
         nsViewController.onFilterChange = { filter = $0 }
+        nsViewController.accentNSColor = NSColor(accent)
         nsViewController.applyFilter(filter)
         nsViewController.applyExternalSearchText(searchText)
         nsViewController.applyDownloadingCount(downloadingCount)
@@ -105,6 +109,7 @@ final class SidebarViewController: NSViewController {
         labels: ["All", "Downloaded"], trackingMode: .selectOne, target: nil, action: nil
     )
     var onFilterChange: ((LibraryFilter) -> Void)?
+    var accentNSColor: NSColor = .controlAccentColor
     private let addButton = NSButton()
     private let bottomBar = NSView()
 
@@ -142,7 +147,8 @@ final class SidebarViewController: NSViewController {
 
         outlineView.headerView = nil
         outlineView.style = .sourceList
-        outlineView.selectionHighlightStyle = .sourceList
+        // .none so our own accent pill paints; .sourceList always uses the system accent.
+        outlineView.selectionHighlightStyle = .none
         outlineView.allowsMultipleSelection = false
         outlineView.allowsEmptySelection = true
         outlineView.rowSizeStyle = .default
@@ -711,6 +717,12 @@ extension SidebarViewController: NSOutlineViewDelegate {
         }
     }
 
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        let view = SidebarRowView()
+        view.selectionColor = accentNSColor
+        return view
+    }
+
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
         if let node = item as? SidebarNode, case .section = node.kind {
             return 22
@@ -1039,4 +1051,35 @@ protocol SidebarCellRenameDelegate: AnyObject {
     func sidebarCell(_ cell: NSTableCellView, commitRenameFor playlistId: UUID, newName: String)
     func sidebarCellCancelRename(_ cell: NSTableCellView)
 }
+/// Draws the source-list selection pill in the app's accent. NSOutlineView's own
+/// .sourceList highlight always uses the system accent, which left the sidebar
+/// disagreeing with every other surface.
+private final class SidebarRowView: NSTableRowView {
+    var selectionColor: NSColor = .selectedContentBackgroundColor
+
+    override var focusRingType: NSFocusRingType {
+        get { .none }
+        set { }
+    }
+
+    // Defers to super first so everything else the row draws — notably the drag
+    // destination feedback the sidebar relies on for drops and reordering — still
+    // happens; only the selection fill is ours.
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+        guard isSelected else { return }
+        let rect = bounds.insetBy(dx: 8, dy: 1)
+        guard rect.width > 0, rect.height > 0 else { return }
+        selectionColor.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
+    }
+
+    /// Cells pick their text colour from this; with highlight style .none the default
+    /// stays .normal even when selected, so labels would draw dark on the accent fill.
+    override var interiorBackgroundStyle: NSView.BackgroundStyle {
+        isSelected ? .emphasized : .normal
+    }
+}
+
 #endif
+
