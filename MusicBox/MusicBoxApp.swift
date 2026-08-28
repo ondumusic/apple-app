@@ -95,6 +95,7 @@ struct MusicBoxApp: App {
     @State private var playbackCache: PlaybackCache
     @State private var networkMonitor = NetworkMonitor()
     @State private var searchHistory = SearchHistory()
+    @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
 
     init() {
         ImagePipeline.shared = ImagePipeline(configuration: .withDataCache)
@@ -231,6 +232,13 @@ struct MusicBoxApp: App {
                 // Cmd+M is Minimize on macOS and AppKit wins that fight; Music.app puts
                 // the mini player on Cmd+Shift+M.
                 .keyboardShortcut("m", modifiers: [.command, .shift])
+            }
+            CommandGroup(after: .toolbar) {
+                Picker("Library Filter", selection: $libraryFilter) {
+                    Text("All Music").tag(LibraryFilter.all)
+                    Text("Downloaded").tag(LibraryFilter.downloaded)
+                }
+                .pickerStyle(.inline)
             }
             CommandMenu("Controls") {
                 // No key equivalent here: a menu shortcut fires even while a text field

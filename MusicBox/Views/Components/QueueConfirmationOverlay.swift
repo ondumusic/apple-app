@@ -7,17 +7,25 @@ struct QueueConfirmationOverlay: ViewModifier {
     @State private var message: LocalizedStringResource = ""
     @State private var dismissTask: Task<Void, Never>?
 
-    private var bottomPadding: CGFloat {
-        #if os(iOS)
-        player.currentTrack != nil ? 140 : 80
-        #else
-        80
-        #endif
-    }
+    // macOS has nothing at the bottom of the window for a centred toast to relate to,
+    // and bottom-centre toasts aren't a Mac idiom — anchor it under the toolbar instead,
+    // near the queue button whose contents just changed.
+    #if os(iOS)
+    /// Clears the tab bar, and the mini player when it's showing.
+    private var overlayPadding: CGFloat { player.currentTrack != nil ? 140 : 80 }
+    private let overlayAlignment: Alignment = .bottom
+    private let overlayEdge: Edge = .bottom
+    private let trailingPadding: CGFloat = 0
+    #else
+    private let overlayPadding: CGFloat = 12
+    private let overlayAlignment: Alignment = .topTrailing
+    private let overlayEdge: Edge = .top
+    private let trailingPadding: CGFloat = 16
+    #endif
 
     func body(content: Content) -> some View {
         content
-            .overlay(alignment: .bottom) {
+            .overlay(alignment: overlayAlignment) {
                 if showing {
                     Text(message)
                         .font(.subheadline.weight(.medium))
@@ -25,8 +33,9 @@ struct QueueConfirmationOverlay: ViewModifier {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .background(.black.opacity(0.75), in: Capsule())
-                        .padding(.bottom, bottomPadding)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(Edge.Set(overlayEdge), overlayPadding)
+                        .padding(.trailing, trailingPadding)
+                        .transition(.move(edge: overlayEdge).combined(with: .opacity))
                         .allowsHitTesting(false)
                 }
             }

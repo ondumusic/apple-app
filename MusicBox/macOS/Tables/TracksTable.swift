@@ -34,6 +34,9 @@ struct TracksTable: NSViewControllerRepresentable {
     /// Whether to render the Album column. Set true on Songs/Search views, false in
     /// album detail (already obvious).
     var showAlbum: Bool = false
+    /// Whether to render the # column. Meaningful where ordering is (album detail,
+    /// playlists); in a flat all-songs list the per-album numbers just repeat.
+    var showTrackNumber: Bool = true
     /// Currently-playing track id; the matching row's # column shows a speaker glyph
     /// instead of the track number.
     var currentlyPlayingTrackId: UUID?
@@ -110,6 +113,7 @@ struct TracksTable: NSViewControllerRepresentable {
             externalSelection: selection,
             showArtist: showArtist,
             showAlbum: showAlbum,
+            showTrackNumber: showTrackNumber,
             currentlyPlayingTrackId: currentlyPlayingTrackId,
             isPlaying: isPlaying,
             usesPlaylistPosition: usesPlaylistPosition
@@ -393,6 +397,7 @@ final class TracksTableViewController: NSViewController {
         externalSelection: Set<UUID>,
         showArtist: Bool,
         showAlbum: Bool,
+        showTrackNumber: Bool,
         currentlyPlayingTrackId newCurrent: UUID?,
         isPlaying newIsPlaying: Bool,
         usesPlaylistPosition newUsesPlaylistPosition: Bool
@@ -403,6 +408,7 @@ final class TracksTableViewController: NSViewController {
         // artist beneath the title when needed.
         artistColumn.isHidden = isEmbedded || !showArtist
         albumColumn.isHidden = !showAlbum
+        numberColumn.isHidden = !showTrackNumber
 
         let changed = !tracksMatch(self.tracks, newTracks) || !sectionsMatch(self.sections, newSections)
         // Detect rows whose `isDownloaded` flipped without otherwise changing — we want
@@ -1247,7 +1253,9 @@ private final class NumberOrSpeakerCell: NSTableCellView {
         NSLayoutConstraint.activate([
             label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            icon.centerXAnchor.constraint(equalTo: centerXAnchor),
+            // Match the number's trailing edge — centring it left the glyph sitting in
+            // the middle of the column while every digit hugged the right.
+            icon.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 14),
             icon.heightAnchor.constraint(equalToConstant: 14),

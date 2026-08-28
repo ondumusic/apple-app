@@ -13,6 +13,7 @@ struct ArtistsViewMac: View {
     @Environment(NetworkMonitor.self) private var network
     @Environment(DownloadService.self) private var downloadService
 
+    @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
     @State private var artists: [Artist] = []
     @State private var selectedArtistId: Artist.ID?
 
@@ -47,23 +48,26 @@ struct ArtistsViewMac: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .onChange(of: musicLibrary.revision, initial: true) {
-            artists = musicLibrary.allArtists()
-            // Prefer a pending navigation request, then keep current, then fall back
-            // to the first artist. The pending value is consumed once.
-            if let pending = pendingArtistSelection, artists.contains(where: { $0.id == pending }) {
-                selectedArtistId = pending
-                pendingArtistSelection = nil
-            } else if selectedArtistId == nil || !artists.contains(where: { $0.id == selectedArtistId }) {
-                selectedArtistId = artists.first?.id
-            }
-        }
+        .onChange(of: musicLibrary.revision, initial: true) { reloadArtists() }
+        .onChange(of: libraryFilter) { reloadArtists() }
         .onChange(of: pendingArtistSelection) { _, newValue in
             // Late navigation while ArtistsViewMac is already onscreen.
             if let id = newValue, artists.contains(where: { $0.id == id }) {
                 selectedArtistId = id
                 pendingArtistSelection = nil
             }
+        }
+    }
+
+    private func reloadArtists() {
+        artists = libraryFilter == .downloaded ? musicLibrary.downloadedArtists() : musicLibrary.allArtists()
+        // Prefer a pending navigation request, then keep current, then fall back to the
+        // first artist. The pending value is consumed once.
+        if let pending = pendingArtistSelection, artists.contains(where: { $0.id == pending }) {
+            selectedArtistId = pending
+            pendingArtistSelection = nil
+        } else if selectedArtistId == nil || !artists.contains(where: { $0.id == selectedArtistId }) {
+            selectedArtistId = artists.first?.id
         }
     }
 }

@@ -7,6 +7,7 @@ struct SongsViewMac: View {
     @Environment(NetworkMonitor.self) private var network
     @Environment(DownloadService.self) private var downloadService
 
+    @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
     @State private var tracks: [Track] = []
     @State private var selection: Set<UUID> = []
 
@@ -18,16 +19,20 @@ struct SongsViewMac: View {
             actions: trackActions,
             showArtist: true,
             showAlbum: true,
+            showTrackNumber: false,
             currentlyPlayingTrackId: player.currentTrack?.id,
             isPlaying: player.isPlaying
         )
         .navigationTitle("Songs")
-        .onChange(of: musicLibrary.revision, initial: true) {
-            tracks = musicLibrary.allTracks()
-        }
+        .onChange(of: musicLibrary.revision, initial: true) { reload() }
+        .onChange(of: libraryFilter) { reload() }
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &tracks)
         }
+    }
+
+    private func reload() {
+        tracks = libraryFilter == .downloaded ? musicLibrary.downloadedTracks() : musicLibrary.allTracks()
     }
 
     private var trackActions: TrackActions {
