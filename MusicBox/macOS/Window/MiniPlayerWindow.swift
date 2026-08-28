@@ -30,6 +30,9 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
 
     /// UserDefaults key for the persisted window frame.
     private static let frameDefaultsKey = "MiniPlayerWindowFrame"
+    /// Whether the mini player was open when the app last quit.
+    static let visibleDefaultsKey = "MiniPlayerWindowVisible"
+    private static var isTerminating = false
     /// Default frame — square (width × width), which puts the user in overlay mode
     /// where the artwork dominates and transport overlays at the bottom.
     private static let defaultFrame = NSRect(x: 0, y: 0, width: 300, height: 300)
@@ -78,6 +81,12 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: panel)
         panel.delegate = self
 
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { Self.isTerminating = true }
+        }
+
         // Now that self exists we can wire the queue toggle through. Toggle is
         // intent-only — the controller decides expand vs collapse based on the
         // current window height, which keeps SwiftUI state in sync with reality
@@ -108,6 +117,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
             close()
         } else {
             showWindow(nil)
+            UserDefaults.standard.set(true, forKey: Self.visibleDefaultsKey)
         }
     }
 
@@ -135,7 +145,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         // this animation. Without the resizing flag it is hover-gated for part of that
         // journey and blinks out halfway.
         state.isResizing = true
-        animateFrameChange(window: window, to: frame, duration: 0.18) { [weak self] in
+        animateFrameChange(window: window, to: frame, duration: Self.queueAnimationDuration) { [weak self] in
             self?.state.isResizing = false
         }
     }
@@ -149,7 +159,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     ) {
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = duration
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             window.animator().setFrame(frame, display: true)
         } completionHandler: {
             MainActor.assumeIsolated { completion?() }
@@ -202,6 +212,16 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         Task { @MainActor in self.saveCurrentFrame() }
     }
 
+    /// Quitting closes the window too, so a plain windowWillClose would record "not
+    /// visible" for every launch — the state we want is what the user last chose, not
+    /// the teardown that follows it.
+    nonisolated func windowWillClose(_ notification: Notification) {
+        Task { @MainActor in
+            guard !Self.isTerminating else { return }
+            UserDefaults.standard.set(false, forKey: Self.visibleDefaultsKey)
+        }
+    }
+
     nonisolated func windowWillStartLiveResize(_ notification: Notification) {
         Task { @MainActor in self.state.isResizing = true }
     }
@@ -241,6 +261,10 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         let rect = NSRectFromString(str)
         return rect.width > 0 && rect.height > 0 ? rect : nil
     }
+
+    /// Long enough to read as motion, eased at both ends. The previous 0.18s easeOut
+    /// put 40% of the travel in the first frame, so the window appeared to jump.
+    static let queueAnimationDuration: TimeInterval = 0.32
 
     /// Snap geometry has to agree with the layout, so read it from the layout.
     private static var transportRowHeight: CGFloat { MiniPlayerContent.transportRowHeight }

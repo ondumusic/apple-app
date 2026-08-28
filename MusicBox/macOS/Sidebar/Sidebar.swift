@@ -13,6 +13,9 @@ struct Sidebar: NSViewControllerRepresentable {
     let actions: SidebarActions
     /// Active + queued downloads — surfaces as a badge on the Downloads category cell.
     var downloadingCount: Int = 0
+    /// Library scope. Lives here rather than the window toolbar: it filters the library
+    /// the sidebar navigates, and the toolbar is the player's.
+    @Binding var filter: LibraryFilter
 
     func makeNSViewController(context: Context) -> SidebarViewController {
         let vc = SidebarViewController()
@@ -23,6 +26,7 @@ struct Sidebar: NSViewControllerRepresentable {
             searchText = newText
         }
         vc.actions = actions
+        vc.onFilterChange = { filter = $0 }
         return vc
     }
 
@@ -30,6 +34,8 @@ struct Sidebar: NSViewControllerRepresentable {
         // Rebuild the tree from the current library state. allPlaylists() is one fetch;
         // we group by parentId in-memory to materialize the folder hierarchy.
         nsViewController.actions = actions
+        nsViewController.onFilterChange = { filter = $0 }
+        nsViewController.applyFilter(filter)
         nsViewController.applyExternalSearchText(searchText)
         nsViewController.applyDownloadingCount(downloadingCount)
         let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists())
@@ -95,6 +101,10 @@ final class SidebarViewController: NSViewController {
     private let outlineView = KeyAwareOutlineView()
     private let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
     private let searchField = NSSearchField()
+    private let filterControl = NSSegmentedControl(
+        labels: ["All", "Downloaded"], trackingMode: .selectOne, target: nil, action: nil
+    )
+    var onFilterChange: ((LibraryFilter) -> Void)?
     private let addButton = NSButton()
     private let bottomBar = NSView()
 
@@ -187,6 +197,13 @@ final class SidebarViewController: NSViewController {
 
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
         bottomBar.addSubview(addButton)
+        filterControl.segmentStyle = .capsule
+        filterControl.controlSize = .small
+        filterControl.selectedSegment = 0
+        filterControl.target = self
+        filterControl.action = #selector(filterChanged)
+        filterControl.translatesAutoresizingMaskIntoConstraints = false
+        bottomBar.addSubview(filterControl)
         view.addSubview(bottomBar)
 
         NSLayoutConstraint.activate([
@@ -202,11 +219,13 @@ final class SidebarViewController: NSViewController {
             bottomBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             bottomBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            bottomBar.heightAnchor.constraint(equalToConstant: 30),
+            bottomBar.heightAnchor.constraint(equalToConstant: 34),
             addButton.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 6),
             addButton.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
             addButton.widthAnchor.constraint(equalToConstant: 22),
             addButton.heightAnchor.constraint(equalToConstant: 22),
+            filterControl.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -6),
+            filterControl.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
         ])
 
         NotificationCenter.default.addObserver(
@@ -257,6 +276,15 @@ final class SidebarViewController: NSViewController {
         if searchField.stringValue != text {
             searchField.stringValue = text
         }
+    }
+
+    func applyFilter(_ filter: LibraryFilter) {
+        let index = filter == .downloaded ? 1 : 0
+        if filterControl.selectedSegment != index { filterControl.selectedSegment = index }
+    }
+
+    @objc private func filterChanged() {
+        onFilterChange?(filterControl.selectedSegment == 1 ? .downloaded : .all)
     }
 
     @objc private func searchFieldChanged() {

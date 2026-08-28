@@ -25,6 +25,7 @@ struct MacOSContentView: View {
     @State private var miniPlayer: MiniPlayerWindowController?
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
     @State private var spaceKeyMonitor: Any?
+    @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
 
     var body: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
@@ -33,7 +34,8 @@ struct MacOSContentView: View {
                 searchText: $searchText,
                 musicLibrary: musicLibrary,
                 actions: sidebarActions,
-                downloadingCount: downloadService.activeDownloads.count + downloadService.pendingQueue.count
+                downloadingCount: downloadService.activeDownloads.count + downloadService.pendingQueue.count,
+                filter: $libraryFilter
             )
             .toolbar(removing: .sidebarToggle)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
@@ -103,7 +105,13 @@ struct MacOSContentView: View {
                 sidebarVisibility = .all
             }
         }
-        .onAppear { installSpaceKeyMonitor() }
+        .onAppear {
+            installSpaceKeyMonitor()
+            // Reopen the mini player if it was showing when the app last quit.
+            if UserDefaults.standard.bool(forKey: MiniPlayerWindowController.visibleDefaultsKey) {
+                toggleMiniPlayer()
+            }
+        }
         .onDisappear {
             if let spaceKeyMonitor { NSEvent.removeMonitor(spaceKeyMonitor) }
             spaceKeyMonitor = nil
@@ -192,6 +200,7 @@ struct MacOSContentView: View {
             let mp = MiniPlayerWindowController(player: player)
             miniPlayer = mp
             mp.showWindow(nil)
+            UserDefaults.standard.set(true, forKey: MiniPlayerWindowController.visibleDefaultsKey)
         }
     }
 
