@@ -57,7 +57,7 @@ struct PlaybackStateStoreTests {
 
     @Test func roundTripsTheQueueThroughDisk() {
         let store = makeStore()
-        let state = PlaybackState(trackIds: [UUID(), UUID()], currentIndex: 1, shuffledIndices: [1, 0])
+        let state = PlaybackState(trackIds: [UUID(), UUID()], currentIndex: 1, shuffledIndices: [1, 0], isUserModified: true)
         store.save(state)
 
         #expect(store.load() == state)

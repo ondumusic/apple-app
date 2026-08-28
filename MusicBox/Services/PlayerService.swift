@@ -23,6 +23,10 @@ final class PlayerService {
     /// Set when playback stops for a reason the user should see. An item that fails or
     /// never becomes ready is otherwise indistinguishable from one that just started.
     var playbackError: String? = nil
+    /// True once the user has shaped this queue by hand — Play Next, Add to Queue,
+    /// reorder, remove. Replacing a queue you built is worth confirming; replacing one
+    /// that is just "the album I pressed play on" is not.
+    private(set) var isQueueUserModified: Bool = false
     /// True while a track is being prepared — a stream can take seconds to buffer.
     private(set) var isBuffering: Bool = false
     var showReplaceQueueConfirmation: Bool = false
@@ -34,17 +38,12 @@ final class PlayerService {
     }
 
     func requestPlay(_ action: @escaping () -> Void) {
-        if currentTrack != nil && queueHasMultipleAlbums {
+        if currentTrack != nil && isQueueUserModified {
             pendingPlayAction = action
             showReplaceQueueConfirmation = true
         } else {
             action()
         }
-    }
-
-    private var queueHasMultipleAlbums: Bool {
-        guard let firstAlbumId = queue.first?.track.albumId else { return false }
-        return queue.contains { $0.track.albumId != firstAlbumId }
     }
 
     func confirmPlay() {
@@ -157,6 +156,7 @@ final class PlayerService {
         queue = tracks.map { QueueItem(track: $0, artworkURL: artworkURL ?? $0.album?.artworkUrl) }
         shuffledIndices = nil
         currentIndex = index
+        isQueueUserModified = false
         savePlaybackState()
         Task { await loadAndPlayCurrent() }
     }
@@ -165,6 +165,7 @@ final class PlayerService {
         queue = items
         shuffledIndices = nil
         currentIndex = index
+        isQueueUserModified = false
         savePlaybackState()
         Task { await loadAndPlayCurrent() }
     }
@@ -179,6 +180,7 @@ final class PlayerService {
         queue = items
         shuffledIndices = SmartShuffle.shuffledIndices(for: items, spread: settings.spreadShuffle)
         currentIndex = 0
+        isQueueUserModified = false
         savePlaybackState()
         Task { await loadAndPlayCurrent() }
     }
@@ -205,6 +207,7 @@ final class PlayerService {
             shuffled.insert(contentsOf: newIndices, at: shuffleInsertPos)
             shuffledIndices = shuffled
         }
+        isQueueUserModified = true
         queueConfirmation = .playNext(items.count)
         invalidateGaplessState()
         savePlaybackState()
@@ -228,6 +231,7 @@ final class PlayerService {
             shuffled += newIndices
             shuffledIndices = shuffled
         }
+        isQueueUserModified = true
         queueConfirmation = .addedToQueue(items.count)
         savePlaybackState()
     }
@@ -335,6 +339,7 @@ final class PlayerService {
         } else {
             queue = Array(queue.prefix(keep))
         }
+        isQueueUserModified = true
         invalidateGaplessState()
         savePlaybackState()
     }
@@ -361,6 +366,7 @@ final class PlayerService {
                 shuffledIndices = shuffled
             }
         }
+        isQueueUserModified = true
         invalidateGaplessState()
         savePlaybackState()
     }
@@ -376,6 +382,7 @@ final class PlayerService {
             let destReal = destination + upNextStart
             queue.move(fromOffsets: sourceReal, toOffset: destReal)
         }
+        isQueueUserModified = true
         invalidateGaplessState()
         savePlaybackState()
     }
@@ -931,7 +938,8 @@ final class PlayerService {
         stateStore.save(PlaybackState(
             trackIds: queue.map(\.track.id),
             currentIndex: currentIndex,
-            shuffledIndices: shuffledIndices
+            shuffledIndices: shuffledIndices,
+            isUserModified: isQueueUserModified
         ))
         savePlaybackPosition()
     }
@@ -962,6 +970,8 @@ final class PlayerService {
             shuffledIndices = shuffled
         }
         currentIndex = min(max(state.currentIndex, 0), queue.count - 1)
+        // A hand-built queue keeps its protection across a restart.
+        isQueueUserModified = state.isUserModified ?? false
 
         let idx = effectiveIndex
         guard idx < queue.count else {

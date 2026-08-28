@@ -497,16 +497,13 @@ struct PlayerRepeatModeTests {
 
 struct PlayerQueueConfirmationTests {
 
-    @Test func requestPlayShowsConfirmationWhenMultipleAlbums() {
+    @Test func requestPlayShowsConfirmationForAHandBuiltQueue() {
         let player = makePlayer()
-        let album1 = UUID(), album2 = UUID()
-        let items = [
-            makeQueueItem(name: "A", albumId: album1),
-            makeQueueItem(name: "B", albumId: album2),
-        ]
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B")]
         player.playNow(queue: items, startingAt: 0)
         // Simulate that currentTrack is set
         player.currentTrack = items[0].track
+        player.playNext(queue: [makeQueueItem(name: "C")])
 
         var actionCalled = false
         player.requestPlay { actionCalled = true }
@@ -518,12 +515,13 @@ struct PlayerQueueConfirmationTests {
         #expect(actionCalled)
     }
 
-    @Test func requestPlayExecutesImmediatelyWhenSingleAlbum() {
+    /// Spanning several albums is no longer the trigger — only hand edits are, so a
+    /// multi-album queue you didn't build plays straight through.
+    @Test func requestPlayExecutesImmediatelyForAnUntouchedQueue() {
         let player = makePlayer()
-        let albumId = UUID()
         let items = [
-            makeQueueItem(name: "A", albumId: albumId),
-            makeQueueItem(name: "B", albumId: albumId),
+            makeQueueItem(name: "A", albumId: UUID()),
+            makeQueueItem(name: "B", albumId: UUID()),
         ]
         player.playNow(queue: items, startingAt: 0)
         player.currentTrack = items[0].track
@@ -537,13 +535,10 @@ struct PlayerQueueConfirmationTests {
 
     @Test func cancelPlayClearsPending() {
         let player = makePlayer()
-        let album1 = UUID(), album2 = UUID()
-        let items = [
-            makeQueueItem(name: "A", albumId: album1),
-            makeQueueItem(name: "B", albumId: album2),
-        ]
+        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B")]
         player.playNow(queue: items, startingAt: 0)
         player.currentTrack = items[0].track
+        player.playNext(queue: [makeQueueItem(name: "C")])
 
         var actionCalled = false
         player.requestPlay { actionCalled = true }
@@ -586,5 +581,56 @@ struct PlayerPlaybackFailureTests {
         player.togglePlayPause()
 
         #expect(!player.isPlaying)
+    }
+}
+
+// MARK: - Replace-Queue Confirmation
+
+struct PlayerReplaceQueueTests {
+
+    @Test func playingAFreshQueueDoesNotPrompt() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A")], startingAt: 0)
+        player.currentTrack = player.queue[0].track
+
+        var played = false
+        player.requestPlay { played = true }
+
+        #expect(played)
+        #expect(!player.showReplaceQueueConfirmation)
+    }
+
+    @Test func replacingAHandBuiltQueuePrompts() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A")], startingAt: 0)
+        player.currentTrack = player.queue[0].track
+        player.addToEnd(queue: [makeQueueItem(name: "B")])
+
+        var played = false
+        player.requestPlay { played = true }
+
+        #expect(!played)
+        #expect(player.showReplaceQueueConfirmation)
+    }
+
+    @Test func aFreshQueueClearsTheHandBuiltFlag() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A")], startingAt: 0)
+        player.playNext(queue: [makeQueueItem(name: "B")])
+        #expect(player.isQueueUserModified)
+
+        player.playNow(queue: [makeQueueItem(name: "C")], startingAt: 0)
+
+        #expect(!player.isQueueUserModified)
+    }
+
+    @Test func reorderingMarksTheQueueHandBuilt() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"), makeQueueItem(name: "C")], startingAt: 0)
+        #expect(!player.isQueueUserModified)
+
+        player.moveQueueItems(from: IndexSet(integer: 0), to: 2)
+
+        #expect(player.isQueueUserModified)
     }
 }

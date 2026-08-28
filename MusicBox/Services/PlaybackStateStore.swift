@@ -7,6 +7,8 @@ nonisolated struct PlaybackState: Codable, Sendable, Equatable {
     var trackIds: [UUID]
     var currentIndex: Int
     var shuffledIndices: [Int]?
+    /// Optional so snapshots written before this existed still decode.
+    var isUserModified: Bool?
 }
 
 /// Where playback had got to. Carries the track id so a stale position — written moments before
