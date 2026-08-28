@@ -20,6 +20,11 @@ final class PlayerService {
     var progress: Double = 0
     var duration: Double = 0
     var queueConfirmation: QueueConfirmation? = nil
+    /// Set when playback stops for a reason the user should see. An item that fails or
+    /// never becomes ready is otherwise indistinguishable from one that just started.
+    var playbackError: String? = nil
+    /// True while a track is being prepared — a stream can take seconds to buffer.
+    private(set) var isBuffering: Bool = false
     var showReplaceQueueConfirmation: Bool = false
     @ObservationIgnored private var pendingPlayAction: (() -> Void)?
 
@@ -76,6 +81,11 @@ final class PlayerService {
     @ObservationIgnored private var nowPlayingArtworkURL: URL?
     @ObservationIgnored private var isSeeking: Bool = false
     @ObservationIgnored private var isLoadingTrack: Bool = false
+    @ObservationIgnored private var itemStatusObservation: NSKeyValueObservation?
+    @ObservationIgnored private var stallWatchdog: Task<Void, Never>?
+    /// How long a remote item may sit un-ready before we call it failed. A rejected token
+    /// produces no error and no timeout of its own — it simply never becomes ready.
+    private static let stallTimeout: TimeInterval = 15
     /// Tracks whether AVQueuePlayer has a queued next item for gapless playback
     @ObservationIgnored private var hasQueuedGaplessItem: Bool = false
     /// The AVPlayerItem currently playing — used to filter endObserver notifications
@@ -131,6 +141,8 @@ final class PlayerService {
     }
 
     deinit {
+        stallWatchdog?.cancel()
+        itemStatusObservation?.invalidate()
         if let timeObserver { primaryPlayer.removeTimeObserver(timeObserver) }
         if let crossfadeObserver { primaryPlayer.removeTimeObserver(crossfadeObserver) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
@@ -286,7 +298,9 @@ final class PlayerService {
             if currentTime.isFinite {
                 progress = currentTime
             }
-        } else if primaryPlayer.currentItem == nil && !queue.isEmpty {
+        } else if (primaryPlayer.currentItem == nil || playbackError != nil) && !queue.isEmpty {
+            // Retry rather than resume: the existing item is either absent or one the
+            // player already rejected, and calling play() on it just fails silently.
             Task { await loadAndPlayCurrent() }
             return
         } else {
@@ -418,6 +432,8 @@ final class PlayerService {
         pendingResume = nil
 
         isLoadingTrack = true
+        isBuffering = true
+        playbackError = nil
         isSeeking = false
         currentTrack = track
         progress = resumeTime
@@ -441,6 +457,7 @@ final class PlayerService {
             let item = makePlayerItem(url: playbackURL)
             currentPlayerItem = item
             gaplessPlayerItem = nil
+            observeStatus(of: item)
             primaryPlayer.insert(item, after: nil)
             if resumeTime > 0 {
                 await primaryPlayer.seek(to: CMTime(seconds: resumeTime, preferredTimescale: 600),
@@ -450,30 +467,75 @@ final class PlayerService {
             primaryPlayer.play()
             isLoadingTrack = false
             isPlaying = true
-
+            // A local file is ready the moment it's inserted; only a stream can hang.
+            if playbackURL.isFileURL {
+                isBuffering = false
+            } else {
+                startStallWatchdog()
+            }
 
             updateNowPlayingPlaybackState()
             await prefetchNextTrackAsync()
             setupGaplessOrCrossfade()
         } catch APIError.unauthorized {
-            isLoadingTrack = false
             #if DEBUG
             print("PlayerService: playback failed — session expired")
             #endif
-            isPlaying = false
-            primaryPlayer.pause()
-            updateNowPlayingPlaybackState()
+            failPlayback(String(localized: "Your session expired. Sign in again to keep listening."))
             NotificationCenter.default.post(name: .sessionExpired, object: nil)
         } catch {
-            isLoadingTrack = false
             #if DEBUG
             print("PlayerService: failed to load track: \(error)")
             #endif
             // Stop instead of skip to avoid recursive failure loops when backgrounded
-            isPlaying = false
-            primaryPlayer.pause()
-            updateNowPlayingPlaybackState()
+            failPlayback(error.localizedDescription)
         }
+    }
+
+    /// Watches the item we just handed the player. `.failed` is the only signal
+    /// AVFoundation gives us for a stream it can't play — nothing is thrown.
+    private func observeStatus(of item: AVPlayerItem) {
+        itemStatusObservation?.invalidate()
+        itemStatusObservation = item.observe(\.status, options: [.new, .initial]) { [weak self] observed, _ in
+            Task { @MainActor [weak self] in
+                guard let self, observed === self.currentPlayerItem else { return }
+                switch observed.status {
+                case .readyToPlay:
+                    self.isBuffering = false
+                    self.playbackError = nil
+                    self.stallWatchdog?.cancel()
+                    self.stallWatchdog = nil
+                case .failed:
+                    self.failPlayback(observed.error?.localizedDescription
+                        ?? String(localized: "This track couldn't be played."))
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    /// A stream that is rejected or black-holed never reports an error and never times
+    /// out on its own — without this the UI shows a pause button at 0:00 indefinitely.
+    private func startStallWatchdog() {
+        stallWatchdog?.cancel()
+        stallWatchdog = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.stallTimeout))
+            guard !Task.isCancelled, let self else { return }
+            guard let item = currentPlayerItem, item.status != .readyToPlay else { return }
+            failPlayback(String(localized: "Couldn't reach the server to play this track."))
+        }
+    }
+
+    private func failPlayback(_ message: String) {
+        stallWatchdog?.cancel()
+        stallWatchdog = nil
+        isLoadingTrack = false
+        isBuffering = false
+        isPlaying = false
+        primaryPlayer.pause()
+        playbackError = message
+        updateNowPlayingPlaybackState()
     }
 
     private func resolvePlaybackURL(for track: Track, queueIndex: Int) throws -> URL {

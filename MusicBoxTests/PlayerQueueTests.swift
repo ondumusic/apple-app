@@ -553,3 +553,38 @@ struct PlayerQueueConfirmationTests {
         #expect(!actionCalled)
     }
 }
+
+// MARK: - Playback Failure
+
+struct PlayerPlaybackFailureTests {
+
+    @Test func startsWithNoErrorAndNotBuffering() {
+        let player = makePlayer()
+
+        #expect(player.playbackError == nil)
+        #expect(!player.isBuffering)
+    }
+
+    @Test func playPauseRetriesInsteadOfResumingAfterAFailure() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A")], startingAt: 0)
+        player.isPlaying = false
+        player.playbackError = "Couldn't reach the server to play this track."
+
+        player.togglePlayPause()
+
+        // Resuming would flip isPlaying synchronously; retrying goes through an async
+        // reload instead, leaving it false at this point.
+        #expect(!player.isPlaying)
+    }
+
+    @Test func pausingAWorkingTrackStillResumes() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A")], startingAt: 0)
+        player.isPlaying = true
+
+        player.togglePlayPause()
+
+        #expect(!player.isPlaying)
+    }
+}

@@ -36,13 +36,26 @@ struct MiniPlayerView: View {
                         .frame(width: 40, height: 40)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(track.name)
-                            .font(.callout.weight(.medium))
-                            .lineLimit(1)
-                        Text(track.artist.name)
-                            .font(.caption)
-                            .foregroundStyle(tinted ? .white.opacity(0.7) : .secondary)
-                            .lineLimit(1)
+                        HStack(spacing: 5) {
+                            if player.isBuffering {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            }
+                            Text(track.name)
+                                .font(.callout.weight(.medium))
+                                .lineLimit(1)
+                        }
+                        if let error = player.playbackError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .lineLimit(1)
+                        } else {
+                            Text(track.artist.name)
+                                .font(.caption)
+                                .foregroundStyle(tinted ? .white.opacity(0.7) : .secondary)
+                                .lineLimit(1)
+                        }
                     }
 
                     Spacer(minLength: 0)

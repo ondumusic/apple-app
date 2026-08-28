@@ -103,17 +103,33 @@ private struct NowPlayingLabel: View {
                 artwork
                 VStack(spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(track?.name ?? "Not Playing")
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                        if let track {
-                            Text("—")
+                        if let error = player.playbackError {
+                            Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                            Text(track.artist.name)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.orange)
+                            Text(error)
+                                .font(.caption.weight(.medium))
                                 .lineLimit(1)
+                                .help(error)
+                        } else {
+                            if player.isBuffering {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .scaleEffect(0.55)
+                                    .frame(width: 12, height: 12)
+                            }
+                            Text(track?.name ?? "Not Playing")
+                                .font(.caption.weight(.medium))
+                                .lineLimit(1)
+                            if let track {
+                                Text("—")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                Text(track.artist.name)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity)
