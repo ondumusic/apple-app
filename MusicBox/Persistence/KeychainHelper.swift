@@ -24,7 +24,16 @@ nonisolated enum KeychainHelper {
         SecItemAdd(query as CFDictionary, nil)
     }
 
-    static func load(key: String) -> String? {
+    /// Distinguishes "nothing stored" from "the read failed". Collapsing the two sends a
+    /// user with a perfectly good stored session to the login screen with no explanation —
+    /// a denied access prompt and a fresh install look identical otherwise.
+    enum LoadOutcome {
+        case found(String)
+        case missing
+        case failed(OSStatus)
+    }
+
+    static func loadOutcome(key: String) -> LoadOutcome {
         var query = baseQuery(for: key)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -32,8 +41,22 @@ nonisolated enum KeychainHelper {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        switch status {
+        case errSecSuccess:
+            guard let data = result as? Data, let value = String(data: data, encoding: .utf8) else {
+                return .failed(errSecDecode)
+            }
+            return .found(value)
+        case errSecItemNotFound:
+            return .missing
+        default:
+            return .failed(status)
+        }
+    }
+
+    static func load(key: String) -> String? {
+        if case .found(let value) = loadOutcome(key: key) { return value }
+        return nil
     }
 
     static func delete(key: String) {

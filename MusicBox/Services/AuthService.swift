@@ -45,9 +45,25 @@ final class AuthService {
               let serverURL = URL(string: serverURLString) else { return }
 
         let key = Keys.sessionToken
-        guard let token = await Task.detached(priority: .userInitiated, operation: {
-            KeychainHelper.load(key: key)
-        }).value else { return }
+        let outcome = await Task.detached(priority: .userInitiated, operation: {
+            KeychainHelper.loadOutcome(key: key)
+        }).value
+
+        let token: String
+        switch outcome {
+        case .found(let value):
+            token = value
+        case .missing:
+            return
+        case .failed(let status):
+            // The session may well be intact — say so rather than presenting a login
+            // screen that implies the user was signed out.
+            #if DEBUG
+            print("AuthService: keychain read failed with OSStatus \(status)")
+            #endif
+            errorMessage = String(localized: "Couldn't read your saved sign-in. Enter your password to continue.")
+            return
+        }
 
         // Re-save to upgrade Keychain accessibility if needed (kSecAttrAccessibleAfterFirstUnlock)
         await Task.detached(priority: .utility, operation: {
