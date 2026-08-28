@@ -10,7 +10,9 @@ struct PlayerToolbar: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
+            ShuffleButton()
             TransportButtons()
+            RepeatButton()
         }
         ToolbarItem(placement: .principal) {
             NowPlayingLabel()
@@ -18,29 +20,6 @@ struct PlayerToolbar: ToolbarContent {
         }
         ToolbarItemGroup(placement: .primaryAction) {
             VolumeControl()
-
-            Button {
-                player.toggleShuffle()
-            } label: {
-                Image(systemName: "shuffle")
-                    .symbolVariant(player.isShuffled ? .none : .none)
-                    .foregroundStyle(player.isShuffled ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-            }
-            .help(player.isShuffled ? "Disable Shuffle" : "Shuffle")
-            .accessibilityLabel("Shuffle")
-            .accessibilityValue(player.isShuffled ? "On" : "Off")
-            .disabled(player.queue.isEmpty)
-
-            Button {
-                player.cycleRepeatMode()
-            } label: {
-                Image(systemName: repeatIconName)
-                    .foregroundStyle(player.repeatMode != .off ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-            }
-            .help(repeatHelp)
-            .accessibilityLabel("Repeat")
-            .accessibilityValue(repeatHelp)
-            .disabled(player.queue.isEmpty)
 
             Button {
                 showQueue.toggle()
@@ -54,15 +33,38 @@ struct PlayerToolbar: ToolbarContent {
         }
     }
 
-    private var repeatIconName: String {
-        switch player.repeatMode {
-        case .off: "repeat"
-        case .all: "repeat"
-        case .one: "repeat.1"
+}
+
+private struct ShuffleButton: View {
+    @Environment(PlayerService.self) private var player
+
+    var body: some View {
+        Button { player.toggleShuffle() } label: {
+            Image(systemName: "shuffle")
+                .foregroundStyle(player.isShuffled ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
         }
+        .help(player.isShuffled ? "Disable Shuffle" : "Shuffle")
+        .accessibilityLabel("Shuffle")
+        .accessibilityValue(player.isShuffled ? "On" : "Off")
+        .disabled(player.queue.isEmpty)
+    }
+}
+
+private struct RepeatButton: View {
+    @Environment(PlayerService.self) private var player
+
+    var body: some View {
+        Button { player.cycleRepeatMode() } label: {
+            Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
+                .foregroundStyle(player.repeatMode != .off ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+        }
+        .help(help)
+        .accessibilityLabel("Repeat")
+        .accessibilityValue(help)
+        .disabled(player.queue.isEmpty)
     }
 
-    private var repeatHelp: String {
+    private var help: String {
         switch player.repeatMode {
         case .off: "Repeat Off"
         case .all: "Repeat All"
@@ -150,8 +152,11 @@ private struct NowPlayingLabel: View {
                 .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.vertical, 4)
             .frame(maxWidth: .infinity)
+            // Shorter than the 52pt toolbar so it sits inside it with a margin, rather
+            // than filling it edge to edge and spilling into the content below.
+            .frame(height: 42)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
         }
     }
@@ -225,14 +230,10 @@ private struct ScrubberView: View {
     @State private var isScrubbing = false
 
     var body: some View {
-        VStack(spacing: 1) {
-            HStack(spacing: 0) {
-                Text(format(isScrubbing ? scrubValue : player.progress))
-                Spacer()
-                Text(format(player.duration))
-            }
-            .font(.caption2.monospacedDigit())
-            .foregroundStyle(.secondary)
+        HStack(spacing: 6) {
+            Text(format(isScrubbing ? scrubValue : player.progress))
+                .font(.system(size: 9).monospacedDigit())
+                .foregroundStyle(.secondary)
             ProgressTrack(
                 value: isScrubbing ? scrubValue : player.progress,
                 duration: max(player.duration, 1),
@@ -246,6 +247,9 @@ private struct ScrubberView: View {
                 }
             )
             .frame(height: 8)
+            Text(format(player.duration))
+                .font(.system(size: 9).monospacedDigit())
+                .foregroundStyle(.secondary)
         }
     }
 
