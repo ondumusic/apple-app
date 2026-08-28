@@ -1212,7 +1212,10 @@ private final class TextCell: NSTableCellView {
         label.lineBreakMode = .byTruncatingTail
         label.cell?.usesSingleLineMode = true
         addSubview(label)
-        textField = label
+        // Deliberately not assigned to NSTableCellView.textField: that hands the label to
+        // AppKit's automatic text-colour management, and under the .sourceList selection
+        // style embedded tables use, it repaints titles in the lighter source-list
+        // treatment — so every track read as greyed out next to the same rows in Songs.
         let trailing = label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -labelTrailingInset)
         trailingConstraint = trailing
         NSLayoutConstraint.activate([
@@ -1315,7 +1318,10 @@ private final class TitleCell: NSTableCellView {
         label.maximumNumberOfLines = 2
         label.cell?.wraps = true
         addSubview(label)
-        textField = label
+        // Deliberately not assigned to NSTableCellView.textField: that hands the label to
+        // AppKit's automatic text-colour management, and under the .sourceList selection
+        // style embedded tables use, it repaints titles in the lighter source-list
+        // treatment — so every track read as greyed out next to the same rows in Songs.
 
         artistLabel.translatesAutoresizingMaskIntoConstraints = false
         artistLabel.lineBreakMode = .byTruncatingTail
