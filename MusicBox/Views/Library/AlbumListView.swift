@@ -103,7 +103,7 @@ struct AlbumListView: View {
         let source = filterOption == .downloaded
             ? musicLibrary.downloadedAlbums()
             : musicLibrary.allAlbums()
-        albums = sortedAlbums(source)
+        albums = sortOption.sorted(source, ascending: sortAscending)
     }
 
     // MARK: - Toolbar Menu
@@ -143,10 +143,14 @@ struct AlbumListView: View {
 
     // MARK: - Sort
 
-    private func sortedAlbums(_ albums: [Album]) -> [Album] {
+}
+
+extension AlbumSortOption {
+    /// Shared with the macOS grid so both platforms order albums identically.
+    func sorted(_ albums: [Album], ascending: Bool) -> [Album] {
         albums.sorted { a, b in
             let result: Bool
-            switch sortOption {
+            switch self {
             case .artist:
                 let aName = a.artistSortName ?? ""
                 let bName = b.artistSortName ?? ""
@@ -180,7 +184,7 @@ struct AlbumListView: View {
                     result = a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
                 }
             }
-            return sortAscending ? result : !result
+            return ascending ? result : !result
         }
     }
 }

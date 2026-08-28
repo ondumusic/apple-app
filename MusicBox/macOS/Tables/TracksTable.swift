@@ -335,7 +335,24 @@ final class TracksTableViewController: NSViewController {
         }
     }
 
-    var accentNSColor: NSColor = .controlAccentColor
+    /// Repaints on change: rows and cells cache the colour when they're configured, so
+    /// switching accent in Settings would otherwise only show up on the next reload.
+    var accentNSColor: NSColor = .controlAccentColor {
+        didSet {
+            guard accentNSColor != oldValue, isViewLoaded else { return }
+            tableView.enumerateAvailableRowViews { rowView, row in
+                (rowView as? EmbeddedRowView)?.selectionColor = accentNSColor
+                for column in 0..<rowView.numberOfColumns {
+                    switch rowView.view(atColumn: column) {
+                    case let cell as TitleCell: cell.accentColor = accentNSColor
+                    case let cell as NumberOrSpeakerCell: cell.accentColor = accentNSColor
+                    default: break
+                    }
+                }
+                rowView.needsDisplay = true
+            }
+        }
+    }
     private(set) var isEmbedded: Bool = false
     /// nil until the first style pass. Without it the equality guard below skips
     /// configuration for a standalone table, since `embedded` and `isEmbedded` are both

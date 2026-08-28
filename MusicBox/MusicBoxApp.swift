@@ -119,8 +119,8 @@ struct MusicBoxApp: App {
         // apiService onChange builds the rest once it lands.
     }
 
-    var body: some Scene {
-        WindowGroup {
+    @ViewBuilder
+    private var rootView: some View {
             Group {
                 if auth.isRestoringSession {
                     // A spinner would strobe — the Keychain read is normally milliseconds.
@@ -214,8 +214,16 @@ struct MusicBoxApp: App {
                 downloadService.resumeOnForeground()
             }
             #endif
-        }
+    }
+
+    var body: some Scene {
+        // A single Window rather than a WindowGroup: Cmd+N was spawning duplicate
+        // main windows, and a second one has no meaning here. Window also gives the
+        // Window menu an entry to bring it back after closing.
         #if os(macOS)
+        Window("MusicBox", id: "main") {
+            rootView
+        }
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(after: .pasteboard) {
@@ -226,6 +234,9 @@ struct MusicBoxApp: App {
                 .keyboardShortcut("f", modifiers: .command)
             }
             CommandGroup(after: .windowArrangement) {
+                // Closing the window shouldn't strand the app: Cmd+N used to be the only
+                // way back, and it's the shortcut for a *new* document, not this.
+                ReopenMainWindowButton()
                 Button("Mini Player") {
                     NotificationCenter.default.post(name: .toggleMiniPlayer, object: nil)
                 }
@@ -248,6 +259,10 @@ struct MusicBoxApp: App {
                     NotificationCenter.default.post(name: .togglePlayPause, object: nil)
                 }
             }
+        }
+        #else
+        WindowGroup {
+            rootView
         }
         #endif
 
@@ -319,3 +334,19 @@ extension View {
         }
     }
 }
+
+
+#if os(macOS)
+/// Brings the single main window back after it's been closed. Lives in a View so it can
+/// reach openWindow, which isn't available on the App type itself.
+private struct ReopenMainWindowButton: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("MusicBox Window") {
+            openWindow(id: "main")
+        }
+        .keyboardShortcut("0", modifiers: .command)
+    }
+}
+#endif

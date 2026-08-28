@@ -109,7 +109,17 @@ final class SidebarViewController: NSViewController {
         labels: ["All", "Downloaded"], trackingMode: .selectOne, target: nil, action: nil
     )
     var onFilterChange: ((LibraryFilter) -> Void)?
-    var accentNSColor: NSColor = .controlAccentColor
+    /// See TracksTable: cached at configure time, so a change needs an explicit repaint.
+    var accentNSColor: NSColor = .controlAccentColor {
+        didSet {
+            guard accentNSColor != oldValue, isViewLoaded else { return }
+            outlineView.enumerateAvailableRowViews { rowView, row in
+                (rowView as? SidebarRowView)?.selectionColor = accentNSColor
+                (rowView.view(atColumn: 0) as? SidebarCell)?.accentColor = accentNSColor
+                rowView.needsDisplay = true
+            }
+        }
+    }
     private let addButton = NSButton()
     private let bottomBar = NSView()
 
