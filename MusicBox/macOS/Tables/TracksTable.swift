@@ -37,6 +37,9 @@ struct TracksTable: NSViewControllerRepresentable {
     /// Whether to render the # column. Meaningful where ordering is (album detail,
     /// playlists); in a flat all-songs list the per-album numbers just repeat.
     var showTrackNumber: Bool = true
+    /// The app's accent. AppKit defaults to the system accent, which is why selected
+    /// rows and the now-playing marks disagreed with every SwiftUI surface.
+    var accent: Color = .accentColor
     /// Currently-playing track id; the matching row's # column shows a speaker glyph
     /// instead of the track number.
     var currentlyPlayingTrackId: UUID?
@@ -101,6 +104,7 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.onDelete = onDelete
         vc.applyEmbeddedStyle(embeddedStyle)
         vc.applyHeaderVisibility(hidden: hidesColumnHeaders)
+        vc.accentNSColor = NSColor(accent)
         vc.applyRowHeight(rowHeight)
         vc.sectionHeaderHeight = sectionHeaderHeight
         vc.sectionHeaderBuilder = sectionHeader
@@ -331,6 +335,7 @@ final class TracksTableViewController: NSViewController {
         }
     }
 
+    var accentNSColor: NSColor = .controlAccentColor
     private(set) var isEmbedded: Bool = false
     /// nil until the first style pass. Without it the equality guard below skips
     /// configuration for a standalone table, since `embedded` and `isEmbedded` are both
@@ -390,7 +395,8 @@ final class TracksTableViewController: NSViewController {
             tableView.style = .inset
             tableView.intercellSpacing = NSSize(width: 3, height: 2)
             tableView.backgroundColor = .controlBackgroundColor
-            tableView.selectionHighlightStyle = .regular
+            // .none so our own pill paints; .regular would draw the system accent over it.
+            tableView.selectionHighlightStyle = .none
             scrollView.drawsBackground = true
             scrollView.hasVerticalScroller = true
             scrollView.verticalScrollElasticity = .automatic
@@ -780,8 +786,17 @@ extension TracksTableViewController: NSTableViewDelegate {
         // even when tableView.backgroundColor is .clear — that's the residual grey we
         // were seeing. Custom row view no-ops the draw so the parent shows through and
         // also paints the inter-row hairline divider.
-        guard isEmbedded else { return nil }
         let view = EmbeddedRowView()
+        view.selectionColor = accentNSColor
+        guard isEmbedded else {
+            // Standalone: full-width pill, no hairline — alternating row colours already
+            // separate the rows there.
+            view.customSelectionLeftInset = 0
+            view.customSelectionRightInset = 0
+            view.suppressDivider = true
+            view.drawsRowBackground = true
+            return view
+        }
         let isHeader = isHeaderRow(row)
         let nextIsHeader = isHeaderRow(row + 1)
         // Suppress dividers around section headers and after the last row of the table.
@@ -837,6 +852,7 @@ extension TracksTableViewController: NSTableViewDelegate {
         case "number":
             let c = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? NumberOrSpeakerCell
                 ?? NumberOrSpeakerCell(identifier: column.identifier)
+            c.accentColor = accentNSColor
             if isCurrent {
                 c.showSpeaker(playing: isPlaying)
             } else {
@@ -856,6 +872,7 @@ extension TracksTableViewController: NSTableViewDelegate {
             // the title when the host wanted artist info — consistent with iTunes /
             // Apple Music layout for inline album sections.
             let inlineArtist = isEmbedded && embeddedShowsArtist
+            c.accentColor = accentNSColor
             c.configure(track: track, isCurrent: isCurrent, showArtistInline: inlineArtist)
             cell = c
         case "artist":
@@ -1060,8 +1077,17 @@ private final class EmbeddedRowView: NSTableRowView {
     /// Trailing inset used with `customSelectionLeftInset`. Mirrors source-list's ~16pt
     /// trailing inset so the pill ends symmetrically.
     var customSelectionRightInset: CGFloat = 16
+    /// The app accent rather than NSColor.selectedContentBackgroundColor, which follows
+    /// the system accent and left selection disagreeing with the rest of the UI.
+    var selectionColor: NSColor = .selectedContentBackgroundColor
+    /// Standalone tables use alternating row colours, which NSTableRowView paints in its
+    /// own drawBackground — our override has to defer to it or the stripes disappear.
+    var drawsRowBackground: Bool = false
 
     override func drawBackground(in dirtyRect: NSRect) {
+        if drawsRowBackground {
+            super.drawBackground(in: dirtyRect)
+        }
         // Custom selection pill — drawn in drawBackground because NSTableView's selection
         // rendering happens at the table level (not delegated to the row's drawSelection)
         // for both .regular and .sourceList highlight styles. We rely on selectionHighlight
@@ -1114,7 +1140,7 @@ private final class EmbeddedRowView: NSTableRowView {
         )
         guard rect.width > 0 else { return }
         let path = roundedRectPath(rect, topRadius: topRadius, bottomRadius: bottomRadius)
-        NSColor.selectedContentBackgroundColor.setFill()
+        selectionColor.setFill()
         path.fill()
     }
 
@@ -1241,6 +1267,7 @@ private final class TextCell: NSTableCellView {
 /// # column cell. Switches between a track number/position and a speaker glyph for
 /// the currently-playing row.
 private final class NumberOrSpeakerCell: NSTableCellView {
+    var accentColor: NSColor = .controlAccentColor { didSet { applyEmphasis() } }
     let label = NSTextField(labelWithString: "")
     let icon = NSImageView()
 
@@ -1256,7 +1283,6 @@ private final class NumberOrSpeakerCell: NSTableCellView {
 
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
-        icon.contentTintColor = .controlAccentColor
         icon.isHidden = true
         addSubview(icon)
 
@@ -1294,7 +1320,7 @@ private final class NumberOrSpeakerCell: NSTableCellView {
     private func applyEmphasis() {
         let emphasized = backgroundStyle == .emphasized
         label.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
-        icon.contentTintColor = emphasized ? .alternateSelectedControlTextColor : .controlAccentColor
+        icon.contentTintColor = emphasized ? .alternateSelectedControlTextColor : accentColor
     }
 }
 
@@ -1304,6 +1330,7 @@ private final class NumberOrSpeakerCell: NSTableCellView {
 /// artist beneath the title when relevant. The title supports up to 2 lines either
 /// way so long names wrap instead of truncating.
 private final class TitleCell: NSTableCellView {
+    var accentColor: NSColor = .controlAccentColor { didSet { applyEmphasis() } }
     let label = NSTextField(labelWithString: "")
     let artistLabel = NSTextField(labelWithString: "")
     let downloadedIcon = NSImageView()
@@ -1380,7 +1407,7 @@ private final class TitleCell: NSTableCellView {
             artistLabel.textColor = .alternateSelectedControlTextColor
             downloadedIcon.contentTintColor = .alternateSelectedControlTextColor
         } else {
-            label.textColor = isCurrent ? .controlAccentColor : .labelColor
+            label.textColor = isCurrent ? accentColor : .labelColor
             artistLabel.textColor = .secondaryLabelColor
             downloadedIcon.contentTintColor = .secondaryLabelColor
         }

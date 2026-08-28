@@ -5,6 +5,7 @@ struct AlbumDetailMac: View {
     let album: Album
 
     @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(SettingsStore.self) private var settings
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
     @Environment(DownloadService.self) private var downloadService
@@ -44,6 +45,7 @@ struct AlbumDetailMac: View {
             actions: trackActions,
             showArtist: hasMultipleArtists,
             showAlbum: false,
+            accent: settings.resolvedAccentColor,
             currentlyPlayingTrackId: player.currentTrack?.id,
             isPlaying: player.isPlaying,
             hidesColumnHeaders: true,
