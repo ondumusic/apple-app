@@ -210,9 +210,8 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         return rect.width > 0 && rect.height > 0 ? rect : nil
     }
 
-    /// Heights that the SwiftUI layout uses too — must match
-    /// `MiniPlayerContent.transportRowHeight` so snap geometry agrees with layout.
-    private static let transportRowHeight: CGFloat = 110
+    /// Snap geometry has to agree with the layout, so read it from the layout.
+    private static var transportRowHeight: CGFloat { MiniPlayerContent.transportRowHeight }
 }
 
 /// Three layout states purely driven by window height:
@@ -238,7 +237,10 @@ private struct MiniPlayerContent: View {
 
     /// Height reserved for the transport row's content area (title + controls +
     /// scrubber + padding). Used to compute the snap point and transport position.
-    static let transportRowHeight: CGFloat = 110
+    /// Must fit title, artist, the transport row, the elapsed/remaining labels and the
+    /// scrubber. Undersized, the row is pinned to the window's bottom edge and the
+    /// scrubber is clipped straight off it.
+    static let transportRowHeight: CGFloat = 126
     static let compactMaxHeight: CGFloat = 80
 
     var body: some View {

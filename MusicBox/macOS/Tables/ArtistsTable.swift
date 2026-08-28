@@ -46,6 +46,10 @@ final class ArtistsTableViewController: NSViewController {
         tableView.allowsMultipleSelection = false
         tableView.allowsEmptySelection = true
         tableView.backgroundColor = .clear
+        // A single column of left-aligned names needs a rail for the eye; without it the
+        // rows stop reading as discrete targets. Subtle, unlike the old heavy divider.
+        tableView.gridStyleMask = .solidHorizontalGridLineMask
+        tableView.gridColor = .separatorColor
         tableView.dataSource = self
         tableView.delegate = self
         tableView.target = self

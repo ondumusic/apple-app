@@ -35,6 +35,25 @@ final class AuthService {
 
     // MARK: - Auto-Login (optimistic)
 
+    /// How long the UI waits on the Keychain before showing the login form anyway.
+    /// A blocked read is indistinguishable from a slow one, and a window that stays
+    /// blank forever is the worse failure — the access prompt that blocks it can sit
+    /// behind other windows where the user never sees it.
+    private static let restoreTimeout: Duration = .seconds(3)
+
+    /// Restores the session, but stops gating the UI after `restoreTimeout` regardless.
+    /// If the read finishes later it still takes effect and the UI switches.
+    func beginSessionRestore() async {
+        let restore = Task { await restoreSession() }
+        let timeout = Task {
+            try? await Task.sleep(for: Self.restoreTimeout)
+            guard !Task.isCancelled else { return }
+            isRestoringSession = false
+        }
+        await restore.value
+        timeout.cancel()
+    }
+
     /// Reads the stored session back at launch. The Keychain work happens off the main
     /// thread: `SecItemCopyMatching` blocks on a locked keychain or an access prompt, and
     /// a stall on the main thread freezes the app before any window exists.

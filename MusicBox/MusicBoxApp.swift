@@ -147,7 +147,7 @@ struct MusicBoxApp: App {
                 }
             }
             .environment(auth)
-            .task { await auth.restoreSession() }
+            .task { await auth.beginSessionRestore() }
             .accentColor(settings.resolvedAccentColor)
             .onChange(of: settings.hapticsEnabled, initial: true) { _, enabled in
                 Haptics.isEnabled = enabled
