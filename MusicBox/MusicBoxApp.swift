@@ -228,13 +228,17 @@ struct MusicBoxApp: App {
                 Button("Mini Player") {
                     NotificationCenter.default.post(name: .toggleMiniPlayer, object: nil)
                 }
-                .keyboardShortcut("m", modifiers: .command)
+                // Cmd+M is Minimize on macOS and AppKit wins that fight; Music.app puts
+                // the mini player on Cmd+Shift+M.
+                .keyboardShortcut("m", modifiers: [.command, .shift])
             }
             CommandMenu("Controls") {
+                // No key equivalent here: a menu shortcut fires even while a text field
+                // has focus, so Space would toggle playback mid-search. MacOSContentView
+                // installs a local key monitor that can see the first responder instead.
                 Button("Play / Pause") {
                     NotificationCenter.default.post(name: .togglePlayPause, object: nil)
                 }
-                .keyboardShortcut(.space, modifiers: [])
             }
         }
         #endif

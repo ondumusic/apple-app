@@ -23,6 +23,8 @@ struct PlayerToolbar: ToolbarContent {
                     .foregroundStyle(player.isShuffled ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             }
             .help(player.isShuffled ? "Disable Shuffle" : "Shuffle")
+            .accessibilityLabel("Shuffle")
+            .accessibilityValue(player.isShuffled ? "On" : "Off")
             .disabled(player.queue.isEmpty)
 
             Button {
@@ -32,6 +34,8 @@ struct PlayerToolbar: ToolbarContent {
                     .foregroundStyle(player.repeatMode != .off ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             }
             .help(repeatHelp)
+            .accessibilityLabel("Repeat")
+            .accessibilityValue(repeatHelp)
             .disabled(player.queue.isEmpty)
 
             Button {
@@ -41,6 +45,7 @@ struct PlayerToolbar: ToolbarContent {
                     .foregroundStyle(showQueue ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             }
             .help("Queue")
+            .accessibilityLabel("Queue")
             .disabled(player.currentTrack == nil)
         }
     }
@@ -72,18 +77,21 @@ private struct TransportButtons: View {
             }
             .disabled(!player.canGoBack || player.currentTrack == nil)
             .help("Previous")
+            .accessibilityLabel("Previous")
 
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
             }
             .disabled(player.currentTrack == nil)
             .help(player.isPlaying ? "Pause" : "Play")
+            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
 
             Button { player.skip() } label: {
                 Image(systemName: "forward.fill")
             }
             .disabled(!player.canSkip || player.currentTrack == nil)
             .help("Next")
+            .accessibilityLabel("Next")
         }
     }
 }

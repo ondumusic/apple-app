@@ -79,7 +79,10 @@ struct ReplaceQueueConfirmation: ViewModifier {
         @Bindable var player = player
         content
             .alert("Replace Queue?", isPresented: $player.showReplaceQueueConfirmation) {
-                Button("Replace", role: .destructive) { player.confirmPlay() }
+                // Replacing the queue isn't destructive — nothing is lost that the user
+                // created — and it's the outcome they asked for, so it's the default.
+                Button("Replace") { player.confirmPlay() }
+                    .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) { player.cancelPlay() }
             } message: {
                 Text("This will replace your current queue and start new playback.")

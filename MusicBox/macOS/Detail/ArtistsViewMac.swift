@@ -11,6 +11,7 @@ struct ArtistsViewMac: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
+    @Environment(DownloadService.self) private var downloadService
 
     @State private var artists: [Artist] = []
     @State private var selectedArtistId: Artist.ID?
@@ -21,28 +22,16 @@ struct ArtistsViewMac: View {
         // nested NavigationSplitView had its own grey chrome problem. A regular HStack
         // sits cleanly inside the outer detail column.
         HStack(spacing: 0) {
-            List(selection: $selectedArtistId) {
-                ForEach(artists) { artist in
-                    HStack(spacing: 8) {
-                        Image(systemName: "music.mic")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 16, height: 16)
-                        Text(artist.name)
-                            .lineLimit(1)
-                    }
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
-                    .tag(artist.id as Artist.ID?)
-                    // Simultaneous so the List still takes the single click for selection.
-                    .simultaneousGesture(TapGesture(count: 2).onEnded { play(artist) })
-                    .contextMenu {
-                        ArtistContextMenuItems(artist: artist)
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+            ArtistsTable(
+                artists: artists,
+                selection: $selectedArtistId,
+                actions: .standard(
+                    player: player,
+                    musicLibrary: musicLibrary,
+                    network: network,
+                    downloadService: downloadService
+                )
+            )
             .background(.background)
             .frame(width: 240)
 
@@ -76,15 +65,6 @@ struct ArtistsViewMac: View {
                 pendingArtistSelection = nil
             }
         }
-    }
-
-    private func play(_ artist: Artist) {
-        let items = musicLibrary.albumsWithTracksForArtist(artist.id).flatMap { album in
-            (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
-        }
-        let available = musicLibrary.availableItems(items, isOnline: network.isOnline)
-        guard !available.isEmpty else { return }
-        player.requestPlay { player.playNow(queue: available) }
     }
 }
 #endif

@@ -24,6 +24,7 @@ struct MacOSContentView: View {
     @State private var searchText: String = ""
     @State private var miniPlayer: MiniPlayerWindowController?
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
+    @State private var spaceKeyMonitor: Any?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
@@ -102,6 +103,11 @@ struct MacOSContentView: View {
                 sidebarVisibility = .all
             }
         }
+        .onAppear { installSpaceKeyMonitor() }
+        .onDisappear {
+            if let spaceKeyMonitor { NSEvent.removeMonitor(spaceKeyMonitor) }
+            spaceKeyMonitor = nil
+        }
         .onReceive(NotificationCenter.default.publisher(for: .toggleMiniPlayer)) { _ in
             toggleMiniPlayer()
         }
@@ -124,6 +130,22 @@ struct MacOSContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .requestAddToPlaylist)) { notification in
             guard let ids = notification.object as? [UUID], !ids.isEmpty else { return }
             addToPlaylistTrackIds = ids
+        }
+    }
+
+    /// Space toggles playback, but only when nothing is taking text input. A menu key
+    /// equivalent can't make that distinction — it fires while the search field has
+    /// focus — and a bare `.keyboardShortcut` never arrives at all once a list is first
+    /// responder, because the list consumes the key first.
+    private func installSpaceKeyMonitor() {
+        guard spaceKeyMonitor == nil else { return }
+        spaceKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let spaceKeyCode: UInt16 = 49
+            guard event.keyCode == spaceKeyCode,
+                  event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
+                  !(NSApp.keyWindow?.firstResponder is NSText) else { return event }
+            NotificationCenter.default.post(name: .togglePlayPause, object: nil)
+            return nil
         }
     }
 
