@@ -9,6 +9,8 @@ struct ArtistsViewMac: View {
     @Binding var pendingArtistSelection: UUID?
 
     @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(PlayerService.self) private var player
+    @Environment(NetworkMonitor.self) private var network
 
     @State private var artists: [Artist] = []
     @State private var selectedArtistId: Artist.ID?
@@ -30,7 +32,10 @@ struct ArtistsViewMac: View {
                             .lineLimit(1)
                     }
                     .padding(.vertical, 4)
+                    .contentShape(Rectangle())
                     .tag(artist.id as Artist.ID?)
+                    // Simultaneous so the List still takes the single click for selection.
+                    .simultaneousGesture(TapGesture(count: 2).onEnded { play(artist) })
                     .contextMenu {
                         ArtistContextMenuItems(artist: artist)
                     }
@@ -71,6 +76,15 @@ struct ArtistsViewMac: View {
                 pendingArtistSelection = nil
             }
         }
+    }
+
+    private func play(_ artist: Artist) {
+        let items = musicLibrary.albumsWithTracksForArtist(artist.id).flatMap { album in
+            (album.tracks ?? []).map { QueueItem(track: $0, artworkURL: album.artworkUrl) }
+        }
+        let available = musicLibrary.availableItems(items, isOnline: network.isOnline)
+        guard !available.isEmpty else { return }
+        player.requestPlay { player.playNow(queue: available) }
     }
 }
 #endif
