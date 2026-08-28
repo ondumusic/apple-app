@@ -662,6 +662,7 @@ extension SidebarViewController: NSOutlineViewDelegate {
 
         let cell = outlineView.makeView(withIdentifier: SidebarCell.identifier, owner: nil) as? SidebarCell
             ?? SidebarCell()
+        cell.accentColor = accentNSColor
         cell.identifier = SidebarCell.identifier
         cell.renameDelegate = self
         let badge: Int? = {
@@ -869,6 +870,29 @@ extension SidebarViewController: NSMenuDelegate {
 private let indentationPerLevel: CGFloat = 8
 
 private final class SidebarCell: NSTableCellView {
+    /// The app accent, for icons. Unselected they'd otherwise render in the system
+    /// accent, which is the inconsistency the selection pill was fixing.
+    var accentColor: NSColor = .controlAccentColor { didSet { applyEmphasis() } }
+    private var isSectionHeader = false
+
+    /// The cell used to get white-on-selection for free from NSTableCellView, because
+    /// .sourceList told it when a row was highlighted. Drawing the pill ourselves means
+    /// nothing does — so react to the style the row view hands down.
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { applyEmphasis() }
+    }
+
+    private func applyEmphasis() {
+        let emphasized = backgroundStyle == .emphasized
+        if isSectionHeader {
+            label.textColor = .secondaryLabelColor
+            return
+        }
+        label.textColor = emphasized ? .alternateSelectedControlTextColor : .labelColor
+        icon.contentTintColor = emphasized ? .alternateSelectedControlTextColor : accentColor
+        badge.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
+    }
+
     static let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
 
     private let icon = NSImageView()
@@ -957,8 +981,10 @@ private final class SidebarCell: NSTableCellView {
         } else {
             badge.isHidden = true
         }
+        isSectionHeader = false
         switch node.kind {
         case .section(let title):
+            isSectionHeader = true
             label.stringValue = title.uppercased()
             label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
             label.textColor = .secondaryLabelColor
@@ -986,6 +1012,7 @@ private final class SidebarCell: NSTableCellView {
             representedPlaylistId = playlist.id
             label.isEditable = true   // editable so editColumn(...) starts inline edit
         }
+        applyEmphasis()
     }
 
     @objc fileprivate func commitRename(_ sender: NSTextField) {
@@ -1056,6 +1083,21 @@ protocol SidebarCellRenameDelegate: AnyObject {
 /// disagreeing with every other surface.
 private final class SidebarRowView: NSTableRowView {
     var selectionColor: NSColor = .selectedContentBackgroundColor
+
+    override var isSelected: Bool {
+        get { super.isSelected }
+        set {
+            guard newValue != super.isSelected else { return }
+            super.isSelected = newValue
+            // Repaint: without this the previous row keeps painting its pill, which is
+            // how several rows ended up looking selected at once.
+            needsDisplay = true
+            let style: NSView.BackgroundStyle = newValue ? .emphasized : .normal
+            for column in 0..<numberOfColumns {
+                (view(atColumn: column) as? NSTableCellView)?.backgroundStyle = style
+            }
+        }
+    }
 
     override var focusRingType: NSFocusRingType {
         get { .none }
