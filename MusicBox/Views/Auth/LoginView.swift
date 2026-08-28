@@ -126,17 +126,21 @@ struct LoginView: View {
                 Button {
                     submit()
                 } label: {
-                    Group {
-                        if auth.isLoading {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Text("Sign In")
-                                .fontWeight(.semibold)
+                    // Overlay rather than swap: a ProgressView and the label have
+                    // different intrinsic sizes, so branching between them resized
+                    // the button mid-submit.
+                    Text("Sign In")
+                        .fontWeight(.semibold)
+                        .opacity(auth.isLoading ? 0 : 1)
+                        .overlay {
+                            if auth.isLoading {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(.white)
+                            }
                         }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
                 }
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.roundedRectangle(radius: 10))
