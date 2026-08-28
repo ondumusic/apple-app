@@ -50,33 +50,52 @@ import Testing
         #expect(auth.storedUsername == "testuser")
     }
 
-    @Test func restoreSessionRequiresAllCredentials() {
+    @Test func restoreSessionRequiresAllCredentials() async {
         let auth = AuthService()
 
         // No credentials stored — should not restore
-        auth.restoreSession()
+        await auth.restoreSession()
         #expect(!auth.isLoggedIn)
 
         // Only serverURL — still not enough
         UserDefaults.standard.set("https://music.example.com/api", forKey: "serverURL")
-        auth.restoreSession()
+        await auth.restoreSession()
         #expect(!auth.isLoggedIn)
 
         // serverURL + token but no username needed for restore (username only for prefill)
         KeychainHelper.save("test_token", for: "sessionToken")
-        auth.restoreSession()
+        await auth.restoreSession()
         #expect(auth.isLoggedIn)
         #expect(auth.apiService?.sessionToken == "test_token")
     }
 
-    @Test func restoreSessionSetsBaseURL() {
+    @Test func restoreSessionSetsBaseURL() async {
         UserDefaults.standard.set("https://music.example.com/api", forKey: "serverURL")
         KeychainHelper.save("my_token", for: "sessionToken")
 
         let auth = AuthService()
-        auth.restoreSession()
+        await auth.restoreSession()
 
         #expect(auth.apiService?.baseURL.absoluteString == "https://music.example.com/api")
+    }
+
+    @Test func restoringFlagStartsTrueAndClearsAfterRestore() async {
+        let auth = AuthService()
+        #expect(auth.isRestoringSession)
+
+        await auth.restoreSession()
+
+        #expect(!auth.isRestoringSession)
+    }
+
+    @Test func restoringFlagClearsWhenThereIsNothingStored() async {
+        UserDefaults.standard.removeObject(forKey: "serverURL")
+        let auth = AuthService()
+
+        await auth.restoreSession()
+
+        #expect(!auth.isRestoringSession)
+        #expect(!auth.isLoggedIn)
     }
 
     @Test func logoutClearsState() {

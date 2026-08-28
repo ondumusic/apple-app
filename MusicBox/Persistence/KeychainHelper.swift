@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-enum KeychainHelper {
+nonisolated enum KeychainHelper {
     private static let service = "com.example.MusicBox"
 
     private static func baseQuery(for key: String) -> [String: Any] {

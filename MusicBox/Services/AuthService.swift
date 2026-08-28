@@ -11,6 +11,9 @@ final class AuthService {
     var isOffline = false
     var isSessionExpired = false
     var errorMessage: String?
+    /// True until the stored session has been read back at launch. Gates the UI so
+    /// `LoginView` doesn't flash before we know whether there's a token.
+    var isRestoringSession = true
 
     // MARK: - Storage Keys
 
@@ -32,15 +35,24 @@ final class AuthService {
 
     // MARK: - Auto-Login (optimistic)
 
-    func restoreSession() {
+    /// Reads the stored session back at launch. The Keychain work happens off the main
+    /// thread: `SecItemCopyMatching` blocks on a locked keychain or an access prompt, and
+    /// a stall on the main thread freezes the app before any window exists.
+    func restoreSession() async {
+        defer { isRestoringSession = false }
+
         guard let serverURLString = storedServerURL,
-              let serverURL = URL(string: serverURLString),
-              let token = KeychainHelper.load(key: Keys.sessionToken) else {
-            return
-        }
+              let serverURL = URL(string: serverURLString) else { return }
+
+        let key = Keys.sessionToken
+        guard let token = await Task.detached(priority: .userInitiated, operation: {
+            KeychainHelper.load(key: key)
+        }).value else { return }
 
         // Re-save to upgrade Keychain accessibility if needed (kSecAttrAccessibleAfterFirstUnlock)
-        KeychainHelper.save(token, for: Keys.sessionToken)
+        await Task.detached(priority: .utility, operation: {
+            KeychainHelper.save(token, for: key)
+        }).value
 
         // Optimistically set up the API service — UI renders immediately
         #if DEBUG
@@ -48,7 +60,7 @@ final class AuthService {
         #endif
         self.apiService = APIService(baseURL: serverURL, sessionToken: token)
 
-        // Validate in the background
+        // Validate in the background — the UI must not wait on the network.
         Task {
             await validateSession()
         }

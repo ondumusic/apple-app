@@ -106,30 +106,25 @@ struct MusicBoxApp: App {
 
         let auth = AuthService()
         auth.observeSessionExpiration()
-        auth.restoreSession()
         let settings = SettingsStore()
         let musicLibrary = try! MusicLibrary()
         let playbackCache = PlaybackCache(settings: settings)
-        let downloadService = DownloadService(musicLibrary: musicLibrary, settings: settings)
-        if let api = auth.apiService {
-            downloadService.configure(baseURL: api.baseURL, sessionToken: api.sessionToken)
-        }
         _auth = State(initialValue: auth)
         _settings = State(initialValue: settings)
         _musicLibrary = State(initialValue: musicLibrary)
         _playbackCache = State(initialValue: playbackCache)
-        _downloadService = State(initialValue: downloadService)
-        _player = State(initialValue: auth.apiService.map { PlayerService(api: $0, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache) })
-        let outbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
-        _outboxService = State(initialValue: outbox)
-        _syncService = State(initialValue: auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService, outbox: outbox) })
-        _playlistController = State(initialValue: outbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0, downloadService: downloadService) })
+        _downloadService = State(initialValue: DownloadService(musicLibrary: musicLibrary, settings: settings))
+        // The session is restored in a .task, so there's no API service yet — the
+        // apiService onChange builds the rest once it lands.
     }
 
     var body: some Scene {
         WindowGroup {
             Group {
-                if auth.isLoggedIn, let syncService, let player {
+                if auth.isRestoringSession {
+                    // A spinner would strobe — the Keychain read is normally milliseconds.
+                    Rectangle().fill(.background).ignoresSafeArea()
+                } else if auth.isLoggedIn, let syncService, let player {
                     ContentView()
                         .environment(musicLibrary)
                         .environment(settings)
@@ -152,6 +147,7 @@ struct MusicBoxApp: App {
                 }
             }
             .environment(auth)
+            .task { await auth.restoreSession() }
             .accentColor(settings.resolvedAccentColor)
             .onChange(of: settings.hapticsEnabled, initial: true) { _, enabled in
                 Haptics.isEnabled = enabled
@@ -197,7 +193,7 @@ struct MusicBoxApp: App {
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 if !auth.isLoggedIn {
                     // Retry restore — Keychain may have been inaccessible on prelaunch
-                    auth.restoreSession()
+                    Task { await auth.restoreSession() }
                 } else {
                     Task { await auth.validateSession() }
                 }
