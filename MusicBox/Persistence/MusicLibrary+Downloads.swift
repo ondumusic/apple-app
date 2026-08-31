@@ -165,6 +165,16 @@ extension MusicLibrary {
             .map { toAlbum($0, artistMap: artistMap) }
     }
 
+    /// Single write point for download-state changes. Patches the cached track list so a
+    /// later `allTracks()` doesn't serve pre-download flags, then notifies views.
+    func publishDownloadChange(_ changed: [UUID: Bool]) {
+        downloadChanged = changed
+        if var cached = cachedAllTracks {
+            applyDownloadChanges(to: &cached)
+            cachedAllTracks = cached
+        }
+    }
+
     func markDownloaded(trackId: UUID, relativePath: String, downloadedFileSize: Int64 = 0) {
         var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == trackId })
         descriptor.fetchLimit = 1
@@ -173,7 +183,7 @@ extension MusicLibrary {
         track.localFilePath = relativePath
         track.downloadedFileSize = downloadedFileSize
         persistChanges()
-        downloadChanged = [trackId: true]
+        publishDownloadChange([trackId: true])
     }
 
     func markUndownloaded(trackId: UUID) {
@@ -186,7 +196,7 @@ extension MusicLibrary {
         track.isDownloaded = false
         track.localFilePath = nil
         persistChanges()
-        downloadChanged = [trackId: false]
+        publishDownloadChange([trackId: false])
     }
 
     /// Bulk variant of `markUndownloaded(trackId:)` — the single-track version replaces
@@ -208,7 +218,7 @@ extension MusicLibrary {
             changed[track.serverId] = false
         }
         persistChanges()
-        downloadChanged = changed
+        publishDownloadChange(changed)
     }
 
     func markAlbumUndownloaded(albumId: UUID) {
@@ -224,7 +234,7 @@ extension MusicLibrary {
             changed[track.serverId] = false
         }
         persistChanges()
-        downloadChanged = changed
+        publishDownloadChange(changed)
     }
 
     func markArtistUndownloaded(artistId: UUID) {
@@ -240,7 +250,7 @@ extension MusicLibrary {
             changed[track.serverId] = false
         }
         persistChanges()
-        downloadChanged = changed
+        publishDownloadChange(changed)
     }
 
     func markAllUndownloaded() {
@@ -261,7 +271,7 @@ extension MusicLibrary {
             try? fm.removeItem(at: downloadsDir)
         }
         persistChanges()
-        downloadChanged = changed
+        publishDownloadChange(changed)
     }
 
     func downloadedFileURLs(albumId: UUID) -> [URL] {
@@ -321,7 +331,7 @@ extension MusicLibrary {
         }
 
         persistChanges()
-        downloadChanged = matched
+        publishDownloadChange(matched)
         #if DEBUG
         print("MusicLibrary: reconciled \(reclaimed)/\(entries.count) downloaded tracks after store reset")
         #endif

@@ -1,6 +1,11 @@
 import Foundation
 import SwiftData
 
+nonisolated struct TrackGroupKey: Hashable {
+    let albumArtistId: UUID
+    let albumId: UUID
+}
+
 @Observable
 final class MusicLibrary {
     @ObservationIgnored let modelContainer: ModelContainer
@@ -11,6 +16,11 @@ final class MusicLibrary {
     /// Cached maps — invalidated on revision bump to avoid repeated full table scans.
     @ObservationIgnored var cachedArtistMap: [UUID: LibraryArtist]?
     @ObservationIgnored var cachedAlbumMap: [UUID: LibraryAlbum]?
+
+    /// Cached result of `allTracks()`. Every navigation to the Songs list re-runs the
+    /// whole fetch-and-sort, which is the single most expensive query in the app at
+    /// library scale. Invalidated with the maps; download mutations patch it in place.
+    @ObservationIgnored var cachedAllTracks: [Track]?
 
     /// Track IDs whose download state changed, mapped to the new `isDownloaded` value.
     /// Views observe this to update in-place without re-querying SwiftData.
@@ -249,21 +259,40 @@ final class MusicLibrary {
 
     func allTracks() -> [Track] {
         _ = revision
+        if let cachedAllTracks { return cachedAllTracks }
         let libTracks = fetch(FetchDescriptor<LibraryTrack>()) ?? []
         let artistMap = buildArtistMap()
         let albumMap = buildAlbumMap()
-        return libTracks
-            .map { buildTrack($0, artistMap: artistMap, album: albumMap[$0.albumId]) }
-            .sorted { a, b in
-                let aSortName = artistMap[a.albumArtistId]?.sortName ?? ""
-                let bSortName = artistMap[b.albumArtistId]?.sortName ?? ""
-                if aSortName != bSortName { return aSortName < bSortName }
-                let aAlbum = albumMap[a.albumId]?.sortName ?? ""
-                let bAlbum = albumMap[b.albumId]?.sortName ?? ""
-                if aAlbum != bAlbum { return aAlbum.localizedStandardCompare(bAlbum) == .orderedAscending }
-                if a.disc != b.disc { return a.disc < b.disc }
-                return (a.number ?? Int.max) < (b.number ?? Int.max)
+
+        // Sorted per album rather than per track. The flat comparator paid four
+        // dictionary lookups plus a localized collation on every one of ~n log n
+        // comparisons, even though every track in an album shares both string keys —
+        // at library scale that collation dominated the whole call.
+        var groups: [TrackGroupKey: [LibraryTrack]] = [:]
+        for lt in libTracks {
+            groups[TrackGroupKey(albumArtistId: lt.albumArtistId, albumId: lt.albumId), default: []].append(lt)
+        }
+        let orderedKeys = groups.keys.sorted { a, b in
+            let aArtist = artistMap[a.albumArtistId]?.sortName ?? ""
+            let bArtist = artistMap[b.albumArtistId]?.sortName ?? ""
+            if aArtist != bArtist { return aArtist < bArtist }
+            let aAlbum = albumMap[a.albumId]?.sortName ?? ""
+            let bAlbum = albumMap[b.albumId]?.sortName ?? ""
+            return aAlbum.localizedStandardCompare(bAlbum) == .orderedAscending
+        }
+
+        var result: [Track] = []
+        result.reserveCapacity(libTracks.count)
+        for key in orderedKeys {
+            let album = albumMap[key.albumId]
+            let ordered = (groups[key] ?? []).sorted {
+                if $0.disc != $1.disc { return $0.disc < $1.disc }
+                return ($0.number ?? Int.max) < ($1.number ?? Int.max)
             }
+            for lt in ordered { result.append(buildTrack(lt, artistMap: artistMap, album: album)) }
+        }
+        cachedAllTracks = result
+        return result
     }
 
     // MARK: - Query: Playlists

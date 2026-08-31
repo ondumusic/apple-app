@@ -8,6 +8,7 @@ extension MusicLibrary {
     func bumpRevision() {
         cachedArtistMap = nil
         cachedAlbumMap = nil
+        cachedAllTracks = nil
         revision += 1
     }
 
@@ -203,6 +204,7 @@ extension MusicLibrary {
         persistChanges()
         cachedArtistMap = nil
         cachedAlbumMap = nil
+        cachedAllTracks = nil
         revision += 1
     }
 
