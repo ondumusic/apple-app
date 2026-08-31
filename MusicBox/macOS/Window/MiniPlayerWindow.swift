@@ -90,6 +90,15 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
             MainActor.assumeIsolated { Self.isTerminating = true }
         }
 
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main
+        ) { note in
+            MainActor.assumeIsolated {
+                guard let window = note.object as? NSWindow else { return }
+                Self.recordKeyWindowPreference(keyWindow: window, panel: panel)
+            }
+        }
+
         // Now that self exists we can wire the queue toggle through. Toggle is
         // intent-only — the controller decides expand vs collapse based on the
         // current window height, which keeps SwiftUI state in sync with reality
@@ -101,6 +110,21 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         .environment(state)
         .environment(settings)
         host.rootView = AnyView(content)
+    }
+
+    /// Remembers which of the two windows the user was last working in so relaunch can
+    /// restore the same one. Recorded when a window *becomes* key rather than inferred
+    /// from the panel resigning: at resignKey the incoming window isn't installed yet,
+    /// so NSApp.keyWindow reads nil and the hand-off goes unrecorded.
+    private static func recordKeyWindowPreference(keyWindow: NSWindow, panel: NSWindow) {
+        guard !isTerminating else { return }
+        guard keyWindow === panel || keyWindow.canBecomeMain else { return }
+        // On quit the main window goes away first and key falls to the panel, which
+        // would otherwise overwrite the preference with the opposite of what the user
+        // left. A hand-off only counts while there's still a main window to hand to.
+        guard NSApp.windows.contains(where: { $0 !== panel && $0.isVisible && $0.canBecomeMain })
+        else { return }
+        UserDefaults.standard.set(keyWindow === panel, forKey: lastKeyDefaultsKey)
     }
 
     /// Derives current queue-visibility from window height and flips it.
@@ -246,19 +270,6 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     /// is wide could only ever crop it into a meaningless band. Height below the artwork
     /// is what reveals the transport and queue; drag well past the artwork and the window
     /// collapses to the compact bar instead.
-    func windowDidBecomeKey(_ notification: Notification) { recordKeyWindowPreference() }
-    func windowDidResignKey(_ notification: Notification) { recordKeyWindowPreference() }
-
-    /// Deferred a tick: on a hand-off between the two windows the incoming one isn't key
-    /// yet when resignKey fires. Skipped while the app is inactive — there's no key
-    /// window then, and switching apps shouldn't count as leaving a window.
-    private func recordKeyWindowPreference() {
-        Task { @MainActor [weak self] in
-            guard let self, NSApp.isActive, let key = NSApp.keyWindow else { return }
-            UserDefaults.standard.set(key === self.window, forKey: Self.lastKeyDefaultsKey)
-        }
-    }
-
     nonisolated func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
         var size = frameSize
         let compactMax = MiniPlayerContent.compactMaxHeight
