@@ -9,6 +9,7 @@ struct ArtistsViewMac: View {
     @Binding var pendingArtistSelection: UUID?
 
     @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(SettingsStore.self) private var settings
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
     @Environment(DownloadService.self) private var downloadService
@@ -31,7 +32,8 @@ struct ArtistsViewMac: View {
                     musicLibrary: musicLibrary,
                     network: network,
                     downloadService: downloadService
-                )
+                ),
+                accent: settings.resolvedAccentColor
             )
             .background(.background)
             .frame(width: 240)

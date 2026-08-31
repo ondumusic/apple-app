@@ -350,7 +350,7 @@ final class TracksTableViewController: NSViewController {
         didSet {
             guard accentNSColor != oldValue, isViewLoaded else { return }
             tableView.enumerateAvailableRowViews { rowView, row in
-                (rowView as? EmbeddedRowView)?.selectionColor = accentNSColor
+                (rowView as? AccentSelectionRowView)?.selectionColor = accentNSColor
                 for column in 0..<rowView.numberOfColumns {
                     switch rowView.view(atColumn: column) {
                     case let cell as TitleCell: cell.accentColor = accentNSColor
@@ -387,7 +387,7 @@ final class TracksTableViewController: NSViewController {
             tableView.gridStyleMask = []
             tableView.intercellSpacing = .zero
             tableView.backgroundColor = .clear
-            // .none so EmbeddedRowView's accent pill paints; NSTableView draws both
+            // .none so AccentSelectionRowView's accent pill paints; NSTableView draws both
             // .regular and .sourceList selection itself and never delegates to a row
             // view's drawSelection, so either would cover the pill with the system
             // accent. Also suppress the focus ring AppKit paints around a right-clicked
@@ -534,7 +534,7 @@ final class TracksTableViewController: NSViewController {
     /// Adds (or removes) the leftmost spacer column based on whether we're in sections
     /// mode, which is only when there's an artwork overlay to reserve room for. The
     /// selection style itself is owned by applyEmbeddedStyle — it's `.none` either way
-    /// so EmbeddedRowView's accent pill is the only thing painting selection.
+    /// so AccentSelectionRowView's accent pill is the only thing painting selection.
     private func applySectionsColumns() {
         let needsSpacer = sections != nil && artworkBuilder != nil
         sectionsLeftInset = needsSpacer ? (artworkSize + 2 * artworkInset) : 0
@@ -805,7 +805,7 @@ extension TracksTableViewController: NSTableViewDelegate {
         // even when tableView.backgroundColor is .clear — that's the residual grey we
         // were seeing. Custom row view no-ops the draw so the parent shows through and
         // also paints the inter-row hairline divider.
-        let view = EmbeddedRowView()
+        let view = AccentSelectionRowView()
         view.selectionColor = accentNSColor
         guard isEmbedded else {
             // Standalone: no hairline — alternating row colours already separate the rows
@@ -1066,152 +1066,6 @@ extension TracksTableViewController: NSMenuDelegate {
 /// Embedded-mode row view that draws no backdrop. NSTableView's `backgroundColor = .clear`
 /// alone doesn't suppress the row-level backdrop the system paints under each row — this
 /// override is what actually makes the parent's color show through.
-private final class EmbeddedRowView: NSTableRowView {
-    /// Set by the delegate to skip the bottom hairline. Used for the final row,
-    /// section-header rows, and rows immediately above section headers — wherever the
-    /// divider would clash with the table's grouping or the row below.
-    var suppressDivider: Bool = false
-
-    override var focusRingType: NSFocusRingType {
-        get { .none }
-        set { /* ignore — pinned to .none so NSTableView's right-click target ring
-              doesn't paint a full-row outline ignoring our custom selection bounds. */ }
-    }
-
-    override var isSelected: Bool {
-        get { super.isSelected }
-        set {
-            super.isSelected = newValue
-            // Propagate emphasis to cells synchronously, before the pending row redraw,
-            // so cells' text flips to white in the same frame the pill appears (no flash
-            // from black to white during shift-range selection).
-            let style: NSView.BackgroundStyle = newValue ? .emphasized : .normal
-            for col in 0..<numberOfColumns {
-                if let cell = view(atColumn: col) as? NSTableCellView, cell.backgroundStyle != style {
-                    cell.backgroundStyle = style
-                }
-            }
-        }
-    }
-    /// When non-nil, NSTableView's native source-list selection pill is replaced with
-    /// a custom one that starts `customSelectionLeftInset` from the leading edge —
-    /// used in sections mode so the pill doesn't extend behind the artwork overlay.
-    var customSelectionLeftInset: CGFloat? = nil
-    /// Trailing inset used with `customSelectionLeftInset`. Mirrors source-list's ~16pt
-    /// trailing inset so the pill ends symmetrically.
-    var customSelectionRightInset: CGFloat = 16
-    /// The app accent rather than NSColor.selectedContentBackgroundColor, which follows
-    /// the system accent and left selection disagreeing with the rest of the UI.
-    var selectionColor: NSColor = .selectedContentBackgroundColor
-    /// Standalone tables use alternating row colours, which NSTableRowView paints in its
-    /// own drawBackground — our override has to defer to it or the stripes disappear.
-    var drawsRowBackground: Bool = false
-
-    override func drawBackground(in dirtyRect: NSRect) {
-        if drawsRowBackground {
-            super.drawBackground(in: dirtyRect)
-        }
-        // Custom selection pill — drawn in drawBackground because NSTableView's selection
-        // rendering happens at the table level (not delegated to the row's drawSelection)
-        // for both .regular and .sourceList highlight styles. We rely on selectionHighlight
-        // Style = .none on the table so nothing else paints over us.
-        if isSelected, let leftInset = customSelectionLeftInset {
-            drawCustomSelectionPill(leftInset: leftInset)
-        }
-        // Inter-row hairline. Skipped on suppressed rows, selected rows, and rows above
-        // a selected row so the pill stays clean.
-        guard !suppressDivider, !isSelected, !isNextRowSelected else { return }
-        let line = NSRect(x: bounds.minX + 8,
-                          y: bounds.maxY - 0.5,
-                          width: bounds.width - 16,
-                          height: 0.5)
-        NSColor.separatorColor.setFill()
-        line.fill()
-    }
-
-    override func drawSeparator(in dirtyRect: NSRect) {}
-
-    override func drawDraggingDestinationFeedback(in dirtyRect: NSRect) {
-        // Standalone tables support drag-to-reorder (playlists), so they need the drop
-        // indicator; embedded ones don't reorder and suppressed it deliberately.
-        guard drawsRowBackground else { return }
-        super.drawDraggingDestinationFeedback(in: dirtyRect)
-    }
-
-    /// Replace the default draw pipeline (which paints a full-row context-menu outline
-    /// when right-clicked) with just our background. Selection drawing is handled inside
-    /// drawBackground; other phases are no-ops above.
-    override func draw(_ dirtyRect: NSRect) {
-        if drawsRowBackground {
-            // Full pipeline: our drawBackground paints the pill, super handles the rest.
-            super.draw(dirtyRect)
-        } else {
-            drawBackground(in: dirtyRect)
-        }
-    }
-
-    /// Cells consult their row view's `interiorBackgroundStyle` to choose text colors.
-    /// With selectionHighlightStyle = .none, the default returns `.normal` even when
-    /// the row is selected — so cells draw black text. Override to surface the
-    /// emphasized state when the row carries a custom inset (sections mode).
-    override var interiorBackgroundStyle: NSView.BackgroundStyle {
-        if isSelected && customSelectionLeftInset != nil {
-            return .emphasized
-        }
-        return super.interiorBackgroundStyle
-    }
-
-    private func drawCustomSelectionPill(leftInset: CGFloat) {
-        let radius: CGFloat = 6
-        let topRadius: CGFloat = isPreviousRowSelected ? 0 : radius
-        let bottomRadius: CGFloat = isNextRowSelected ? 0 : radius
-        let rect = NSRect(
-            x: bounds.minX + leftInset,
-            y: bounds.minY,
-            width: max(0, bounds.width - leftInset - customSelectionRightInset),
-            height: bounds.height
-        )
-        guard rect.width > 0 else { return }
-        let path = roundedRectPath(rect, topRadius: topRadius, bottomRadius: bottomRadius)
-        selectionColor.setFill()
-        path.fill()
-    }
-
-    /// Rounded-rect with selectable corner radii on top/bottom — uses `appendArc(from:to:)`
-    /// so the geometry is correct in either flipped or non-flipped coordinate systems.
-    private func roundedRectPath(_ rect: NSRect, topRadius: CGFloat, bottomRadius: CGFloat) -> NSBezierPath {
-        let path = NSBezierPath()
-        let minX = rect.minX, maxX = rect.maxX, minY = rect.minY, maxY = rect.maxY
-        path.move(to: NSPoint(x: minX + topRadius, y: minY))
-        path.line(to: NSPoint(x: maxX - topRadius, y: minY))
-        if topRadius > 0 {
-            path.appendArc(from: NSPoint(x: maxX, y: minY),
-                           to: NSPoint(x: maxX, y: minY + topRadius),
-                           radius: topRadius)
-        }
-        path.line(to: NSPoint(x: maxX, y: maxY - bottomRadius))
-        if bottomRadius > 0 {
-            path.appendArc(from: NSPoint(x: maxX, y: maxY),
-                           to: NSPoint(x: maxX - bottomRadius, y: maxY),
-                           radius: bottomRadius)
-        }
-        path.line(to: NSPoint(x: minX + bottomRadius, y: maxY))
-        if bottomRadius > 0 {
-            path.appendArc(from: NSPoint(x: minX, y: maxY),
-                           to: NSPoint(x: minX, y: maxY - bottomRadius),
-                           radius: bottomRadius)
-        }
-        path.line(to: NSPoint(x: minX, y: minY + topRadius))
-        if topRadius > 0 {
-            path.appendArc(from: NSPoint(x: minX, y: minY),
-                           to: NSPoint(x: minX + topRadius, y: minY),
-                           radius: topRadius)
-        }
-        path.close()
-        return path
-    }
-}
-
 /// Group-row cell that hosts a SwiftUI view (album header). Used in sections mode so
 /// the caller can render the album title, artwork, action buttons via a familiar
 /// SwiftUI subview while the table itself stays AppKit.

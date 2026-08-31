@@ -9,9 +9,11 @@ struct ArtistsTable: NSViewControllerRepresentable {
     let artists: [Artist]
     @Binding var selection: Artist.ID?
     let actions: ArtistActions
+    let accent: Color
 
     func makeNSViewController(context: Context) -> ArtistsTableViewController {
         let vc = ArtistsTableViewController()
+        vc.accentNSColor = NSColor(accent)
         vc.actions = actions
         vc.onSelectionChange = { selection = $0 }
         vc.apply(artists: artists, selection: selection)
@@ -19,6 +21,7 @@ struct ArtistsTable: NSViewControllerRepresentable {
     }
 
     func updateNSViewController(_ vc: ArtistsTableViewController, context: Context) {
+        vc.accentNSColor = NSColor(accent)
         vc.actions = actions
         vc.onSelectionChange = { selection = $0 }
         vc.apply(artists: artists, selection: selection)
@@ -29,6 +32,15 @@ final class ArtistsTableViewController: NSViewController {
     fileprivate var artists: [Artist] = []
     var actions = ArtistActions()
     var onSelectionChange: ((Artist.ID?) -> Void)?
+    var accentNSColor: NSColor = .controlAccentColor {
+        didSet {
+            guard accentNSColor != oldValue, isViewLoaded else { return }
+            tableView.enumerateAvailableRowViews { rowView, _ in
+                (rowView as? AccentSelectionRowView)?.selectionColor = accentNSColor
+                rowView.needsDisplay = true
+            }
+        }
+    }
 
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
@@ -42,6 +54,9 @@ final class ArtistsTableViewController: NSViewController {
         tableView.addTableColumn(column)
         tableView.headerView = nil
         tableView.style = .inset
+        // .none so AccentSelectionRowView's pill is what paints — the default would
+        // draw the system accent over it, leaving this the one blue list in the app.
+        tableView.selectionHighlightStyle = .none
         tableView.rowHeight = 28
         tableView.allowsMultipleSelection = false
         tableView.allowsEmptySelection = true
@@ -129,12 +144,25 @@ extension ArtistsTableViewController: NSTableViewDelegate {
         return cell
     }
 
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        let view = AccentSelectionRowView()
+        view.selectionColor = accentNSColor
+        // Matches the 10pt margin `style = .inset` gives the rows; the row separators
+        // are NSTableView's own grid lines here, so no hairline of our own.
+        view.customSelectionLeftInset = 10
+        view.customSelectionRightInset = 10
+        view.suppressDivider = true
+        return view
+    }
+
     /// Gives NSTableView's built-in type-to-select something to match against.
     func tableView(_ tableView: NSTableView, typeSelectStringFor tableColumn: NSTableColumn?, row: Int) -> String? {
         artists.indices.contains(row) ? artists[row].name : nil
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
+        // selectionHighlightStyle = .none means NSTableView won't redraw rows itself.
+        tableView.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
         guard !isApplyingExternalSelection else { return }
         let row = tableView.selectedRow
         onSelectionChange?(artists.indices.contains(row) ? artists[row].id : nil)
