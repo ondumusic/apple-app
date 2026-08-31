@@ -124,7 +124,9 @@ struct MusicBoxApp: App {
             Group {
                 if auth.isRestoringSession {
                     // A spinner would strobe — the Keychain read is normally milliseconds.
+                    // The content cross-fades in rather than popping over this.
                     Rectangle().fill(.background).ignoresSafeArea()
+                        .transition(.opacity)
                 } else if auth.isLoggedIn, let syncService, let player {
                     ContentView()
                         .environment(musicLibrary)
@@ -148,6 +150,7 @@ struct MusicBoxApp: App {
                 }
             }
             .environment(auth)
+            .animation(.easeOut(duration: 0.18), value: auth.isRestoringSession)
             .task { await auth.beginSessionRestore() }
             .accentColor(settings.resolvedAccentColor)
             .onChange(of: settings.hapticsEnabled, initial: true) { _, enabled in

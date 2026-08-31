@@ -109,9 +109,12 @@ struct MacOSContentView: View {
         }
         .onAppear {
             installSpaceKeyMonitor()
-            // Reopen the mini player if it was showing when the app last quit.
+            // Reopen the mini player if it was showing when the app last quit — without
+            // taking key, so the main window stays the active one.
             if UserDefaults.standard.bool(forKey: MiniPlayerWindowController.visibleDefaultsKey) {
-                toggleMiniPlayer()
+                let mp = miniPlayer ?? MiniPlayerWindowController(player: player, settings: settings)
+                miniPlayer = mp
+                mp.showWithoutActivating()
             }
         }
         .onDisappear {

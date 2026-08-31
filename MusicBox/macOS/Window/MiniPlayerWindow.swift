@@ -113,6 +113,15 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
 
     var isVisible: Bool { window?.isVisible ?? false }
 
+    /// Restores the window at launch without taking key. showWindow(_:) makes it key and
+    /// front, which stole focus from the main window on every launch — and left its
+    /// toolbar rendering as an inactive window's.
+    func showWithoutActivating() {
+        guard let window else { return }
+        window.orderFront(nil)
+        UserDefaults.standard.set(true, forKey: Self.visibleDefaultsKey)
+    }
+
     func toggle() {
         if isVisible {
             close()
