@@ -12,6 +12,12 @@ struct AlbumSectionHeader: View {
     let onShuffle: () -> Void
     let onDownload: () -> Void
     let onCancelDownload: () -> Void
+    /// Distance from the table's left edge to the album title. In the split layout this
+    /// clears the artwork gutter; compact just insets from the edge.
+    var leadingInset: CGFloat = 240
+    /// Compact mode: no artwork gutter exists, so the header carries the cover and the
+    /// summary line that would otherwise sit under the overlay.
+    var inlineArtwork: Bool = false
 
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(DownloadService.self) private var downloadService
@@ -25,15 +31,31 @@ struct AlbumSectionHeader: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
+            if inlineArtwork {
+                NavigationLink(value: album) {
+                    ArtworkView(url: album.artworkUrl)
+                        .frame(width: 64, height: 64)
+                }
+                .buttonStyle(.plain)
+            }
             VStack(alignment: .leading, spacing: 4) {
                 Text(album.name)
                     .font(.title2.bold())
                     .lineLimit(2)
-                if let year = album.releaseYear {
-                    Text(String(year))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                Group {
+                    if inlineArtwork {
+                        if let year = album.releaseYear {
+                            Text("\(String(year)) · ") + albumSummary(album)
+                        } else {
+                            albumSummary(album)
+                        }
+                    } else if let year = album.releaseYear {
+                        Text(String(year))
+                    }
                 }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
             Spacer(minLength: 12)
             HStack(spacing: 8) {
@@ -62,10 +84,11 @@ struct AlbumSectionHeader: View {
             .buttonBorderShape(.circle)
             .controlSize(.large)
         }
-        // Push past the spacer column (artworkSize 160 + 2 × inset 20 = 200) AND past
-        // the number column (36) plus the title cell's leading text inset (4) — so the
-        // album title sits in the same x position as the track titles below.
-        .padding(.leading, 240)
+        // In the split layout this pushes past the spacer column (artworkSize 160 + 2 ×
+        // inset 20 = 200) AND past the number column (36) plus the title cell's leading
+        // text inset (4), so the album title sits in the same x position as the track
+        // titles below.
+        .padding(.leading, leadingInset)
         .padding(.trailing, 20)
         // Top padding matches artworkInset (20) so the title baseline aligns with the
         // top edge of the artwork.
@@ -74,25 +97,27 @@ struct AlbumSectionHeader: View {
     }
 }
 
+/// "12 songs, 44 min" — under the overlay artwork in the split layout, on the header's
+/// secondary line when compact.
+private func albumSummary(_ album: Album) -> Text {
+    let trackCount = album.tracks?.count ?? 0
+    let totalMinutes = Int(((album.tracks?.reduce(0) { $0 + $1.duration } ?? 0) / 60).rounded())
+    let duration: String
+    if totalMinutes >= 60 {
+        let hours = totalMinutes / 60
+        let mins = totalMinutes % 60
+        duration = mins == 0 ? "\(hours) hr" : "\(hours) hr \(mins) min"
+    } else {
+        duration = "\(max(1, totalMinutes)) min"
+    }
+    return Text("^[\(trackCount) song](inflect: true), \(duration)")
+}
+
 /// Album artwork rendered in the leftmost spacer-column area of TracksTable. Sized
 /// to match `artworkSize` × `artworkSize`; positioned by the table to anchor at the
 /// section's header row and extend down across the first few track rows.
 struct AlbumArtworkOverlay: View {
     let album: Album
-
-    private var trackCount: Int { album.tracks?.count ?? 0 }
-    private var totalDuration: TimeInterval {
-        album.tracks?.reduce(0) { $0 + $1.duration } ?? 0
-    }
-    private var formattedDuration: String {
-        let totalMinutes = Int((totalDuration / 60).rounded())
-        if totalMinutes >= 60 {
-            let hours = totalMinutes / 60
-            let mins = totalMinutes % 60
-            return mins == 0 ? "\(hours) hr" : "\(hours) hr \(mins) min"
-        }
-        return "\(max(1, totalMinutes)) min"
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -101,7 +126,7 @@ struct AlbumArtworkOverlay: View {
                     .frame(width: 160, height: 160)
             }
             .buttonStyle(.plain)
-            Text("^[\(trackCount) song](inflect: true), \(formattedDuration)")
+            albumSummary(album)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)

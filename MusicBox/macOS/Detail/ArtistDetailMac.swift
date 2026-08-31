@@ -14,6 +14,7 @@ struct ArtistDetailMac: View {
     /// Selection is hoisted up to the artist level so the single TracksTable can carry
     /// it across all album sections (cmd-click + shift-range work natively).
     @State private var selection: Set<UUID> = []
+    @State private var paneWidth: CGFloat = 0
 
     private var totalSongs: Int {
         albums.reduce(0) { $0 + ($1.tracks?.count ?? 0) }
@@ -54,7 +55,9 @@ struct ArtistDetailMac: View {
                             onPlay: { playAlbum(album, shuffle: false) },
                             onShuffle: { playAlbum(album, shuffle: true) },
                             onDownload: { downloadAlbum(album) },
-                            onCancelDownload: { cancelAlbumDownload(album) }
+                            onCancelDownload: { cancelAlbumDownload(album) },
+                            leadingInset: isCompact ? 20 : 240,
+                            inlineArtwork: isCompact
                         )
                         // Inject services so the header can reflect download state live —
                         // NSHostingView creates its own environment scope, so we need to
@@ -63,18 +66,28 @@ struct ArtistDetailMac: View {
                         .environment(downloadService)
                     )
                 },
-                sectionHeaderHeight: 80,
-                artwork: { album in
-                    AnyView(AlbumArtworkOverlay(album: album))
-                },
+                sectionHeaderHeight: isCompact ? 96 : 80,
+                artwork: artworkOverlay,
                 artworkSize: 160,
                 artworkInset: 20
             )
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { paneWidth = $0 }
         }
         .background(Color(NSColor.textBackgroundColor))
         .navigationTitle(artist.name)
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }
+    }
+
+    /// The split layout reserves a fixed 200pt for the artwork, which leaves the track
+    /// titles wrapping once the pane is narrow — and the artist list means the pane is a
+    /// lot narrower than the window. Below this the section header takes the cover
+    /// inline and the rows get the full width instead of a squeezed column.
+    private static let splitLayoutMinWidth: CGFloat = 640
+    private var isCompact: Bool { paneWidth > 0 && paneWidth < Self.splitLayoutMinWidth }
+
+    private var artworkOverlay: ((Album) -> AnyView)? {
+        isCompact ? nil : { album in AnyView(AlbumArtworkOverlay(album: album)) }
     }
 
     private var header: some View {

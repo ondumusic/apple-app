@@ -157,7 +157,16 @@ final class TracksTableViewController: NSViewController {
     private var sections: [TracksTableSection]? = nil
     var sectionHeaderBuilder: ((Album) -> AnyView)?
     var sectionHeaderHeight: CGFloat = 80
-    var artworkBuilder: ((Album) -> AnyView)?
+    /// Presence — not identity — decides whether the artwork gutter exists, and that
+    /// flip has to reach the columns even when the tracks themselves didn't change.
+    var artworkBuilder: ((Album) -> AnyView)? {
+        didSet {
+            guard isViewLoaded, (oldValue == nil) != (artworkBuilder == nil) else { return }
+            applySectionsColumns()
+            rebuildArtworkOverlays()
+            tableView.reloadData()
+        }
+    }
     var artworkSize: CGFloat = 120
     var artworkInset: CGFloat = 20
     /// One NSHostingView per album, keyed by album id. Subviews of `tableView` so they
@@ -168,6 +177,9 @@ final class TracksTableViewController: NSViewController {
     /// + 2 × artworkInset). Track row content starts here; the selection pill draws
     /// from here too. Computed from artworkSize/artworkInset on each layout.
     private var sectionsLeftInset: CGFloat = 0
+    /// Sections mode sets selectionHighlightStyle = .none and paints the pill itself, so
+    /// emphasis and redraws are our job. True with or without an artwork gutter.
+    private var drawsManualSelection = false
 
     private let spacerColumn = NSTableColumn(identifier: .init("sectionSpacer"))
     private let numberColumn = NSTableColumn(identifier: .init("number"))
@@ -517,13 +529,16 @@ final class TracksTableViewController: NSViewController {
     }
 
     /// Adds (or removes) the leftmost spacer column based on whether we're in sections
-    /// mode. The spacer reserves horizontal space for the artwork overlay so track row
-    /// content doesn't overlap it. Also flips selectionHighlightStyle to `.none` so the
-    /// native source-list pill (which paints full-width and ignores our `drawSelection`
-    /// override) gets out of our way — EmbeddedRowView draws the inset pill itself.
+    /// mode, which is only when there's an artwork overlay to reserve room for. Sections
+    /// mode also flips selectionHighlightStyle to `.none` — NSTableView paints both
+    /// `.regular` and `.sourceList` selection itself and never delegates to a row view's
+    /// `drawSelection`, so with `.none` it tracks selection but draws nothing and
+    /// EmbeddedRowView paints the accent pill instead.
     private func applySectionsColumns() {
-        let needsSpacer = sections != nil && artworkBuilder != nil
+        let isSectioned = sections != nil
+        let needsSpacer = isSectioned && artworkBuilder != nil
         sectionsLeftInset = needsSpacer ? (artworkSize + 2 * artworkInset) : 0
+        drawsManualSelection = isSectioned
         if needsSpacer {
             spacerColumn.title = ""
             spacerColumn.minWidth = sectionsLeftInset
@@ -536,19 +551,16 @@ final class TracksTableViewController: NSViewController {
             if let idx = tableView.tableColumns.firstIndex(of: spacerColumn), idx != 0 {
                 tableView.moveColumn(idx, toColumn: 0)
             }
-            // .none — NSTableView paints both .regular and .sourceList selection itself
-            // and never delegates to row view's drawSelection. With .none, NSTableView
-            // tracks selection state but draws nothing; EmbeddedRowView's drawBackground
-            // paints the inset pill manually.
+        } else if tableView.tableColumns.contains(spacerColumn) {
+            tableView.removeTableColumn(spacerColumn)
+        }
+        if isSectioned {
             tableView.selectionHighlightStyle = .none
             // Suppress the focus ring NSTableView paints around right-clicked rows —
             // it ignores our row-level draw overrides and would span the artwork zone.
             tableView.focusRingType = .none
             scrollView.focusRingType = .none
         } else {
-            if tableView.tableColumns.contains(spacerColumn) {
-                tableView.removeTableColumn(spacerColumn)
-            }
             tableView.selectionHighlightStyle = isEmbedded ? .sourceList : .regular
         }
     }
@@ -556,7 +568,7 @@ final class TracksTableViewController: NSViewController {
     /// Creates / updates / removes one NSHostingView per album for the artwork overlay.
     /// Positioning happens in viewDidLayout once row frames are known.
     private func rebuildArtworkOverlays() {
-        let activeIds = Set(sections?.map(\.id) ?? [])
+        let activeIds = artworkBuilder == nil ? [] : Set(sections?.map(\.id) ?? [])
         for (id, view) in artworkOverlays where !activeIds.contains(id) {
             view.removeFromSuperview()
             artworkOverlays.removeValue(forKey: id)
@@ -823,6 +835,11 @@ extension TracksTableViewController: NSTableViewDelegate {
         // the +16, the pill extends 16pt back into the artwork zone.
         if sectionsLeftInset > 0 {
             view.customSelectionLeftInset = sectionsLeftInset + 16
+        } else if drawsManualSelection {
+            // No artwork gutter to clear, so the pill runs the full row width — the
+            // leading track number would otherwise fall outside an inset pill.
+            view.customSelectionLeftInset = 0
+            view.customSelectionRightInset = 0
         }
         return view
     }
@@ -853,7 +870,7 @@ extension TracksTableViewController: NSTableViewDelegate {
         // sections mode uses selectionHighlightStyle = .none, so NSTableView doesn't
         // propagate emphasis to cells. Set it explicitly based on the row's selection
         // state so cells flip text colors correctly even after scroll-recycle.
-        let emphasized = sectionsLeftInset > 0 && tableView.selectedRowIndexes.contains(row)
+        let emphasized = drawsManualSelection && tableView.selectedRowIndexes.contains(row)
         let cellStyle: NSView.BackgroundStyle = emphasized ? .emphasized : .normal
 
         // Spacer column (sections mode): empty cell — the artwork overlay paints over
@@ -939,7 +956,7 @@ extension TracksTableViewController: NSTableViewDelegate {
         // rows on selection changes and not to flip cell backgroundStyle to .emphasized.
         // Both jobs fall to us: trigger the redraw and propagate emphasis to cells so
         // their text colors flip to white.
-        if sectionsLeftInset > 0 {
+        if drawsManualSelection {
             tableView.enumerateAvailableRowViews { rowView, _ in
                 rowView.needsDisplay = true
                 let style: NSView.BackgroundStyle = rowView.isSelected ? .emphasized : .normal
