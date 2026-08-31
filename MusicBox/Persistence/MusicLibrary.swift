@@ -216,6 +216,25 @@ final class MusicLibrary {
 
     // MARK: - Query: Tracks
 
+    /// Resolves many tracks in one fetch, keyed by id. Restoring a saved queue used to
+    /// call `track(_:)` per id — a fetch each, plus an artist and album lookup each —
+    /// which put hundreds of round trips on the main thread during launch.
+    func tracks(ids: [UUID]) -> [UUID: Track] {
+        _ = revision
+        guard !ids.isEmpty else { return [:] }
+        let wanted = Array(Set(ids))
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { wanted.contains($0.serverId) })
+        let libTracks = fetch(descriptor) ?? []
+        let artistIds = Set(libTracks.map(\.artistId) + libTracks.map(\.albumArtistId))
+        let artistMap = buildArtistMapForIds(artistIds)
+        let albumMap = buildAlbumMap()
+        var byId: [UUID: Track] = [:]
+        for lt in libTracks {
+            byId[lt.serverId] = buildTrack(lt, artistMap: artistMap, album: albumMap[lt.albumId])
+        }
+        return byId
+    }
+
     func tracksForAlbum(_ albumId: UUID) -> [Track] {
         _ = revision
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId })

@@ -634,3 +634,37 @@ struct PlayerReplaceQueueTests {
         #expect(player.isQueueUserModified)
     }
 }
+
+// MARK: - Up Next Ordering
+
+struct PlayerUpNextTests {
+
+    @Test func unshuffledUpNextFollowsQueueOrder() {
+        let player = makePlayer()
+        let items = (1...5).map { makeQueueItem(name: "T\($0)") }
+        player.playNow(queue: items, startingAt: 1)
+
+        #expect(player.upNextEntries.map(\.originalIndex) == [2, 3, 4])
+    }
+
+    /// The bug this covers: walking the raw queue and comparing against effectiveIndex
+    /// dropped everything shuffle had placed before the current track.
+    @Test func shuffledUpNextFollowsPlayOrderAndKeepsEveryTrack() {
+        let player = makePlayer()
+        let items = (1...5).map { makeQueueItem(name: "T\($0)") }
+        player.playNow(queue: items, startingAt: 0)
+        player.shuffledIndices = [3, 0, 4, 1, 2]
+        player.currentIndex = 0
+
+        // Everything after position 0 in play order — not queue positions after index 3.
+        #expect(player.upNextEntries.map(\.originalIndex) == [0, 4, 1, 2])
+        #expect(player.upNextEntries.count == items.count - 1)
+    }
+
+    @Test func upNextIsEmptyOnTheLastTrack() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B")], startingAt: 1)
+
+        #expect(player.upNextEntries.isEmpty)
+    }
+}

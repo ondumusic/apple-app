@@ -65,6 +65,26 @@ final class PlayerService {
 
     var isShuffled: Bool { shuffledIndices != nil }
 
+    /// Everything queued after the current track, in the order it will actually play —
+    /// which is the shuffled order when shuffle is on. Walking the raw queue and
+    /// comparing against `effectiveIndex` instead drops whatever shuffle placed earlier
+    /// and lists the rest in the wrong order.
+    var upNextEntries: [(originalIndex: Int, item: QueueItem)] {
+        guard !queue.isEmpty, currentIndex >= 0 else { return [] }
+        let start = currentIndex + 1
+        guard start < queue.count else { return [] }
+        return (start..<queue.count).compactMap { position in
+            let effective: Int
+            if let shuffled = shuffledIndices, position < shuffled.count {
+                effective = shuffled[position]
+            } else {
+                effective = position
+            }
+            guard queue.indices.contains(effective) else { return nil }
+            return (effective, queue[effective])
+        }
+    }
+
     // MARK: - Private
 
     @ObservationIgnored private var api: APIService
@@ -975,7 +995,8 @@ final class PlayerService {
     private func restoreState() {
         guard let musicLibrary, let state = stateStore.load(), !state.trackIds.isEmpty else { return }
 
-        let tracks = state.trackIds.compactMap { musicLibrary.track($0) }
+        let byId = musicLibrary.tracks(ids: state.trackIds)
+        let tracks = state.trackIds.compactMap { byId[$0] }
         // A partial restore would shift every index, including the shuffle order. The
         // snapshot is a convenience, so drop it rather than reconstruct a different queue.
         guard tracks.count == state.trackIds.count else { return }

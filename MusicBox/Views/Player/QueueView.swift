@@ -137,22 +137,7 @@ struct QueueView: View {
         return player.queue[idx].artworkURL
     }
 
-    private var upNextItems: [QueueItem] {
-        guard !player.queue.isEmpty else { return [] }
-        let count = player.queue.count
-        var items: [QueueItem] = []
-        for i in (player.currentIndex + 1)..<count {
-            let effective: Int
-            if let shuffled = player.shuffledIndices, i < shuffled.count {
-                effective = shuffled[i]
-            } else {
-                effective = i
-            }
-            guard effective < player.queue.count else { continue }
-            items.append(player.queue[effective])
-        }
-        return items
-    }
+    private var upNextItems: [QueueItem] { player.upNextEntries.map(\.item) }
 
     @ViewBuilder
     private func queueRow(track: Track, artworkURL: URL?, isActive: Bool) -> some View {

@@ -296,11 +296,7 @@ struct QueuePanel: View {
     @Environment(PlayerService.self) private var player
     @Binding var isPresented: Bool
 
-    private var upNext: [(originalIndex: Int, item: QueueItem)] {
-        let current = player.effectiveIndex
-        return player.queue.enumerated()
-            .compactMap { current >= 0 && $0.offset > current ? ($0.offset, $0.element) : nil }
-    }
+    private var upNext: [(originalIndex: Int, item: QueueItem)] { player.upNextEntries }
 
     var body: some View {
         VStack(spacing: 0) {
