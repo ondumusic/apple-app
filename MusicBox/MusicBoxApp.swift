@@ -123,9 +123,7 @@ struct MusicBoxApp: App {
     private var rootView: some View {
             Group {
                 if auth.isRestoringSession {
-                    // A spinner would strobe — the Keychain read is normally milliseconds.
-                    // The content cross-fades in rather than popping over this.
-                    Rectangle().fill(.background).ignoresSafeArea()
+                    LaunchPlaceholder()
                         .transition(.opacity)
                 } else if auth.isLoggedIn, let syncService, let player {
                     ContentView()
@@ -145,8 +143,9 @@ struct MusicBoxApp: App {
                         LoginView()
                     }
                 } else {
-                    // auth.isLoggedIn but services not yet initialized
-                    ProgressView()
+                    // Logged in, services still coming up — same placeholder rather than a
+                    // bare spinner, so the window doesn't change shape twice.
+                    LaunchPlaceholder()
                 }
             }
             .environment(auth)
@@ -354,4 +353,40 @@ private struct ReopenMainWindowButton: View {
 }
 #endif
 
-
+#if os(macOS)
+/// Stands in for the window's chrome while the session restores and services come up.
+/// An empty window reads as a hang; the app's own shape reads as loading.
+private struct LaunchPlaceholder: View {
+    var body: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(.quaternary.opacity(0.5))
+                .frame(width: 240)
+                .overlay(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(.quaternary)
+                            .frame(height: 22)
+                        ForEach(0..<4, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(.quaternary.opacity(0.7))
+                                .frame(height: 14)
+                                .padding(.trailing, 60)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 14)
+                }
+            Divider()
+            Rectangle().fill(.background)
+        }
+        .ignoresSafeArea()
+    }
+}
+#else
+private struct LaunchPlaceholder: View {
+    var body: some View {
+        Rectangle().fill(.background).ignoresSafeArea()
+    }
+}
+#endif

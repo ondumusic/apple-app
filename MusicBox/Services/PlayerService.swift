@@ -110,6 +110,8 @@ final class PlayerService {
     @ObservationIgnored private var isLoadingTrack: Bool = false
     @ObservationIgnored private var itemStatusObservation: NSKeyValueObservation?
     @ObservationIgnored private var stallWatchdog: Task<Void, Never>?
+    /// The deferred queue restore. Exposed so tests can await it — the app never needs to.
+    @ObservationIgnored private(set) var restoreTask: Task<Void, Never>?
     /// How long a remote item may sit un-ready before we call it failed. A rejected token
     /// produces no error and no timeout of its own — it simply never becomes ready.
     private static let stallTimeout: TimeInterval = 15
@@ -158,7 +160,9 @@ final class PlayerService {
         setupEndObserver()
         setupAudioSession()
         setupRemoteCommands()
-        restoreState()
+        // Off the first-frame path: nothing on screen needs the saved queue, and
+        // resolving it here made launch scale with however many tracks were queued.
+        restoreTask = Task { @MainActor [weak self] in self?.restoreState() }
     }
 
     private func applyVolume() {

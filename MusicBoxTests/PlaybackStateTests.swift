@@ -95,7 +95,7 @@ struct PlaybackStateStoreTests {
 @Suite(.serialized)
 struct PlayerStateRestoreTests {
 
-    @Test func restoresQueueAndPositionOnLaunch() throws {
+    @Test func restoresQueueAndPositionOnLaunch() async throws {
         let lib = try makeTestLibrary()
         let ids = seedTracks(lib, count: 4)
         let store = makeStore()
@@ -103,6 +103,7 @@ struct PlayerStateRestoreTests {
         store.savePosition(PlaybackPosition(trackId: ids[2], elapsed: 61))
 
         let player = makePlayer(library: lib, store: store)
+        await player.restoreTask?.value
 
         #expect(player.queue.map(\.track.id) == ids)
         #expect(player.currentIndex == 2)
@@ -111,7 +112,7 @@ struct PlayerStateRestoreTests {
         #expect(!player.isPlaying)
     }
 
-    @Test func ignoresAPositionBelongingToADifferentTrack() throws {
+    @Test func ignoresAPositionBelongingToADifferentTrack() async throws {
         let lib = try makeTestLibrary()
         let ids = seedTracks(lib, count: 3)
         let store = makeStore()
@@ -119,64 +120,70 @@ struct PlayerStateRestoreTests {
         store.savePosition(PlaybackPosition(trackId: ids[2], elapsed: 90))
 
         let player = makePlayer(library: lib, store: store)
+        await player.restoreTask?.value
 
         #expect(player.currentTrack?.id == ids[0])
         #expect(player.progress == 0)
     }
 
-    @Test func restoresShuffleOrder() throws {
+    @Test func restoresShuffleOrder() async throws {
         let lib = try makeTestLibrary()
         let ids = seedTracks(lib, count: 3)
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids, currentIndex: 0, shuffledIndices: [2, 0, 1]))
 
         let player = makePlayer(library: lib, store: store)
+        await player.restoreTask?.value
 
         #expect(player.shuffledIndices == [2, 0, 1])
         #expect(player.currentTrack?.id == ids[2])
     }
 
-    @Test func dropsSnapshotWhenATrackNoLongerExists() throws {
+    @Test func dropsSnapshotWhenATrackNoLongerExists() async throws {
         let lib = try makeTestLibrary()
         let ids = seedTracks(lib, count: 2)
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids + [UUID()], currentIndex: 0, shuffledIndices: nil))
 
         let player = makePlayer(library: lib, store: store)
+        await player.restoreTask?.value
 
         #expect(player.queue.isEmpty)
         #expect(player.currentTrack == nil)
     }
 
-    @Test func ignoresShuffleOrderThatNoLongerMatchesTheQueue() throws {
+    @Test func ignoresShuffleOrderThatNoLongerMatchesTheQueue() async throws {
         let lib = try makeTestLibrary()
         let ids = seedTracks(lib, count: 3)
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids, currentIndex: 0, shuffledIndices: [1, 0]))
 
         let player = makePlayer(library: lib, store: store)
+        await player.restoreTask?.value
 
         #expect(player.shuffledIndices == nil)
         #expect(player.queue.count == 3)
     }
 
-    @Test func clampsAnOutOfRangeIndex() throws {
+    @Test func clampsAnOutOfRangeIndex() async throws {
         let lib = try makeTestLibrary()
         let ids = seedTracks(lib, count: 2)
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids, currentIndex: 99, shuffledIndices: nil))
 
         let player = makePlayer(library: lib, store: store)
+        await player.restoreTask?.value
 
         #expect(player.currentIndex == 1)
         #expect(player.currentTrack?.id == ids[1])
     }
 
-    @Test func restoresNothingWithoutALibrary() {
+    @Test func restoresNothingWithoutALibrary() async {
         let store = makeStore()
         store.save(PlaybackState(trackIds: [UUID()], currentIndex: 0, shuffledIndices: nil))
 
         let player = makePlayer(library: nil, store: store)
+        await player.restoreTask?.value
 
         #expect(player.queue.isEmpty)
     }
@@ -187,11 +194,12 @@ struct PlayerStateRestoreTests {
 @Suite(.serialized)
 struct PlayerStateSaveTests {
 
-    @Test func savesTheQueueOnMutation() throws {
+    @Test func savesTheQueueOnMutation() async throws {
         let lib = try makeTestLibrary()
         let ids = seedTracks(lib, count: 3)
         let store = makeStore()
         let player = makePlayer(library: lib, store: store)
+        await player.restoreTask?.value
 
         player.playNext(queue: ids.compactMap { lib.track($0) }.map { QueueItem(track: $0) })
 
@@ -199,7 +207,7 @@ struct PlayerStateSaveTests {
         #expect(saved?.trackIds == ids)
     }
 
-    @Test func anEmptyQueueLeavesTheLastSnapshotAlone() throws {
+    @Test func anEmptyQueueLeavesTheLastSnapshotAlone() async throws {
         let lib = try makeTestLibrary()
         let ids = seedTracks(lib, count: 2)
         let store = makeStore()
@@ -207,17 +215,19 @@ struct PlayerStateSaveTests {
         store.save(state)
 
         let player = makePlayer(library: nil, store: store)
+        await player.restoreTask?.value
         player.savePlaybackState()
 
         #expect(store.load() == state)
     }
 
-    @Test func savedShuffleOrderSurvivesAToggle() throws {
+    @Test func savedShuffleOrderSurvivesAToggle() async throws {
         let lib = try makeTestLibrary()
         let ids = seedTracks(lib, count: 5)
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids, currentIndex: 0, shuffledIndices: nil))
         let player = makePlayer(library: lib, store: store)
+        await player.restoreTask?.value
 
         player.toggleShuffle()
 
