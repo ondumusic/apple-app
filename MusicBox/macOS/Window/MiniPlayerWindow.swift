@@ -32,6 +32,9 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     private static let frameDefaultsKey = "MiniPlayerWindowFrame"
     /// Whether the mini player was open when the app last quit.
     static let visibleDefaultsKey = "MiniPlayerWindowVisible"
+    /// Whether the mini player — rather than the main window — was the one the user was
+    /// last working in. Relaunch restores key to whichever it was.
+    static let lastKeyDefaultsKey = "MiniPlayerWasLastKeyWindow"
     private static var isTerminating = false
     /// Default frame — square (width × width), which puts the user in overlay mode
     /// where the artwork dominates and transport overlays at the bottom.
@@ -243,6 +246,19 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     /// is wide could only ever crop it into a meaningless band. Height below the artwork
     /// is what reveals the transport and queue; drag well past the artwork and the window
     /// collapses to the compact bar instead.
+    func windowDidBecomeKey(_ notification: Notification) { recordKeyWindowPreference() }
+    func windowDidResignKey(_ notification: Notification) { recordKeyWindowPreference() }
+
+    /// Deferred a tick: on a hand-off between the two windows the incoming one isn't key
+    /// yet when resignKey fires. Skipped while the app is inactive — there's no key
+    /// window then, and switching apps shouldn't count as leaving a window.
+    private func recordKeyWindowPreference() {
+        Task { @MainActor [weak self] in
+            guard let self, NSApp.isActive, let key = NSApp.keyWindow else { return }
+            UserDefaults.standard.set(key === self.window, forKey: Self.lastKeyDefaultsKey)
+        }
+    }
+
     nonisolated func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
         var size = frameSize
         let compactMax = MiniPlayerContent.compactMaxHeight
@@ -398,6 +414,7 @@ private struct UnifiedLayout: View {
             artwork
                 .frame(width: width, height: artworkHeight)
                 .clipped()
+                .gesture(WindowDragGesture())
             // Transport (and any revealed queue) positioned absolutely via a leading
             // VStack with a top spacer.
             VStack(spacing: 0) {
@@ -407,9 +424,11 @@ private struct UnifiedLayout: View {
                     isQueueVisible: isQueueVisible,
                     onQueueToggleRequest: onQueueToggleRequest
                 )
-                .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
                 .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity,
+                        minHeight: MiniPlayerContent.transportRowHeight,
+                        maxHeight: MiniPlayerContent.transportRowHeight)
                 .background(transportBackground)
                 .opacity(transportVisible ? 1 : 0)
                 .animation(.easeInOut(duration: 0.18), value: transportVisible)
@@ -443,9 +462,9 @@ private struct UnifiedLayout: View {
             // appearance and keeps the (black) text legible without obscuring the
             // image too aggressively. Black-on-material reads in both modes so the
             // controls don't visually flicker color when the snap happens.
-            Rectangle().fill(.regularMaterial)
+            Rectangle().fill(.regularMaterial).gesture(WindowDragGesture())
         } else {
-            Color(NSColor.windowBackgroundColor)
+            Color(NSColor.windowBackgroundColor).gesture(WindowDragGesture())
         }
     }
 
