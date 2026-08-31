@@ -109,13 +109,12 @@ struct MacOSContentView: View {
         }
         .onAppear {
             installSpaceKeyMonitor()
-            // Reopen the mini player if it was showing when the app last quit — without
-            // taking key, so the main window stays the active one.
+            // Reopen the mini player if it was showing when the app last quit, in
+            // whichever z-order and focus the user left the two windows in.
             if UserDefaults.standard.bool(forKey: MiniPlayerWindowController.visibleDefaultsKey) {
                 let mp = miniPlayer ?? MiniPlayerWindowController(player: player, settings: settings)
                 miniPlayer = mp
-                mp.showWithoutActivating()
-                restoreLastKeyWindow(miniPlayer: mp)
+                mp.restoreAtLaunch()
             }
         }
         .onDisappear {
@@ -196,19 +195,6 @@ struct MacOSContentView: View {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             post(tempId)
-        }
-    }
-
-    /// Ordering the mini player front at launch also makes it the window macOS hands key
-    /// to on the first activation. Hand focus back to whichever window the user left it
-    /// on. Deferred a tick so it runs after the window ordering above has settled.
-    private func restoreLastKeyWindow(miniPlayer mp: MiniPlayerWindowController) {
-        let wantsMiniPlayer = UserDefaults.standard.bool(forKey: MiniPlayerWindowController.lastKeyDefaultsKey)
-        Task { @MainActor in
-            let target = wantsMiniPlayer
-                ? mp.window
-                : NSApp.windows.first { $0 !== mp.window && $0.isVisible && $0.canBecomeMain }
-            target?.makeKeyAndOrderFront(nil)
         }
     }
 

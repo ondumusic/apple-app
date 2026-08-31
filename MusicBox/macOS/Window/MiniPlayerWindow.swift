@@ -140,13 +140,28 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
 
     var isVisible: Bool { window?.isVisible ?? false }
 
-    /// Restores the window at launch without taking key. showWindow(_:) makes it key and
-    /// front, which stole focus from the main window on every launch — and left its
+    /// Restores the window at launch in the z-order and focus the user left it in.
+    ///
+    /// Deferred a tick so the main window is on screen to order against. Ordering the
+    /// panel front and raising the main window afterwards put the mini player up front on
+    /// every single launch and then visibly flipped; going straight in behind the main
+    /// window means there's nothing to correct. showWindow(_:) is no good either — it
+    /// makes the panel key and front, stealing focus and leaving the main window's
     /// toolbar rendering as an inactive window's.
-    func showWithoutActivating() {
-        guard let window else { return }
-        window.orderFront(nil)
-        UserDefaults.standard.set(true, forKey: Self.visibleDefaultsKey)
+    func restoreAtLaunch() {
+        Task { @MainActor [weak self] in
+            guard let self, let window = self.window else { return }
+            UserDefaults.standard.set(true, forKey: Self.visibleDefaultsKey)
+            if UserDefaults.standard.bool(forKey: Self.lastKeyDefaultsKey) {
+                window.makeKeyAndOrderFront(nil)
+            } else if let main = NSApp.windows.first(where: {
+                $0 !== window && $0.isVisible && $0.canBecomeMain
+            }) {
+                window.order(.below, relativeTo: main.windowNumber)
+            } else {
+                window.orderFront(nil)
+            }
+        }
     }
 
     func toggle() {
