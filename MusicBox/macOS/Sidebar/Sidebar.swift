@@ -860,12 +860,8 @@ extension SidebarViewController: NSMenuDelegate {
     }
 
     @objc private func menuRename(_ sender: NSMenuItem) {
-        guard let playlist = sender.representedObject as? Playlist,
-              let row = rowForSelection(.playlist(playlist.id))
-        else { return }
-        // Programmatic edit uses NSOutlineView's built-in inline editor on the outline
-        // column. Cell rendering already gave the textField isEditable = true.
-        outlineView.editColumn(0, row: row, with: nil, select: true)
+        guard let playlist = sender.representedObject as? Playlist else { return }
+        startInlineRename(playlistId: playlist.id)
     }
 
     @objc private func menuDelete(_ sender: NSMenuItem) {
@@ -992,6 +988,7 @@ private final class SidebarCell: NSTableCellView {
             badge.isHidden = true
         }
         isSectionHeader = false
+        endInlineRename()
         switch node.kind {
         case .section(let title):
             isSectionHeader = true
@@ -1020,9 +1017,15 @@ private final class SidebarCell: NSTableCellView {
             labelLeadingToCell.isActive = false
             labelLeadingToIcon.isActive = true
             representedPlaylistId = playlist.id
-            label.isEditable = true   // editable so editColumn(...) starts inline edit
         }
         applyEmphasis()
+    }
+
+    /// Undoes beginInlineRename. The field stays non-editable the rest of the time so a
+    /// click on an already-selected row selects it instead of opening the inline editor.
+    func endInlineRename() {
+        label.isEditable = false
+        label.isSelectable = false
     }
 
     @objc fileprivate func commitRename(_ sender: NSTextField) {
@@ -1051,6 +1054,12 @@ private final class SidebarCell: NSTableCellView {
 }
 
 extension SidebarCell: NSTextFieldDelegate {
+    func controlTextDidEndEditing(_ obj: Notification) {
+        // Deferred: AppKit is still tearing down the field editor at this point, and
+        // flipping isEditable underneath it leaves the editor attached to the cell.
+        Task { @MainActor [weak self] in self?.endInlineRename() }
+    }
+
     /// Escape during editing reverts the text and ends the edit without committing.
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
