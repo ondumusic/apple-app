@@ -808,10 +808,11 @@ extension TracksTableViewController: NSTableViewDelegate {
         let view = EmbeddedRowView()
         view.selectionColor = accentNSColor
         guard isEmbedded else {
-            // Standalone: full-width pill, no hairline — alternating row colours already
-            // separate the rows there.
-            view.customSelectionLeftInset = 0
-            view.customSelectionRightInset = 0
+            // Standalone: no hairline — alternating row colours already separate the rows
+            // there. The pill matches the 10pt margin `style = .inset` gives the stripes,
+            // so it doesn't run into the sidebar divider.
+            view.customSelectionLeftInset = 10
+            view.customSelectionRightInset = 10
             view.suppressDivider = true
             view.drawsRowBackground = true
             return view
