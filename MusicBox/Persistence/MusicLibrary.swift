@@ -466,11 +466,16 @@ final class MusicLibrary {
             Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount)
         }
 
+        // An album matches on its own name or by belonging to a matched artist, so
+        // searching an artist's name returns their discography rather than only the
+        // albums with that word in the title.
+        let matchedArtistIds = matchedArtists.map(\.serverId)
         let albumDescriptor = FetchDescriptor<LibraryAlbum>(
             predicate: #Predicate {
                 $0.trackCount > 0 && (
                     $0.name.localizedStandardContains(query) ||
-                    $0.sortName.localizedStandardContains(query)
+                    $0.sortName.localizedStandardContains(query) ||
+                    matchedArtistIds.contains($0.artistId)
                 )
             }
         )
@@ -479,6 +484,9 @@ final class MusicLibrary {
         let artistMap = buildArtistMapForIds(artistIds)
         let filteredAlbums = matchedAlbums
             .sorted { a, b in
+                let aName = a.name.localizedStandardContains(query)
+                let bName = b.name.localizedStandardContains(query)
+                if aName != bName { return aName }
                 let aSortName = artistMap[a.artistId]?.sortName ?? ""
                 let bSortName = artistMap[b.artistId]?.sortName ?? ""
                 if aSortName != bSortName { return aSortName < bSortName }
@@ -492,7 +500,6 @@ final class MusicLibrary {
         // A track matches on its own title or by belonging to a matched artist or album,
         // so searching an artist's name lists their songs rather than an empty Songs
         // section. SwiftData can't join, so the ids matched above are folded in instead.
-        let matchedArtistIds = matchedArtists.map(\.serverId)
         let matchedAlbumIds = matchedAlbums.map(\.serverId)
         let trackDescriptor = FetchDescriptor<LibraryTrack>(
             predicate: #Predicate {

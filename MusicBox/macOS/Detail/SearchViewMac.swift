@@ -36,13 +36,17 @@ struct SearchViewMac: View {
         return max(1, Int((available + spacing) / (cell + spacing)))
     }
 
-    /// One row of artists, two of albums — this is a top-results area, not the full list.
+    /// One row of artists. Albums get two rows to themselves, but only one when there are
+    /// artists above them — a full artist row plus two rows of covers pushed the songs
+    /// table down to a single visible row. This is a top-results area; the rest is behind
+    /// "Show all".
     private var shownArtists: [Artist] {
         Array(results.artists.prefix(perRow(cell: Self.artistCell, spacing: Self.artistSpacing)))
     }
 
     private var shownAlbums: [Album] {
-        Array(results.albums.prefix(perRow(cell: Self.albumCell, spacing: Self.albumSpacing) * 2))
+        let rows = results.artists.isEmpty ? 2 : 1
+        return Array(results.albums.prefix(perRow(cell: Self.albumCell, spacing: Self.albumSpacing) * rows))
     }
 
     private var hasTopResults: Bool { !results.artists.isEmpty || !results.albums.isEmpty }

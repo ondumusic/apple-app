@@ -737,6 +737,37 @@ struct MusicLibrarySearchTests {
         #expect(results.tracks[0].name == "Stairway to Heaven")
     }
 
+    @Test func searchFindsAlbumsByArtistName() throws {
+        let lib = try makeTestLibrary()
+        let beatles = UUID(), zeppelin = UUID()
+        let abbey = UUID(), four = UUID()
+        lib.upsertArtists([syncArtist(id: beatles, name: "The Beatles", albumCount: 1),
+                           syncArtist(id: zeppelin, name: "Led Zeppelin", albumCount: 1)])
+        lib.upsertAlbums([syncAlbum(id: abbey, artistId: beatles, name: "Abbey Road"),
+                          syncAlbum(id: four, artistId: zeppelin, name: "IV")])
+        lib.upsertTracks([syncTrack(artistId: beatles, albumId: abbey, name: "Come Together"),
+                          syncTrack(artistId: zeppelin, albumId: four, name: "Black Dog")])
+        lib.bumpRevision()
+
+        // "Abbey Road" doesn't contain "beatles" — it matches through its artist.
+        let results = lib.search("beatles")
+        #expect(results.albums.map(\.name) == ["Abbey Road"])
+    }
+
+    @Test func searchRanksAlbumNameMatchesFirst() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID(), named = UUID(), other = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "The Beatles", albumCount: 2)])
+        lib.upsertAlbums([syncAlbum(id: other, artistId: artistId, name: "Abbey Road"),
+                          syncAlbum(id: named, artistId: artistId, name: "With The Beatles")])
+        lib.upsertTracks([syncTrack(artistId: artistId, albumId: other, name: "Come Together"),
+                          syncTrack(artistId: artistId, albumId: named, name: "All My Loving")])
+        lib.bumpRevision()
+
+        let results = lib.search("beatles")
+        #expect(results.albums.first?.name == "With The Beatles")
+    }
+
     @Test func searchFindsTracksByArtistName() throws {
         let lib = try makeTestLibrary()
         let beatles = UUID(), zeppelin = UUID()
