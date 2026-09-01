@@ -132,6 +132,9 @@ private struct TransportButtons: View {
             .help("Next")
             .accessibilityLabel("Next")
         }
+        // Transport glyphs draw in the default foreground, so they stayed at full
+        // contrast in an inactive window while the tinted controls beside them faded.
+        .foregroundStyle(AppActivity.shared.isActive ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
     }
 }
 
@@ -196,6 +199,7 @@ private struct NowPlayingLabel: View {
             // than filling it edge to edge and spilling into the content below.
             .frame(height: 42)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+            .opacity(AppActivity.shared.isActive ? 1 : 0.55)
         }
     }
 

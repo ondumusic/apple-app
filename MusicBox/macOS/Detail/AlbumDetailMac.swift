@@ -53,6 +53,10 @@ struct AlbumDetailMac: View {
                 .frame(maxWidth: Self.maxContentWidth, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // The table paints its own background only as far as the cap, so the margin
+        // beside it showed the window's grey. Page supplies the same surface.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(NSColor.controlBackgroundColor))
         .navigationBarBackButtonHidden(backDestination != nil)
     }
 
