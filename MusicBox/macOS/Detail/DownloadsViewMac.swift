@@ -132,108 +132,143 @@ struct DownloadsViewMac: View {
 private struct DownloadTransfersSection: View {
     @Environment(DownloadService.self) private var downloadService
 
-    private var activeCount: Int {
-        downloadService.activeDownloads.count + downloadService.pendingQueue.count
+    /// Columns, not a run-on HStack: the artist used to start at a different x on every
+    /// row and the status floated at the far right, disconnected from what it described.
+    private static let artistWidth: CGFloat = 200
+    private static let statusWidth: CGFloat = 140
+    /// Enough to see what's happening without the strip taking over the page.
+    private static let visibleRows = 5
+
+    private struct Row: Identifiable {
+        let id: UUID
+        let title: String
+        let artist: String
+        let progress: Double?
+        let status: String?
+        let isError: Bool
+        let menu: AnyView
+    }
+
+    private var rows: [Row] {
+        var all: [Row] = []
+        for trackId in downloadService.activeDownloadOrder {
+            guard let state = downloadService.activeDownloads[trackId] else { continue }
+            all.append(Row(
+                id: trackId, title: state.trackName, artist: state.artistName,
+                progress: state.isPaused ? nil : downloadService.progressSnapshot[trackId],
+                status: state.isPaused ? "Paused" : nil, isError: false,
+                menu: AnyView(activeMenu(trackId: trackId, isPaused: state.isPaused))
+            ))
+        }
+        for info in downloadService.pendingQueue {
+            all.append(Row(id: info.track.id, title: info.track.name,
+                           artist: info.track.artist.name, progress: nil,
+                           status: "Queued", isError: false, menu: AnyView(EmptyView())))
+        }
+        for failed in downloadService.failedDownloads {
+            all.append(Row(id: failed.id, title: failed.trackName, artist: failed.artistName,
+                           progress: nil, status: failed.reason, isError: true,
+                           menu: AnyView(failedMenu(failed))))
+        }
+        return all
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Transfers")
-                    .font(.subheadline.weight(.semibold))
-                if activeCount > 0 {
-                    Text("^[\(activeCount) item](inflect: true)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 12)
-                if !downloadService.failedDownloads.isEmpty {
-                    Button("Retry All") {
-                        for failed in downloadService.failedDownloads {
-                            downloadService.retryDownload(failed)
-                        }
-                    }
-                    .buttonStyle(.link)
-                    .font(.subheadline)
-                    Button("Clear Failed") { downloadService.clearFailedDownloads() }
-                        .buttonStyle(.link)
-                        .font(.subheadline)
-                }
+        let all = rows
+        let shown = all.prefix(Self.visibleRows)
+        VStack(alignment: .leading, spacing: 6) {
+            header(total: all.count)
+            ForEach(Array(shown)) { row in
+                transferRow(row).contextMenu { row.menu }
             }
-
-            ForEach(downloadService.activeDownloadOrder, id: \.self) { trackId in
-                if let state = downloadService.activeDownloads[trackId] {
-                    transferRow(
-                        title: state.trackName,
-                        subtitle: state.artistName,
-                        progress: state.isPaused ? nil : downloadService.progressSnapshot[trackId],
-                        trailing: state.isPaused ? "Paused" : nil
-                    )
-                    .contextMenu {
-                        if state.isPaused {
-                            Button("Resume") { downloadService.resumeDownload(trackId: trackId) }
-                        } else {
-                            Button("Pause") { downloadService.pauseDownload(trackId: trackId) }
-                        }
-                        Button("Cancel", role: .destructive) {
-                            downloadService.cancelDownload(trackId: trackId)
-                        }
-                    }
-                }
-            }
-
-            ForEach(Array(downloadService.pendingQueue.prefix(4)), id: \.track.id) { info in
-                transferRow(title: info.track.name, subtitle: info.track.artist.name,
-                            progress: nil, trailing: "Queued")
-            }
-            if downloadService.pendingQueue.count > 4 {
-                Text("^[\(downloadService.pendingQueue.count - 4) more queued](inflect: true)")
+            if all.count > shown.count {
+                Text("^[\(all.count - shown.count) more](inflect: true)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-
-            ForEach(downloadService.failedDownloads) { failed in
-                transferRow(title: failed.trackName, subtitle: failed.artistName,
-                            progress: nil, trailing: failed.reason, isError: true)
-                    .contextMenu {
-                        Button("Retry") { downloadService.retryDownload(failed) }
-                        Button("Dismiss", role: .destructive) {
-                            downloadService.dismissFailedDownload(failed)
-                        }
-                    }
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
 
-    private func transferRow(title: String, subtitle: String, progress: Double?,
-                             trailing: String?, isError: Bool = false) -> some View {
-        HStack(spacing: 10) {
-            Text(title)
+    private func header(total: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("Transfers")
+                .font(.subheadline.weight(.semibold))
+            Text("^[\(total) item](inflect: true)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            if !downloadService.failedDownloads.isEmpty {
+                Button("Retry All") {
+                    for failed in downloadService.failedDownloads {
+                        downloadService.retryDownload(failed)
+                    }
+                }
+                .buttonStyle(.link)
+                .font(.subheadline)
+                Button("Clear Failed") { downloadService.clearFailedDownloads() }
+                    .buttonStyle(.link)
+                    .font(.subheadline)
+            }
+        }
+        .padding(.bottom, 2)
+    }
+
+    private func transferRow(_ row: Row) -> some View {
+        HStack(spacing: 12) {
+            Text(row.title)
                 .lineLimit(1)
-            Text(subtitle)
-                .font(.caption)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(row.artist)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Spacer(minLength: 12)
-            if let progress, progress > 0 {
+                .frame(width: Self.artistWidth, alignment: .leading)
+            status(row)
+                .frame(width: Self.statusWidth, alignment: .trailing)
+        }
+        .font(.callout)
+    }
+
+    @ViewBuilder
+    private func status(_ row: Row) -> some View {
+        if let progress = row.progress, progress > 0 {
+            HStack(spacing: 8) {
                 ProgressView(value: progress)
-                    .frame(width: 80)
                 Text("\(Int(progress * 100))%")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                    .frame(width: 34, alignment: .trailing)
-            } else if let trailing {
-                Text(trailing)
-                    .font(.caption)
-                    .foregroundStyle(isError ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-            } else {
-                ProgressView().controlSize(.small)
+                    .frame(width: 32, alignment: .trailing)
             }
+        } else if let status = row.status {
+            Text(status)
+                .font(.caption)
+                .foregroundStyle(row.isError ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                .lineLimit(1)
+        } else {
+            // Starting: an indeterminate bar keeps the column the same shape as a
+            // determinate one, so rows don't jump as downloads get going.
+            ProgressView().progressViewStyle(.linear)
         }
-        .font(.callout)
+    }
+
+    private func activeMenu(trackId: UUID, isPaused: Bool) -> some View {
+        Group {
+            if isPaused {
+                Button("Resume") { downloadService.resumeDownload(trackId: trackId) }
+            } else {
+                Button("Pause") { downloadService.pauseDownload(trackId: trackId) }
+            }
+            Button("Cancel", role: .destructive) { downloadService.cancelDownload(trackId: trackId) }
+        }
+    }
+
+    private func failedMenu(_ failed: DownloadService.FailedDownload) -> some View {
+        Group {
+            Button("Retry") { downloadService.retryDownload(failed) }
+            Button("Dismiss", role: .destructive) { downloadService.dismissFailedDownload(failed) }
+        }
     }
 }
 #endif
