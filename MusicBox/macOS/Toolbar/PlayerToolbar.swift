@@ -6,12 +6,10 @@ import SwiftUI
 /// inside a single ToolbarItem.principal caused beachball/hang in earlier iterations.
 struct PlayerToolbar: ToolbarContent {
     @Environment(PlayerService.self) private var player
-    @Environment(\.controlActiveState) private var activeState
-
-    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// The accent, but only while the app has focus — macOS greys controls out in an
     /// inactive window and ours stayed bright.
     private var activeTint: AnyShapeStyle {
-        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
     }
     @Binding var showQueue: Bool
 
@@ -48,12 +46,10 @@ struct PlayerToolbar: ToolbarContent {
 
 private struct ShuffleButton: View {
     @Environment(PlayerService.self) private var player
-    @Environment(\.controlActiveState) private var activeState
-
-    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// The accent, but only while the app has focus — macOS greys controls out in an
     /// inactive window and ours stayed bright.
     private var activeTint: AnyShapeStyle {
-        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
     }
 
     var body: some View {
@@ -70,12 +66,10 @@ private struct ShuffleButton: View {
 
 private struct RepeatButton: View {
     @Environment(PlayerService.self) private var player
-    @Environment(\.controlActiveState) private var activeState
-
-    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// The accent, but only while the app has focus — macOS greys controls out in an
     /// inactive window and ours stayed bright.
     private var activeTint: AnyShapeStyle {
-        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
     }
 
     var body: some View {
@@ -100,12 +94,10 @@ private struct RepeatButton: View {
 
 private struct TransportButtons: View {
     @Environment(PlayerService.self) private var player
-    @Environment(\.controlActiveState) private var activeState
-
-    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// The accent, but only while the app has focus — macOS greys controls out in an
     /// inactive window and ours stayed bright.
     private var activeTint: AnyShapeStyle {
-        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
     }
 
     var body: some View {
@@ -145,12 +137,10 @@ private struct TransportButtons: View {
 
 private struct NowPlayingLabel: View {
     @Environment(PlayerService.self) private var player
-    @Environment(\.controlActiveState) private var activeState
-
-    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// The accent, but only while the app has focus — macOS greys controls out in an
     /// inactive window and ours stayed bright.
     private var activeTint: AnyShapeStyle {
-        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
     }
 
     private var track: Track? { player.currentTrack }
@@ -238,12 +228,10 @@ private struct NowPlayingLabel: View {
 /// popover meant clicking it opened a second popover over the first.
 struct VolumeControl: View {
     @Environment(PlayerService.self) private var player
-    @Environment(\.controlActiveState) private var activeState
-
-    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// The accent, but only while the app has focus — macOS greys controls out in an
     /// inactive window and ours stayed bright.
     private var activeTint: AnyShapeStyle {
-        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
     }
     @State private var showingSlider = false
     var iconSize: CGFloat? = nil
@@ -285,12 +273,10 @@ struct VolumeControl: View {
 
 private struct ScrubberView: View {
     @Environment(PlayerService.self) private var player
-    @Environment(\.controlActiveState) private var activeState
-
-    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// The accent, but only while the app has focus — macOS greys controls out in an
     /// inactive window and ours stayed bright.
     private var activeTint: AnyShapeStyle {
-        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
     }
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
@@ -311,7 +297,7 @@ private struct ScrubberView: View {
                     player.seek(to: scrubValue)
                     isScrubbing = false
                 },
-                isWindowActive: activeState != .inactive
+                isWindowActive: AppActivity.shared.isActive
             )
             .frame(height: 8)
             Text(format(player.duration))

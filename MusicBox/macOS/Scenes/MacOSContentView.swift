@@ -60,10 +60,10 @@ struct MacOSContentView: View {
                     }
                 }
                 .navigationDestination(for: Album.self) { album in
-                    AlbumDetailMac(album: album, showsBackButton: true)
+                    AlbumDetailMac(album: album, backDestination: backDestination)
                 }
                 .navigationDestination(for: Artist.self) { artist in
-                    ArtistDetailMac(artist: artist, showsBackButton: true)
+                    ArtistDetailMac(artist: artist, backDestination: backDestination)
                 }
                 .navigationDestination(for: SearchAllRequest.self) { request in
                     SearchAllViewMac(request: request)
@@ -293,6 +293,17 @@ struct MacOSContentView: View {
                     .shadow(color: Color.black.opacity(0.18), radius: 8, x: -2, y: 0)
                     .transition(.move(edge: .trailing))
             }
+        }
+    }
+
+    /// What a pushed detail view returns to — the search results if that's where the
+    /// push came from, otherwise the section that's selected.
+    private var backDestination: String {
+        if !searchText.isEmpty { return "Search" }
+        switch sidebarSelection {
+        case .category(let category): return category.title
+        case .playlist(let id): return musicLibrary.playlist(id)?.name ?? "Library"
+        case nil: return "Library"
         }
     }
 

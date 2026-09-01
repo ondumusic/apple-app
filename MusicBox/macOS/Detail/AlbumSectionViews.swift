@@ -18,9 +18,6 @@ struct AlbumSectionHeader: View {
     /// Compact mode: no artwork gutter exists, so the header carries the cover and the
     /// summary line that would otherwise sit under the overlay.
     var inlineArtwork: Bool = false
-    /// Set when this album is a pushed destination — the chevron sits with the title
-    /// rather than in a bar of its own, matching the search show-all pages.
-    var onBack: (() -> Void)?
 
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(DownloadService.self) private var downloadService
@@ -40,10 +37,6 @@ struct AlbumSectionHeader: View {
                         .frame(width: 64, height: 64)
                 }
                 .buttonStyle(.plain)
-            }
-            if onBack != nil {
-                BackToResultsButton()
-                    .padding(.trailing, 2)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text(album.name)

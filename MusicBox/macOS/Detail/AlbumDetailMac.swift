@@ -6,7 +6,7 @@ struct AlbumDetailMac: View {
     /// Set when this view is pushed rather than shown as a section's root. The toolbar's
     /// own back button sits beside the transport controls where it reads as a player
     /// control, so pushed detail views carry their own next to the title.
-    var showsBackButton = false
+    var backDestination: String?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(MusicLibrary.self) private var musicLibrary
@@ -43,15 +43,20 @@ struct AlbumDetailMac: View {
     }
 
     var body: some View {
-        table
-            // Capped: the title column otherwise grows with the window and leaves a long
-            // empty run between a track's name and its duration.
-            .frame(maxWidth: Self.maxContentWidth)
-            .frame(maxWidth: .infinity)
-            .navigationBarBackButtonHidden(showsBackButton)
+        VStack(spacing: 0) {
+            if let backDestination { BackBar(destination: backDestination) }
+            table
+                // Capped: the title column otherwise grows with the window and leaves a
+                // long empty run between a track's name and its duration. Left-aligned
+                // rather than centred so the table stays anchored to the sidebar and the
+                // slack collects as one margin instead of two.
+                .frame(maxWidth: Self.maxContentWidth, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .navigationBarBackButtonHidden(backDestination != nil)
     }
 
-    static let maxContentWidth: CGFloat = 1100
+    static let maxContentWidth: CGFloat = 920
 
     private var table: some View {
         TracksTable(
@@ -75,8 +80,7 @@ struct AlbumDetailMac: View {
                         onPlay: { playAll(shuffle: false) },
                         onShuffle: { playAll(shuffle: true) },
                         onDownload: { downloadAlbum() },
-                        onCancelDownload: { downloadService.cancelAlbumDownloads(albumId: album.id) },
-                        onBack: showsBackButton ? { dismiss() } : nil
+                        onCancelDownload: { downloadService.cancelAlbumDownloads(albumId: album.id) }
                     )
                     .environment(musicLibrary)
                     .environment(downloadService)

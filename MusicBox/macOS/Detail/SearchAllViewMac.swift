@@ -34,6 +34,7 @@ struct SearchAllViewMac: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            BackBar(destination: "Search")
             header
             Divider()
             if request.kind == .songs {
@@ -97,7 +98,6 @@ struct SearchAllViewMac: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            BackToResultsButton()
             Text(title).font(.title3.weight(.semibold))
             switch request.kind {
             case .artists:
