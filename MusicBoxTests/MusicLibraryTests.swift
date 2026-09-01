@@ -737,6 +737,59 @@ struct MusicLibrarySearchTests {
         #expect(results.tracks[0].name == "Stairway to Heaven")
     }
 
+    @Test func searchFindsTracksByArtistName() throws {
+        let lib = try makeTestLibrary()
+        let beatles = UUID(), zeppelin = UUID()
+        let abbey = UUID(), four = UUID()
+        lib.upsertArtists([syncArtist(id: beatles, name: "The Beatles"),
+                           syncArtist(id: zeppelin, name: "Led Zeppelin")])
+        lib.upsertAlbums([syncAlbum(id: abbey, artistId: beatles, name: "Abbey Road"),
+                          syncAlbum(id: four, artistId: zeppelin, name: "IV")])
+        lib.upsertTracks([
+            syncTrack(artistId: beatles, albumId: abbey, name: "Come Together"),
+            syncTrack(artistId: zeppelin, albumId: four, name: "Black Dog", number: 2),
+        ])
+        lib.bumpRevision()
+
+        // No track is titled "beatles" — they match through their artist.
+        let results = lib.search("beatles")
+        #expect(results.tracks.map(\.name) == ["Come Together"])
+    }
+
+    @Test func searchFindsTracksByAlbumName() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID(), abbey = UUID(), other = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "The Beatles")])
+        lib.upsertAlbums([syncAlbum(id: abbey, artistId: artistId, name: "Abbey Road"),
+                          syncAlbum(id: other, artistId: artistId, name: "Revolver")])
+        lib.upsertTracks([
+            syncTrack(artistId: artistId, albumId: abbey, name: "Come Together"),
+            syncTrack(artistId: artistId, albumId: other, name: "Taxman", number: 2),
+        ])
+        lib.bumpRevision()
+
+        let results = lib.search("abbey")
+        #expect(results.tracks.map(\.name) == ["Come Together"])
+    }
+
+    /// A title hit outranks tracks that only matched through their artist or album, so
+    /// searching a song name doesn't bury it under that artist's discography.
+    @Test func searchRanksTitleMatchesFirst() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID(), albumId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Aardvark")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Debut")])
+        lib.upsertTracks([
+            syncTrack(artistId: artistId, albumId: albumId, name: "Another Song"),
+            syncTrack(artistId: artistId, albumId: albumId, name: "Aardvark Anthem", number: 2),
+        ])
+        lib.bumpRevision()
+
+        let results = lib.search("aardvark")
+        #expect(results.tracks.count == 2)
+        #expect(results.tracks[0].name == "Aardvark Anthem")
+    }
+
     @Test func searchEmptyQueryReturnsEmpty() throws {
         let lib = try makeTestLibrary()
         lib.upsertArtists([syncArtist(name: "Artist")])

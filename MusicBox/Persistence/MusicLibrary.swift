@@ -436,6 +436,18 @@ final class MusicLibrary {
 
     // MARK: - Search
 
+    /// Artists carry no artwork of their own, so each borrows its first album's. Resolved
+    /// in one pass for a set of search results rather than per row.
+    func artistArtwork(for artists: [Artist]) -> [UUID: URL] {
+        _ = revision
+        return Dictionary(uniqueKeysWithValues: artists.compactMap { artist in
+            albumsForArtist(artist.id)
+                .first(where: { $0.artworkUrl != nil })
+                .flatMap(\.artworkUrl)
+                .map { (artist.id, $0) }
+        })
+    }
+
     func search(_ query: String) -> (artists: [Artist], albums: [Album], tracks: [Track]) {
         _ = revision
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return ([], [], []) }
@@ -477,9 +489,17 @@ final class MusicLibrary {
             }
             .map { toAlbum($0, artistMap: artistMap) }
 
+        // A track matches on its own title or by belonging to a matched artist or album,
+        // so searching an artist's name lists their songs rather than an empty Songs
+        // section. SwiftData can't join, so the ids matched above are folded in instead.
+        let matchedArtistIds = matchedArtists.map(\.serverId)
+        let matchedAlbumIds = matchedAlbums.map(\.serverId)
         let trackDescriptor = FetchDescriptor<LibraryTrack>(
             predicate: #Predicate {
-                $0.name.localizedStandardContains(query)
+                $0.name.localizedStandardContains(query) ||
+                matchedArtistIds.contains($0.artistId) ||
+                matchedArtistIds.contains($0.albumArtistId) ||
+                matchedAlbumIds.contains($0.albumId)
             }
         )
         let matchedTracks = fetch(trackDescriptor) ?? []
@@ -496,9 +516,16 @@ final class MusicLibrary {
         } else {
             trackAlbumMap = buildAlbumMap()
         }
+        // Title matches rank above tracks that only matched through their artist or
+        // album — typing a song name should not bury it under that artist's discography.
         let filteredTracks = matchedTracks
             .map { buildTrack($0, artistMap: trackArtistMap, album: trackAlbumMap[$0.albumId]) }
-            .sorted { ($0.artist.sortName, $0.name) < ($1.artist.sortName, $1.name) }
+            .sorted { a, b in
+                let aTitle = a.name.localizedStandardContains(query)
+                let bTitle = b.name.localizedStandardContains(query)
+                if aTitle != bTitle { return aTitle }
+                return (a.artist.sortName, a.name) < (b.artist.sortName, b.name)
+            }
 
         return (filteredArtists, filteredAlbums, filteredTracks)
     }

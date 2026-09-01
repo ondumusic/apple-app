@@ -76,14 +76,7 @@ struct SearchViewMac: View {
             guard !Task.isCancelled else { return }
             let found = musicLibrary.search(query)
             results = found
-            artistArtwork = Dictionary(
-                uniqueKeysWithValues: found.artists.compactMap { artist in
-                    musicLibrary.albumsForArtist(artist.id)
-                        .first(where: { $0.artworkUrl != nil })
-                        .flatMap(\.artworkUrl)
-                        .map { (artist.id, $0) }
-                }
-            )
+            artistArtwork = musicLibrary.artistArtwork(for: found.artists)
             displayedQuery = query
         }
     }
@@ -126,12 +119,23 @@ struct SearchViewMac: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
     }
 
-    private func sectionHeader(_ title: String, count: Int, unit: String) -> some View {
+    private func sectionHeader(_ title: String, count: Int, unit: String,
+                               showAll: SearchAllRequest.Kind? = nil) -> some View {
         HStack(spacing: 8) {
             Text(title).font(.headline)
             Text(countLabel(count, unit: unit))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            if let showAll {
+                Spacer()
+                NavigationLink(value: SearchAllRequest(kind: showAll, query: query)) {
+                    HStack(spacing: 2) {
+                        Text("Show all")
+                        Image(systemName: "chevron.right").font(.caption2)
+                    }
+                }
+                .buttonStyle(.link)
+            }
         }
     }
 
@@ -145,34 +149,11 @@ struct SearchViewMac: View {
 
     private var artistsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Artists", count: results.artists.count, unit: "artist")
+            sectionHeader("Artists", count: results.artists.count, unit: "artist",
+                          showAll: shownArtists.count < results.artists.count ? .artists : nil)
             LazyVGrid(columns: artistColumns, alignment: .leading, spacing: 14) {
                 ForEach(shownArtists) { artist in
-                    Button {
-                        NotificationCenter.default.post(name: .navigateToArtist, object: artist)
-                    } label: {
-                        VStack(spacing: 6) {
-                            Group {
-                                if let url = artistArtwork[artist.id] {
-                                    ArtworkView(url: url)
-                                } else {
-                                    Image(systemName: "music.mic")
-                                        .font(.title2)
-                                        .foregroundStyle(.secondary)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                        .background(.quaternary)
-                                }
-                            }
-                            .frame(width: 72, height: 72)
-                            .clipShape(Circle())
-                            Text(artist.name)
-                                .font(.caption)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.center)
-                                .frame(width: 96)
-                        }
-                    }
-                    .buttonStyle(.plain)
+                    SearchArtistCell(artist: artist, artworkURL: artistArtwork[artist.id])
                 }
             }
         }
@@ -180,7 +161,8 @@ struct SearchViewMac: View {
 
     private var albumsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Albums", count: results.albums.count, unit: "album")
+            sectionHeader("Albums", count: results.albums.count, unit: "album",
+                          showAll: shownAlbums.count < results.albums.count ? .albums : nil)
             LazyVGrid(columns: albumColumns, alignment: .leading, spacing: 16) {
                 ForEach(shownAlbums) { album in
                     Button {

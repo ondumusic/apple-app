@@ -59,6 +59,9 @@ struct MacOSContentView: View {
                 .navigationDestination(for: Artist.self) { artist in
                     ArtistDetailMac(artist: artist)
                 }
+                .navigationDestination(for: SearchAllRequest.self) { request in
+                    SearchAllViewMac(request: request)
+                }
             }
         }
         .frame(minWidth: 900, minHeight: 600)
@@ -116,6 +119,10 @@ struct MacOSContentView: View {
             } else if oldValue.isEmpty {
                 selectionBeforeSearch = sidebarSelection
                 sidebarSelection = nil
+            } else {
+                // Refining the query drops any "show all" drill-in — it was built from
+                // the previous query and would otherwise sit there showing stale results.
+                detailPath = NavigationPath()
             }
         }
         .onChange(of: sidebarVisibility) { _, newValue in
