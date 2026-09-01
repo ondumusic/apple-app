@@ -737,6 +737,42 @@ struct MusicLibrarySearchTests {
         #expect(results.tracks[0].name == "Stairway to Heaven")
     }
 
+    @Test func downloadedAlbumEntriesCountsAndSizesPerAlbum() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID(), one = UUID(), two = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist", albumCount: 2)])
+        lib.upsertAlbums([syncAlbum(id: one, artistId: artistId, name: "Alpha"),
+                          syncAlbum(id: two, artistId: artistId, name: "Beta")])
+        let a1 = syncTrack(artistId: artistId, albumId: one, name: "A1")
+        let a2 = syncTrack(artistId: artistId, albumId: one, name: "A2", number: 2)
+        let b1 = syncTrack(artistId: artistId, albumId: two, name: "B1")
+        let b2 = syncTrack(artistId: artistId, albumId: two, name: "B2", number: 2)
+        lib.upsertTracks([a1, a2, b1, b2])
+        lib.markDownloaded(trackId: a1.id, relativePath: "a1.m4a", downloadedFileSize: 100)
+        lib.markDownloaded(trackId: a2.id, relativePath: "a2.m4a", downloadedFileSize: 200)
+        lib.markDownloaded(trackId: b1.id, relativePath: "b1.m4a", downloadedFileSize: 50)
+        lib.bumpRevision()
+
+        let entries = lib.downloadedAlbumEntries()
+        #expect(entries.map(\.album.name) == ["Alpha", "Beta"])
+        #expect(entries[0].trackCount == 2)
+        #expect(entries[0].size == 300)
+        // Beta has one of its two tracks downloaded; only that one counts.
+        #expect(entries[1].trackCount == 1)
+        #expect(entries[1].size == 50)
+    }
+
+    @Test func downloadedAlbumEntriesExcludesAlbumsWithNothingOnDisk() throws {
+        let lib = try makeTestLibrary()
+        let artistId = UUID(), albumId = UUID()
+        lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
+        lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Alpha")])
+        lib.upsertTracks([syncTrack(artistId: artistId, albumId: albumId, name: "A1")])
+        lib.bumpRevision()
+
+        #expect(lib.downloadedAlbumEntries().isEmpty)
+    }
+
     @Test func searchFindsAlbumsByArtistName() throws {
         let lib = try makeTestLibrary()
         let beatles = UUID(), zeppelin = UUID()

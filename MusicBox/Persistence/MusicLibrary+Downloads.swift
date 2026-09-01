@@ -1,6 +1,15 @@
 import Foundation
 import SwiftData
 
+/// One row of the Downloads list: the album plus what's actually on disk for it.
+nonisolated struct DownloadedAlbumEntry: Identifiable, Hashable, Sendable {
+    let album: Album
+    let trackCount: Int
+    let size: Int64
+
+    var id: UUID { album.id }
+}
+
 // MARK: - Download Queries & Mutations
 
 extension MusicLibrary {
@@ -118,6 +127,37 @@ extension MusicLibrary {
     }
 
     /// Returns all albums that have at least one downloaded track.
+    /// Downloaded albums with their downloaded-track count and on-disk size, gathered in
+    /// one pass — the Downloads list needs all three per row and querying each separately
+    /// is a fetch per album.
+    func downloadedAlbumEntries() -> [DownloadedAlbumEntry] {
+        _ = downloadChanged
+        _ = revision
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
+        let downloaded = (try? modelContext.fetch(descriptor)) ?? []
+        var counts: [UUID: Int] = [:]
+        var sizes: [UUID: Int64] = [:]
+        for track in downloaded {
+            counts[track.albumId, default: 0] += 1
+            sizes[track.albumId, default: 0] += track.downloadedFileSize
+        }
+        let artistMap = buildArtistMap()
+        let albums = (try? modelContext.fetch(FetchDescriptor<LibraryAlbum>())) ?? []
+        return albums
+            .filter { counts[$0.serverId] != nil }
+            .map {
+                DownloadedAlbumEntry(album: toAlbum($0, artistMap: artistMap),
+                                     trackCount: counts[$0.serverId] ?? 0,
+                                     size: sizes[$0.serverId] ?? 0)
+            }
+            .sorted { a, b in
+                let aArtist = a.album.artistSortName ?? a.album.artistName ?? ""
+                let bArtist = b.album.artistSortName ?? b.album.artistName ?? ""
+                if aArtist != bArtist { return aArtist.localizedStandardCompare(bArtist) == .orderedAscending }
+                return a.album.name.localizedStandardCompare(b.album.name) == .orderedAscending
+            }
+    }
+
     func downloadedAlbums() -> [Album] {
         _ = downloadChanged
         let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })

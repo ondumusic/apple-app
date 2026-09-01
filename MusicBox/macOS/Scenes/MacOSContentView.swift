@@ -306,7 +306,7 @@ private struct DetailPlaceholder: View {
         case .category(.artists):
             ArtistsViewMac(pendingArtistSelection: $pendingArtistNavigation)
         case .category(.downloads):
-            DownloadsView()
+            DownloadsViewMac()
         case .playlist(let id):
             PlaylistDetailMac(playlistId: id)
                 .id(id)
