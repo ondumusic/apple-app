@@ -23,6 +23,9 @@ struct MacOSContentView: View {
     @State private var deleteTarget: Playlist?
     @State private var addToPlaylistTrackIds: [UUID] = []
     @State private var searchText: String = ""
+    /// Restored when a search is cleared — searching deselects the sidebar so it stops
+    /// claiming you're still in whatever section you left.
+    @State private var selectionBeforeSearch: SidebarSelection?
     @State private var miniPlayer: MiniPlayerWindowController?
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
     @State private var spaceKeyMonitor: Any?
@@ -95,10 +98,25 @@ struct MacOSContentView: View {
                 Text("This will permanently delete the playlist.")
             }
         }
-        .onChange(of: sidebarSelection) {
+        .onChange(of: sidebarSelection) { _, newValue in
             // Switching sidebar items resets the drill-in stack so we don't show stale
             // album/artist detail under a new section.
             detailPath = NavigationPath()
+            // Picking a section is a way out of search, the same as clearing the field.
+            if newValue != nil, !searchText.isEmpty {
+                searchText = ""
+                selectionBeforeSearch = nil
+            }
+        }
+        .onChange(of: searchText) { oldValue, newValue in
+            if newValue.isEmpty {
+                guard !oldValue.isEmpty else { return }
+                sidebarSelection = selectionBeforeSearch ?? .category(.artists)
+                selectionBeforeSearch = nil
+            } else if oldValue.isEmpty {
+                selectionBeforeSearch = sidebarSelection
+                sidebarSelection = nil
+            }
         }
         .onChange(of: sidebarVisibility) { _, newValue in
             // We don't allow the sidebar to be hidden — clamp back to .all if anything

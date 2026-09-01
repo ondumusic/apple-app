@@ -11,8 +11,41 @@ struct SearchViewMac: View {
     @Environment(DownloadService.self) private var downloadService
 
     @State private var results: (artists: [Artist], albums: [Album], tracks: [Track]) = ([], [], [])
+    /// Artists carry no artwork of their own, so each one borrows its first album's.
+    /// Resolved once per query rather than per row.
+    @State private var artistArtwork: [UUID: URL] = [:]
     @State private var displayedQuery: String = ""
     @State private var trackSelection: Set<UUID> = []
+    @State private var contentWidth: CGFloat = 0
+
+    private static let artistCell: CGFloat = 108
+    private static let albumCell: CGFloat = 124
+    private static let artistSpacing: CGFloat = 12
+    private static let albumSpacing: CGFloat = 16
+    private static let horizontalPadding: CGFloat = 20
+
+    private let artistColumns = [GridItem(.adaptive(minimum: SearchViewMac.artistCell), spacing: SearchViewMac.artistSpacing)]
+    private let albumColumns = [GridItem(.adaptive(minimum: SearchViewMac.albumCell), spacing: SearchViewMac.albumSpacing)]
+
+    /// How many cells the adaptive grid will fit across — the same arithmetic LazyVGrid
+    /// does. Used to trim the results to whole rows: capping the region by height instead
+    /// sliced the last row of covers in half and left it scrolling inside a short band.
+    private func perRow(cell: CGFloat, spacing: CGFloat) -> Int {
+        let available = contentWidth - 2 * Self.horizontalPadding
+        guard available > 0 else { return 1 }
+        return max(1, Int((available + spacing) / (cell + spacing)))
+    }
+
+    /// One row of artists, two of albums — this is a top-results area, not the full list.
+    private var shownArtists: [Artist] {
+        Array(results.artists.prefix(perRow(cell: Self.artistCell, spacing: Self.artistSpacing)))
+    }
+
+    private var shownAlbums: [Album] {
+        Array(results.albums.prefix(perRow(cell: Self.albumCell, spacing: Self.albumSpacing) * 2))
+    }
+
+    private var hasTopResults: Bool { !results.artists.isEmpty || !results.albums.isEmpty }
 
     var body: some View {
         Group {
@@ -35,12 +68,22 @@ struct SearchViewMac: View {
             // changes, so a stale closure can't overwrite results with an older match.
             guard !query.isEmpty else {
                 results = ([], [], [])
+                artistArtwork = [:]
                 displayedQuery = ""
                 return
             }
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
-            results = musicLibrary.search(query)
+            let found = musicLibrary.search(query)
+            results = found
+            artistArtwork = Dictionary(
+                uniqueKeysWithValues: found.artists.compactMap { artist in
+                    musicLibrary.albumsForArtist(artist.id)
+                        .first(where: { $0.artworkUrl != nil })
+                        .flatMap(\.artworkUrl)
+                        .map { (artist.id, $0) }
+                }
+            )
             displayedQuery = query
         }
     }
@@ -48,20 +91,21 @@ struct SearchViewMac: View {
     @ViewBuilder
     private var resultsBody: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !results.artists.isEmpty || !results.albums.isEmpty {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if !results.artists.isEmpty { artistsSection }
-                        if !results.albums.isEmpty { albumsSection }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if hasTopResults {
+                VStack(alignment: .leading, spacing: 20) {
+                    if !results.artists.isEmpty { artistsSection }
+                    if !results.albums.isEmpty { albumsSection }
                 }
-                .frame(maxHeight: 220)
+                .padding(.horizontal, Self.horizontalPadding)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Divider()
             }
             if !results.tracks.isEmpty {
+                sectionHeader("Songs", count: results.tracks.count, unit: "song")
+                    .padding(.horizontal, Self.horizontalPadding)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
                 TracksTable(
                     tracks: results.tracks,
                     selection: $trackSelection,
@@ -79,54 +123,74 @@ struct SearchViewMac: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+    }
+
+    private func sectionHeader(_ title: String, count: Int, unit: String) -> some View {
+        HStack(spacing: 8) {
+            Text(title).font(.headline)
+            Text(countLabel(count, unit: unit))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func countLabel(_ count: Int, unit: String) -> LocalizedStringKey {
+        switch unit {
+        case "artist": "^[\(count) artist](inflect: true)"
+        case "album": "^[\(count) album](inflect: true)"
+        default: "^[\(count) song](inflect: true)"
+        }
     }
 
     private var artistsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Artists").font(.headline)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(results.artists.prefix(10)) { artist in
-                        Button {
-                            NotificationCenter.default.post(name: .navigateToArtist, object: artist)
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: "music.mic")
-                                    .font(.title2)
-                                    .frame(width: 60, height: 60)
-                                    .background(.quaternary, in: Circle())
-                                Text(artist.name)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .frame(width: 80)
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Artists", count: results.artists.count, unit: "artist")
+            LazyVGrid(columns: artistColumns, alignment: .leading, spacing: 14) {
+                ForEach(shownArtists) { artist in
+                    Button {
+                        NotificationCenter.default.post(name: .navigateToArtist, object: artist)
+                    } label: {
+                        VStack(spacing: 6) {
+                            Group {
+                                if let url = artistArtwork[artist.id] {
+                                    ArtworkView(url: url)
+                                } else {
+                                    Image(systemName: "music.mic")
+                                        .font(.title2)
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .background(.quaternary)
+                                }
                             }
+                            .frame(width: 72, height: 72)
+                            .clipShape(Circle())
+                            Text(artist.name)
+                                .font(.caption)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.center)
+                                .frame(width: 96)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
     }
 
     private var albumsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Albums").font(.headline)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(results.albums.prefix(10)) { album in
-                        Button {
-                            NotificationCenter.default.post(name: .navigateToAlbum, object: album)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                ArtworkView(url: album.artworkUrl)
-                                    .frame(width: 96, height: 96)
-                                Text(album.name)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .frame(width: 96, alignment: .leading)
-                            }
-                        }
-                        .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Albums", count: results.albums.count, unit: "album")
+            LazyVGrid(columns: albumColumns, alignment: .leading, spacing: 16) {
+                ForEach(shownAlbums) { album in
+                    Button {
+                        NotificationCenter.default.post(name: .navigateToAlbum, object: album)
+                    } label: {
+                        AlbumCard(album: album)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        AlbumContextMenuItems(album: album)
                     }
                 }
             }
