@@ -832,6 +832,19 @@ extension SidebarViewController: NSMenuDelegate {
                 menu.addItem(.separator())
             }
 
+            if !playlist.isFolder {
+                let isDownloaded = actions.isPlaylistDownloaded(playlist)
+                let download = NSMenuItem(
+                    title: isDownloaded ? "Remove Download" : "Download",
+                    action: isDownloaded ? #selector(menuRemoveDownload) : #selector(menuDownload),
+                    keyEquivalent: ""
+                )
+                download.target = self
+                download.representedObject = playlist
+                menu.addItem(download)
+                menu.addItem(.separator())
+            }
+
             let rename = NSMenuItem(title: "Rename", action: #selector(menuRename), keyEquivalent: "")
             rename.target = self
             rename.representedObject = playlist
@@ -882,6 +895,16 @@ extension SidebarViewController: NSMenuDelegate {
     @objc private func menuRename(_ sender: NSMenuItem) {
         guard let playlist = sender.representedObject as? Playlist else { return }
         startInlineRename(playlistId: playlist.id)
+    }
+
+    @objc private func menuDownload(_ sender: NSMenuItem) {
+        guard let playlist = sender.representedObject as? Playlist else { return }
+        actions.downloadPlaylist(playlist)
+    }
+
+    @objc private func menuRemoveDownload(_ sender: NSMenuItem) {
+        guard let playlist = sender.representedObject as? Playlist else { return }
+        actions.removePlaylistDownload(playlist)
     }
 
     @objc private func menuDelete(_ sender: NSMenuItem) {

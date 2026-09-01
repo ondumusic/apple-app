@@ -20,6 +20,11 @@ struct SidebarActions {
     var createPlaylist: (UUID?) -> Void = { _ in }
     /// Trigger naming flow for a new folder; parentId nil = root.
     var createFolder: (UUID?) -> Void = { _ in }
+    /// Download every track in the playlist, or remove those downloads. The sidebar
+    /// asks whether it's fully downloaded to decide which of the two to offer.
+    var downloadPlaylist: (Playlist) -> Void = { _ in }
+    var removePlaylistDownload: (Playlist) -> Void = { _ in }
+    var isPlaylistDownloaded: (Playlist) -> Bool = { _ in false }
     /// Move playlist (or folder) into the given parent. Nil parent = root.
     var movePlaylist: (UUID, UUID?) -> Void = { _, _ in }
 }

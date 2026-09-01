@@ -292,6 +292,19 @@ struct MacOSContentView: View {
 
     private var sidebarActions: SidebarActions {
         var a = SidebarActions()
+        a.downloadPlaylist = { [musicLibrary, downloadService] playlist in
+            let ids = Set(musicLibrary.tracksForPlaylist(playlist.id).map(\.id))
+            guard !ids.isEmpty else { return }
+            downloadService.downloadTracks(ids: ids, library: musicLibrary)
+        }
+        a.removePlaylistDownload = { [musicLibrary] playlist in
+            let ids = Set(musicLibrary.tracksForPlaylist(playlist.id).map(\.id))
+            musicLibrary.markTracksUndownloaded(trackIds: ids)
+        }
+        a.isPlaylistDownloaded = { [musicLibrary] playlist in
+            let tracks = musicLibrary.tracksForPlaylist(playlist.id)
+            return !tracks.isEmpty && tracks.allSatisfy(\.isDownloaded)
+        }
         a.playPlaylist = { playlist in
             let tracks = musicLibrary.tracksForPlaylist(playlist.id)
             let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
