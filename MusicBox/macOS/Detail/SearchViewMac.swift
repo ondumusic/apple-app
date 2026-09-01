@@ -36,20 +36,22 @@ struct SearchViewMac: View {
         return max(1, Int((available + spacing) / (cell + spacing)))
     }
 
-    /// One row of artists. Albums get two rows to themselves, but only one when there are
-    /// artists above them — a full artist row plus two rows of covers pushed the songs
-    /// table down to a single visible row. This is a top-results area; the rest is behind
-    /// "Show all".
+    /// Every section is a top-results summary — one row each of artists and albums, a
+    /// handful of songs — so all three fit on screen together. The rest of each lives
+    /// behind "Show all".
     private var shownArtists: [Artist] {
         Array(results.artists.prefix(perRow(cell: Self.artistCell, spacing: Self.artistSpacing)))
     }
 
     private var shownAlbums: [Album] {
-        let rows = results.artists.isEmpty ? 2 : 1
-        return Array(results.albums.prefix(perRow(cell: Self.albumCell, spacing: Self.albumSpacing) * rows))
+        Array(results.albums.prefix(perRow(cell: Self.albumCell, spacing: Self.albumSpacing)))
     }
 
-    private var hasTopResults: Bool { !results.artists.isEmpty || !results.albums.isEmpty }
+    private var shownTracks: [Track] {
+        Array(results.tracks.prefix(Self.shownSongLimit))
+    }
+
+    private static let shownSongLimit = 6
 
     var body: some View {
         Group {
@@ -87,37 +89,15 @@ struct SearchViewMac: View {
 
     @ViewBuilder
     private var resultsBody: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if hasTopResults {
-                VStack(alignment: .leading, spacing: 20) {
-                    if !results.artists.isEmpty { artistsSection }
-                    if !results.albums.isEmpty { albumsSection }
-                }
-                .padding(.horizontal, Self.horizontalPadding)
-                .padding(.vertical, 14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Divider()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                if !results.artists.isEmpty { artistsSection }
+                if !results.albums.isEmpty { albumsSection }
+                if !results.tracks.isEmpty { songsSection }
             }
-            if !results.tracks.isEmpty {
-                sectionHeader("Songs", count: results.tracks.count, unit: "song")
-                    .padding(.horizontal, Self.horizontalPadding)
-                    .padding(.top, 10)
-                    .padding(.bottom, 6)
-                TracksTable(
-                    tracks: results.tracks,
-                    selection: $trackSelection,
-                    onPlay: playTrack(at:),
-                    actions: trackActions,
-                    showArtist: true,
-                    showAlbum: true,
-                    accent: settings.resolvedAccentColor,
-                    currentlyPlayingTrackId: player.currentTrack?.id,
-                    isPlaying: player.isPlaying
-                )
-                .frame(maxHeight: .infinity)
-            } else {
-                Spacer(minLength: 0)
-            }
+            .padding(.horizontal, Self.horizontalPadding)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // Same surface the tracks table paints, so the grids above it read as one page
@@ -181,6 +161,19 @@ struct SearchViewMac: View {
                     .contextMenu {
                         AlbumContextMenuItems(album: album)
                     }
+                }
+            }
+        }
+    }
+
+    private var songsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Songs", count: results.tracks.count, unit: "song",
+                          showAll: shownTracks.count < results.tracks.count ? .songs : nil)
+            VStack(spacing: 0) {
+                ForEach(Array(shownTracks.enumerated()), id: \.element.id) { index, track in
+                    if index > 0 { Divider() }
+                    SearchTrackRow(track: track) { playTrack(at: index) }
                 }
             }
         }
