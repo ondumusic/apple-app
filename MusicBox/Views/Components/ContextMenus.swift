@@ -82,7 +82,14 @@ struct AlbumContextMenuItems: View {
 
         if downloadedOnly || musicLibrary.isAlbumFullyDownloaded(albumId: album.id) {
             Button(role: .destructive) {
+                #if os(macOS)
+                DownloadRemovalRequest.post(
+                    trackIds: Set(musicLibrary.tracksForAlbum(album.id).filter(\.isDownloaded).map(\.id)),
+                    subject: album.name
+                )
+                #else
                 musicLibrary.markAlbumUndownloaded(albumId: album.id)
+                #endif
             } label: {
                 Label("Remove Download", systemImage: "trash")
             }
@@ -273,7 +280,15 @@ struct ArtistContextMenuItems: View {
 
         if downloadedOnly || musicLibrary.isArtistFullyDownloaded(artistId: artist.id) {
             Button(role: .destructive) {
+                #if os(macOS)
+                DownloadRemovalRequest.post(
+                    trackIds: Set(musicLibrary.downloadedTracks()
+                        .filter { $0.albumArtistId == artist.id }.map(\.id)),
+                    subject: artist.name
+                )
+                #else
                 musicLibrary.markArtistUndownloaded(artistId: artist.id)
+                #endif
             } label: {
                 Label("Remove Download", systemImage: "trash")
             }

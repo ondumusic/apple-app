@@ -75,6 +75,7 @@ struct MacOSContentView: View {
         .animation(.easeInOut(duration: 0.22), value: showQueue)
         .queueConfirmationOverlay()
         .replaceQueueConfirmation()
+        .removeDownloadConfirmation()
         .toolbar(removing: .sidebarToggle)
         .toolbar { PlayerToolbar(showQueue: $showQueue) }
         .toolbarBackground(.visible, for: .windowToolbar)
@@ -298,8 +299,8 @@ struct MacOSContentView: View {
             downloadService.downloadTracks(ids: ids, library: musicLibrary)
         }
         a.removePlaylistDownload = { [musicLibrary] playlist in
-            let ids = Set(musicLibrary.tracksForPlaylist(playlist.id).map(\.id))
-            musicLibrary.markTracksUndownloaded(trackIds: ids)
+            let ids = Set(musicLibrary.tracksForPlaylist(playlist.id).filter(\.isDownloaded).map(\.id))
+            DownloadRemovalRequest.post(trackIds: ids, subject: playlist.name)
         }
         a.isPlaylistDownloaded = { [musicLibrary] playlist in
             let tracks = musicLibrary.tracksForPlaylist(playlist.id)

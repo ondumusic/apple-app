@@ -69,7 +69,7 @@ struct PlaylistDetailMac: View {
         let isComplete = !tracks.isEmpty && tracks.allSatisfy(\.isDownloaded)
         Button {
             if isComplete {
-                musicLibrary.markTracksUndownloaded(trackIds: ids)
+                DownloadRemovalRequest.post(trackIds: ids, subject: playlist?.name ?? "")
             } else {
                 downloadService.downloadTracks(ids: ids, library: musicLibrary)
             }
@@ -83,6 +83,10 @@ struct PlaylistDetailMac: View {
         .disabled(tracks.isEmpty || isDownloading)
         .help(isComplete ? "Remove Download" : "Download")
 
+    }
+
+    private var totalDuration: TimeInterval {
+        tracks.reduce(0) { $0 + $1.duration }
     }
 
     private var header: some View {
@@ -105,9 +109,15 @@ struct PlaylistDetailMac: View {
                             isRenamingHeader = true
                         }
                 }
-                Text("^[\(tracks.count) song](inflect: true)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text("^[\(tracks.count) song](inflect: true)")
+                    if totalDuration > 0 {
+                        Text("·")
+                        Text(formattedTotalDuration(totalDuration))
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
             Spacer()
             HStack(spacing: 8) {

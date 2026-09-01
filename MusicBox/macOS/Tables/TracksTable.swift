@@ -1228,9 +1228,12 @@ private final class TitleCell: NSTableCellView {
         self.identifier = identifier
 
         label.translatesAutoresizingMaskIntoConstraints = false
+        // One line, truncated. Wrapping put long titles on two lines at any width, which
+        // broke the row rhythm of a table whose other columns are all single-line.
         label.lineBreakMode = .byTruncatingTail
-        label.maximumNumberOfLines = 2
-        label.cell?.wraps = true
+        label.maximumNumberOfLines = 1
+        label.cell?.wraps = false
+        label.cell?.usesSingleLineMode = true
         addSubview(label)
         // Deliberately not assigned to NSTableCellView.textField: that hands the label to
         // AppKit's automatic text-colour management, and under the .sourceList selection

@@ -11,7 +11,6 @@ struct DownloadsViewMac: View {
     @State private var entries: [DownloadedAlbumEntry] = []
     @State private var selection: Set<UUID> = []
     @State private var totalSize: Int64 = 0
-    @State private var pendingRemoval: [Album] = []
     @State private var showRemoveAllConfirmation = false
 
     private var isTransferring: Bool {
@@ -38,7 +37,7 @@ struct DownloadsViewMac: View {
                     accent: settings.resolvedAccentColor,
                     onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) },
                     onPlay: playAlbum,
-                    onRemove: { pendingRemoval = $0 }
+                    onRemove: requestRemoval
                 )
             }
         }
@@ -46,21 +45,6 @@ struct DownloadsViewMac: View {
         .background(Color(NSColor.controlBackgroundColor))
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }
-        .confirmationDialog(
-            removalTitle,
-            isPresented: Binding(get: { !pendingRemoval.isEmpty },
-                                 set: { if !$0 { pendingRemoval = [] } }),
-            titleVisibility: .visible
-        ) {
-            Button("Remove", role: .destructive) {
-                for album in pendingRemoval { musicLibrary.markAlbumUndownloaded(albumId: album.id) }
-                pendingRemoval = []
-                selection = []
-            }
-            Button("Cancel", role: .cancel) { pendingRemoval = [] }
-        } message: {
-            Text("The files are deleted from this Mac. Everything stays in your library and can be downloaded again.")
-        }
         .confirmationDialog(
             "Remove All Downloads?",
             isPresented: $showRemoveAllConfirmation,
@@ -76,10 +60,13 @@ struct DownloadsViewMac: View {
         }
     }
 
-    private var removalTitle: String {
-        pendingRemoval.count == 1
-            ? "Remove “\(pendingRemoval[0].name)”?"
-            : "Remove \(pendingRemoval.count) Albums?"
+    private func requestRemoval(_ albums: [Album]) {
+        let ids = albums.flatMap { musicLibrary.tracksForAlbum($0.id).filter(\.isDownloaded).map(\.id) }
+        let subject = albums.count == 1
+            ? albums[0].name
+            : String(AttributedString(localized: "^[\(albums.count) album](inflect: true)").characters)
+        DownloadRemovalRequest.post(trackIds: Set(ids), subject: subject)
+        selection = []
     }
 
     private var header: some View {

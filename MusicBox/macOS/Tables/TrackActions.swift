@@ -73,9 +73,13 @@ struct TrackActions {
                 }
             }
             a.removeDownload = { tracks in
-                let ids = Set(tracks.filter { musicLibrary.isDownloaded(trackId: $0.id) }.map(\.id))
-                guard !ids.isEmpty else { return }
-                musicLibrary.markTracksUndownloaded(trackIds: ids)
+                let ids = Set(tracks.filter(\.isDownloaded).map(\.id))
+                DownloadRemovalRequest.post(
+                    trackIds: ids,
+                    subject: tracks.count == 1
+                        ? tracks[0].name
+                        : DownloadRemovalRequest.songSubject(count: ids.count)
+                )
             }
         }
         return a

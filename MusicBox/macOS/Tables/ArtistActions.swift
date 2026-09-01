@@ -63,7 +63,11 @@ struct ArtistActions {
                     downloadService.download(album: album, artist: artist)
                 }
             }
-            a.removeDownload = { musicLibrary.markArtistUndownloaded(artistId: $0.id) }
+            a.removeDownload = { artist in
+                let ids = Set(musicLibrary.downloadedTracks()
+                    .filter { $0.albumArtistId == artist.id }.map(\.id))
+                DownloadRemovalRequest.post(trackIds: ids, subject: artist.name)
+            }
         }
         return a
     }

@@ -101,16 +101,18 @@ struct AlbumSectionHeader: View {
 /// secondary line when compact.
 private func albumSummary(_ album: Album) -> Text {
     let trackCount = album.tracks?.count ?? 0
-    let totalMinutes = Int(((album.tracks?.reduce(0) { $0 + $1.duration } ?? 0) / 60).rounded())
-    let duration: String
-    if totalMinutes >= 60 {
-        let hours = totalMinutes / 60
-        let mins = totalMinutes % 60
-        duration = mins == 0 ? "\(hours) hr" : "\(hours) hr \(mins) min"
-    } else {
-        duration = "\(max(1, totalMinutes)) min"
-    }
-    return Text("^[\(trackCount) song](inflect: true), \(duration)")
+    let total = album.tracks?.reduce(0) { $0 + $1.duration } ?? 0
+    return Text("^[\(trackCount) song](inflect: true), \(formattedTotalDuration(total))")
+}
+
+/// "44 min" / "1 hr 12 min" — collection totals, as opposed to Track.formattedDuration's
+/// m:ss for a single song.
+func formattedTotalDuration(_ seconds: TimeInterval) -> String {
+    let totalMinutes = Int((seconds / 60).rounded())
+    guard totalMinutes >= 60 else { return "\(max(1, totalMinutes)) min" }
+    let hours = totalMinutes / 60
+    let mins = totalMinutes % 60
+    return mins == 0 ? "\(hours) hr" : "\(hours) hr \(mins) min"
 }
 
 /// Album artwork rendered in the leftmost spacer-column area of TracksTable. Sized
