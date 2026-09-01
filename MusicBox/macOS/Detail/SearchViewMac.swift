@@ -90,7 +90,7 @@ struct SearchViewMac: View {
     @ViewBuilder
     private var resultsBody: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 34) {
                 if !results.artists.isEmpty { artistsSection }
                 if !results.albums.isEmpty { albumsSection }
                 if !results.tracks.isEmpty { songsSection }
@@ -108,18 +108,20 @@ struct SearchViewMac: View {
 
     private func sectionHeader(_ title: String, count: Int, unit: String,
                                showAll: SearchAllRequest.Kind? = nil) -> some View {
-        HStack(spacing: 8) {
-            Text(title).font(.headline)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title)
+                .font(.title3.weight(.semibold))
             Text(countLabel(count, unit: unit))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            Spacer(minLength: 12)
             if let showAll {
-                Spacer()
                 NavigationLink(value: SearchAllRequest(kind: showAll, query: query)) {
-                    HStack(spacing: 2) {
+                    HStack(spacing: 3) {
                         Text("Show all")
-                        Image(systemName: "chevron.right").font(.caption2)
+                        Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
                     }
+                    .font(.subheadline)
                 }
                 .buttonStyle(.link)
             }
@@ -135,7 +137,7 @@ struct SearchViewMac: View {
     }
 
     private var artistsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Artists", count: results.artists.count, unit: "artist",
                           showAll: shownArtists.count < results.artists.count ? .artists : nil)
             LazyVGrid(columns: artistColumns, alignment: .leading, spacing: 14) {
@@ -147,7 +149,7 @@ struct SearchViewMac: View {
     }
 
     private var albumsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Albums", count: results.albums.count, unit: "album",
                           showAll: shownAlbums.count < results.albums.count ? .albums : nil)
             LazyVGrid(columns: albumColumns, alignment: .leading, spacing: 16) {
@@ -167,7 +169,7 @@ struct SearchViewMac: View {
     }
 
     private var songsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Songs", count: results.tracks.count, unit: "song",
                           showAll: shownTracks.count < results.tracks.count ? .songs : nil)
             VStack(spacing: 0) {

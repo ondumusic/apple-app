@@ -17,6 +17,7 @@ nonisolated struct SearchAllRequest: Hashable {
 struct SearchAllViewMac: View {
     let request: SearchAllRequest
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(SettingsStore.self) private var settings
     @Environment(PlayerService.self) private var player
@@ -79,6 +80,9 @@ struct SearchAllViewMac: View {
             }
         }
         .navigationTitle(title)
+        // The toolbar's back button lands beside the transport controls, where it reads
+        // as a player control. This page carries its own, next to what it goes back from.
+        .navigationBarBackButtonHidden(true)
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
     }
 
@@ -91,8 +95,15 @@ struct SearchAllViewMac: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Text(title).font(.headline)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "chevron.backward")
+                    .font(.body.weight(.medium))
+            }
+            .buttonStyle(.plain)
+            .help("Back to results")
+            .accessibilityLabel("Back to results")
+            Text(title).font(.title3.weight(.semibold))
             switch request.kind {
             case .artists:
                 Text("^[\(artists.count) artist](inflect: true)")
@@ -113,7 +124,7 @@ struct SearchAllViewMac: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
     }
 
     private func reload() {
