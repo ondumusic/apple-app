@@ -13,6 +13,8 @@ struct Sidebar: NSViewControllerRepresentable {
     let actions: SidebarActions
     /// Active + queued downloads — surfaces as a badge on the Downloads category cell.
     var downloadingCount: Int = 0
+    /// Overall fraction across everything in flight, for the sidebar's activity strip.
+    var downloadProgress: Double = 0
     /// Library scope. Lives here rather than the window toolbar: it filters the library
     /// the sidebar navigates, and the toolbar is the player's.
     @Binding var filter: LibraryFilter
@@ -41,7 +43,7 @@ struct Sidebar: NSViewControllerRepresentable {
         nsViewController.accentNSColor = NSColor(accent)
         nsViewController.applyFilter(filter)
         nsViewController.applyExternalSearchText(searchText)
-        nsViewController.applyDownloadingCount(downloadingCount)
+        nsViewController.applyDownloadingCount(downloadingCount, progress: downloadProgress)
         let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists())
         nsViewController.update(playlistNodes: nodes, externalSelection: selection)
     }
@@ -122,6 +124,9 @@ final class SidebarViewController: NSViewController {
     }
     private let addButton = NSButton()
     private let bottomBar = NSView()
+    /// Mail-style activity strip: overall progress while transfers run, click for the
+    /// Activity window. Hidden entirely when nothing is downloading.
+    private let activityBar = ActivityBarView()
 
     private var rootNodes: [SidebarNode] = []
     private var librarySection: SidebarNode!
@@ -129,8 +134,13 @@ final class SidebarViewController: NSViewController {
     /// Active + queued downloads. Surfaced as a numeric badge on the Downloads category
     /// cell when > 0.
     private var downloadingCount: Int = 0
+    private lazy var activityBarHeight: NSLayoutConstraint =
+        activityBar.heightAnchor.constraint(equalToConstant: 0)
 
-    func applyDownloadingCount(_ count: Int) {
+    func applyDownloadingCount(_ count: Int, progress: Double) {
+        activityBar.update(count: count, progress: progress)
+        activityBarHeight.constant = count > 0 ? 30 : 0
+        activityBar.isHidden = count == 0
         guard count != downloadingCount else { return }
         downloadingCount = count
         // Find and reload just the .downloads category row so the badge refreshes
@@ -220,6 +230,12 @@ final class SidebarViewController: NSViewController {
         filterControl.action = #selector(filterChanged)
         filterControl.translatesAutoresizingMaskIntoConstraints = false
         bottomBar.addSubview(filterControl)
+        activityBar.translatesAutoresizingMaskIntoConstraints = false
+        activityBar.isHidden = true
+        activityBar.onClick = {
+            NotificationCenter.default.post(name: .showDownloadActivity, object: nil)
+        }
+        view.addSubview(activityBar)
         view.addSubview(bottomBar)
 
         NSLayoutConstraint.activate([
@@ -231,7 +247,11 @@ final class SidebarViewController: NSViewController {
             scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 6),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: activityBar.topAnchor),
+            activityBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            activityBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            activityBar.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
+            activityBarHeight,
             bottomBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             bottomBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -1068,6 +1088,56 @@ extension SidebarCell: NSTextFieldDelegate {
             return true
         }
         return false
+    }
+}
+
+/// Compact progress strip at the foot of the sidebar. Ambient by design — it says how
+/// much is left and nothing else; the Activity window is where the detail lives.
+private final class ActivityBarView: NSView {
+    var onClick: (() -> Void)?
+
+    private let label = NSTextField(labelWithString: "")
+    private let bar = NSProgressIndicator()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+
+        bar.isIndeterminate = false
+        bar.minValue = 0
+        bar.maxValue = 1
+        bar.controlSize = .small
+        bar.style = .bar
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(bar)
+
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+            bar.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            bar.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            bar.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 3),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) not implemented") }
+
+    func update(count: Int, progress: Double) {
+        guard count > 0 else { return }
+        let format = String(localized: "^[\(count) download](inflect: true) remaining")
+        label.stringValue = format
+        bar.doubleValue = progress
+    }
+
+    override func mouseDown(with event: NSEvent) { onClick?() }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
     }
 }
 

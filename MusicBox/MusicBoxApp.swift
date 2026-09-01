@@ -245,6 +245,10 @@ struct MusicBoxApp: App {
                 // Cmd+M is Minimize on macOS and AppKit wins that fight; Music.app puts
                 // the mini player on Cmd+Shift+M.
                 .keyboardShortcut("m", modifiers: [.command, .shift])
+                Button("Activity") {
+                    NotificationCenter.default.post(name: .showDownloadActivity, object: nil)
+                }
+                .keyboardShortcut("0", modifiers: [.command, .option])
             }
             CommandGroup(after: .toolbar) {
                 Picker("Library Filter", selection: $libraryFilter) {
@@ -262,6 +266,13 @@ struct MusicBoxApp: App {
                 }
             }
         }
+
+        Window("Activity", id: "activity") {
+            DownloadActivityView()
+                .environment(downloadService)
+        }
+        .defaultSize(width: 520, height: 340)
+        .windowResizability(.contentMinSize)
         #else
         WindowGroup {
             rootView

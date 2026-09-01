@@ -9,6 +9,7 @@ extension Notification.Name {
     static let requestAddToPlaylist = Notification.Name("MusicBox.requestAddToPlaylist")
     static let focusSearch = Notification.Name("MusicBox.focusSearch")
     static let toggleMiniPlayer = Notification.Name("MusicBox.toggleMiniPlayer")
+    static let showDownloadActivity = Notification.Name("MusicBox.showDownloadActivity")
     static let togglePlayPause = Notification.Name("MusicBox.togglePlayPause")
     /// Posted with `object: UUID` — the playlist/folder id that should enter inline rename
     /// mode in the macOS sidebar (used for "create + immediately rename" flow).

@@ -22,6 +22,7 @@ struct MacOSContentView: View {
     @State private var detailPath = NavigationPath()
     @State private var deleteTarget: Playlist?
     @State private var addToPlaylistTrackIds: [UUID] = []
+    @Environment(\.openWindow) private var openWindow
     @State private var searchText: String = ""
     /// Restored when a search is cleared — searching deselects the sidebar so it stops
     /// claiming you're still in whatever section you left.
@@ -39,6 +40,7 @@ struct MacOSContentView: View {
                 musicLibrary: musicLibrary,
                 actions: sidebarActions,
                 downloadingCount: downloadService.activeDownloads.count + downloadService.pendingQueue.count,
+                downloadProgress: overallDownloadProgress,
                 filter: $libraryFilter,
                 accent: settings.resolvedAccentColor
             )
@@ -149,6 +151,9 @@ struct MacOSContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleMiniPlayer)) { _ in
             toggleMiniPlayer()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showDownloadActivity)) { _ in
+            openWindow(id: "activity")
+        }
         .onReceive(NotificationCenter.default.publisher(for: .togglePlayPause)) { _ in
             player.togglePlayPause()
         }
@@ -221,6 +226,15 @@ struct MacOSContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             post(tempId)
         }
+    }
+
+    /// Averaged across what's in flight, with queued items counting as zero — enough for
+    /// an ambient bar, and it doesn't pretend to know total bytes.
+    private var overallDownloadProgress: Double {
+        let active = downloadService.activeDownloads.keys.map { downloadService.progressSnapshot[$0] ?? 0 }
+        let total = active.count + downloadService.pendingQueue.count
+        guard total > 0 else { return 0 }
+        return active.reduce(0, +) / Double(total)
     }
 
     private func toggleMiniPlayer() {
