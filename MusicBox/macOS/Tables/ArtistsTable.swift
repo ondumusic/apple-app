@@ -152,6 +152,7 @@ extension ArtistsTableViewController: NSTableViewDelegate {
         view.customSelectionLeftInset = 10
         view.customSelectionRightInset = 10
         view.suppressDivider = true
+        view.drawsSystemSeparator = true
         return view
     }
 

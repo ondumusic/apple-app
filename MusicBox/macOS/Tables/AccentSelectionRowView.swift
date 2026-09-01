@@ -30,6 +30,10 @@ final class AccentSelectionRowView: NSTableRowView {
                     cell.backgroundStyle = style
                 }
             }
+            // Redraw in the same pass. Without this the pill waits for the delegate's
+            // selection-changed sweep, so a deselected row's text went black while its
+            // pill was still painted — visible as a flash on every click.
+            needsDisplay = true
         }
     }
     /// When non-nil, NSTableView's native source-list selection pill is replaced with
@@ -68,7 +72,14 @@ final class AccentSelectionRowView: NSTableRowView {
         line.fill()
     }
 
-    override func drawSeparator(in dirtyRect: NSRect) {}
+    /// Tables that draw their own hairline in drawBackground suppress this entirely;
+    /// ones relying on NSTableView's grid lines opt back in.
+    var drawsSystemSeparator: Bool = false
+
+    override func drawSeparator(in dirtyRect: NSRect) {
+        guard drawsSystemSeparator else { return }
+        super.drawSeparator(in: dirtyRect)
+    }
 
     override func drawDraggingDestinationFeedback(in dirtyRect: NSRect) {
         // Standalone tables support drag-to-reorder (playlists), so they need the drop

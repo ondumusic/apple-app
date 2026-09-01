@@ -120,6 +120,9 @@ struct SearchViewMac: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // Same surface the tracks table paints, so the grids above it read as one page
+        // rather than a separate panel stuck on top.
+        .background(Color(NSColor.controlBackgroundColor))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
     }
 
