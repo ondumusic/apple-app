@@ -90,19 +90,22 @@ struct PlaylistDetailMac: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: 16) {
+            PlaylistArtworkMosaic(tracks: tracks)
+                .frame(width: 88, height: 88)
+            VStack(alignment: .leading, spacing: 4) {
                 if isRenamingHeader {
                     TextField("", text: $headerNameDraft)
                         .textFieldStyle(.plain)
-                        .font(.title2.bold())
+                        .font(.largeTitle.bold())
                         .onSubmit(commitHeaderRename)
                         .onExitCommand {
                             isRenamingHeader = false
                         }
                 } else {
                     Text(playlist?.name ?? "")
-                        .font(.title2.bold())
+                        .font(.largeTitle.bold())
+                        .lineLimit(1)
                         .onTapGesture(count: 2) {
                             guard let p = playlist else { return }
                             headerNameDraft = p.name
@@ -116,7 +119,6 @@ struct PlaylistDetailMac: View {
                         Text(formattedTotalDuration(totalDuration))
                     }
                 }
-                .font(.caption)
                 .foregroundStyle(.secondary)
             }
             Spacer()
@@ -135,8 +137,8 @@ struct PlaylistDetailMac: View {
             .buttonBorderShape(.circle)
             .controlSize(.large)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background)
         .overlay(alignment: .bottom) {
@@ -228,6 +230,60 @@ struct PlaylistDetailMac: View {
             #endif
             playlistController.moveItem(moved.id, to: newPosition, within: playlistId)
             prevPosition = newPosition
+        }
+    }
+}
+
+/// Playlists have no artwork of their own, so the header borrows their music: one cover
+/// if that's all there is, otherwise a 2×2 of the first four distinct albums — the
+/// convention Music.app and everything like it uses.
+private struct PlaylistArtworkMosaic: View {
+    let tracks: [Track]
+
+    private var artworkURLs: [URL] {
+        var seen = Set<UUID>()
+        var urls: [URL] = []
+        for track in tracks {
+            guard let album = track.album, !seen.contains(album.id) else { continue }
+            seen.insert(album.id)
+            if let url = album.artworkUrl {
+                urls.append(url)
+                if urls.count == 4 { break }
+            }
+        }
+        return urls
+    }
+
+    var body: some View {
+        Group {
+            let urls = artworkURLs
+            if urls.isEmpty {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.quaternary)
+                    .overlay {
+                        Image(systemName: "music.note.list")
+                            .font(.title)
+                            .foregroundStyle(.secondary)
+                    }
+            } else if urls.count < 4 {
+                ArtworkView(url: urls[0])
+            } else {
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        ArtworkView(url: urls[0], cornerRadius: 0)
+                        ArtworkView(url: urls[1], cornerRadius: 0)
+                    }
+                    HStack(spacing: 0) {
+                        ArtworkView(url: urls[2], cornerRadius: 0)
+                        ArtworkView(url: urls[3], cornerRadius: 0)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
         }
     }
 }
