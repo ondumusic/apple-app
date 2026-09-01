@@ -17,7 +17,6 @@ nonisolated struct SearchAllRequest: Hashable {
 struct SearchAllViewMac: View {
     let request: SearchAllRequest
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(SettingsStore.self) private var settings
     @Environment(PlayerService.self) private var player
@@ -96,13 +95,7 @@ struct SearchAllViewMac: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Button(action: { dismiss() }) {
-                Image(systemName: "chevron.backward")
-                    .font(.body.weight(.medium))
-            }
-            .buttonStyle(.plain)
-            .help("Back to results")
-            .accessibilityLabel("Back to results")
+            BackToResultsButton()
             Text(title).font(.title3.weight(.semibold))
             switch request.kind {
             case .artists:

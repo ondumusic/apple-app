@@ -3,7 +3,12 @@ import SwiftUI
 
 struct ArtistDetailMac: View {
     let artist: Artist
+    /// Set when this view is pushed rather than shown as a section's root. The toolbar's
+    /// own back button sits beside the transport controls where it reads as a player
+    /// control, so pushed detail views carry their own next to the title.
+    var showsBackButton = false
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(SettingsStore.self) private var settings
     @Environment(PlayerService.self) private var player
@@ -74,6 +79,7 @@ struct ArtistDetailMac: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { paneWidth = $0 }
         }
         .background(Color(NSColor.textBackgroundColor))
+        .navigationBarBackButtonHidden(showsBackButton)
         .navigationTitle(artist.name)
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }
@@ -92,6 +98,7 @@ struct ArtistDetailMac: View {
 
     private var header: some View {
         HStack(alignment: .center) {
+            if showsBackButton { BackToResultsButton() }
             VStack(alignment: .leading, spacing: 4) {
                 Text(artist.name)
                     .font(.largeTitle.bold())

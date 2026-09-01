@@ -24,12 +24,7 @@ final class AccentSelectionRowView: NSTableRowView {
             // Propagate emphasis to cells synchronously, before the pending row redraw,
             // so cells' text flips to white in the same frame the pill appears (no flash
             // from black to white during shift-range selection).
-            let style: NSView.BackgroundStyle = newValue ? .emphasized : .normal
-            for col in 0..<numberOfColumns {
-                if let cell = view(atColumn: col) as? NSTableCellView, cell.backgroundStyle != style {
-                    cell.backgroundStyle = style
-                }
-            }
+            applyCellEmphasis()
             // Redraw in the same pass. Without this the pill waits for the delegate's
             // selection-changed sweep, so a deselected row's text went black while its
             // pill was still painted — visible as a flash on every click.
@@ -46,6 +41,35 @@ final class AccentSelectionRowView: NSTableRowView {
     /// The app accent rather than NSColor.selectedContentBackgroundColor, which follows
     /// the system accent and left selection disagreeing with the rest of the UI.
     var selectionColor: NSColor = .selectedContentBackgroundColor
+
+    /// macOS greys out selection in a window that isn't key — ours stayed at full accent,
+    /// which made an inactive window read as if it still had focus. Cells follow: the
+    /// system keeps label text primary against the unemphasized fill rather than white.
+    private var isWindowActive: Bool { window?.isKeyWindow ?? false }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        keyObservers.forEach(NotificationCenter.default.removeObserver)
+        keyObservers.removeAll()
+        guard let window else { return }
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            keyObservers.append(NotificationCenter.default.addObserver(
+                forName: name, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.applyCellEmphasis()
+                    self.needsDisplay = true
+                }
+            })
+        }
+    }
+
+    private var keyObservers: [NSObjectProtocol] = []
+
+    deinit {
+        keyObservers.forEach(NotificationCenter.default.removeObserver)
+    }
     /// Standalone tables use alternating row colours, which NSTableRowView paints in its
     /// own drawBackground — our override has to defer to it or the stripes disappear.
     var drawsRowBackground: Bool = false
@@ -111,6 +135,15 @@ final class AccentSelectionRowView: NSTableRowView {
         return super.interiorBackgroundStyle
     }
 
+    private func applyCellEmphasis() {
+        let style: NSView.BackgroundStyle = (isSelected && isWindowActive) ? .emphasized : .normal
+        for col in 0..<numberOfColumns {
+            if let cell = view(atColumn: col) as? NSTableCellView, cell.backgroundStyle != style {
+                cell.backgroundStyle = style
+            }
+        }
+    }
+
     private func drawCustomSelectionPill(leftInset: CGFloat) {
         let radius: CGFloat = 6
         let topRadius: CGFloat = isPreviousRowSelected ? 0 : radius
@@ -123,7 +156,7 @@ final class AccentSelectionRowView: NSTableRowView {
         )
         guard rect.width > 0 else { return }
         let path = roundedRectPath(rect, topRadius: topRadius, bottomRadius: bottomRadius)
-        selectionColor.setFill()
+        (isWindowActive ? selectionColor : .unemphasizedSelectedContentBackgroundColor).setFill()
         path.fill()
     }
 

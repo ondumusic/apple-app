@@ -1199,6 +1199,40 @@ protocol SidebarCellRenameDelegate: AnyObject {
 private final class SidebarRowView: NSTableRowView {
     var selectionColor: NSColor = .selectedContentBackgroundColor
 
+    /// Selection greys out in a window that isn't key, the way every other Mac sidebar
+    /// behaves. Ours painted full accent regardless, so an inactive window looked focused.
+    private var isWindowActive: Bool { window?.isKeyWindow ?? false }
+    private var keyObservers: [NSObjectProtocol] = []
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        keyObservers.forEach(NotificationCenter.default.removeObserver)
+        keyObservers.removeAll()
+        guard let window else { return }
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            keyObservers.append(NotificationCenter.default.addObserver(
+                forName: name, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.applyCellEmphasis()
+                    self.needsDisplay = true
+                }
+            })
+        }
+    }
+
+    deinit {
+        keyObservers.forEach(NotificationCenter.default.removeObserver)
+    }
+
+    private func applyCellEmphasis() {
+        let style: NSView.BackgroundStyle = (isSelected && isWindowActive) ? .emphasized : .normal
+        for column in 0..<numberOfColumns {
+            (view(atColumn: column) as? NSTableCellView)?.backgroundStyle = style
+        }
+    }
+
     override var isSelected: Bool {
         get { super.isSelected }
         set {
@@ -1207,10 +1241,7 @@ private final class SidebarRowView: NSTableRowView {
             // Repaint: without this the previous row keeps painting its pill, which is
             // how several rows ended up looking selected at once.
             needsDisplay = true
-            let style: NSView.BackgroundStyle = newValue ? .emphasized : .normal
-            for column in 0..<numberOfColumns {
-                (view(atColumn: column) as? NSTableCellView)?.backgroundStyle = style
-            }
+            applyCellEmphasis()
         }
     }
 
@@ -1227,14 +1258,14 @@ private final class SidebarRowView: NSTableRowView {
         guard isSelected else { return }
         let rect = bounds.insetBy(dx: 8, dy: 1)
         guard rect.width > 0, rect.height > 0 else { return }
-        selectionColor.setFill()
+        (isWindowActive ? selectionColor : .unemphasizedSelectedContentBackgroundColor).setFill()
         NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
     }
 
     /// Cells pick their text colour from this; with highlight style .none the default
     /// stays .normal even when selected, so labels would draw dark on the accent fill.
     override var interiorBackgroundStyle: NSView.BackgroundStyle {
-        isSelected ? .emphasized : .normal
+        (isSelected && isWindowActive) ? .emphasized : .normal
     }
 }
 

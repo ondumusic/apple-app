@@ -3,7 +3,12 @@ import SwiftUI
 
 struct AlbumDetailMac: View {
     let album: Album
+    /// Set when this view is pushed rather than shown as a section's root. The toolbar's
+    /// own back button sits beside the transport controls where it reads as a player
+    /// control, so pushed detail views carry their own next to the title.
+    var showsBackButton = false
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(SettingsStore.self) private var settings
     @Environment(PlayerService.self) private var player
@@ -38,6 +43,22 @@ struct AlbumDetailMac: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            if showsBackButton {
+                HStack {
+                    BackToResultsButton()
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                Divider()
+            }
+            table
+        }
+        .navigationBarBackButtonHidden(showsBackButton)
+    }
+
+    private var table: some View {
         TracksTable(
             tracks: tracks,
             selection: $selection,

@@ -60,10 +60,10 @@ struct MacOSContentView: View {
                     }
                 }
                 .navigationDestination(for: Album.self) { album in
-                    AlbumDetailMac(album: album)
+                    AlbumDetailMac(album: album, showsBackButton: true)
                 }
                 .navigationDestination(for: Artist.self) { artist in
-                    ArtistDetailMac(artist: artist)
+                    ArtistDetailMac(artist: artist, showsBackButton: true)
                 }
                 .navigationDestination(for: SearchAllRequest.self) { request in
                     SearchAllViewMac(request: request)
@@ -177,12 +177,17 @@ struct MacOSContentView: View {
             detailPath.append(album)
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
-            // Switch to the Artists category and record which artist to land on. The
+            guard let artist = notification.object as? Artist else { return }
+            if !searchText.isEmpty {
+                // Push, so there's a way back to the results. Switching sections here
+                // clears the search and strands you with nothing to return to.
+                detailPath.append(artist)
+                return
+            }
+            // Otherwise land in the Artists category on that artist. The
             // pendingArtistNavigation binding lets ArtistsViewMac skip its default
             // first-artist selection on first mount (no flicker).
-            if let artist = notification.object as? Artist {
-                pendingArtistNavigation = artist.id
-            }
+            pendingArtistNavigation = artist.id
             sidebarSelection = .category(.artists)
         }
         .onReceive(NotificationCenter.default.publisher(for: .requestAddToPlaylist)) { notification in
