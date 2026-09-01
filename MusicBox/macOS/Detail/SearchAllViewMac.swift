@@ -78,6 +78,8 @@ struct SearchAllViewMac: View {
             }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.controlBackgroundColor))
         .navigationTitle(title)
         // The toolbar's back button lands beside the transport controls, where it reads
         // as a player control. This page carries its own, next to what it goes back from.

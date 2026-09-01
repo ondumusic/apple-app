@@ -6,6 +6,13 @@ import SwiftUI
 /// inside a single ToolbarItem.principal caused beachball/hang in earlier iterations.
 struct PlayerToolbar: ToolbarContent {
     @Environment(PlayerService.self) private var player
+    @Environment(\.controlActiveState) private var activeState
+
+    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// inactive window and ours stayed bright.
+    private var activeTint: AnyShapeStyle {
+        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+    }
     @Binding var showQueue: Bool
 
     var body: some ToolbarContent {
@@ -29,7 +36,7 @@ struct PlayerToolbar: ToolbarContent {
                 showQueue.toggle()
             } label: {
                 Image(systemName: "list.bullet")
-                    .foregroundStyle(showQueue ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(showQueue ? activeTint : AnyShapeStyle(.secondary))
             }
             .help("Queue")
             .accessibilityLabel("Queue")
@@ -41,11 +48,18 @@ struct PlayerToolbar: ToolbarContent {
 
 private struct ShuffleButton: View {
     @Environment(PlayerService.self) private var player
+    @Environment(\.controlActiveState) private var activeState
+
+    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// inactive window and ours stayed bright.
+    private var activeTint: AnyShapeStyle {
+        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+    }
 
     var body: some View {
         Button { player.toggleShuffle() } label: {
             Image(systemName: "shuffle")
-                .foregroundStyle(player.isShuffled ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .foregroundStyle(player.isShuffled ? activeTint : AnyShapeStyle(.secondary))
         }
         .help(player.isShuffled ? "Disable Shuffle" : "Shuffle")
         .accessibilityLabel("Shuffle")
@@ -56,11 +70,18 @@ private struct ShuffleButton: View {
 
 private struct RepeatButton: View {
     @Environment(PlayerService.self) private var player
+    @Environment(\.controlActiveState) private var activeState
+
+    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// inactive window and ours stayed bright.
+    private var activeTint: AnyShapeStyle {
+        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+    }
 
     var body: some View {
         Button { player.cycleRepeatMode() } label: {
             Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
-                .foregroundStyle(player.repeatMode != .off ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .foregroundStyle(player.repeatMode != .off ? activeTint : AnyShapeStyle(.secondary))
         }
         .help(help)
         .accessibilityLabel("Repeat")
@@ -79,6 +100,13 @@ private struct RepeatButton: View {
 
 private struct TransportButtons: View {
     @Environment(PlayerService.self) private var player
+    @Environment(\.controlActiveState) private var activeState
+
+    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// inactive window and ours stayed bright.
+    private var activeTint: AnyShapeStyle {
+        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -117,6 +145,13 @@ private struct TransportButtons: View {
 
 private struct NowPlayingLabel: View {
     @Environment(PlayerService.self) private var player
+    @Environment(\.controlActiveState) private var activeState
+
+    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// inactive window and ours stayed bright.
+    private var activeTint: AnyShapeStyle {
+        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+    }
 
     private var track: Track? { player.currentTrack }
     private var artworkURL: URL? {
@@ -203,6 +238,13 @@ private struct NowPlayingLabel: View {
 /// popover meant clicking it opened a second popover over the first.
 struct VolumeControl: View {
     @Environment(PlayerService.self) private var player
+    @Environment(\.controlActiveState) private var activeState
+
+    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// inactive window and ours stayed bright.
+    private var activeTint: AnyShapeStyle {
+        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+    }
     @State private var showingSlider = false
     var iconSize: CGFloat? = nil
 
@@ -243,6 +285,13 @@ struct VolumeControl: View {
 
 private struct ScrubberView: View {
     @Environment(PlayerService.self) private var player
+    @Environment(\.controlActiveState) private var activeState
+
+    /// The accent, but only while the window has focus — macOS greys controls out in an
+    /// inactive window and ours stayed bright.
+    private var activeTint: AnyShapeStyle {
+        activeState == .inactive ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint)
+    }
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
 
@@ -261,7 +310,8 @@ private struct ScrubberView: View {
                 onCommit: {
                     player.seek(to: scrubValue)
                     isScrubbing = false
-                }
+                },
+                isWindowActive: activeState != .inactive
             )
             .frame(height: 8)
             Text(format(player.duration))
@@ -286,13 +336,14 @@ struct ProgressTrack: View {
     let onScrub: (Double) -> Void
     let onCommit: () -> Void
     var tint: Color = .accentColor
+    var isWindowActive: Bool = true
     var trackColor: Color = Color.primary.opacity(0.18)
 
     var body: some View {
         ProgressTrackRepresentable(
             value: value,
             duration: duration,
-            tint: NSColor(tint),
+            tint: isWindowActive ? NSColor(tint) : .secondaryLabelColor,
             trackColor: NSColor(trackColor),
             onScrub: onScrub,
             onCommit: onCommit

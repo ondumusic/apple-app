@@ -43,20 +43,15 @@ struct AlbumDetailMac: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if showsBackButton {
-                HStack {
-                    BackToResultsButton()
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-                Divider()
-            }
-            table
-        }
-        .navigationBarBackButtonHidden(showsBackButton)
+        table
+            // Capped: the title column otherwise grows with the window and leaves a long
+            // empty run between a track's name and its duration.
+            .frame(maxWidth: Self.maxContentWidth)
+            .frame(maxWidth: .infinity)
+            .navigationBarBackButtonHidden(showsBackButton)
     }
+
+    static let maxContentWidth: CGFloat = 1100
 
     private var table: some View {
         TracksTable(
@@ -80,7 +75,8 @@ struct AlbumDetailMac: View {
                         onPlay: { playAll(shuffle: false) },
                         onShuffle: { playAll(shuffle: true) },
                         onDownload: { downloadAlbum() },
-                        onCancelDownload: { downloadService.cancelAlbumDownloads(albumId: album.id) }
+                        onCancelDownload: { downloadService.cancelAlbumDownloads(albumId: album.id) },
+                        onBack: showsBackButton ? { dismiss() } : nil
                     )
                     .environment(musicLibrary)
                     .environment(downloadService)
