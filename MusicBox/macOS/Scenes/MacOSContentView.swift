@@ -27,6 +27,10 @@ struct MacOSContentView: View {
     /// Restored when a search is cleared — searching deselects the sidebar so it stops
     /// claiming you're still in whatever section you left.
     @State private var selectionBeforeSearch: SidebarSelection?
+    /// Batch bookkeeping for the sidebar's progress bar. Queueing more work grows the
+    /// total; finishing grows the completed count; both reset once the queue drains.
+    @State private var batchTotal = 0
+    @State private var batchCompleted = 0
     @State private var miniPlayer: MiniPlayerWindowController?
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
     @State private var spaceKeyMonitor: Any?
@@ -111,6 +115,16 @@ struct MacOSContentView: View {
             if newValue != nil, !searchText.isEmpty {
                 searchText = ""
                 selectionBeforeSearch = nil
+            }
+        }
+        .onChange(of: downloadsRemaining) { previous, current in
+            if current == 0 {
+                batchTotal = 0
+                batchCompleted = 0
+            } else if current < previous {
+                batchCompleted += previous - current
+            } else {
+                batchTotal += current - previous
             }
         }
         .onChange(of: searchText) { oldValue, newValue in
@@ -228,13 +242,20 @@ struct MacOSContentView: View {
         }
     }
 
-    /// Averaged across what's in flight, with queued items counting as zero — enough for
-    /// an ambient bar, and it doesn't pretend to know total bytes.
+    private var downloadsRemaining: Int {
+        downloadService.activeDownloads.count + downloadService.pendingQueue.count
+    }
+
+    /// Progress across the whole batch, not across the current workers. Averaging the
+    /// in-flight fractions made the bar sawtooth: each completion took a ~1.0 out of the
+    /// numerator while a queued item entered at 0, so finishing something moved the bar
+    /// backwards. Counting finished items keeps it monotonic — the completion adds 1 to
+    /// `batchCompleted` at the same moment its fraction leaves `partial`.
     private var overallDownloadProgress: Double {
-        let active = downloadService.activeDownloads.keys.map { downloadService.progressSnapshot[$0] ?? 0 }
-        let total = active.count + downloadService.pendingQueue.count
-        guard total > 0 else { return 0 }
-        return active.reduce(0, +) / Double(total)
+        guard batchTotal > 0 else { return 0 }
+        let partial = downloadService.activeDownloads.keys
+            .reduce(0.0) { $0 + (downloadService.progressSnapshot[$1] ?? 0) }
+        return min(1, (Double(batchCompleted) + partial) / Double(batchTotal))
     }
 
     private func toggleMiniPlayer() {

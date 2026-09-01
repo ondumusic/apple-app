@@ -9,6 +9,12 @@ import SwiftUI
 /// when you actually care.
 struct DownloadActivityView: View {
     @Environment(DownloadService.self) private var downloadService
+    @State private var showCancelAllConfirmation = false
+
+    /// Anything still going or waiting — failed rows alone don't warrant bulk transport.
+    private var hasTransfers: Bool {
+        !downloadService.activeDownloads.isEmpty || !downloadService.pendingQueue.isEmpty
+    }
 
     private var isEmpty: Bool {
         downloadService.activeDownloads.isEmpty
@@ -31,7 +37,7 @@ struct DownloadActivityView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
                         section("Downloading", rows: activeRows)
                         section("Queued", rows: queuedRows)
                         section("Failed", rows: failedRows)
@@ -42,6 +48,13 @@ struct DownloadActivityView: View {
         }
         .frame(minWidth: 460, minHeight: 260)
         .background(Color(NSColor.controlBackgroundColor))
+        .confirmationDialog("Cancel All Downloads?", isPresented: $showCancelAllConfirmation,
+                            titleVisibility: .visible) {
+            Button("Cancel All", role: .destructive) { downloadService.cancelAll() }
+            Button("Keep Downloading", role: .cancel) {}
+        } message: {
+            Text("Nothing already downloaded is removed — only what's still in progress or waiting.")
+        }
     }
 
     private var header: some View {
@@ -50,6 +63,18 @@ struct DownloadActivityView: View {
             Text(summary)
                 .font(.subheadline.weight(.medium))
             Spacer(minLength: 12)
+            if hasTransfers {
+                Button(downloadService.isPaused ? "Resume All" : "Pause All") {
+                    if downloadService.isPaused {
+                        downloadService.resumeAll()
+                    } else {
+                        downloadService.pauseAll()
+                    }
+                }
+                .buttonStyle(.link)
+                Button("Cancel All") { showCancelAllConfirmation = true }
+                    .buttonStyle(.link)
+            }
             if !downloadService.failedDownloads.isEmpty {
                 Button("Retry All") {
                     for failed in downloadService.failedDownloads {
@@ -67,10 +92,12 @@ struct DownloadActivityView: View {
     }
 
     private var summary: LocalizedStringKey {
+        // The noun goes inside the markup — wrapping "remaining" made the inflection
+        // engine pluralise that instead, which came out as "remained".
         let remaining = downloadService.activeDownloads.count + downloadService.pendingQueue.count
-        if remaining > 0 { return "^[\(remaining) remaining](inflect: true)" }
+        if remaining > 0 { return "^[\(remaining) download](inflect: true) remaining" }
         if !downloadService.failedDownloads.isEmpty {
-            return "^[\(downloadService.failedDownloads.count) failed](inflect: true)"
+            return "^[\(downloadService.failedDownloads.count) download](inflect: true) failed"
         }
         return "Idle"
     }
@@ -96,8 +123,10 @@ struct DownloadActivityView: View {
         downloadService.activeDownloadOrder.compactMap { trackId in
             guard let state = downloadService.activeDownloads[trackId] else { return nil }
             return ActivityRow(
-                id: trackId, title: state.trackName, artist: state.artistName,
-                progress: state.isPaused ? nil : downloadService.progressSnapshot[trackId],
+                id: "active-\(trackId)", title: state.trackName, artist: state.artistName,
+                // Zero rather than nil before bytes flow, so the column is always
+                // present and shows an indeterminate bar instead of a gap.
+                progress: state.isPaused ? nil : (downloadService.progressSnapshot[trackId] ?? 0),
                 status: state.isPaused ? "Paused" : nil, isError: false,
                 primary: state.isPaused
                     ? .init(label: "Resume", symbol: "play.circle") { downloadService.resumeDownload(trackId: trackId) }
@@ -109,7 +138,7 @@ struct DownloadActivityView: View {
 
     private var queuedRows: [ActivityRow] {
         downloadService.pendingQueue.map { info in
-            ActivityRow(id: info.track.id, title: info.track.name, artist: info.track.artist.name,
+            ActivityRow(id: "queued-\(info.track.id)", title: info.track.name, artist: info.track.artist.name,
                         progress: nil, status: "Waiting", isError: false, primary: nil,
                         secondary: .init(label: "Cancel", symbol: "xmark.circle") {
                             downloadService.cancelDownload(trackId: info.track.id)
@@ -119,7 +148,7 @@ struct DownloadActivityView: View {
 
     private var failedRows: [ActivityRow] {
         downloadService.failedDownloads.map { failed in
-            ActivityRow(id: failed.id, title: failed.trackName, artist: failed.artistName,
+            ActivityRow(id: "failed-\(failed.id)", title: failed.trackName, artist: failed.artistName,
                         progress: nil, status: failed.reason, isError: true,
                         primary: .init(label: "Retry", symbol: "arrow.clockwise") {
                             downloadService.retryDownload(failed)
@@ -138,7 +167,7 @@ struct ActivityRow: Identifiable {
         let run: () -> Void
     }
 
-    let id: UUID
+    let id: String
     let title: String
     let artist: String
     let progress: Double?

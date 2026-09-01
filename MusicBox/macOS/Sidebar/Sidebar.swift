@@ -1129,8 +1129,11 @@ private final class ActivityBarView: NSView {
 
     func update(count: Int, progress: Double) {
         guard count > 0 else { return }
-        let format = String(localized: "^[\(count) download](inflect: true) remaining")
-        label.stringValue = format
+        // AttributedString resolves the inflection markup; String(localized:) leaves it
+        // in the output verbatim, markup and all.
+        label.stringValue = String(
+            AttributedString(localized: "^[\(count) download](inflect: true) remaining").characters
+        )
         bar.doubleValue = progress
     }
 
