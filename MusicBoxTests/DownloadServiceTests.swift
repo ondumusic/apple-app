@@ -529,3 +529,29 @@ private func makeService(library: MusicLibrary? = nil, settings: SettingsStore? 
         #expect(pendingIds == [tracks[1].id, tracks[3].id])
     }
 }
+
+@Suite(.serialized)
+struct DownloadPauseOverrideTests {
+
+    /// The override lasts the session and is deliberately not persisted, so a relaunch
+    /// defers to the system setting again.
+    @Test func lowPowerOverrideDefaultsOff() throws {
+        let service = try makeService()
+        #expect(service.ignoresLowPowerMode == false)
+    }
+
+    @Test func lowPowerOverrideCanBeSet() throws {
+        let service = try makeService()
+        service.ignoresLowPowerMode = true
+        #expect(service.ignoresLowPowerMode)
+    }
+
+    /// Taking the override re-evaluates the pause conditions rather than pinning the
+    /// reason, so the disk-space guard still gets its say on the next attempt.
+    @Test func overrideReevaluatesPauseReason() throws {
+        let service = try makeService()
+        service.downloadsPausedReason = .lowDiskSpace
+        service.ignoresLowPowerMode = true
+        #expect(service.downloadsPausedReason == nil)
+    }
+}

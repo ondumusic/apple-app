@@ -9,6 +9,11 @@ struct DownloadPausedNotice: View {
     @Environment(DownloadService.self) private var downloadService
     @Environment(NetworkMonitor.self) private var network
 
+    /// Only the Low Power Mode pause is a preference the user can reasonably overrule.
+    private var isOverridable: Bool {
+        downloadService.downloadsPausedReason == .lowPowerMode
+    }
+
     private var reason: LocalizedStringKey? {
         let hasWork = !downloadService.activeDownloads.isEmpty || !downloadService.pendingQueue.isEmpty
         guard hasWork else { return nil }
@@ -29,6 +34,10 @@ struct DownloadPausedNotice: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                 Text(reason)
                 Spacer(minLength: 0)
+                if isOverridable {
+                    Button("Download Anyway") { downloadService.ignoresLowPowerMode = true }
+                        .buttonStyle(.link)
+                }
             }
             .font(.subheadline)
             .foregroundStyle(.orange)

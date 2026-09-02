@@ -30,7 +30,20 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     /// Reason downloads are blocked by system conditions (nil when not blocked)
     var downloadsPausedReason: DownloadPausedReason?
 
-    nonisolated enum DownloadPausedReason {
+    /// Set when the user chooses to download anyway despite Low Power Mode. Deliberately
+    /// not persisted — it lasts the session, so the next launch defers to the system
+    /// setting again rather than quietly ignoring it forever.
+    ///
+    /// Only Low Power Mode can be overridden. Low disk space is a real limit, not a
+    /// preference, and filling the volume is a worse outcome than a stalled queue.
+    var ignoresLowPowerMode = false {
+        didSet {
+            guard ignoresLowPowerMode, ignoresLowPowerMode != oldValue else { return }
+            startNextIfNeeded()
+        }
+    }
+
+    nonisolated enum DownloadPausedReason: Equatable {
         case lowPowerMode
         case lowDiskSpace
     }
@@ -427,7 +440,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     private func startNextIfNeeded() {
         guard !isPaused else { return }
 
-        if ProcessInfo.processInfo.isLowPowerModeEnabled {
+        if ProcessInfo.processInfo.isLowPowerModeEnabled, !ignoresLowPowerMode {
             downloadsPausedReason = .lowPowerMode
             #if DEBUG
             print("DownloadService: not starting — Low Power Mode is on (\(pendingQueue.count) queued)")
