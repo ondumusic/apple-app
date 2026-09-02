@@ -7,17 +7,30 @@ import SwiftUI
 struct PlayerToolbar: ToolbarContent {
     @Environment(PlayerService.self) private var player
     @Binding var showQueue: Bool
+    /// Fixed, and deliberately conservative.
+    ///
+    /// A measured width arrives *after* layout, so during a live resize the toolbar lays
+    /// out with the previous, too-wide value, decides to overflow, and the correction
+    /// lands too late — controls vanished behind `»` on a one-pixel drag and only came
+    /// back when something else forced an update. Sized to what survives the 900pt
+    /// minimum window — measured, since the toolbar overflows well before the space runs
+    /// out: 260 still evicted the queue button at 900 with 137pt to spare. The cost is
+    /// that it no longer grows on a wide window.
+    private static let nowPlayingWidth: CGFloat = 200
 
     var body: some ToolbarContent {
+        // The display sits with the transport rather than in `.principal`. Measured,
+        // `.principal` doesn't centre: it anchors the item at a fixed offset — 562pt at
+        // every window width — and reserves a 160pt gap after the transport that never
+        // closes. Packing it with the controls and sizing it to fill uses that gap
+        // instead of protecting it.
         ToolbarItemGroup(placement: .navigation) {
             ShuffleButton().fadesWhenInactive()
             TransportButtons().fadesWhenInactive()
             RepeatButton().fadesWhenInactive()
-        }
-        ToolbarItem(placement: .principal) {
             NowPlayingLabel()
                 .fadesWhenInactive()
-                .frame(minWidth: 260, idealWidth: 420, maxWidth: 460)
+                .frame(width: Self.nowPlayingWidth)
         }
         ToolbarItemGroup(placement: .primaryAction) {
             VolumeControl()
