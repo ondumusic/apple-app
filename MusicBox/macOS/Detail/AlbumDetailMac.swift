@@ -10,44 +10,45 @@ struct AlbumDetailMac: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(MusicLibrary.self) private var musicLibrary
-    @Environment(SettingsStore.self) private var settings
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
     @Environment(DownloadService.self) private var downloadService
 
     @State private var tracks: [Track] = []
-    @State private var selection: Set<UUID> = []
 
     private var hasMultipleArtists: Bool {
         Set(tracks.map(\.artist.id)).count > 1
     }
 
-    private var trackActions: TrackActions {
-        .standard(player: player, musicLibrary: musicLibrary, network: network, downloadService: downloadService, artworkURL: album.artworkUrl)
-    }
-
-    /// Single-section view of this album — same iTunes split layout as ArtistDetailMac
-    /// uses for each of an artist's albums. Album metadata + buttons live in the
-    /// section header; artwork is overlaid on the left.
-    private var sections: [TracksTableSection] {
-        [TracksTableSection(id: album.id, album: albumWithLoadedTracks, tracks: tracks)]
-    }
-
-    /// `album` from the navigation destination doesn't have `.tracks` populated —
-    /// rebuild a copy with the loaded tracks so the artwork overlay's caption
-    /// (track count, total duration) is accurate.
-    private var albumWithLoadedTracks: Album {
-        var copy = album
-        copy.tracks = tracks
-        return copy
-    }
 
     var body: some View {
         VStack(spacing: 0) {
             if let backDestination { BackBar(destination: backDestination) }
-            albumHeader
-            Divider()
-            table
+            // One scrolling section: the header moved with the list rather than sitting
+            // above a table with its own scroll area, which read as two panes stacked.
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    albumHeader
+                    ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                        if index > 0 {
+                            Divider().padding(.leading, 24)
+                        }
+                        TrackRow(
+                            track: track,
+                            album: album,
+                            showArtist: hasMultipleArtists,
+                            onTap: { playTrack(at: index) }
+                        )
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 7)
+                    }
+                }
+            }
+        }
+        .navigationTitle(album.name)
+        .onChange(of: musicLibrary.revision, initial: true) { reload() }
+        .onChange(of: musicLibrary.downloadChanged) {
+            musicLibrary.applyDownloadChanges(to: &tracks)
         }
         // The table paints its own background only as far as the cap, so the margin
         // beside it showed the window's grey. Page supplies the same surface.
@@ -138,28 +139,6 @@ struct AlbumDetailMac: View {
             }
         }
         .help(isComplete ? "Remove Download" : (isDownloading ? "Cancel Download" : "Download"))
-    }
-
-    private var table: some View {
-        TracksTable(
-            tracks: tracks,
-            selection: $selection,
-            onPlay: playTrack(at:),
-            actions: trackActions,
-            showArtist: hasMultipleArtists,
-            showAlbum: false,
-            accent: settings.resolvedAccentColor,
-            currentlyPlayingTrackId: player.currentTrack?.id,
-            isPlaying: player.isPlaying,
-            rowHeight: 34,
-            embeddedStyle: true
-        )
-        .background(Color(NSColor.textBackgroundColor))
-        .navigationTitle(album.name)
-        .onChange(of: musicLibrary.revision, initial: true) { reload() }
-        .onChange(of: musicLibrary.downloadChanged) {
-            musicLibrary.applyDownloadChanges(to: &tracks)
-        }
     }
 
     private func reload() {
