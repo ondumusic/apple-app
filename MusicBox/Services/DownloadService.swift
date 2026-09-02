@@ -429,11 +429,17 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
         if ProcessInfo.processInfo.isLowPowerModeEnabled {
             downloadsPausedReason = .lowPowerMode
+            #if DEBUG
+            print("DownloadService: not starting — Low Power Mode is on (\(pendingQueue.count) queued)")
+            #endif
             return
         }
 
         if cachedAvailableDiskSpace() < Self.minimumFreeDiskSpace {
             downloadsPausedReason = .lowDiskSpace
+            #if DEBUG
+            print("DownloadService: not starting — free disk below \(Self.minimumFreeDiskSpace) bytes")
+            #endif
             return
         }
 

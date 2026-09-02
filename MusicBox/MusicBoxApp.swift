@@ -270,6 +270,7 @@ struct MusicBoxApp: App {
         Window("Activity", id: "activity") {
             DownloadActivityView()
                 .environment(downloadService)
+                .environment(networkMonitor)
         }
         .defaultSize(width: 520, height: 340)
         .windowResizability(.contentMinSize)

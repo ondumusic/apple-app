@@ -24,6 +24,7 @@ struct DownloadsViewMac: View {
         VStack(spacing: 0) {
             header
             Divider()
+            DownloadPausedNotice()
             if entries.isEmpty && !isTransferring {
                 ContentUnavailableView(
                     "No Downloads",

@@ -9,6 +9,7 @@ import SwiftUI
 /// when you actually care.
 struct DownloadActivityView: View {
     @Environment(DownloadService.self) private var downloadService
+    @Environment(NetworkMonitor.self) private var network
     @State private var showCancelAllConfirmation = false
 
     /// Anything still going or waiting — failed rows alone don't warrant bulk transport.
@@ -28,6 +29,7 @@ struct DownloadActivityView: View {
                 header
                 Divider()
             }
+            DownloadPausedNotice()
             if isEmpty {
                 ContentUnavailableView(
                     "No Activity",
