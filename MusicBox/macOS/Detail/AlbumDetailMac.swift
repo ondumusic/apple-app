@@ -45,6 +45,8 @@ struct AlbumDetailMac: View {
     var body: some View {
         VStack(spacing: 0) {
             if let backDestination { BackBar(destination: backDestination) }
+            albumHeader
+            Divider()
             table
         }
         // The table paints its own background only as far as the cap, so the margin
@@ -52,6 +54,90 @@ struct AlbumDetailMac: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(NSColor.controlBackgroundColor))
         .navigationBarBackButtonHidden(backDestination != nil)
+    }
+
+    /// Artwork and metadata across the top, track list full width beneath — the shape
+    /// Music.app uses for an album. The old layout kept the artwork in a left gutter
+    /// spanning the first rows, which cost the columns 200pt at every width and got
+    /// cramped fast in a narrow window. The artist page keeps that gutter for its
+    /// per-album sections, where scrolling past several covers is the point.
+    private var albumHeader: some View {
+        HStack(alignment: .bottom, spacing: 20) {
+            ArtworkView(url: album.artworkUrl)
+                .frame(width: 180, height: 180)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(album.name)
+                    .font(.largeTitle.bold())
+                    .lineLimit(2)
+                Text(album.artistName ?? "")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    if let year = album.releaseYear {
+                        Text(String(year))
+                        Text("·")
+                    }
+                    Text("^[\(tracks.count) song](inflect: true)")
+                    if totalDuration > 0 {
+                        Text("·")
+                        Text(formattedTotalDuration(totalDuration))
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Button { playAll(shuffle: false) } label: {
+                        Label("Play", systemImage: "play.fill")
+                    }
+                    Button { playAll(shuffle: true) } label: {
+                        Label("Shuffle", systemImage: "shuffle")
+                    }
+                    albumDownloadButton
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .padding(.top, 6)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 20)
+        .padding(.bottom, 18)
+    }
+
+    private var totalDuration: TimeInterval {
+        tracks.reduce(0) { $0 + $1.duration }
+    }
+
+    @ViewBuilder
+    private var albumDownloadButton: some View {
+        let isDownloading = downloadService.isAlbumDownloading(albumId: album.id)
+        let isComplete = musicLibrary.isAlbumFullyDownloaded(albumId: album.id)
+        Button {
+            if isDownloading {
+                downloadService.cancelAlbumDownloads(albumId: album.id)
+            } else if isComplete {
+                DownloadRemovalRequest.post(
+                    trackIds: Set(tracks.filter(\.isDownloaded).map(\.id)),
+                    subject: album.name
+                )
+            } else {
+                downloadAlbum()
+            }
+        } label: {
+            if isDownloading {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: isComplete ? "arrow.down.circle.fill" : "arrow.down.circle")
+            }
+        }
+        .help(isComplete ? "Remove Download" : (isDownloading ? "Cancel Download" : "Download"))
     }
 
     private var table: some View {
@@ -65,29 +151,8 @@ struct AlbumDetailMac: View {
             accent: settings.resolvedAccentColor,
             currentlyPlayingTrackId: player.currentTrack?.id,
             isPlaying: player.isPlaying,
-            hidesColumnHeaders: true,
-            rowHeight: 40,
-            embeddedStyle: true,
-            sections: sections,
-            sectionHeader: { sectionAlbum in
-                AnyView(
-                    AlbumSectionHeader(
-                        album: sectionAlbum,
-                        onPlay: { playAll(shuffle: false) },
-                        onShuffle: { playAll(shuffle: true) },
-                        onDownload: { downloadAlbum() },
-                        onCancelDownload: { downloadService.cancelAlbumDownloads(albumId: album.id) }
-                    )
-                    .environment(musicLibrary)
-                    .environment(downloadService)
-                )
-            },
-            sectionHeaderHeight: 80,
-            artwork: { sectionAlbum in
-                AnyView(AlbumArtworkOverlay(album: sectionAlbum))
-            },
-            artworkSize: 160,
-            artworkInset: 20
+            rowHeight: 34,
+            embeddedStyle: true
         )
         .background(Color(NSColor.textBackgroundColor))
         .navigationTitle(album.name)

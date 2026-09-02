@@ -12,6 +12,7 @@ struct DownloadsViewMac: View {
     @State private var selection: Set<UUID> = []
     @State private var totalSize: Int64 = 0
     @State private var showRemoveAllConfirmation = false
+    @State private var showDownloadAllConfirmation = false
 
     private var isTransferring: Bool {
         !downloadService.activeDownloads.isEmpty
@@ -45,6 +46,16 @@ struct DownloadsViewMac: View {
         .background(Color(NSColor.controlBackgroundColor))
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }
+        .confirmationDialog(
+            "Download Your Whole Library?",
+            isPresented: $showDownloadAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Download All") { downloadService.downloadAll(library: musicLibrary) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every song is downloaded to this Mac for offline playback. You can watch progress in the Activity window.")
+        }
         .confirmationDialog(
             "Remove All Downloads?",
             isPresented: $showRemoveAllConfirmation,
@@ -86,6 +97,9 @@ struct DownloadsViewMac: View {
                     .monospacedDigit()
             }
             Spacer(minLength: 12)
+            Button("Download All") { showDownloadAllConfirmation = true }
+                .buttonStyle(.link)
+                .font(.subheadline)
             if !entries.isEmpty {
                 Button("Remove All") { showRemoveAllConfirmation = true }
                     .buttonStyle(.link)
