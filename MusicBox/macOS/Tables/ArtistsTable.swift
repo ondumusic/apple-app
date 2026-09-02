@@ -57,14 +57,16 @@ final class ArtistsTableViewController: NSViewController {
         // .none so AccentSelectionRowView's pill is what paints — the default would
         // draw the system accent over it, leaving this the one blue list in the app.
         tableView.selectionHighlightStyle = .none
-        tableView.rowHeight = 28
+        // 28 was tight for a single line of 13pt text; the list read as dense.
+        tableView.rowHeight = 34
         tableView.allowsMultipleSelection = false
         tableView.allowsEmptySelection = true
         tableView.backgroundColor = .clear
-        // A single column of left-aligned names needs a rail for the eye; without it the
-        // rows stop reading as discrete targets. Subtle, unlike the old heavy divider.
-        tableView.gridStyleMask = .solidHorizontalGridLineMask
-        tableView.gridColor = .separatorColor
+        // No grid mask: AppKit rules every row edge to edge, which made a plain list of
+        // names look like a spreadsheet. AccentSelectionRowView draws an inset hairline
+        // instead — still a rail for the eye, but it stops short of the edges and skips
+        // the selected row.
+        tableView.gridStyleMask = []
         tableView.dataSource = self
         tableView.delegate = self
         tableView.target = self
@@ -151,8 +153,7 @@ extension ArtistsTableViewController: NSTableViewDelegate {
         // are NSTableView's own grid lines here, so no hairline of our own.
         view.customSelectionLeftInset = 10
         view.customSelectionRightInset = 10
-        view.suppressDivider = true
-        view.drawsSystemSeparator = true
+        view.suppressDivider = false
         return view
     }
 
