@@ -46,12 +46,6 @@ struct AlbumDetailMac: View {
         VStack(spacing: 0) {
             if let backDestination { BackBar(destination: backDestination) }
             table
-                // Capped: the title column otherwise grows with the window and leaves a
-                // long empty run between a track's name and its duration. Left-aligned
-                // rather than centred so the table stays anchored to the sidebar and the
-                // slack collects as one margin instead of two.
-                .frame(maxWidth: Self.maxContentWidth, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
         // The table paints its own background only as far as the cap, so the margin
         // beside it showed the window's grey. Page supplies the same surface.
@@ -59,8 +53,6 @@ struct AlbumDetailMac: View {
         .background(Color(NSColor.controlBackgroundColor))
         .navigationBarBackButtonHidden(backDestination != nil)
     }
-
-    static let maxContentWidth: CGFloat = 920
 
     private var table: some View {
         TracksTable(

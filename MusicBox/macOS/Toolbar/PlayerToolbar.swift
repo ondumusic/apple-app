@@ -6,39 +6,38 @@ import SwiftUI
 /// inside a single ToolbarItem.principal caused beachball/hang in earlier iterations.
 struct PlayerToolbar: ToolbarContent {
     @Environment(PlayerService.self) private var player
-    /// The accent, but only while the app has focus — macOS greys controls out in an
-    /// inactive window and ours stayed bright.
-    private var activeTint: AnyShapeStyle {
-        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
-    }
     @Binding var showQueue: Bool
 
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
-            ShuffleButton()
-            TransportButtons()
-            RepeatButton()
+            ShuffleButton().fadesWhenInactive()
+            TransportButtons().fadesWhenInactive()
+            RepeatButton().fadesWhenInactive()
         }
         ToolbarItem(placement: .principal) {
             NowPlayingLabel()
+                .fadesWhenInactive()
                 .frame(minWidth: 260, idealWidth: 420, maxWidth: 460)
         }
         ToolbarItemGroup(placement: .primaryAction) {
             VolumeControl()
+                .fadesWhenInactive()
 
             AirPlayPicker()
                 .frame(width: 18, height: 18)
                 .help("AirPlay")
+                .fadesWhenInactive()
 
             Button {
                 showQueue.toggle()
             } label: {
                 Image(systemName: "list.bullet")
-                    .foregroundStyle(showQueue ? activeTint : AnyShapeStyle(.secondary))
+                    .foregroundStyle(showQueue ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             }
             .help("Queue")
             .accessibilityLabel("Queue")
             .disabled(player.currentTrack == nil)
+            .fadesWhenInactive()
         }
     }
 
@@ -46,16 +45,11 @@ struct PlayerToolbar: ToolbarContent {
 
 private struct ShuffleButton: View {
     @Environment(PlayerService.self) private var player
-    /// The accent, but only while the app has focus — macOS greys controls out in an
-    /// inactive window and ours stayed bright.
-    private var activeTint: AnyShapeStyle {
-        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
-    }
 
     var body: some View {
         Button { player.toggleShuffle() } label: {
             Image(systemName: "shuffle")
-                .foregroundStyle(player.isShuffled ? activeTint : AnyShapeStyle(.secondary))
+                .foregroundStyle(player.isShuffled ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
         }
         .help(player.isShuffled ? "Disable Shuffle" : "Shuffle")
         .accessibilityLabel("Shuffle")
@@ -66,16 +60,11 @@ private struct ShuffleButton: View {
 
 private struct RepeatButton: View {
     @Environment(PlayerService.self) private var player
-    /// The accent, but only while the app has focus — macOS greys controls out in an
-    /// inactive window and ours stayed bright.
-    private var activeTint: AnyShapeStyle {
-        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
-    }
 
     var body: some View {
         Button { player.cycleRepeatMode() } label: {
             Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
-                .foregroundStyle(player.repeatMode != .off ? activeTint : AnyShapeStyle(.secondary))
+                .foregroundStyle(player.repeatMode != .off ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
         }
         .help(help)
         .accessibilityLabel("Repeat")
@@ -94,11 +83,6 @@ private struct RepeatButton: View {
 
 private struct TransportButtons: View {
     @Environment(PlayerService.self) private var player
-    /// The accent, but only while the app has focus — macOS greys controls out in an
-    /// inactive window and ours stayed bright.
-    private var activeTint: AnyShapeStyle {
-        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
-    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -132,19 +116,11 @@ private struct TransportButtons: View {
             .help("Next")
             .accessibilityLabel("Next")
         }
-        // Transport glyphs draw in the default foreground, so they stayed at full
-        // contrast in an inactive window while the tinted controls beside them faded.
-        .foregroundStyle(AppActivity.shared.isActive ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
     }
 }
 
 private struct NowPlayingLabel: View {
     @Environment(PlayerService.self) private var player
-    /// The accent, but only while the app has focus — macOS greys controls out in an
-    /// inactive window and ours stayed bright.
-    private var activeTint: AnyShapeStyle {
-        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
-    }
 
     private var track: Track? { player.currentTrack }
     private var artworkURL: URL? {
@@ -199,7 +175,6 @@ private struct NowPlayingLabel: View {
             // than filling it edge to edge and spilling into the content below.
             .frame(height: 42)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-            .opacity(AppActivity.shared.isActive ? 1 : 0.55)
         }
     }
 
@@ -232,11 +207,6 @@ private struct NowPlayingLabel: View {
 /// popover meant clicking it opened a second popover over the first.
 struct VolumeControl: View {
     @Environment(PlayerService.self) private var player
-    /// The accent, but only while the app has focus — macOS greys controls out in an
-    /// inactive window and ours stayed bright.
-    private var activeTint: AnyShapeStyle {
-        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
-    }
     @State private var showingSlider = false
     var iconSize: CGFloat? = nil
 
@@ -277,11 +247,6 @@ struct VolumeControl: View {
 
 private struct ScrubberView: View {
     @Environment(PlayerService.self) private var player
-    /// The accent, but only while the app has focus — macOS greys controls out in an
-    /// inactive window and ours stayed bright.
-    private var activeTint: AnyShapeStyle {
-        AppActivity.shared.isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
-    }
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
 
@@ -300,8 +265,7 @@ private struct ScrubberView: View {
                 onCommit: {
                     player.seek(to: scrubValue)
                     isScrubbing = false
-                },
-                isWindowActive: AppActivity.shared.isActive
+                }
             )
             .frame(height: 8)
             Text(format(player.duration))
@@ -326,14 +290,13 @@ struct ProgressTrack: View {
     let onScrub: (Double) -> Void
     let onCommit: () -> Void
     var tint: Color = .accentColor
-    var isWindowActive: Bool = true
     var trackColor: Color = Color.primary.opacity(0.18)
 
     var body: some View {
         ProgressTrackRepresentable(
             value: value,
             duration: duration,
-            tint: isWindowActive ? NSColor(tint) : .secondaryLabelColor,
+            tint: NSColor(tint),
             trackColor: NSColor(trackColor),
             onScrub: onScrub,
             onCommit: onCommit
