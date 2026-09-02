@@ -100,3 +100,66 @@ struct AllTracksOrderingTests {
         #expect(lib.allTracks().first?.isDownloaded == false)
     }
 }
+
+/// The background rebuild has to produce exactly what the synchronous path produces —
+/// it's the same library read through a different context.
+@Suite(.serialized)
+struct BackgroundTrackCacheTests {
+
+    private func makeLibrary() throws -> MusicLibrary {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
+                 LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+            configurations: config
+        )
+        return MusicLibrary(container: container)
+    }
+
+    @Test func prepareMatchesSynchronousOrdering() async throws {
+        let lib = try makeLibrary()
+        let now = Date()
+        let beatles = UUID(), radiohead = UUID()
+        let revolver = UUID(), kida = UUID()
+        lib.upsertArtists([
+            SyncArtist(id: beatles, name: "The Beatles", sortName: "Beatles, The",
+                       slug: "beatles", albumCount: 1, insertedAt: now),
+            SyncArtist(id: radiohead, name: "Radiohead", sortName: "Radiohead",
+                       slug: "radiohead", albumCount: 1, insertedAt: now),
+        ])
+        lib.upsertAlbums([
+            SyncAlbum(id: revolver, artistId: beatles, name: "Revolver", sortName: "Revolver",
+                      slug: "revolver", releaseYear: 1966, artworkUrl: nil, isUnknown: false,
+                      trackCount: 2, insertedAt: now),
+            SyncAlbum(id: kida, artistId: radiohead, name: "Kid A", sortName: "Kid A",
+                      slug: "kid-a", releaseYear: 2000, artworkUrl: nil, isUnknown: false,
+                      trackCount: 1, insertedAt: now),
+        ])
+        func track(_ name: String, artist: UUID, album: UUID, number: Int) -> SyncTrack {
+            let id = UUID()
+            return SyncTrack(id: id, artistId: artist, albumArtistId: artist, albumId: album,
+                             name: name, disc: 1, number: number, duration: 200,
+                             mimetype: "audio/mp4", streamUrl: "/s/\(id)",
+                             downloadUrl: "/d/\(id)", insertedAt: now)
+        }
+        lib.upsertTracks([
+            track("Idioteque", artist: radiohead, album: kida, number: 8),
+            track("Taxman", artist: beatles, album: revolver, number: 1),
+            track("Eleanor Rigby", artist: beatles, album: revolver, number: 2),
+        ])
+        lib.bumpRevision()
+
+        let synchronous = lib.allTracks().map(\.name)
+        lib.cachedAllTracks = nil
+        await lib.prepareAllTracks()
+
+        #expect(lib.cachedAllTracks?.map(\.name) == synchronous)
+        #expect(synchronous == ["Taxman", "Eleanor Rigby", "Idioteque"])
+    }
+
+    @Test func prepareInstallsCacheForLaterSynchronousReads() async throws {
+        let lib = try makeLibrary()
+        await lib.prepareAllTracks()
+        #expect(lib.cachedAllTracks != nil)
+    }
+}

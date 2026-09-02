@@ -153,6 +153,8 @@ struct MacOSContentView: View {
                 sidebarSelection = .category(.artists)
             }
             restoreDetail()
+            // Build the tracks cache before anyone opens Songs.
+            Task { await musicLibrary.prepareAllTracks() }
             installSpaceKeyMonitor()
             // Reopen the mini player if it was showing when the app last quit, in
             // whichever z-order and focus the user left the two windows in.

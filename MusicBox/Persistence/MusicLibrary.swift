@@ -257,17 +257,13 @@ final class MusicLibrary {
             .sorted { ($0.disc, $0.number ?? Int.max) < ($1.disc, $1.number ?? Int.max) }
     }
 
-    func allTracks() -> [Track] {
-        _ = revision
-        if let cachedAllTracks { return cachedAllTracks }
-        let libTracks = fetch(FetchDescriptor<LibraryTrack>()) ?? []
-        let artistMap = buildArtistMap()
-        let albumMap = buildAlbumMap()
-
-        // Sorted per album rather than per track. The flat comparator paid four
-        // dictionary lookups plus a localized collation on every one of ~n log n
-        // comparisons, even though every track in an album shares both string keys —
-        // at library scale that collation dominated the whole call.
+    /// Sorted per album rather than per track. The flat comparator paid four dictionary
+    /// lookups plus a localized collation on every one of ~n log n comparisons, even
+    /// though every track in an album shares both string keys — at library scale that
+    /// collation dominated the whole call.
+    nonisolated static func sortedTracks(_ libTracks: [LibraryTrack],
+                                         artistMap: [UUID: LibraryArtist],
+                                         albumMap: [UUID: LibraryAlbum]) -> [Track] {
         var groups: [TrackGroupKey: [LibraryTrack]] = [:]
         for lt in libTracks {
             groups[TrackGroupKey(albumArtistId: lt.albumArtistId, albumId: lt.albumId), default: []].append(lt)
@@ -289,8 +285,40 @@ final class MusicLibrary {
                 if $0.disc != $1.disc { return $0.disc < $1.disc }
                 return ($0.number ?? Int.max) < ($1.number ?? Int.max)
             }
-            for lt in ordered { result.append(buildTrack(lt, artistMap: artistMap, album: album)) }
+            for lt in ordered { result.append(buildTrackValue(lt, artistMap: artistMap, album: album)) }
         }
+        return result
+    }
+
+    /// Rebuilds the tracks cache on a background context and installs it.
+    ///
+    /// `allTracks()` stays synchronous for callers that need it now, but on a slower Mac
+    /// its fetch-and-build is long enough to read as a hang when it lands on a click.
+    /// Doing it here — after a sync, or before the Songs list is first opened — keeps
+    /// that work off whoever happens to tap next.
+    func prepareAllTracks() async {
+        let container = modelContainer
+        let built = await Task.detached {
+            let context = ModelContext(container)
+            guard let libTracks = try? context.fetch(FetchDescriptor<LibraryTrack>()),
+                  let libArtists = try? context.fetch(FetchDescriptor<LibraryArtist>()),
+                  let libAlbums = try? context.fetch(FetchDescriptor<LibraryAlbum>())
+            else { return [Track]() }
+            let artistMap = Dictionary(uniqueKeysWithValues: libArtists.map { ($0.serverId, $0) })
+            let albumMap = Dictionary(uniqueKeysWithValues: libAlbums.map { ($0.serverId, $0) })
+            return Self.sortedTracks(libTracks, artistMap: artistMap, albumMap: albumMap)
+        }.value
+        cachedAllTracks = built
+    }
+
+    func allTracks() -> [Track] {
+        _ = revision
+        if let cachedAllTracks { return cachedAllTracks }
+        let libTracks = fetch(FetchDescriptor<LibraryTrack>()) ?? []
+        let artistMap = buildArtistMap()
+        let albumMap = buildAlbumMap()
+
+        let result = Self.sortedTracks(libTracks, artistMap: artistMap, albumMap: albumMap)
         cachedAllTracks = result
         return result
     }
@@ -602,6 +630,12 @@ final class MusicLibrary {
     }
 
     func buildTrack(_ lt: LibraryTrack, artistMap: [UUID: LibraryArtist], album: LibraryAlbum?) -> Track {
+        Self.buildTrackValue(lt, artistMap: artistMap, album: album)
+    }
+
+    /// Same construction, callable from the background rebuild — model objects are read
+    /// through whichever context fetched them, and nothing here touches the main one.
+    nonisolated static func buildTrackValue(_ lt: LibraryTrack, artistMap: [UUID: LibraryArtist], album: LibraryAlbum?) -> Track {
         let artist = artistMap[lt.artistId].map {
             Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount)
         } ?? Artist(id: lt.artistId, name: "Unknown", sortName: "Unknown", slug: "unknown")

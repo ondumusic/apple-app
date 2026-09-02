@@ -33,7 +33,21 @@ struct SongsViewMac: View {
     }
 
     private func reload() {
-        tracks = libraryFilter == .downloaded ? musicLibrary.downloadedTracks() : musicLibrary.allTracks()
+        guard libraryFilter != .downloaded else {
+            tracks = musicLibrary.downloadedTracks()
+            return
+        }
+        if let warm = musicLibrary.cachedAllTracks {
+            tracks = warm
+            return
+        }
+        // Cold cache — build it off the main actor rather than freezing the window. On a
+        // slower Mac the fetch-and-build is long enough to read as a hang. Whatever was
+        // on screen stays until the real list arrives.
+        Task {
+            await musicLibrary.prepareAllTracks()
+            if libraryFilter != .downloaded { tracks = musicLibrary.cachedAllTracks ?? [] }
+        }
     }
 
     private var trackActions: TrackActions {

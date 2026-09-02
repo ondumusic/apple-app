@@ -253,6 +253,7 @@ final class SyncService {
 
         var artworkURLs: [URL] = []
         var newTrackIds = Set<UUID>()
+        var changedAnything = false
 
         do {
             var pageCount = 0
@@ -264,6 +265,11 @@ final class SyncService {
                 print("SyncService: page \(pageCount) — \(response.artists.count) artists, \(response.albums.count) albums, \(response.tracks.count) tracks, \(response.deletions.count) deletions, complete: \(response.complete)")
                 #endif
 
+                if !response.artists.isEmpty || !response.albums.isEmpty
+                    || !response.tracks.isEmpty || !response.playlists.isEmpty
+                    || !response.playlistItems.isEmpty || !response.deletions.isEmpty {
+                    changedAnything = true
+                }
                 musicLibrary.upsertArtists(response.artists)
                 let newAlbumIds = musicLibrary.upsertAlbums(response.albums)
                 newTrackIds.formUnion(musicLibrary.upsertTracks(response.tracks))
@@ -308,12 +314,16 @@ final class SyncService {
             #endif
         }
 
-        // Single revision bump after all pages — triggers view refreshes once
-        musicLibrary.bumpRevision()
-        // Rebuild the tracks cache the bump just invalidated, now rather than on the next
-        // Songs open — that's the full fetch-and-sort, and paying it on a click is what
-        // makes the tab feel slow after a sync.
-        Task { @MainActor [musicLibrary] in _ = musicLibrary.allTracks() }
+        // Single revision bump after all pages — triggers view refreshes once. Skipped
+        // when the delta was empty, which is what most foreground syncs return: bumping
+        // regardless threw away the tracks cache every five minutes for nothing, and the
+        // next Songs open paid a full rebuild for it.
+        if changedAnything {
+            musicLibrary.bumpRevision()
+            // Rebuild off the main actor so the cost doesn't land on whoever opens Songs
+            // next — see MusicLibrary.prepareAllTracks().
+            Task { [musicLibrary] in await musicLibrary.prepareAllTracks() }
+        }
 
         // Prefetch artwork — detached to avoid slowing sync, stored to prevent deallocation
         if !artworkURLs.isEmpty {
