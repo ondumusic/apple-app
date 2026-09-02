@@ -14,7 +14,8 @@ struct MacOSContentView: View {
     @Environment(DownloadService.self) private var downloadService
 
     @State private var showQueue = false
-    @State private var sidebarSelection: SidebarSelection? = .category(.artists)
+    /// Restored from the last session — reopening on Artists every time loses your place.
+    @State private var sidebarSelection: SidebarSelection? = MacOSContentView.restoredSelection()
     /// Set when navigating to a specific artist (e.g. "Go to Artist" on a track).
     /// ArtistsViewMac reads it on its first load to skip the default first-artist
     /// selection — avoids the visible flicker the previous async re-post had.
@@ -109,14 +110,7 @@ struct MacOSContentView: View {
             }
         }
         .onChange(of: sidebarSelection) { _, newValue in
-            // Switching sidebar items resets the drill-in stack so we don't show stale
-            // album/artist detail under a new section.
-            detailPath = NavigationPath()
-            // Picking a section is a way out of search, the same as clearing the field.
-            if newValue != nil, !searchText.isEmpty {
-                searchText = ""
-                selectionBeforeSearch = nil
-            }
+            handleSelectionChange(newValue)
         }
         .onChange(of: downloadsRemaining) { previous, current in
             if current == 0 {
@@ -150,6 +144,9 @@ struct MacOSContentView: View {
             }
         }
         .onAppear {
+            if case .playlist(let id) = sidebarSelection, musicLibrary.playlist(id) == nil {
+                sidebarSelection = .category(.artists)
+            }
             installSpaceKeyMonitor()
             // Reopen the mini player if it was showing when the app last quit, in
             // whichever z-order and focus the user left the two windows in.
@@ -163,37 +160,14 @@ struct MacOSContentView: View {
             if let spaceKeyMonitor { NSEvent.removeMonitor(spaceKeyMonitor) }
             spaceKeyMonitor = nil
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleMiniPlayer)) { _ in
-            toggleMiniPlayer()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showDownloadActivity)) { _ in
-            openWindow(id: "activity")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .togglePlayPause)) { _ in
-            player.togglePlayPause()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { notification in
-            guard let album = notification.object as? Album else { return }
-            detailPath.append(album)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { notification in
-            guard let artist = notification.object as? Artist else { return }
-            if !searchText.isEmpty {
-                // Push, so there's a way back to the results. Switching sections here
-                // clears the search and strands you with nothing to return to.
-                detailPath.append(artist)
-                return
-            }
-            // Otherwise land in the Artists category on that artist. The
-            // pendingArtistNavigation binding lets ArtistsViewMac skip its default
-            // first-artist selection on first mount (no flicker).
-            pendingArtistNavigation = artist.id
-            sidebarSelection = .category(.artists)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .requestAddToPlaylist)) { notification in
-            guard let ids = notification.object as? [UUID], !ids.isEmpty else { return }
-            addToPlaylistTrackIds = ids
-        }
+        .modifier(WindowNotificationHandlers(
+            toggleMiniPlayer: toggleMiniPlayer,
+            showActivity: { openWindow(id: "activity") },
+            togglePlayPause: { player.togglePlayPause() },
+            navigateToAlbum: { detailPath.append($0) },
+            navigateToArtist: handleArtistNavigation,
+            addToPlaylist: { addToPlaylistTrackIds = $0 }
+        ))
     }
 
     /// Space toggles playback, but only when nothing is taking text input. A menu key
@@ -262,6 +236,43 @@ struct MacOSContentView: View {
         let partial = downloadService.activeDownloads.keys
             .reduce(0.0) { $0 + (downloadService.progressSnapshot[$1] ?? 0) }
         return min(1, (Double(batchCompleted) + partial) / Double(batchTotal))
+    }
+
+    static let lastSelectionKey = "MacOSLastSidebarSelection"
+
+    private static func restoredSelection() -> SidebarSelection {
+        guard let stored = UserDefaults.standard.string(forKey: lastSelectionKey),
+              let selection = SidebarSelection(storageValue: stored)
+        else { return .category(.artists) }
+        return selection
+    }
+
+    private func handleArtistNavigation(_ artist: Artist) {
+        if !searchText.isEmpty {
+            // Push, so there's a way back to the results. Switching sections here clears
+            // the search and strands you with nothing to return to.
+            detailPath.append(artist)
+            return
+        }
+        // Otherwise land in the Artists category on that artist. The
+        // pendingArtistNavigation binding lets ArtistsViewMac skip its default
+        // first-artist selection on first mount (no flicker).
+        pendingArtistNavigation = artist.id
+        sidebarSelection = .category(.artists)
+    }
+
+    private func handleSelectionChange(_ newValue: SidebarSelection?) {
+        if let newValue {
+            UserDefaults.standard.set(newValue.storageValue, forKey: Self.lastSelectionKey)
+        }
+        // Switching sidebar items resets the drill-in stack so we don't show stale
+        // album/artist detail under a new section.
+        detailPath = NavigationPath()
+        // Picking a section is a way out of search, the same as clearing the field.
+        if newValue != nil, !searchText.isEmpty {
+            searchText = ""
+            selectionBeforeSearch = nil
+        }
     }
 
     private func toggleMiniPlayer() {
@@ -614,6 +625,41 @@ struct QueueListRow: View {
         } else {
             Color.clear
         }
+    }
+}
+/// The window's notification wiring, lifted out of MacOSContentView.body — the modifier
+/// chain there had grown past what the type checker will infer in reasonable time.
+private struct WindowNotificationHandlers: ViewModifier {
+    let toggleMiniPlayer: () -> Void
+    let showActivity: () -> Void
+    let togglePlayPause: () -> Void
+    let navigateToAlbum: (Album) -> Void
+    let navigateToArtist: (Artist) -> Void
+    let addToPlaylist: ([UUID]) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .toggleMiniPlayer)) { _ in
+                toggleMiniPlayer()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showDownloadActivity)) { _ in
+                showActivity()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .togglePlayPause)) { _ in
+                togglePlayPause()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { note in
+                guard let album = note.object as? Album else { return }
+                navigateToAlbum(album)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToArtist)) { note in
+                guard let artist = note.object as? Artist else { return }
+                navigateToArtist(artist)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .requestAddToPlaylist)) { note in
+                guard let ids = note.object as? [UUID], !ids.isEmpty else { return }
+                addToPlaylist(ids)
+            }
     }
 }
 #endif

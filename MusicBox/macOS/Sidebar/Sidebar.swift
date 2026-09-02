@@ -702,6 +702,14 @@ extension SidebarViewController: NSOutlineViewDelegate {
             return nil
         }()
         cell.configure(for: node, compensateIndent: shouldCompensateIndent(for: node), badgeCount: badge)
+        // Emphasis from the row's current state, not just from selection *changes*. A
+        // cell built for an already-selected row — which is every launch, since selection
+        // is restored before the cells exist — otherwise came up with dark text on the
+        // accent pill.
+        let row = outlineView.row(forItem: node)
+        let isSelected = row >= 0 && outlineView.selectedRowIndexes.contains(row)
+        let isWindowActive = outlineView.window?.isKeyWindow ?? false
+        cell.backgroundStyle = (isSelected && isWindowActive) ? .emphasized : .normal
         return cell
     }
 

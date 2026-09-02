@@ -310,6 +310,10 @@ final class SyncService {
 
         // Single revision bump after all pages — triggers view refreshes once
         musicLibrary.bumpRevision()
+        // Rebuild the tracks cache the bump just invalidated, now rather than on the next
+        // Songs open — that's the full fetch-and-sort, and paying it on a click is what
+        // makes the tab feel slow after a sync.
+        Task { @MainActor [musicLibrary] in _ = musicLibrary.allTracks() }
 
         // Prefetch artwork — detached to avoid slowing sync, stored to prevent deallocation
         if !artworkURLs.isEmpty {
