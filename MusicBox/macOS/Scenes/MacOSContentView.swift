@@ -62,9 +62,11 @@ struct MacOSContentView: View {
                 }
                 .navigationDestination(for: Album.self) { album in
                     AlbumDetailMac(album: album, backDestination: backDestination)
+                        .onAppear { rememberDetail("album:\(album.id.uuidString)") }
                 }
                 .navigationDestination(for: Artist.self) { artist in
                     ArtistDetailMac(artist: artist, backDestination: backDestination)
+                        .onAppear { rememberDetail("artist:\(artist.id.uuidString)") }
                 }
                 .navigationDestination(for: SearchAllRequest.self) { request in
                     SearchAllViewMac(request: request)
@@ -112,6 +114,9 @@ struct MacOSContentView: View {
         .onChange(of: sidebarSelection) { _, newValue in
             handleSelectionChange(newValue)
         }
+        .onChange(of: detailPath.count) { _, depth in
+            if depth == 0 { rememberDetail(nil) }
+        }
         .onChange(of: downloadsRemaining) { previous, current in
             if current == 0 {
                 batchTotal = 0
@@ -147,6 +152,7 @@ struct MacOSContentView: View {
             if case .playlist(let id) = sidebarSelection, musicLibrary.playlist(id) == nil {
                 sidebarSelection = .category(.artists)
             }
+            restoreDetail()
             installSpaceKeyMonitor()
             // Reopen the mini player if it was showing when the app last quit, in
             // whichever z-order and focus the user left the two windows in.
@@ -261,6 +267,35 @@ struct MacOSContentView: View {
         sidebarSelection = .category(.artists)
     }
 
+    static let lastDetailKey = "MacOSLastDetail"
+
+    /// One level of drill-in, so relaunching lands back on the album or artist you had
+    /// open rather than just the section it lives in. Deeper stacks aren't restored —
+    /// they're rare, and NavigationPath doesn't round-trip our value types cleanly.
+    private func rememberDetail(_ value: String?) {
+        if let value {
+            UserDefaults.standard.set(value, forKey: Self.lastDetailKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.lastDetailKey)
+        }
+    }
+
+    private func restoreDetail() {
+        guard searchText.isEmpty,
+              let stored = UserDefaults.standard.string(forKey: Self.lastDetailKey)
+        else { return }
+        let parts = stored.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let id = UUID(uuidString: parts[1]) else { return }
+        switch parts[0] {
+        case "album":
+            if let album = musicLibrary.album(id) { detailPath.append(album) }
+        case "artist":
+            if let artist = musicLibrary.artist(id) { detailPath.append(artist) }
+        default:
+            break
+        }
+    }
+
     private func handleSelectionChange(_ newValue: SidebarSelection?) {
         if let newValue {
             UserDefaults.standard.set(newValue.storageValue, forKey: Self.lastSelectionKey)
@@ -268,6 +303,7 @@ struct MacOSContentView: View {
         // Switching sidebar items resets the drill-in stack so we don't show stale
         // album/artist detail under a new section.
         detailPath = NavigationPath()
+        rememberDetail(nil)
         // Picking a section is a way out of search, the same as clearing the field.
         if newValue != nil, !searchText.isEmpty {
             searchText = ""

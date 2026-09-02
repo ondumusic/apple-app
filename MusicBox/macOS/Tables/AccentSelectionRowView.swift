@@ -49,6 +49,13 @@ final class AccentSelectionRowView: NSTableRowView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        // Sync to the window's *current* state, not just to later changes. Cells are
+        // often built before the row is in a window at all — every launch, since the
+        // selection is restored first — and with only change-observation nothing ever
+        // corrected the mismatch: an accent pill drawn later under text coloured for a
+        // window that wasn't key yet.
+        applyCellEmphasis()
+        needsDisplay = true
         keyObservers.forEach(NotificationCenter.default.removeObserver)
         keyObservers.removeAll()
         guard let window else { return }
