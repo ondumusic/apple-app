@@ -39,7 +39,11 @@ struct DownloadActivityView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
+                    // Lazy: a full-library queue is thousands of rows, and a plain
+                    // VStack builds every one of them when the window opens. The row
+                    // identity bug that prompted the switch away from LazyVStack was the
+                    // shared ids, which are section-scoped now.
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         section("Downloading", rows: activeRows)
                         section("Queued", rows: queuedRows)
                         section("Failed", rows: failedRows)

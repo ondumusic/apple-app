@@ -32,6 +32,7 @@ struct DownloadPausedNotice: View {
         if let reason {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
                 Text(reason)
                 Spacer(minLength: 0)
                 if isOverridable {
@@ -40,11 +41,11 @@ struct DownloadPausedNotice: View {
                 }
             }
             .font(.subheadline)
-            .foregroundStyle(.orange)
+            .foregroundStyle(.primary)
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(NSColor.windowBackgroundColor))
+            .background(Color.orange.opacity(0.16))
             .overlay(alignment: .bottom) { Divider() }
         }
     }

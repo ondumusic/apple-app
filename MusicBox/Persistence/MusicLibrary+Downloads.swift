@@ -130,6 +130,14 @@ extension MusicLibrary {
     /// Downloaded albums with their downloaded-track count and on-disk size, gathered in
     /// one pass — the Downloads list needs all three per row and querying each separately
     /// is a fetch per album.
+    /// Just the ids, for callers that only need membership. Building Track structs for
+    /// every downloaded row to answer "is this one downloaded" is a lot of work wasted.
+    func downloadedTrackIds() -> Set<UUID> {
+        _ = downloadChanged
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true })
+        return Set(((try? modelContext.fetch(descriptor)) ?? []).map(\.serverId))
+    }
+
     func downloadedAlbumEntries() -> [DownloadedAlbumEntry] {
         _ = downloadChanged
         _ = revision

@@ -267,19 +267,25 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     func downloadAll(library: MusicLibrary) {
-        let artists = library.allArtists()
-        for artist in artists {
-            let albums = library.albumsWithTracksForArtist(artist.id)
-            for album in albums {
+        // Membership resolved up front. Per track this used to run a SwiftData fetch
+        // (isDownloaded) plus a linear scan of the pending queue (isQueued), so a full
+        // library was thousands of queries and a quadratic scan — enough to hang the app
+        // on the click that started it.
+        var seen = library.downloadedTrackIds()
+        seen.formUnion(activeDownloads.keys)
+        seen.formUnion(pendingQueue.map(\.track.id))
+
+        var queued: [DownloadInfo] = []
+        for artist in library.allArtists() {
+            for album in library.albumsWithTracksForArtist(artist.id) {
                 guard let tracks = album.tracks else { continue }
-                for track in tracks {
-                    guard !musicLibrary.isDownloaded(trackId: track.id),
-                          !isDownloading(trackId: track.id),
-                          !isQueued(trackId: track.id) else { continue }
-                    pendingQueue.append(DownloadInfo(track: track, album: album, artist: artist))
+                for track in tracks where !seen.contains(track.id) {
+                    seen.insert(track.id)
+                    queued.append(DownloadInfo(track: track, album: album, artist: artist))
                 }
             }
         }
+        pendingQueue.append(contentsOf: queued)
         startNextIfNeeded()
     }
 
