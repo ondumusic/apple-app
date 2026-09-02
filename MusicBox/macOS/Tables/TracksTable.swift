@@ -827,10 +827,11 @@ extension TracksTableViewController: NSTableViewDelegate {
         if sectionsLeftInset > 0 {
             view.customSelectionLeftInset = sectionsLeftInset + 16
         } else {
-            // No artwork gutter to clear, so the pill runs the full row width — the
-            // leading track number would otherwise fall outside an inset pill.
-            view.customSelectionLeftInset = 0
-            view.customSelectionRightInset = 0
+            // No artwork gutter to clear, but still inset — full-bleed ran the pill
+            // straight into the sidebar divider. 12 clears the edge without reaching the
+            // track number, which sits further in.
+            view.customSelectionLeftInset = 12
+            view.customSelectionRightInset = 12
         }
         return view
     }

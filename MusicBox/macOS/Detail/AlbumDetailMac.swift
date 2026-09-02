@@ -9,12 +9,26 @@ struct AlbumDetailMac: View {
     var backDestination: String?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(SettingsStore.self) private var settings
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
     @Environment(DownloadService.self) private var downloadService
 
     @State private var tracks: [Track] = []
+    @State private var selection: Set<UUID> = []
+
+    /// Tall enough for the header's 180pt artwork plus its padding.
+    static let headerHeight: CGFloat = 222
+
+    private var sections: [TracksTableSection] {
+        [TracksTableSection(id: album.id, album: album, tracks: tracks)]
+    }
+
+    private var trackActions: TrackActions {
+        .standard(player: player, musicLibrary: musicLibrary, network: network,
+                  downloadService: downloadService, artworkURL: album.artworkUrl)
+    }
 
     private var hasMultipleArtists: Bool {
         Set(tracks.map(\.artist.id)).count > 1
@@ -24,26 +38,36 @@ struct AlbumDetailMac: View {
     var body: some View {
         VStack(spacing: 0) {
             if let backDestination { BackBar(destination: backDestination) }
-            // One scrolling section: the header moved with the list rather than sitting
-            // above a table with its own scroll area, which read as two panes stacked.
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    albumHeader
-                    ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                        if index > 0 {
-                            Divider().padding(.leading, 24)
-                        }
-                        TrackRow(
-                            track: track,
-                            album: album,
-                            showArtist: hasMultipleArtists,
-                            onTap: { playTrack(at: index) }
-                        )
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 7)
-                    }
-                }
-            }
+            // One scrolling section, and the table's interaction: the album header is
+            // the table's own section header, so it scrolls with the rows while click
+            // still selects and double-click plays, as on the artist page. No artwork
+            // gutter — the header carries the cover, so the rows get the full width.
+            TracksTable(
+                tracks: tracks,
+                selection: $selection,
+                onPlay: playTrack(at:),
+                actions: trackActions,
+                showArtist: hasMultipleArtists,
+                showAlbum: false,
+                accent: settings.resolvedAccentColor,
+                currentlyPlayingTrackId: player.currentTrack?.id,
+                isPlaying: player.isPlaying,
+                hidesColumnHeaders: true,
+                rowHeight: 40,
+                embeddedStyle: true,
+                sections: sections,
+                sectionHeader: { _ in
+                    AnyView(
+                        albumHeader
+                            .environment(musicLibrary)
+                            .environment(downloadService)
+                            .environment(player)
+                            .environment(network)
+                    )
+                },
+                sectionHeaderHeight: Self.headerHeight
+            )
+            .background(Color(NSColor.textBackgroundColor))
         }
         .navigationTitle(album.name)
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
