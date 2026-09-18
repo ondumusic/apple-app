@@ -186,6 +186,9 @@ final class SidebarViewController: NSViewController {
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
+        // viewDidLayout owns the top inset; the automatic one is zero for the first
+        // frames after launch, which is what misplaced the skeleton.
+        scrollView.automaticallyAdjustsContentInsets = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
@@ -208,9 +211,7 @@ final class SidebarViewController: NSViewController {
         view.addSubview(bottomBar)
 
         NSLayoutConstraint.activate([
-            // Window toolbar sits above us already; no need to reserve space for traffic
-            // lights here.
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor, constant: 8),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: activityBar.topAnchor),
@@ -261,6 +262,22 @@ final class SidebarViewController: NSViewController {
         // the visible area on every layout.
         outlineView.sizeLastColumnToFit()
 
+        // How far this view overhangs the window's content area — i.e. how much of it is
+        // currently behind the titlebar. SwiftUI hands the representable the full window
+        // height for the first frames after launch and only insets it once the toolbar is
+        // configured, so a fixed top inset drew the skeleton rows behind the titlebar and
+        // then dropped them into place. Measuring against contentLayoutRect is right in
+        // both states: it's the titlebar's height at launch and zero once settled.
+        let overhang: CGFloat = view.window.map { window in
+            let contentRect = view.convert(window.contentLayoutRect, from: nil)
+            return view.isFlipped
+                ? max(0, contentRect.minY - view.bounds.minY)
+                : max(0, view.bounds.maxY - contentRect.maxY)
+        } ?? 0
+        let top = overhang + 8
+        if abs(scrollView.contentInsets.top - top) > 0.5 {
+            scrollView.contentInsets = NSEdgeInsets(top: top, left: 0, bottom: 0, right: 0)
+        }
     }
 
 
