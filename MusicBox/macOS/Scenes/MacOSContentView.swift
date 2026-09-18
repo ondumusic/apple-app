@@ -35,23 +35,42 @@ struct MacOSContentView: View {
     @State private var miniPlayer: MiniPlayerWindowController?
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
     @State private var spaceKeyMonitor: Any?
+    /// Drives the toolbar's search field for Cmd+F. Search moved out of the sidebar.
+    @FocusState private var searchFieldFocused: Bool
     @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
 
     var body: some View {
+        // Window level, not scoped to the content column. Inside `detail:` a VStack
+        // sibling never lays out, and both safeAreaInset and overlay are swallowed by the
+        // AppKit table representable — a plain red probe didn't render either.
+        VStack(spacing: 0) {
+            splitViewChrome
+            PlayerBottomBar(showQueue: $showQueue)   // PROTOTYPE
+        }
+    }
+
+    private var splitView: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
             Sidebar(
                 selection: $sidebarSelection,
-                searchText: $searchText,
                 musicLibrary: musicLibrary,
                 actions: sidebarActions,
                 downloadingCount: downloadService.activeDownloads.count + downloadService.pendingQueue.count,
                 downloadProgress: overallDownloadProgress,
-                filter: $libraryFilter,
                 accent: settings.resolvedAccentColor
             )
             .toolbar(removing: .sidebarToggle)
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
+            // safeAreaInset rather than a VStack: inside a split view's detail column the
+            // NavigationStack claims the full height and a stacked sibling never gets laid
+            // out. This reserves the space properly and keeps scroll content clear of it.
+            detailStack
+        }
+    }
+
+    private var detailStack: some View {
+        Group {
             NavigationStack(path: $detailPath) {
                 Group {
                     if !searchText.isEmpty {
@@ -61,26 +80,42 @@ struct MacOSContentView: View {
                     }
                 }
                 .navigationDestination(for: Album.self) { album in
-                    AlbumDetailMac(album: album, backDestination: backDestination)
+                    AlbumDetailMac(album: album)
+                        .backToolbar(backDestination)
                         .onAppear { rememberDetail("album:\(album.id.uuidString)") }
                 }
                 .navigationDestination(for: Artist.self) { artist in
-                    ArtistDetailMac(artist: artist, backDestination: backDestination)
+                    ArtistDetailMac(artist: artist)
+                        .backToolbar(backDestination)
                         .onAppear { rememberDetail("artist:\(artist.id.uuidString)") }
                 }
                 .navigationDestination(for: SearchAllRequest.self) { request in
                     SearchAllViewMac(request: request)
+                        .backToolbar("Search")
                 }
             }
         }
+    }
+
+    private var splitViewChrome: some View {
+        splitView
         .frame(minWidth: 900, minHeight: 600)
         .overlay(alignment: .trailing) { queueSlideOver }
         .animation(.easeInOut(duration: 0.22), value: showQueue)
+        // The system's own search field rather than a TextField in a toolbar item: it
+        // anchors itself at the trailing edge, collapses to a magnifier when the window
+        // is narrow, and is the only thing `searchFocused` can drive — a `focused`
+        // binding on a toolbar TextField never fires, which is why Cmd+F did nothing.
+        .searchable(text: $searchText, prompt: "Search")
+        .searchFocused($searchFieldFocused)
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
+            searchFieldFocused = true
+        }
         .queueConfirmationOverlay()
         .replaceQueueConfirmation()
         .removeDownloadConfirmation()
         .toolbar(removing: .sidebarToggle)
-        .toolbar { PlayerToolbar(showQueue: $showQueue) }
+
         .toolbarBackground(.visible, for: .windowToolbar)
         .sheet(
             isPresented: Binding(

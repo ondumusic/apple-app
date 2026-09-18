@@ -56,6 +56,93 @@ struct PlayerToolbar: ToolbarContent {
 
 }
 
+// PROTOTYPE — not for keeping. The same controls as a bottom bar instead of toolbar
+// items. Ordinary content at the bottom of the window: no titlebar to fight, no safe
+// area, no item model that can push controls into an overflow menu, and centring is just
+// a ZStack. Lives in this file so it can see the control views without changing their
+// visibility.
+struct PlayerBottomBar: View {
+    @Environment(PlayerService.self) private var player
+    @Binding var showQueue: Bool
+
+    /// Dominant colour of the current cover, washed over the bar. Subtle on purpose: the
+    /// bar carries text and controls that have to stay legible, so this is a tint on top
+    /// of the standard material rather than a background in its own right.
+    @State private var tint: Color?
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var artworkURL: URL? { player.currentTrack?.album?.artworkUrl }
+
+    /// The cover's hue, at a lightness the bar chooses rather than the artwork. Applying
+    /// the extracted colour directly means a dark saturated sleeve darkens the bar under
+    /// its own text; normalising keeps every cover legible while still reading as that
+    /// record's colour.
+    private var wash: Color? {
+        guard let tint else { return nil }
+        let ns = NSColor(tint).usingColorSpace(.deviceRGB) ?? .windowBackgroundColor
+        var h: CGFloat = 0, sat: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        ns.getHue(&h, saturation: &sat, brightness: &b, alpha: &a)
+        return Color(NSColor(hue: h,
+                             saturation: min(sat, 0.60),
+                             brightness: colorScheme == .dark ? 0.32 : 0.94,
+                             alpha: 1))
+    }
+
+    var body: some View {
+        ZStack {
+            HStack(spacing: 16) {
+                Spacer(minLength: 20)
+                ShuffleButton()
+                RepeatButton()
+                VolumeControl()
+                AirPlayPicker()
+                    .frame(width: 18, height: 18)
+                    .help("AirPlay")
+                Button { showQueue.toggle() } label: {
+                    Image(systemName: "list.bullet")
+                        .foregroundStyle(showQueue ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                }
+                .help("Queue")
+                .accessibilityLabel("Queue")
+                .disabled(player.currentTrack == nil)
+            }
+            .padding(.leading, 24)
+            .padding(.trailing, 20)
+
+            // Transport and display centre together as one group. Apart — transport hard
+            // left, display centred — the controls read as stranded from what they
+            // control; centring the display alone and leading the transport were both
+            // worse than keeping them adjacent.
+            HStack(spacing: 20) {
+                TransportButtons()
+                NowPlayingLabel()
+                    .frame(width: 420)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(height: 64)
+        .frame(maxWidth: .infinity)
+        .background {
+            ZStack {
+                Rectangle().fill(.bar)
+                if let wash {
+                    LinearGradient(
+                        colors: [wash.opacity(0.95), wash.opacity(0.45)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                }
+            }
+            .animation(.easeInOut(duration: 0.8), value: wash)
+        }
+        .overlay(alignment: .top) { Divider() }
+        .task(id: artworkURL) {
+            tint = await ArtworkColorExtractor.extractColor(from: artworkURL, maxBrightness: 0.8)
+        }
+    }
+}
+
 private struct ShuffleButton: View {
     @Environment(PlayerService.self) private var player
 
@@ -98,12 +185,12 @@ private struct TransportButtons: View {
     @Environment(PlayerService.self) private var player
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 14) {
             Button { player.back() } label: {
                 Image(systemName: "backward.fill")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 14)
+                    .frame(width: 15, height: 15)
             }
             .disabled(!player.canGoBack || player.currentTrack == nil)
             .help("Previous")
@@ -113,7 +200,7 @@ private struct TransportButtons: View {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 19, height: 19)
+                    .frame(width: 24, height: 24)
             }
             .disabled(player.currentTrack == nil)
             .help(player.isPlaying ? "Pause" : "Play")
@@ -123,7 +210,7 @@ private struct TransportButtons: View {
                 Image(systemName: "forward.fill")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 14)
+                    .frame(width: 15, height: 15)
             }
             .disabled(!player.canSkip || player.currentTrack == nil)
             .help("Next")

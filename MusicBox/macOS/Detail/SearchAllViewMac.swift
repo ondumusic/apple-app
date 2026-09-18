@@ -34,7 +34,6 @@ struct SearchAllViewMac: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            BackBar(destination: "Search")
             header
             Divider()
             if request.kind == .songs {
@@ -82,9 +81,7 @@ struct SearchAllViewMac: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
         .navigationTitle(title)
-        // The toolbar's back button lands beside the transport controls, where it reads
-        // as a player control. This page carries its own, next to what it goes back from.
-        .navigationBarBackButtonHidden(true)
+        .navigationSubtitle(subtitle)
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
     }
 
@@ -94,6 +91,15 @@ struct SearchAllViewMac: View {
         case .albums: "Albums"
         case .songs: "Songs"
         }
+    }
+
+    private var subtitle: String {
+        let key: String.LocalizationValue = switch request.kind {
+        case .artists: "^[\(artists.count) result](inflect: true)"
+        case .albums: "^[\(albums.count) result](inflect: true)"
+        case .songs: "^[\(tracks.count) result](inflect: true)"
+        }
+        return String(AttributedString(localized: key).characters)
     }
 
     private var header: some View {

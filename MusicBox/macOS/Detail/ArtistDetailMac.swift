@@ -3,10 +3,8 @@ import SwiftUI
 
 struct ArtistDetailMac: View {
     let artist: Artist
-    /// Set when this view is pushed rather than shown as a section's root. The toolbar's
-    /// own back button sits beside the transport controls where it reads as a player
-    /// control, so pushed detail views carry their own next to the title.
-    var backDestination: String?
+    /// True inside ArtistsViewMac's detail pane, false when pushed as its own page.
+    var isEmbedded = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(MusicLibrary.self) private var musicLibrary
@@ -37,7 +35,6 @@ struct ArtistDetailMac: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let backDestination { BackBar(destination: backDestination) }
             header
                 .padding(20)
             TracksTable(
@@ -80,10 +77,10 @@ struct ArtistDetailMac: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { paneWidth = $0 }
         }
         .background(Color(NSColor.textBackgroundColor))
-        .navigationBarBackButtonHidden(backDestination != nil)
-        .navigationTitle(artist.name)
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }
+        .windowTitle(isEmbedded ? nil : "Artist",
+                     subtitle: "^[\(albums.count) album](inflect: true)")
     }
 
     /// The split layout reserves a fixed 200pt for the artwork, which leaves the track

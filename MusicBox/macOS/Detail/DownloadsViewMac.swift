@@ -22,8 +22,6 @@ struct DownloadsViewMac: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
             DownloadPausedNotice()
             if entries.isEmpty && !isTransferring {
                 ContentUnavailableView(
@@ -44,6 +42,21 @@ struct DownloadsViewMac: View {
             }
         }
         .navigationTitle("Downloads")
+        .navigationSubtitle(subtitle)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button("Download All") { showDownloadAllConfirmation = true }
+                    if !entries.isEmpty {
+                        Button("Remove All", role: .destructive) { showRemoveAllConfirmation = true }
+                    }
+                } label: {
+                    Label("Download Options", systemImage: "ellipsis.circle")
+                }
+                .menuIndicator(.hidden)
+                .help("Download options")
+            }
+        }
         .background(Color(NSColor.controlBackgroundColor))
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }
@@ -81,34 +94,11 @@ struct DownloadsViewMac: View {
         selection = []
     }
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("Downloads")
-                .font(.title3.weight(.semibold))
-            Text("^[\(entries.count) album](inflect: true)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            if totalSize > 0 {
-                Text("·")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            Spacer(minLength: 12)
-            Button("Download All") { showDownloadAllConfirmation = true }
-                .buttonStyle(.link)
-                .font(.subheadline)
-            if !entries.isEmpty {
-                Button("Remove All") { showRemoveAllConfirmation = true }
-                    .buttonStyle(.link)
-                    .font(.subheadline)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+    /// No filter control here — everything in this view is downloaded by definition.
+    private var subtitle: String {
+        let count = String(AttributedString(localized: "^[\(entries.count) album](inflect: true)").characters)
+        guard totalSize > 0 else { return count }
+        return "\(count) · \(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))"
     }
 
     private func reload() {

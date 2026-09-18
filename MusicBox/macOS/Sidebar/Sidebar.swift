@@ -8,16 +8,12 @@ import SwiftUI
 /// commits.
 struct Sidebar: NSViewControllerRepresentable {
     @Binding var selection: SidebarSelection?
-    @Binding var searchText: String
     let musicLibrary: MusicLibrary
     let actions: SidebarActions
     /// Active + queued downloads — surfaces as a badge on the Downloads category cell.
     var downloadingCount: Int = 0
     /// Overall fraction across everything in flight, for the sidebar's activity strip.
     var downloadProgress: Double = 0
-    /// Library scope. Lives here rather than the window toolbar: it filters the library
-    /// the sidebar navigates, and the toolbar is the player's.
-    @Binding var filter: LibraryFilter
     /// The app accent. .sourceList selection would otherwise paint the system accent,
     /// the way the track tables used to.
     var accent: Color = .accentColor
@@ -27,11 +23,7 @@ struct Sidebar: NSViewControllerRepresentable {
         vc.onSelectionChange = { newValue in
             selection = newValue
         }
-        vc.onSearchTextChange = { newText in
-            searchText = newText
-        }
         vc.actions = actions
-        vc.onFilterChange = { filter = $0 }
         return vc
     }
 
@@ -39,10 +31,7 @@ struct Sidebar: NSViewControllerRepresentable {
         // Rebuild the tree from the current library state. allPlaylists() is one fetch;
         // we group by parentId in-memory to materialize the folder hierarchy.
         nsViewController.actions = actions
-        nsViewController.onFilterChange = { filter = $0 }
         nsViewController.accentNSColor = NSColor(accent)
-        nsViewController.applyFilter(filter)
-        nsViewController.applyExternalSearchText(searchText)
         nsViewController.applyDownloadingCount(downloadingCount, progress: downloadProgress)
         let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists())
         nsViewController.update(playlistNodes: nodes, externalSelection: selection)
@@ -100,17 +89,11 @@ final class SidebarNode: NSObject {
 
 final class SidebarViewController: NSViewController {
     var onSelectionChange: ((SidebarSelection?) -> Void)?
-    var onSearchTextChange: ((String) -> Void)?
     var actions: SidebarActions = SidebarActions()
 
     private let scrollView = NSScrollView()
     private let outlineView = KeyAwareOutlineView()
     private let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
-    private let searchField = NSSearchField()
-    private let filterControl = NSSegmentedControl(
-        labels: ["All", "Downloaded"], trackingMode: .selectOne, target: nil, action: nil
-    )
-    var onFilterChange: ((LibraryFilter) -> Void)?
     /// See TracksTable: cached at configure time, so a change needs an explicit repaint.
     var accentNSColor: NSColor = .controlAccentColor {
         didSet {
@@ -206,13 +189,6 @@ final class SidebarViewController: NSViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
-        searchField.placeholderString = "Search"
-        searchField.target = self
-        searchField.action = #selector(searchFieldChanged)
-        searchField.sendsSearchStringImmediately = false
-        searchField.sendsWholeSearchString = false
-        searchField.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(searchField)
 
         addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "New")
         addButton.bezelStyle = .accessoryBar
@@ -223,13 +199,6 @@ final class SidebarViewController: NSViewController {
 
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
         bottomBar.addSubview(addButton)
-        filterControl.segmentStyle = .capsule
-        filterControl.controlSize = .small
-        filterControl.selectedSegment = 0
-        filterControl.target = self
-        filterControl.action = #selector(filterChanged)
-        filterControl.translatesAutoresizingMaskIntoConstraints = false
-        bottomBar.addSubview(filterControl)
         activityBar.translatesAutoresizingMaskIntoConstraints = false
         activityBar.isHidden = true
         activityBar.onClick = {
@@ -241,10 +210,7 @@ final class SidebarViewController: NSViewController {
         NSLayoutConstraint.activate([
             // Window toolbar sits above us already; no need to reserve space for traffic
             // lights here.
-            searchField.topAnchor.constraint(equalTo: view.topAnchor, constant: 8),
-            searchField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
-            searchField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
-            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 6),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor, constant: 8),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: activityBar.topAnchor),
@@ -260,16 +226,8 @@ final class SidebarViewController: NSViewController {
             addButton.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
             addButton.widthAnchor.constraint(equalToConstant: 22),
             addButton.heightAnchor.constraint(equalToConstant: 22),
-            filterControl.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -6),
-            filterControl.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
         ])
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleFocusSearch),
-            name: .focusSearch,
-            object: nil
-        )
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleStartInlineRename(_:)),
@@ -289,11 +247,7 @@ final class SidebarViewController: NSViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        // Without this, the NSSearchField is the window's first focusable view and
-        // the system parks the keyboard focus there on launch — annoying because the
-        // user usually wants to navigate the sidebar with arrow keys, not type a search
-        // they didn't ask for.
-        if view.window?.firstResponder === searchField || view.window?.firstResponder === view.window {
+        if view.window?.firstResponder === view.window {
             view.window?.makeFirstResponder(outlineView)
         }
     }
@@ -306,30 +260,9 @@ final class SidebarViewController: NSViewController {
         // user resizes the split. sizeLastColumnToFit() forces the column to match
         // the visible area on every layout.
         outlineView.sizeLastColumnToFit()
+
     }
 
-    func applyExternalSearchText(_ text: String) {
-        if searchField.stringValue != text {
-            searchField.stringValue = text
-        }
-    }
-
-    func applyFilter(_ filter: LibraryFilter) {
-        let index = filter == .downloaded ? 1 : 0
-        if filterControl.selectedSegment != index { filterControl.selectedSegment = index }
-    }
-
-    @objc private func filterChanged() {
-        onFilterChange?(filterControl.selectedSegment == 1 ? .downloaded : .all)
-    }
-
-    @objc private func searchFieldChanged() {
-        onSearchTextChange?(searchField.stringValue)
-    }
-
-    @objc private func handleFocusSearch() {
-        view.window?.makeFirstResponder(searchField)
-    }
 
     private func deleteSelectedPlaylist() {
         let row = outlineView.selectedRow

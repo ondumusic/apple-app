@@ -42,13 +42,20 @@ struct ArtistsViewMac: View {
 
             Group {
                 if let id = selectedArtistId, let artist = artists.first(where: { $0.id == id }) {
-                    ArtistDetailMac(artist: artist)
+                    ArtistDetailMac(artist: artist, isEmbedded: true)
                         .id(artist.id)
                 } else {
                     ContentUnavailableView("Select an Artist", systemImage: "music.mic")
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .navigationTitle("Artists")
+        .navigationSubtitle("^[\(artists.count) artist](inflect: true)")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                LibraryOptionsMenu(filter: $libraryFilter)
+            }
         }
         .onChange(of: musicLibrary.revision, initial: true) { reloadArtists() }
         .onChange(of: libraryFilter) { reloadArtists() }

@@ -13,11 +13,7 @@ struct AlbumsViewMac: View {
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 16)]
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            ScrollView {
-
+        ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(albums) { album in
                     NavigationLink(value: album) {
@@ -29,57 +25,24 @@ struct AlbumsViewMac: View {
                     }
                 }
             }
-                .padding(20)
-            }
+            .padding(20)
         }
         .navigationTitle("Albums")
+        // The count belongs in the window subtitle, which is where macOS puts secondary
+        // information about what's on screen. As an in-page header it cost a row of
+        // vertical space on every view and repeated what the sidebar selection says.
+        .navigationSubtitle("^[\(albums.count) album](inflect: true)")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                LibraryOptionsMenu(filter: $libraryFilter) {
+                    SortOptionsSection(selection: $sortOption, ascending: $sortAscending)
+                }
+            }
+        }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }
         .onChange(of: sortOption) { reload() }
         .onChange(of: sortAscending) { reload() }
-    }
-
-    /// Pinned rather than scrolling with the grid, and carrying the count — the control
-    /// was previously floating over the artwork with nothing to anchor it.
-    private var header: some View {
-        HStack(spacing: 8) {
-            Text("Albums")
-                .font(.headline)
-            Text("^[\(albums.count) album](inflect: true)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Spacer()
-            sortMenu
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
-    }
-
-    private var sortMenu: some View {
-        Menu {
-            ForEach(AlbumSortOption.allCases, id: \.self) { option in
-                Button {
-                    if sortOption == option {
-                        sortAscending.toggle()
-                    } else {
-                        sortOption = option
-                        sortAscending = true
-                    }
-                } label: {
-                    if sortOption == option {
-                        Label(option.rawValue, systemImage: sortAscending ? "chevron.up" : "chevron.down")
-                    } else {
-                        Text(option.rawValue)
-                    }
-                }
-            }
-        } label: {
-            Label(sortOption.rawValue, systemImage: sortAscending ? "arrow.up" : "arrow.down")
-                .font(.callout)
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help(sortAscending ? sortOption.ascendingLabel : sortOption.descendingLabel)
     }
 
     private func reload() {

@@ -3,10 +3,6 @@ import SwiftUI
 
 struct AlbumDetailMac: View {
     let album: Album
-    /// Set when this view is pushed rather than shown as a section's root. The toolbar's
-    /// own back button sits beside the transport controls where it reads as a player
-    /// control, so pushed detail views carry their own next to the title.
-    var backDestination: String?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(SettingsStore.self) private var settings
@@ -37,7 +33,6 @@ struct AlbumDetailMac: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let backDestination { BackBar(destination: backDestination) }
             // One scrolling section, and the table's interaction: the album header is
             // the table's own section header, so it scrolls with the rows while click
             // still selects and double-click plays, as on the artist page. No artwork
@@ -69,7 +64,11 @@ struct AlbumDetailMac: View {
             )
             .background(Color(NSColor.textBackgroundColor))
         }
-        .navigationTitle(album.name)
+        // "Album", not the album's name: the page header already sets that in largeTitle
+        // right below, and repeating it twice in one glance is what made the titlebar
+        // read as duplicated chrome.
+        .navigationTitle("Album")
+        .navigationSubtitle(album.artistName ?? "")
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &tracks)
@@ -78,7 +77,6 @@ struct AlbumDetailMac: View {
         // beside it showed the window's grey. Page supplies the same surface.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(NSColor.controlBackgroundColor))
-        .navigationBarBackButtonHidden(backDestination != nil)
     }
 
     /// Artwork and metadata across the top, track list full width beneath — the shape

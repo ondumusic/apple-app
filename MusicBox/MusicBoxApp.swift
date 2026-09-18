@@ -22,17 +22,11 @@ class BackgroundSessionDelegate: NSObject, UIApplicationDelegate {
 
 #if os(macOS)
 final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
-    /// Strong refs so the KVO observers stay alive for the window's lifetime.
-    private var titleObservers: [NSKeyValueObservation] = []
     private var didClearLaunchFocus = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Hide the navigationTitle that SwiftUI parks in the title bar — we don't want
-        // the current view's name shown there. KVO-clamps title to "" so it stays hidden
-        // even when toolbar reconfigures (sidebar toggle, navigation push, etc.) re-set
-        // the window title under the hood.
         for window in NSApp.windows {
-            attachTitleClamp(to: window)
+            clearLaunchFocus(in: window)
         }
         NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeMainNotification,
@@ -40,22 +34,11 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] note in
             guard let window = note.object as? NSWindow else { return }
-            self?.attachTitleClamp(to: window)
+            self?.clearLaunchFocus(in: window)
         }
     }
 
-    private func attachTitleClamp(to window: NSWindow) {
-        if !window.title.isEmpty { window.title = "" }
-        window.titleVisibility = .hidden
-        let observation = window.observe(\.title, options: [.new]) { window, _ in
-            if !window.title.isEmpty { window.title = "" }
-            window.titleVisibility = .hidden
-        }
-        titleObservers.append(observation)
-        #if DEBUG
-        let fr = window.firstResponder.map { String(describing: $0) } ?? "nil"
-        print("[focus] attachTitleClamp firstResponder=\(fr) didClear=\(didClearLaunchFocus)")
-        #endif
+    private func clearLaunchFocus(in window: NSWindow) {
         // Clear focus once at launch so the system doesn't park keyboard focus on the
         // sidebar's search field. NSText (the field editor for any text input) is what
         // actually shows up as firstResponder, not the NSSearchField itself.

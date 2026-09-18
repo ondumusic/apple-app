@@ -25,11 +25,24 @@ struct SongsViewMac: View {
             isPlaying: player.isPlaying
         )
         .navigationTitle("Songs")
+        .navigationSubtitle(subtitle)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                LibraryOptionsMenu(filter: $libraryFilter)
+            }
+        }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &tracks)
         }
+    }
+
+    private var subtitle: String {
+        let count = String(AttributedString(localized: "^[\(tracks.count) song](inflect: true)").characters)
+        let total = tracks.reduce(0) { $0 + $1.duration }
+        guard total > 0 else { return count }
+        return "\(count) · \(formattedTotalDuration(total))"
     }
 
     private func reload() {
