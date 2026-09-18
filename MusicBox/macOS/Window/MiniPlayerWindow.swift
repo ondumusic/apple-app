@@ -28,6 +28,10 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         (window?.frame.width ?? 300) + MiniPlayerContent.transportRowHeight + 220
     }
 
+    /// Lets the main window tell which of the two is key. It's a plain NSWindow, not an
+    /// NSPanel, so canBecomeMain is true for it and couldn't separate them.
+    static let windowIdentifier = NSUserInterfaceItemIdentifier("MusicBox.miniPlayer")
+
     /// UserDefaults key for the persisted window frame.
     private static let frameDefaultsKey = "MiniPlayerWindowFrame"
     /// Whether the mini player was open when the app last quit.
@@ -52,6 +56,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
             defer: false
         )
         panel.title = "Now Playing"
+        panel.identifier = Self.windowIdentifier
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
         // Movable-by-window-background was capturing drags meant for queue rows
@@ -110,6 +115,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         .environment(state)
         .environment(settings)
         host.rootView = AnyView(content)
+        observeUpNextShortcut()
     }
 
     /// Remembers which of the two windows the user was last working in so relaunch can
@@ -125,6 +131,19 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         guard NSApp.windows.contains(where: { $0 !== panel && $0.isVisible && $0.canBecomeMain })
         else { return }
         UserDefaults.standard.set(keyWindow === panel, forKey: lastKeyDefaultsKey)
+    }
+
+    /// The shortcut reaches every window, so the mini player only claims it while it has
+    /// focus — otherwise the main window's slide-over is the queue the user means.
+    private func observeUpNextShortcut() {
+        NotificationCenter.default.addObserver(
+            forName: .toggleUpNext, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.window?.isKeyWindow == true else { return }
+                self.toggleQueueByWindowState()
+            }
+        }
     }
 
     /// Derives current queue-visibility from window height and flips it.

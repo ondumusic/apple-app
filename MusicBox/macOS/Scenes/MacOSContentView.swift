@@ -111,6 +111,13 @@ struct MacOSContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
             searchFieldFocused = true
         }
+        // Only the front window responds. The mini player is a plain NSWindow rather
+        // than an NSPanel, so canBecomeMain is true for it too and can't tell them apart
+        // — both queues were toggling at once. Its identifier can.
+        .onReceive(NotificationCenter.default.publisher(for: .toggleUpNext)) { _ in
+            guard NSApp.keyWindow?.identifier != MiniPlayerWindowController.windowIdentifier else { return }
+            showQueue.toggle()
+        }
         .queueConfirmationOverlay()
         .replaceQueueConfirmation()
         .removeDownloadConfirmation()

@@ -11,6 +11,9 @@ extension Notification.Name {
     static let toggleMiniPlayer = Notification.Name("MusicBox.toggleMiniPlayer")
     static let showDownloadActivity = Notification.Name("MusicBox.showDownloadActivity")
     static let togglePlayPause = Notification.Name("MusicBox.togglePlayPause")
+    /// Handled by whichever surface is key — the mini player's inline queue if that
+    /// panel has focus, otherwise the main window's queue slide-over.
+    static let toggleUpNext = Notification.Name("MusicBox.toggleUpNext")
     /// Posted with `object: UUID` — the playlist/folder id that should enter inline rename
     /// mode in the macOS sidebar (used for "create + immediately rename" flow).
     static let startInlineRename = Notification.Name("MusicBox.startInlineRename")

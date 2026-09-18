@@ -217,6 +217,10 @@ struct MusicBoxApp: App {
                     NotificationCenter.default.post(name: .focusSearch, object: nil)
                 }
                 .keyboardShortcut("f", modifiers: .command)
+                Button("Up Next") {
+                    NotificationCenter.default.post(name: .toggleUpNext, object: nil)
+                }
+                .keyboardShortcut("u", modifiers: [.command, .option])
             }
             CommandGroup(after: .windowArrangement) {
                 // Closing the window shouldn't strand the app: Cmd+N used to be the only
