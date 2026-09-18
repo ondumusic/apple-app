@@ -60,7 +60,9 @@ struct MacOSContentView: View {
                 accent: settings.resolvedAccentColor
             )
             .toolbar(removing: .sidebarToggle)
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+            // Capped: the split view otherwise lets the sidebar eat most of the window,
+            // and nothing in it benefits from more than a couple of hundred points.
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } detail: {
             // safeAreaInset rather than a VStack: inside a split view's detail column the
             // NavigationStack claims the full height and a stacked sibling never gets laid
