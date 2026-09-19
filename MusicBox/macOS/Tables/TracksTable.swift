@@ -826,6 +826,9 @@ extension TracksTableViewController: NSTableViewDelegate {
         // the +16, the pill extends 16pt back into the artwork zone.
         if sectionsLeftInset > 0 {
             view.customSelectionLeftInset = sectionsLeftInset + 16
+            // The trailing side needs the same clearance the other branches give it;
+            // left at its default the pill ran flush to the window edge.
+            view.customSelectionRightInset = 12
         } else {
             // No artwork gutter to clear, but still inset — full-bleed ran the pill
             // straight into the sidebar divider. 12 clears the edge without reaching the
