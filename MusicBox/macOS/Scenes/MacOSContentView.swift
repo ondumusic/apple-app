@@ -34,19 +34,30 @@ struct MacOSContentView: View {
     @State private var batchCompleted = 0
     @State private var miniPlayer: MiniPlayerWindowController?
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
+    /// Width of the detail column, measured rather than assumed — the sidebar is
+    /// user-resizable. The player bar is sized to match so it spans the content column
+    /// exactly. Measuring the sidebar instead left the bar a couple of points wide of
+    /// the divider, overlapping it.
+    @State private var detailWidth: CGFloat = 0
     @State private var spaceKeyMonitor: Any?
     /// Drives the toolbar's search field for Cmd+F. Search moved out of the sidebar.
     @FocusState private var searchFieldFocused: Bool
     @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
 
     var body: some View {
-        // Window level, not scoped to the content column. Inside `detail:` a VStack
-        // sibling never lays out, and both safeAreaInset and overlay are swallowed by the
-        // AppKit table representable — a plain red probe didn't render either.
-        VStack(spacing: 0) {
-            splitViewChrome
-            PlayerBottomBar(showQueue: $showQueue)   // PROTOTYPE
-        }
+        // The bar still lives at window level — inside `detail:` it never lays out at
+        // all, which a plain red probe confirmed isn't specific to the bar. Floating it
+        // over the content column is done by insetting the overlay past the sidebar's
+        // measured width instead, which also lets the sidebar run the full height.
+        splitViewChrome
+            .overlay(alignment: .bottomTrailing) {
+                // Sized to the detail column and pinned trailing, rather than padded in
+                // from the leading edge by the sidebar's width — that measurement omits
+                // the split divider, which left the bar lapping a couple of points over
+                // the sidebar.
+                PlayerBottomBar(showQueue: $showQueue)
+                    .frame(width: detailWidth > 0 ? detailWidth : nil)
+            }
     }
 
     private var splitView: some View {
@@ -68,6 +79,13 @@ struct MacOSContentView: View {
             // NavigationStack claims the full height and a stacked sibling never gets laid
             // out. This reserves the space properly and keeps scroll content clear of it.
             detailStack
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { detailWidth = $0 }
+                // Reserves the bar's height inside the detail column so lists end above
+                // it and their scrollers inset with them. The bar itself is drawn by the
+                // window-level overlay — a visible safeAreaInset never rendered here.
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    Color.clear.frame(height: PlayerBottomBar.height)
+                }
         }
     }
 

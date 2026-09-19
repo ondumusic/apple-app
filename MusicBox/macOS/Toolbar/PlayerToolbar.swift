@@ -62,6 +62,8 @@ struct PlayerToolbar: ToolbarContent {
 // a ZStack. Lives in this file so it can see the control views without changing their
 // visibility.
 struct PlayerBottomBar: View {
+    static let height: CGFloat = 64
+
     @Environment(PlayerService.self) private var player
     @Binding var showQueue: Bool
 
@@ -121,7 +123,7 @@ struct PlayerBottomBar: View {
             }
         }
         .buttonStyle(.plain)
-        .frame(height: 64)
+        .frame(height: Self.height)
         .frame(maxWidth: .infinity)
         .background {
             ZStack {
