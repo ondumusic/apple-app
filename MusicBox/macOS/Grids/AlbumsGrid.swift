@@ -1,0 +1,364 @@
+#if os(macOS)
+import AppKit
+import SwiftUI
+
+/// AppKit-backed album grid. LazyVGrid gave no keyboard navigation (it has no focus
+/// model for grid items), no rubber-band selection, and selection that lagged a click —
+/// stacked tap gestures have to wait out the double-click interval before either can
+/// fire. NSCollectionView selects on mouseDown and brings the rest with it, and it
+/// recycles cells rather than keeping every realised card alive.
+struct AlbumsGrid: NSViewControllerRepresentable {
+    let albums: [Album]
+    @Binding var selection: Set<Album.ID>
+    let actions: AlbumActions
+    let accent: Color
+    let onOpen: (Album) -> Void
+
+    func makeNSViewController(context: Context) -> AlbumsGridViewController {
+        let vc = AlbumsGridViewController()
+        apply(to: vc)
+        return vc
+    }
+
+    func updateNSViewController(_ vc: AlbumsGridViewController, context: Context) {
+        apply(to: vc)
+    }
+
+    private func apply(to vc: AlbumsGridViewController) {
+        vc.accentNSColor = NSColor(accent)
+        vc.actions = actions
+        vc.onOpen = onOpen
+        vc.onSelectionChange = { selection = $0 }
+        vc.apply(albums: albums, selection: selection)
+    }
+}
+
+final class AlbumsGridViewController: NSViewController {
+    fileprivate var albums: [Album] = []
+    var actions = AlbumActions()
+    var onOpen: ((Album) -> Void)?
+    var onSelectionChange: ((Set<Album.ID>) -> Void)?
+    var accentNSColor: NSColor = .controlAccentColor {
+        didSet {
+            guard accentNSColor != oldValue, isViewLoaded else { return }
+            applyItemChrome()
+        }
+    }
+
+    private let collectionView = AlbumsCollectionView()
+    private let scrollView = NSScrollView()
+    /// Set while pushing a selection down from SwiftUI, so the resulting delegate
+    /// callback doesn't echo the same value back up and fight the binding.
+    private var isApplyingExternalSelection = false
+
+    /// Matches the SwiftUI grid this replaced: cards stretch to fill the row, never
+    /// narrower than this.
+    private static let minimumItemWidth: CGFloat = 160
+    private static let interitemSpacing: CGFloat = 16
+    private static let lineSpacing: CGFloat = 20
+    private static let sectionInset: CGFloat = 20
+    /// Title plus year plus the gap above them — the part of a cell that isn't artwork.
+    private static let captionHeight: CGFloat = 42
+
+    override func loadView() {
+        let layout = NSCollectionViewFlowLayout()
+        layout.minimumInteritemSpacing = Self.interitemSpacing
+        layout.minimumLineSpacing = Self.lineSpacing
+        layout.sectionInset = NSEdgeInsets(
+            top: Self.sectionInset, left: Self.sectionInset,
+            bottom: Self.sectionInset, right: Self.sectionInset
+        )
+
+        collectionView.collectionViewLayout = layout
+        collectionView.dataSource = self
+        collectionView.delegate = self
+        collectionView.isSelectable = true
+        collectionView.allowsMultipleSelection = true
+        collectionView.allowsEmptySelection = true
+        collectionView.backgroundColors = [.clear]
+        collectionView.register(AlbumGridItem.self, forItemWithIdentifier: AlbumGridItem.identifier)
+        collectionView.onDoubleClick = { [weak self] indexPath in
+            guard let self, self.albums.indices.contains(indexPath.item) else { return }
+            self.onOpen?(self.albums[indexPath.item])
+        }
+        collectionView.onOpenSelection = { [weak self] in
+            guard let self, let first = self.selectedAlbums().first else { return }
+            self.onOpen?(first)
+        }
+        collectionView.onEmphasisChange = { [weak self] in self?.applyItemChrome() }
+        collectionView.onHoverChange = { [weak self] path in self?.applyHover(path) }
+
+        let menu = NSMenu()
+        menu.delegate = self
+        collectionView.menu = menu
+
+        scrollView.documentView = collectionView
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = false
+        scrollView.reserveSpaceForPlayerBar()
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        view = scrollView
+
+        // Scrolling moves cells under a stationary cursor, which produces no mouse event
+        // of its own — without this the play button stays on whichever cover the pointer
+        // was over when the scroll started.
+        NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.collectionView.refreshHoverFromPointer() }
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        guard let layout = collectionView.collectionViewLayout as? NSCollectionViewFlowLayout else { return }
+        let size = itemSize(forWidth: scrollView.contentSize.width)
+        guard layout.itemSize != size else { return }
+        layout.itemSize = size
+    }
+
+    /// Flow layout wants a fixed item size, so the adaptive-column arithmetic that
+    /// `GridItem(.adaptive(minimum:))` did for us happens here instead.
+    private func itemSize(forWidth width: CGFloat) -> NSSize {
+        let available = width - Self.sectionInset * 2
+        guard available > 0 else { return NSSize(width: Self.minimumItemWidth, height: Self.minimumItemWidth + Self.captionHeight) }
+        let spacing = Self.interitemSpacing
+        let columns = max(1, Int((available + spacing) / (Self.minimumItemWidth + spacing)))
+        let itemWidth = floor((available - spacing * CGFloat(columns - 1)) / CGFloat(columns))
+        return NSSize(width: itemWidth, height: itemWidth + Self.captionHeight)
+    }
+
+    func apply(albums newAlbums: [Album], selection: Set<Album.ID>) {
+        let changed = albums.map(\.id) != newAlbums.map(\.id)
+        albums = newAlbums
+        if changed { collectionView.reloadData() }
+
+        let target = Set(albums.indices.filter { selection.contains(albums[$0].id) }
+            .map { IndexPath(item: $0, section: 0) })
+        guard target != collectionView.selectionIndexPaths else { return }
+        isApplyingExternalSelection = true
+        collectionView.selectionIndexPaths = target
+        isApplyingExternalSelection = false
+    }
+
+    fileprivate func selectedAlbums() -> [Album] {
+        collectionView.selectionIndexPaths
+            .map(\.item)
+            .sorted()
+            .compactMap { albums.indices.contains($0) ? albums[$0] : nil }
+    }
+
+    private var hoveredIndexPath: IndexPath?
+
+    private func applyHover(_ path: IndexPath?) {
+        guard path != hoveredIndexPath else { return }
+        hoveredIndexPath = path
+        for (index, item) in collectionView.visibleItems().enumerated() {
+            _ = index
+            guard let cell = item as? AlbumGridItem,
+                  let itemPath = collectionView.indexPath(for: item) else { continue }
+            cell.isHovered = itemPath == path
+        }
+    }
+
+    private func applyItemChrome() {
+        for item in collectionView.visibleItems().compactMap({ $0 as? AlbumGridItem }) {
+            item.accentColor = accentNSColor
+            item.isEmphasized = collectionView.isFirstResponderEmphasis
+        }
+    }
+
+    private func publishSelection() {
+        guard !isApplyingExternalSelection else { return }
+        onSelectionChange?(Set(selectedAlbums().map(\.id)))
+    }
+
+    // MARK: - Context menu targets
+
+    /// Right-clicking inside a selection acts on all of it; right-clicking outside one
+    /// acts on that album alone and adopts it, so the menu and the selection agree.
+    private func albumsForContextAction() -> [Album] {
+        guard let clicked = collectionView.clickedIndexPath,
+              albums.indices.contains(clicked.item) else { return [] }
+        if collectionView.selectionIndexPaths.contains(clicked) {
+            return selectedAlbums()
+        }
+        collectionView.selectionIndexPaths = [clicked]
+        publishSelection()
+        return [albums[clicked.item]]
+    }
+
+    @objc private func menuOpen() {
+        guard let album = albumsForContextAction().first else { return }
+        onOpen?(album)
+    }
+    @objc private func menuPlay() { withContextAlbums { actions.play($0) } }
+    @objc private func menuShuffle() { withContextAlbums { actions.shuffle($0) } }
+    @objc private func menuPlayNext() { withContextAlbums { actions.playNext($0) } }
+    @objc private func menuAddToEnd() { withContextAlbums { actions.addToEnd($0) } }
+    @objc private func menuAddToPlaylist() { withContextAlbums { actions.addToPlaylist($0) } }
+    @objc private func menuDownload() { withContextAlbums { actions.download($0) } }
+    @objc private func menuRemoveDownload() { withContextAlbums { actions.removeDownload($0) } }
+
+    private func withContextAlbums(_ body: ([Album]) -> Void) {
+        let target = albumsForContextAction()
+        guard !target.isEmpty else { return }
+        body(target)
+    }
+}
+
+extension AlbumsGridViewController: NSCollectionViewDataSource {
+    func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int {
+        albums.count
+    }
+
+    func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
+        let item = collectionView.makeItem(withIdentifier: AlbumGridItem.identifier, for: indexPath)
+        guard let cell = item as? AlbumGridItem, albums.indices.contains(indexPath.item) else { return item }
+        let album = albums[indexPath.item]
+        cell.accentColor = accentNSColor
+        cell.isEmphasized = self.collectionView.isFirstResponderEmphasis
+        cell.onPlay = { [weak self] in self?.actions.play([album]) }
+        cell.isHovered = indexPath == hoveredIndexPath
+        cell.configure(album: album)
+        return cell
+    }
+}
+
+extension AlbumsGridViewController: NSCollectionViewDelegate {
+    func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>) {
+        publishSelection()
+    }
+
+    func collectionView(_ collectionView: NSCollectionView, didDeselectItemsAt indexPaths: Set<IndexPath>) {
+        publishSelection()
+    }
+}
+
+extension AlbumsGridViewController: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        guard let clicked = collectionView.clickedIndexPath,
+              albums.indices.contains(clicked.item) else { return }
+        let target = collectionView.selectionIndexPaths.contains(clicked)
+            ? selectedAlbums()
+            : [albums[clicked.item]]
+
+        if target.count == 1 {
+            addItem(to: menu, title: "Open", action: #selector(menuOpen))
+            menu.addItem(.separator())
+        }
+        addItem(to: menu, title: "Play", action: #selector(menuPlay))
+        addItem(to: menu, title: "Shuffle", action: #selector(menuShuffle))
+        menu.addItem(.separator())
+        addItem(to: menu, title: "Play Next", action: #selector(menuPlayNext))
+        addItem(to: menu, title: "Add to Queue", action: #selector(menuAddToEnd))
+        menu.addItem(.separator())
+        addItem(to: menu, title: "Add to Playlist…", action: #selector(menuAddToPlaylist))
+        if actions.supportsDownload {
+            menu.addItem(.separator())
+            if actions.isFullyDownloaded(target) {
+                addItem(to: menu, title: "Remove Download", action: #selector(menuRemoveDownload))
+            } else {
+                addItem(to: menu, title: "Download", action: #selector(menuDownload))
+            }
+        }
+    }
+
+    private func addItem(to menu: NSMenu, title: String, action: Selector) {
+        let item = NSMenuItem(title: NSLocalizedString(title, comment: ""), action: action, keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+    }
+}
+
+/// NSCollectionView has no doubleAction the way NSTableView does, and no notion of a
+/// clicked-but-unselected item for menus, so both are tracked here.
+final class AlbumsCollectionView: NSCollectionView {
+    var onDoubleClick: ((IndexPath) -> Void)?
+    var onOpenSelection: (() -> Void)?
+    var onEmphasisChange: (() -> Void)?
+    var onHoverChange: ((IndexPath?) -> Void)?
+    private(set) var clickedIndexPath: IndexPath?
+    private var trackingArea: NSTrackingArea?
+
+    /// Selection paints the accent only while the grid has focus, matching the tables.
+    var isFirstResponderEmphasis: Bool {
+        window?.firstResponder === self && (window?.isKeyWindow ?? false)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        onHoverChange?(indexPathForItem(at: convert(event.locationInWindow, from: nil)))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        onHoverChange?(nil)
+    }
+
+    /// Recomputed from the pointer's current position rather than an event, for the cases
+    /// that produce no mouse event at all — scrolling, and cells being recycled under it.
+    func refreshHoverFromPointer() {
+        guard let window, window.isKeyWindow else { onHoverChange?(nil); return }
+        let inWindow = window.mouseLocationOutsideOfEventStream
+        let local = convert(inWindow, from: nil)
+        guard visibleRect.contains(local) else { onHoverChange?(nil); return }
+        onHoverChange?(indexPathForItem(at: local))
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        clickedIndexPath = indexPathForItem(at: point)
+        // super selects on mouseDown, which is what makes selection feel instant; the
+        // second click of a double arrives with the selection already settled.
+        super.mouseDown(with: event)
+        if event.clickCount == 2, let path = clickedIndexPath {
+            onDoubleClick?(path)
+        }
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        clickedIndexPath = indexPathForItem(at: convert(event.locationInWindow, from: nil))
+        super.rightMouseDown(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        // Return opens, matching double-click. Everything else — arrows, Cmd+A,
+        // shift-extend — NSCollectionView already handles.
+        if event.keyCode == 36 || event.keyCode == 76 {
+            onOpenSelection?()
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        defer { onEmphasisChange?() }
+        return super.becomeFirstResponder()
+    }
+
+    override func resignFirstResponder() -> Bool {
+        defer { onEmphasisChange?() }
+        return super.resignFirstResponder()
+    }
+}
+#endif
