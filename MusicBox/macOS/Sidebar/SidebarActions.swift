@@ -16,6 +16,9 @@ struct SidebarActions {
     /// Track IDs being dropped onto a (non-folder) playlist row. Caller adds them via
     /// the playlist controller / outbox.
     var addTracksToPlaylist: ([UUID], Playlist) -> Void = { _, _ in }
+    /// Albums are resolved to their tracks by the caller, which is the side that has
+    /// the library.
+    var addAlbumsToPlaylist: ([UUID], Playlist) -> Void = { _, _ in }
     /// Trigger naming flow for a new playlist; parentId nil = root.
     var createPlaylist: (UUID?) -> Void = { _ in }
     /// Trigger naming flow for a new folder; parentId nil = root.
@@ -33,6 +36,10 @@ extension NSPasteboard.PasteboardType {
     /// Pasteboard type used by track drag operations. Carries one UUID string per
     /// dragged track in NSPasteboardItem(s).
     static let musicBoxTracks = NSPasteboard.PasteboardType("com.musicbox.tracks")
+    /// Pasteboard type used by album drag operations. One album UUID per item — the
+    /// drop side expands it to tracks, since a single NSPasteboardItem can only carry
+    /// one string per type and an album is many tracks.
+    static let musicBoxAlbums = NSPasteboard.PasteboardType("com.musicbox.albums")
     /// Pasteboard type used by sidebar playlist drag operations. Distinct from
     /// musicBoxTracks so a track drag can't accidentally land as a playlist move.
     static let musicBoxSidebarPlaylist = NSPasteboard.PasteboardType("com.musicbox.sidebar.playlist")

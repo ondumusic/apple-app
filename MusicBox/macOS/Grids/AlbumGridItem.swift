@@ -29,6 +29,22 @@ final class AlbumGridItem: NSCollectionViewItem {
         didSet { applySelection() }
     }
 
+    /// Rubber-band membership arrives here, not through isSelected — NSCollectionView
+    /// only commits the selection on mouse-up, so drawing isSelected alone left the
+    /// marquee empty until release. Finder highlights as the rectangle passes over.
+    override var highlightState: NSCollectionViewItem.HighlightState {
+        didSet { applySelection() }
+    }
+
+    /// Selected, or about to be by the rectangle currently being dragged over it.
+    private var drawsSelected: Bool {
+        switch highlightState {
+        case .forSelection: return true
+        case .forDeselection: return false
+        default: return isSelected
+        }
+    }
+
     /// Driven by the collection view rather than a tracking area of this cell's own:
     /// cells move under a stationary cursor while scrolling and never get mouseExited,
     /// so per-cell tracking left play buttons stuck on several covers at once.
@@ -40,8 +56,20 @@ final class AlbumGridItem: NSCollectionViewItem {
         }
     }
 
+    /// Passed through to the item's view: NSCollectionView hides the items being
+    /// dragged, and declining that is the only way to avoid a flash — restoring them
+    /// afterwards is always at least one frame late.
+    var suppressesHiding: Bool {
+        get { (view as? DragVisibleView)?.suppressesHiding ?? false }
+        set {
+            guard let view = view as? DragVisibleView else { return }
+            view.suppressesHiding = newValue
+            if newValue { view.isHidden = false }
+        }
+    }
+
     override func loadView() {
-        view = NSView()
+        view = DragVisibleView()
         view.wantsLayer = true
 
         artworkContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -153,22 +181,39 @@ final class AlbumGridItem: NSCollectionViewItem {
         loadingURL = nil
         artwork.image = nil
         isHovered = false
+        highlightState = .none
+        suppressesHiding = false
     }
 
     /// Photos-style: a ring around the sleeve and the title picking up the accent, rather
     /// than a wash over the artwork — a translucent fill across a 300pt cover just makes
     /// it muddy.
     private func applySelection() {
+        let on = drawsSelected
         let color = isEmphasized ? accentColor : .tertiaryLabelColor
-        artworkContainer.layer?.borderWidth = isSelected ? 3 : 0.5
-        artworkContainer.layer?.borderColor = isSelected
+        artworkContainer.layer?.borderWidth = on ? 3 : 0.5
+        artworkContainer.layer?.borderColor = on
             ? color.cgColor
             : NSColor.separatorColor.withAlphaComponent(0.4).cgColor
-        titleLabel.textColor = isSelected ? color : .labelColor
+        titleLabel.textColor = on ? color : .labelColor
     }
 
     @objc private func handlePlay() { onPlay?() }
 
 }
 
+/// Declines `isHidden = true` while a drag is in flight. AppKit hides a drag's source
+/// views for its duration, which leaves holes in a grid or table; the ghost under the
+/// cursor already says what's moving, and Finder leaves the originals in place.
+final class DragVisibleView: NSView {
+    var suppressesHiding = false
+
+    override var isHidden: Bool {
+        get { super.isHidden }
+        set {
+            guard !(suppressesHiding && newValue) else { return }
+            super.isHidden = newValue
+        }
+    }
+}
 #endif

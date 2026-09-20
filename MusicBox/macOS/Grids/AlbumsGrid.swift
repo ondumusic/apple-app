@@ -231,6 +231,76 @@ extension AlbumsGridViewController: NSCollectionViewDataSource {
 }
 
 extension AlbumsGridViewController: NSCollectionViewDelegate {
+    func collectionView(_ collectionView: NSCollectionView, canDragItemsAt indexPaths: Set<IndexPath>, with event: NSEvent) -> Bool {
+        !indexPaths.isEmpty
+    }
+
+    /// One item per album carrying its id; the sidebar expands it to tracks on drop.
+    func collectionView(_ collectionView: NSCollectionView, pasteboardWriterForItemAt indexPath: IndexPath) -> NSPasteboardWriting? {
+        guard albums.indices.contains(indexPath.item) else { return nil }
+        let item = NSPasteboardItem()
+        item.setString(albums[indexPath.item].id.uuidString, forType: .musicBoxAlbums)
+        return item
+    }
+
+    /// Dragging an album out of the grid copies it into whatever it lands on; it never
+    /// moves anything, so the grid itself is not a reorderable list.
+    func collectionView(
+        _ collectionView: NSCollectionView,
+        draggingSession session: NSDraggingSession,
+        sourceOperationMaskFor context: NSDraggingContext
+    ) -> NSDragOperation {
+        context == .withinApplication ? .copy : []
+    }
+
+    /// Dragging an unselected album drags just that one, matching how the context menu
+    /// treats a right-click outside the selection.
+    func collectionView(
+        _ collectionView: NSCollectionView,
+        draggingSession session: NSDraggingSession,
+        willBeginAt screenPoint: NSPoint,
+        forItemsAt indexPaths: Set<IndexPath>
+    ) {
+        if !indexPaths.isSubset(of: collectionView.selectionIndexPaths) {
+            collectionView.selectionIndexPaths = indexPaths
+            publishSelection()
+        }
+        keepSourceItemsVisible(in: collectionView, at: indexPaths)
+    }
+
+    /// Runs before AppKit applies the hiding, which is what makes it a no-op rather
+    /// than a correction.
+    private func keepSourceItemsVisible(in collectionView: NSCollectionView, at indexPaths: Set<IndexPath>) {
+        for path in indexPaths {
+            (collectionView.item(at: path) as? AlbumGridItem)?.suppressesHiding = true
+        }
+    }
+
+    /// Lift the suppression once the drag is over, so ordinary hiding works again.
+    func collectionView(
+        _ collectionView: NSCollectionView,
+        draggingSession session: NSDraggingSession,
+        endedAt screenPoint: NSPoint,
+        dragOperation operation: NSDragOperation
+    ) {
+        for item in collectionView.visibleItems() {
+            (item as? AlbumGridItem)?.suppressesHiding = false
+            item.view.isHidden = false
+        }
+    }
+
+    /// NSCollectionView doesn't push the state onto the items itself; without this the
+    /// rubber band tracks but nothing under it changes until the mouse comes up.
+    func collectionView(
+        _ collectionView: NSCollectionView,
+        didChangeItemsAt indexPaths: Set<IndexPath>,
+        to highlightState: NSCollectionViewItem.HighlightState
+    ) {
+        for path in indexPaths {
+            (collectionView.item(at: path) as? AlbumGridItem)?.highlightState = highlightState
+        }
+    }
+
     func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>) {
         publishSelection()
     }

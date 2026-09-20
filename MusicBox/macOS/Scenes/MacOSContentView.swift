@@ -444,6 +444,12 @@ struct MacOSContentView: View {
         a.addTracksToPlaylist = { trackIds, playlist in
             playlistController.addTracks(trackIds, to: playlist.id)
         }
+        a.addAlbumsToPlaylist = { albumIds, playlist in
+            // Dropped in the order they were dragged, each album in its own track order.
+            let trackIds = albumIds.flatMap { musicLibrary.tracksForAlbum($0).map(\.id) }
+            guard !trackIds.isEmpty else { return }
+            playlistController.addTracks(trackIds, to: playlist.id)
+        }
         a.createPlaylist = { parentId in
             guard let new = playlistController.createPlaylist(name: "Untitled Playlist", parentId: parentId) else { return }
             scheduleInlineRename(forTempId: new.id)
