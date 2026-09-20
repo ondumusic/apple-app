@@ -15,6 +15,7 @@ struct QueueActions {
     var move: (IndexSet, Int) -> Void = { _, _ in }
     var insertTracks: ([UUID], Int) -> Void = { _, _ in }
     var insertAlbums: ([UUID], Int) -> Void = { _, _ in }
+    var addToPlaylist: ([UUID]) -> Void = { _ in }
 
     static func standard(player: PlayerService, musicLibrary: MusicLibrary, network: NetworkMonitor) -> QueueActions {
         var a = QueueActions()
@@ -44,6 +45,10 @@ struct QueueActions {
             }
             guard !items.isEmpty else { return }
             player.insertIntoQueue(items, at: position)
+        }
+        a.addToPlaylist = { trackIds in
+            guard !trackIds.isEmpty else { return }
+            NotificationCenter.default.post(name: .requestAddToPlaylist, object: trackIds)
         }
         return a
     }

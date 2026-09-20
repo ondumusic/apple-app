@@ -64,6 +64,15 @@ final class AccentSelectionRowView: NSTableRowView {
     /// The app accent rather than NSColor.selectedContentBackgroundColor, which follows
     /// the system accent and left selection disagreeing with the rest of the UI.
     var selectionColor: NSColor = .selectedContentBackgroundColor
+    /// What the pill becomes when the window isn't key. The system colour assumes the
+    /// text will go dark with it; a row that keeps white text — as Music.app's Up Next
+    /// does — needs something darker to stay legible.
+    var unemphasizedSelectionColor: NSColor = .unemphasizedSelectedContentBackgroundColor
+    /// Whether a selected row keeps its emphasized (white) text when the window isn't
+    /// key. Off by default — the system's behaviour, and what the other tables want,
+    /// where the pill goes pale and the text goes dark with it. The queue turns it on
+    /// and darkens the pill instead, which is what Music.app's Up Next does.
+    var keepsEmphasisWhenInactive: Bool = false
 
     /// macOS greys out selection in a window that isn't key — ours stayed at full accent,
     /// which made an inactive window read as if it still had focus. Cells follow: the
@@ -166,7 +175,8 @@ final class AccentSelectionRowView: NSTableRowView {
     }
 
     private func applyCellEmphasis() {
-        let style: NSView.BackgroundStyle = (isSelected && isWindowActive) ? .emphasized : .normal
+        let emphasize = isSelected && (isWindowActive || keepsEmphasisWhenInactive)
+        let style: NSView.BackgroundStyle = emphasize ? .emphasized : .normal
         for col in 0..<numberOfColumns {
             if let cell = view(atColumn: col) as? NSTableCellView, cell.backgroundStyle != style {
                 cell.backgroundStyle = style
@@ -186,7 +196,7 @@ final class AccentSelectionRowView: NSTableRowView {
         )
         guard rect.width > 0 else { return }
         let path = roundedRectPath(rect, topRadius: topRadius, bottomRadius: bottomRadius)
-        (isWindowActive ? selectionColor : .unemphasizedSelectedContentBackgroundColor).setFill()
+        (isWindowActive ? selectionColor : unemphasizedSelectionColor).setFill()
         path.fill()
     }
 

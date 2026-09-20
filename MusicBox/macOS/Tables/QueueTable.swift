@@ -68,6 +68,8 @@ final class QueueTableViewController: NSViewController {
 
     private let tableView = QueueKeyTableView()
     private let scrollView = NSScrollView()
+    private var hoveredRow: Int?
+    private var trackingArea: NSTrackingArea?
 
     override func loadView() {
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("queue"))
@@ -106,13 +108,87 @@ final class QueueTableViewController: NSViewController {
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
         scrollView.addBottomContentPadding()
+        scrollView.contentView.postsBoundsChangedNotifications = true
         view = scrollView
+
+        let menu = NSMenu()
+        menu.delegate = self
+        tableView.menu = menu
+
+        // Scrolling moves rows under a stationary cursor and produces no mouse event of
+        // its own, so a per-row tracking area leaves the hover stuck on whichever row
+        // the pointer was over when the scroll started.
+        NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshHoverFromPointer() }
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    private func refreshEmphasis() {
+        let selected = tableView.selectedRowIndexes
+        for row in 0..<tableView.numberOfRows {
+            guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? QueueCell
+            else { continue }
+            cell.backgroundStyle = selected.contains(row) ? .emphasized : .normal
+        }
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        if let trackingArea { view.removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: view.bounds,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        )
+        view.addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        applyHover(row: tableView.row(at: tableView.convert(event.locationInWindow, from: nil)))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        applyHover(row: -1)
+    }
+
+    /// From the pointer's position rather than an event, for the cases that produce none:
+    /// scrolling, and rows being recycled underneath it.
+    private func refreshHoverFromPointer() {
+        guard let window = view.window, window.isKeyWindow else { return applyHover(row: -1) }
+        let local = tableView.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        guard tableView.visibleRect.contains(local) else { return applyHover(row: -1) }
+        applyHover(row: tableView.row(at: local))
+    }
+
+    private func applyHover(row: Int) {
+        let target = items.indices.contains(row) ? row : nil
+        guard target != hoveredRow else { return }
+        hoveredRow = target
+        for visible in 0..<tableView.numberOfRows {
+            guard let cell = tableView.view(atColumn: 0, row: visible, makeIfNecessary: false) as? QueueCell
+            else { continue }
+            cell.isHovered = (visible == target)
+        }
     }
 
     func apply(items newItems: [QueueItem]) {
         let changed = items.map(\.id) != newItems.map(\.id)
         items = newItems
-        if changed { tableView.reloadData() }
+        if changed {
+            tableView.reloadData()
+            refreshEmphasis()
+        }
     }
 
     @objc private func handleDoubleClick() {
@@ -125,6 +201,32 @@ final class QueueTableViewController: NSViewController {
         let rows = tableView.selectedRowIndexes
         guard !rows.isEmpty else { return }
         actions.remove(rows)
+    }
+
+    /// Right-clicking inside the selection acts on all of it; outside one acts on just
+    /// that row, matching the tables and the album grid.
+    private func contextRows() -> IndexSet {
+        let clicked = tableView.clickedRow
+        guard items.indices.contains(clicked) else { return [] }
+        if tableView.selectedRowIndexes.contains(clicked) { return tableView.selectedRowIndexes }
+        return IndexSet(integer: clicked)
+    }
+
+    @objc private func menuPlay() {
+        guard let first = contextRows().first else { return }
+        actions.play(first)
+    }
+
+    @objc private func menuRemove() {
+        let rows = contextRows()
+        guard !rows.isEmpty else { return }
+        actions.remove(rows)
+    }
+
+    @objc private func menuAddToPlaylist() {
+        let rows = contextRows()
+        guard !rows.isEmpty else { return }
+        actions.addToPlaylist(rows.compactMap { items.indices.contains($0) ? items[$0].track.id : nil })
     }
 
     fileprivate func remove(row: Int) {
@@ -212,6 +314,24 @@ extension QueueTableViewController: NSTableViewDataSource {
     }
 }
 
+extension QueueTableViewController: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        guard items.indices.contains(tableView.clickedRow) else { return }
+        addItem(to: menu, title: "Play", action: #selector(menuPlay))
+        menu.addItem(.separator())
+        addItem(to: menu, title: "Add to Playlist…", action: #selector(menuAddToPlaylist))
+        menu.addItem(.separator())
+        addItem(to: menu, title: "Remove from Queue", action: #selector(menuRemove))
+    }
+
+    private func addItem(to menu: NSMenu, title: String, action: Selector) {
+        let item = NSMenuItem(title: NSLocalizedString(title, comment: ""), action: action, keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+    }
+}
+
 extension QueueTableViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard items.indices.contains(row) else { return nil }
@@ -219,6 +339,10 @@ extension QueueTableViewController: NSTableViewDelegate {
             ?? QueueCell()
         cell.showsDuration = showsDuration
         cell.metrics = metrics
+        // From the row's *current* state, not only from later changes: a recycled cell
+        // otherwise keeps the emphasis of whatever row it last showed.
+        cell.backgroundStyle = tableView.selectedRowIndexes.contains(row) ? .emphasized : .normal
+        cell.isHovered = (row == hoveredRow)
         cell.onRemove = { [weak self] in self?.remove(row: row) }
         cell.configure(item: items[row])
         return cell
@@ -229,6 +353,12 @@ extension QueueTableViewController: NSTableViewDelegate {
         view.selectionColor = accentNSColor
         view.customSelectionLeftInset = 8
         view.customSelectionRightInset = 8
+        // White text stays, and the pill darkens instead — Music.app's Up Next does the
+        // same. Without the flag the row view resets the cell to unemphasized on every
+        // selection and key change, which is what kept defeating this.
+        view.keepsEmphasisWhenInactive = true
+        view.unemphasizedSelectionColor = NSColor.unemphasizedSelectedContentBackgroundColor
+            .blended(withFraction: 0.35, of: .black) ?? .unemphasizedSelectedContentBackgroundColor
         // Starts where the title does, clear of the artwork — the same treatment
         // Music.app gives its Up Next rows, and what the other tables here already do
         // for rows that have no leading accessory.
@@ -241,6 +371,7 @@ extension QueueTableViewController: NSTableViewDelegate {
     func tableViewSelectionDidChange(_ notification: Notification) {
         // selectionHighlightStyle = .none means the table won't redraw rows itself.
         tableView.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
+        refreshEmphasis()
     }
 }
 
@@ -280,7 +411,6 @@ final class QueueCell: NSTableCellView {
     private let removeButton = NSButton()
     private var loadingURL: URL?
     private var imageTask: ImageTask?
-    private var trackingArea: NSTrackingArea?
     private var artworkLeading: NSLayoutConstraint!
     private var artworkWidth: NSLayoutConstraint!
     private var artworkHeight: NSLayoutConstraint!
@@ -404,7 +534,8 @@ final class QueueCell: NSTableCellView {
         imageTask = nil
         loadingURL = nil
         artwork.image = nil
-        setHovering(false)
+        isHovered = false
+        backgroundStyle = .normal
     }
 
     @objc private func handleRemove() { onRemove?() }
@@ -424,26 +555,18 @@ final class QueueCell: NSTableCellView {
         removeButton.contentTintColor = secondary
     }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let trackingArea { removeTrackingArea(trackingArea) }
-        let area = NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-            owner: self
-        )
-        addTrackingArea(area)
-        trackingArea = area
-    }
-
-    override func mouseEntered(with event: NSEvent) { setHovering(true) }
-    override func mouseExited(with event: NSEvent) { setHovering(false) }
-
+    /// Driven by the controller, not a tracking area of this cell's own: rows move under
+    /// a stationary cursor while scrolling and never get mouseExited, which left the
+    /// hover stuck until the pointer moved again.
+    ///
     /// The duration gives way to the button rather than sitting beside it, so the row
     /// doesn't reflow on hover.
-    private func setHovering(_ hovering: Bool) {
-        removeButton.isHidden = !hovering
-        duration.isHidden = hovering || !showsDuration
+    var isHovered: Bool = false {
+        didSet {
+            guard isHovered != oldValue else { return }
+            removeButton.isHidden = !isHovered
+            duration.isHidden = isHovered || !showsDuration
+        }
     }
 }
 

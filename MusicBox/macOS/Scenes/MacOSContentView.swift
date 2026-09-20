@@ -539,6 +539,12 @@ struct QueuePanel: View {
                 Text("Up Next")
                     .font(.headline)
                 Spacer()
+                if !upNext.isEmpty {
+                    Button("Clear") { player.clearUpNext() }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .help("Remove everything after the current track")
+                }
             }
             .padding(.horizontal, 16)
             .frame(height: contentHeaderHeight)
