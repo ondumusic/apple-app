@@ -28,8 +28,12 @@ struct LibraryOptionsMenu<Sort: View>: View {
                     : "line.3.horizontal.decrease.circle.fill"
             )
         }
-        // The disclosure chevron a toolbar Menu draws by default reads as a second
-        // control sitting next to the icon.
+        // Outside a toolbar a Menu draws itself bordered and stretches to fill, which
+        // made it a full-width "View Options" bar across the header. Music's is a bare
+        // glyph at the trailing edge.
+        .labelStyle(.iconOnly)
+        .menuStyle(.borderlessButton)
+        .fixedSize()
         .menuIndicator(.hidden)
         .help("Filter and sort")
     }

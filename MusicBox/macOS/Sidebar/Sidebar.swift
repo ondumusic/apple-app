@@ -8,6 +8,7 @@ import SwiftUI
 /// commits.
 struct Sidebar: NSViewControllerRepresentable {
     @Binding var selection: SidebarSelection?
+    @Binding var searchText: String
     let musicLibrary: MusicLibrary
     let actions: SidebarActions
     /// Active + queued downloads — surfaces as a badge on the Downloads category cell.
@@ -23,6 +24,9 @@ struct Sidebar: NSViewControllerRepresentable {
         vc.onSelectionChange = { newValue in
             selection = newValue
         }
+        vc.onSearchTextChange = { newText in
+            searchText = newText
+        }
         vc.actions = actions
         return vc
     }
@@ -35,6 +39,7 @@ struct Sidebar: NSViewControllerRepresentable {
         nsViewController.applyDownloadingCount(downloadingCount, progress: downloadProgress)
         let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists())
         nsViewController.update(playlistNodes: nodes, externalSelection: selection)
+        nsViewController.applyExternalSearchText(searchText)
     }
 
     private static func buildPlaylistTree(allPlaylists: [Playlist]) -> [SidebarNode] {
@@ -89,6 +94,7 @@ final class SidebarNode: NSObject {
 
 final class SidebarViewController: NSViewController {
     var onSelectionChange: ((SidebarSelection?) -> Void)?
+    var onSearchTextChange: ((String) -> Void)?
     var actions: SidebarActions = SidebarActions()
 
     private let scrollView = NSScrollView()
@@ -108,6 +114,7 @@ final class SidebarViewController: NSViewController {
     /// Matches Music.app: its sidebar scroll area starts 52pt below the window top.
     private static let trafficLightClearance: CGFloat = 52
 
+    private let searchField = NSSearchField()
     private let addButton = NSButton()
     private let bottomBar = NSView()
     /// Mail-style activity strip: overall progress while transfers run, click for the
@@ -192,6 +199,14 @@ final class SidebarViewController: NSViewController {
         // viewDidLayout owns the top inset; the automatic one is zero for the first
         // frames after launch, which is what misplaced the skeleton.
         scrollView.automaticallyAdjustsContentInsets = false
+
+        searchField.placeholderString = NSLocalizedString("Search", comment: "")
+        searchField.target = self
+        searchField.action = #selector(searchFieldChanged)
+        searchField.sendsSearchStringImmediately = false
+        searchField.sendsWholeSearchString = false
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(searchField)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
@@ -214,7 +229,13 @@ final class SidebarViewController: NSViewController {
         view.addSubview(bottomBar)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            // Music.app's sidebar: traffic lights, then the search field, then the
+            // sections. Measured there at 52pt down for the scroll area, with the field
+            // inset 11pt on each side.
+            searchField.topAnchor.constraint(equalTo: view.topAnchor, constant: Self.trafficLightClearance),
+            searchField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
+            searchField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 6),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: activityBar.topAnchor),
@@ -234,6 +255,12 @@ final class SidebarViewController: NSViewController {
 
         NotificationCenter.default.addObserver(
             self,
+            selector: #selector(handleFocusSearch),
+            name: .focusSearch,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
             selector: #selector(handleStartInlineRename(_:)),
             name: .startInlineRename,
             object: nil
@@ -251,7 +278,7 @@ final class SidebarViewController: NSViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        if view.window?.firstResponder === view.window {
+        if view.window?.firstResponder === searchField || view.window?.firstResponder === view.window {
             view.window?.makeFirstResponder(outlineView)
         }
     }
@@ -265,16 +292,27 @@ final class SidebarViewController: NSViewController {
         // the visible area on every layout.
         outlineView.sizeLastColumnToFit()
 
-        // The window has no toolbar, so the sidebar starts at its very top and the
-        // traffic lights float over it — the same arrangement Music.app uses, where the
-        // sidebar's scroll area begins 52pt down. Nothing to measure: without a titlebar
-        // strip there is no safe area to react to.
-        let top = Self.trafficLightClearance
+        // The search field above now carries the traffic-light clearance, so the list
+        // only needs its own small inset.
+        let top: CGFloat = 4
         if abs(scrollView.contentInsets.top - top) > 0.5 {
             scrollView.contentInsets = NSEdgeInsets(top: top, left: 0, bottom: 0, right: 0)
         }
     }
 
+
+    func applyExternalSearchText(_ text: String) {
+        guard searchField.stringValue != text else { return }
+        searchField.stringValue = text
+    }
+
+    @objc private func searchFieldChanged() {
+        onSearchTextChange?(searchField.stringValue)
+    }
+
+    @objc private func handleFocusSearch() {
+        view.window?.makeFirstResponder(searchField)
+    }
 
     private func deleteSelectedPlaylist() {
         let row = outlineView.selectedRow

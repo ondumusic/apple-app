@@ -19,36 +19,42 @@ struct ArtistsViewMac: View {
     @State private var selectedArtistId: Artist.ID?
 
     var body: some View {
-        // Plain HStack with a manual divider — HSplitView was rendering above the
-        // window toolbar (it doesn't respect the parent's toolbar safe area), and the
-        // nested NavigationSplitView had its own grey chrome problem. A regular HStack
-        // sits cleanly inside the outer detail column.
-        HStack(spacing: 0) {
-            ArtistsTable(
-                artists: artists,
-                selection: $selectedArtistId,
-                actions: .standard(
-                    player: player,
-                    musicLibrary: musicLibrary,
-                    network: network,
-                    downloadService: downloadService
-                ),
-                accent: settings.resolvedAccentColor
-            )
-            .background(.background)
-            .frame(width: 240)
-
-            Divider()
-
-            Group {
-                if let id = selectedArtistId, let artist = artists.first(where: { $0.id == id }) {
-                    ArtistDetailMac(artist: artist, isEmbedded: true)
-                        .id(artist.id)
-                } else {
-                    ContentUnavailableView("Select an Artist", systemImage: "music.mic")
-                }
+        VStack(spacing: 0) {
+            ContentHeader(backDestination: nil) {
+                LibraryOptionsMenu(filter: $libraryFilter)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Divider()
+            // Plain HStack with a manual divider — HSplitView was rendering above the
+            // window toolbar (it doesn't respect the parent's toolbar safe area), and the
+            // nested NavigationSplitView had its own grey chrome problem. A regular HStack
+            // sits cleanly inside the outer detail column.
+            HStack(spacing: 0) {
+                ArtistsTable(
+                    artists: artists,
+                    selection: $selectedArtistId,
+                    actions: .standard(
+                        player: player,
+                        musicLibrary: musicLibrary,
+                        network: network,
+                        downloadService: downloadService
+                    ),
+                    accent: settings.resolvedAccentColor
+                )
+                .background(.background)
+                .frame(width: 240)
+
+                Divider()
+
+                Group {
+                    if let id = selectedArtistId, let artist = artists.first(where: { $0.id == id }) {
+                        ArtistDetailMac(artist: artist, isEmbedded: true)
+                            .id(artist.id)
+                    } else {
+                        ContentUnavailableView("Select an Artist", systemImage: "music.mic")
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .onChange(of: musicLibrary.revision, initial: true) { reloadArtists() }
         .onChange(of: libraryFilter) { reloadArtists() }

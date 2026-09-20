@@ -53,6 +53,7 @@ struct MacOSContentView: View {
         HStack(spacing: 0) {
             Sidebar(
                 selection: $sidebarSelection,
+                searchText: $searchText,
                 musicLibrary: musicLibrary,
                 actions: sidebarActions,
                 downloadingCount: downloadService.activeDownloads.count + downloadService.pendingQueue.count,
@@ -87,14 +88,17 @@ struct MacOSContentView: View {
                 }
                 .navigationDestination(for: Album.self) { album in
                     AlbumDetailMac(album: album)
+                        .contentHeader(backDestination)
                         .onAppear { rememberDetail("album:\(album.id.uuidString)") }
                 }
                 .navigationDestination(for: Artist.self) { artist in
                     ArtistDetailMac(artist: artist)
+                        .contentHeader(backDestination)
                         .onAppear { rememberDetail("artist:\(artist.id.uuidString)") }
                 }
                 .navigationDestination(for: SearchAllRequest.self) { request in
                     SearchAllViewMac(request: request)
+                        .contentHeader("Search")
                 }
             }
         }

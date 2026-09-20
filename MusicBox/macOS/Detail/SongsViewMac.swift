@@ -13,17 +13,23 @@ struct SongsViewMac: View {
     @State private var selection: Set<UUID> = []
 
     var body: some View {
-        TracksTable(
-            tracks: tracks,
-            selection: $selection,
-            onPlay: playTrack(at:),
-            actions: trackActions,
-            showArtist: true,
-            showAlbum: true,
-            accent: settings.resolvedAccentColor,
-            currentlyPlayingTrackId: player.currentTrack?.id,
-            isPlaying: player.isPlaying
-        )
+        VStack(spacing: 0) {
+            ContentHeader(backDestination: nil) {
+                LibraryOptionsMenu(filter: $libraryFilter)
+            }
+            Divider()
+            TracksTable(
+                tracks: tracks,
+                selection: $selection,
+                onPlay: playTrack(at:),
+                actions: trackActions,
+                showArtist: true,
+                showAlbum: true,
+                accent: settings.resolvedAccentColor,
+                currentlyPlayingTrackId: player.currentTrack?.id,
+                isPlaying: player.isPlaying
+            )
+        }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }
         .onChange(of: musicLibrary.downloadChanged) {

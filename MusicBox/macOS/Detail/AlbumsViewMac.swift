@@ -16,19 +16,27 @@ struct AlbumsViewMac: View {
     @State private var selection: Set<Album.ID> = []
 
     var body: some View {
-        AlbumsGrid(
-            albums: albums,
-            selection: $selection,
-            actions: .standard(
-                player: player,
-                musicLibrary: musicLibrary,
-                network: network,
-                downloadService: downloadService
-            ),
-            accent: settings.resolvedAccentColor,
-            onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) }
-        )
-        .background(Color(NSColor.controlBackgroundColor))
+        VStack(spacing: 0) {
+            ContentHeader(backDestination: nil) {
+                LibraryOptionsMenu(filter: $libraryFilter) {
+                    SortOptionsSection(selection: $sortOption, ascending: $sortAscending)
+                }
+            }
+            Divider()
+            AlbumsGrid(
+                albums: albums,
+                selection: $selection,
+                actions: .standard(
+                    player: player,
+                    musicLibrary: musicLibrary,
+                    network: network,
+                    downloadService: downloadService
+                ),
+                accent: settings.resolvedAccentColor,
+                onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) }
+            )
+            .background(Color(NSColor.controlBackgroundColor))
+        }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }
         .onChange(of: sortOption) { reload() }

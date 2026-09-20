@@ -22,26 +22,44 @@ struct DownloadsViewMac: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DownloadPausedNotice()
-            if entries.isEmpty && !isTransferring {
-                ContentUnavailableView(
-                    "No Downloads",
-                    systemImage: "arrow.down.circle",
-                    description: Text("Albums you download are kept on this Mac and play offline.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                DownloadsTable(
-                    entries: entries,
-                    selection: $selection,
-                    accent: settings.resolvedAccentColor,
-                    onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) },
-                    onPlay: playAlbum,
-                    onRemove: requestRemoval
-                )
+            ContentHeader(backDestination: nil) {
+                Menu {
+                    Button("Download All") { showDownloadAllConfirmation = true }
+                    if !entries.isEmpty {
+                        Button("Remove All", role: .destructive) { showRemoveAllConfirmation = true }
+                    }
+                } label: {
+                    Label("Download Options", systemImage: "ellipsis.circle")
+                }
+                .labelStyle(.iconOnly)
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Download options")
             }
+            Divider()
+            VStack(spacing: 0) {
+                DownloadPausedNotice()
+                if entries.isEmpty && !isTransferring {
+                    ContentUnavailableView(
+                        "No Downloads",
+                        systemImage: "arrow.down.circle",
+                        description: Text("Albums you download are kept on this Mac and play offline.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    DownloadsTable(
+                        entries: entries,
+                        selection: $selection,
+                        accent: settings.resolvedAccentColor,
+                        onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) },
+                        onPlay: playAlbum,
+                        onRemove: requestRemoval
+                    )
+                }
+            }
+            .background(Color(NSColor.controlBackgroundColor))
         }
-        .background(Color(NSColor.controlBackgroundColor))
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }
         .confirmationDialog(
