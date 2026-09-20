@@ -536,6 +536,16 @@ final class TracksTableViewController: NSViewController {
     /// selection style itself is owned by applyEmbeddedStyle — it's `.none` either way
     /// so AccentSelectionRowView's accent pill is the only thing painting selection.
     private func applySectionsColumns() {
+        // Explicitly unanimated: adding or removing the spacer column runs inside
+        // whatever animation context is open when SwiftUI updates the representable, so
+        // crossing the compact breakpoint slid every track across to its new indent
+        // while the artwork it was making room for appeared instantly. A SwiftUI
+        // .animation(nil:) can't reach in here to stop it.
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = 0
+        NSAnimationContext.current.allowsImplicitAnimation = false
+        defer { NSAnimationContext.endGrouping() }
+
         let needsSpacer = sections != nil && artworkBuilder != nil
         sectionsLeftInset = needsSpacer ? (artworkSize + 2 * artworkInset) : 0
         if needsSpacer {

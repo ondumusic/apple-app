@@ -76,6 +76,10 @@ struct ArtistDetailMac: View {
             )
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { paneWidth = $0 }
         }
+        // The compact switch is a hard breakpoint — the artwork moves from a gutter to
+        // inline and the header changes height — so there's nothing to animate between.
+        // Inheriting an animation made the track list slide across as it flipped.
+        .animation(nil, value: isCompact)
         .background(Color(NSColor.textBackgroundColor))
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }

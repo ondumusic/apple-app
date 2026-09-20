@@ -84,9 +84,15 @@ struct MacOSContentView: View {
                             Divider()
                             QueuePanel(isPresented: $showQueue)
                                 .frame(width: Self.queueWidth)
-                                .transition(.move(edge: .trailing))
                         }
                     }
+                    // A push happens instantly. Animating the column's width meant the
+                    // AppKit grid and tables were re-laid out on every frame, and row
+                    // heights shift as the width does — mid-slide the top of an artist's
+                    // list would show a different album and then settle back. Sliding the
+                    // panel while the content snapped was worse again. The overlay below
+                    // still slides: nothing resizes for it.
+                    .animation(nil, value: showQueue)
                     // Only the floating panel casts a shadow; a pushed one is tiled
                     // beside the content and has nothing to lift off.
                     .overlay(alignment: .trailing) {
@@ -388,31 +394,37 @@ struct MacOSContentView: View {
 
     /// The floating form of the queue panel, used when there isn't room to push.
     ///
-    /// Always laid out and moved with `offset` rather than inserted behind an `if`:
-    /// inserting it gave it SwiftUI's default opacity transition, so it faded in where
-    /// the pushed form slides. The dismiss area is a sibling, so no invisible
-    /// click-catcher sits over the list.
+    /// The transition goes on the panel itself, which is the view being inserted. Put it
+    /// on a child of an inserted container instead and it never runs — the container
+    /// takes SwiftUI's default opacity transition and the child comes in with it, which
+    /// is why this faded at first.
+    ///
+    /// Deliberately not offset-and-clip: that keeps the panel laid out permanently, so
+    /// every frame of the slide recomposites the whole overlay region over AppKit-hosted
+    /// content that redraws on its own schedule, and the content tore mid-transition.
     private func queueOverlay(visible: Bool) -> some View {
         ZStack(alignment: .trailing) {
+            // Always present, so nothing is inserted or removed behind the panel while
+            // it moves; it only takes clicks while the panel is actually open.
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture { showQueue = false }
+                .allowsHitTesting(visible)
+
             if visible {
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-                    .onTapGesture { showQueue = false }
+                QueuePanel(isPresented: $showQueue)
+                    .frame(width: Self.queueWidth)
+                    .frame(maxHeight: .infinity)
+                    .background(Color(NSColor.windowBackgroundColor))
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.14))
+                            .frame(width: 0.5)
+                    }
+                    .transition(.move(edge: .trailing))
             }
-            QueuePanel(isPresented: $showQueue)
-                .frame(width: Self.queueWidth)
-                .frame(maxHeight: .infinity)
-                .background(Color(NSColor.windowBackgroundColor))
-                .overlay(alignment: .leading) {
-                    Rectangle()
-                        .fill(Color.primary.opacity(0.14))
-                        .frame(width: 0.5)
-                }
-                .offset(x: visible ? 0 : Self.queueWidth)
         }
-        .clipped()
-        .allowsHitTesting(visible)
     }
 
     /// What a pushed detail view returns to — the search results if that's where the
