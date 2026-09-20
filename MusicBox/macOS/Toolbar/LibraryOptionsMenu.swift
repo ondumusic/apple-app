@@ -9,6 +9,8 @@ struct LibraryOptionsMenu<Sort: View>: View {
     @Binding var filter: LibraryFilter
     @ViewBuilder var sort: Sort
 
+    @State private var isHovering = false
+
     var body: some View {
         Menu {
             Picker("Show", selection: $filter) {
@@ -30,6 +32,15 @@ struct LibraryOptionsMenu<Sort: View>: View {
         .labelStyle(.iconOnly)
         .menuStyle(.borderlessButton)
         .fixedSize()
+        // The same hover treatment the back button and the player's controls have; a
+        // bare glyph with no response reads as a label rather than something to click.
+        .padding(.horizontal, 5)
+        .padding(.vertical, 3)
+        .background {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.primary.opacity(isHovering ? 0.10 : 0))
+        }
+        .onHover { isHovering = $0 }
         .help("Filter and sort")
     }
 }

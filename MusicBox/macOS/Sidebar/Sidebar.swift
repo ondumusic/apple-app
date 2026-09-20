@@ -90,6 +90,48 @@ final class SidebarNode: NSObject {
     }
 }
 
+/// Search field whose focus ring is the app's accent rather than the system's.
+///
+/// AppKit's ring follows the *system* accent, which is the same mismatch
+/// AccentSelectionRowView exists to fix — the app paints its own selection everywhere
+/// else, so a blue ring here is the one thing that doesn't match.
+final class AccentSearchField: NSSearchField {
+    var accentColor: NSColor = .controlAccentColor { didSet { needsDisplay = true } }
+
+    override var focusRingType: NSFocusRingType {
+        get { .none }
+        set { /* pinned: we draw our own */ }
+    }
+
+    private var isEditing: Bool {
+        guard let editor = currentEditor() else { return false }
+        return window?.firstResponder === editor
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard isEditing else { return }
+        let ring = NSBezierPath(
+            roundedRect: bounds.insetBy(dx: 1.25, dy: 1.25),
+            xRadius: 6,
+            yRadius: 6
+        )
+        ring.lineWidth = 2.5
+        accentColor.withAlphaComponent(0.9).setStroke()
+        ring.stroke()
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        defer { needsDisplay = true }
+        return super.becomeFirstResponder()
+    }
+
+    override func textDidEndEditing(_ notification: Notification) {
+        super.textDidEndEditing(notification)
+        needsDisplay = true
+    }
+}
+
 // MARK: - View Controller
 
 final class SidebarViewController: NSViewController {
@@ -104,6 +146,7 @@ final class SidebarViewController: NSViewController {
     var accentNSColor: NSColor = .controlAccentColor {
         didSet {
             guard accentNSColor != oldValue, isViewLoaded else { return }
+            searchField.accentColor = accentNSColor
             outlineView.enumerateAvailableRowViews { rowView, row in
                 (rowView as? SidebarRowView)?.selectionColor = accentNSColor
                 (rowView.view(atColumn: 0) as? SidebarCell)?.accentColor = accentNSColor
@@ -114,7 +157,8 @@ final class SidebarViewController: NSViewController {
     /// Matches Music.app: its sidebar scroll area starts 52pt below the window top.
     private static let trafficLightClearance: CGFloat = 52
 
-    private let searchField = NSSearchField()
+    private let searchField = AccentSearchField()
+    private weak var backdrop: NSVisualEffectView?
     private let addButton = NSButton()
     private let bottomBar = NSView()
     /// Mail-style activity strip: overall progress while transfers run, click for the
@@ -168,6 +212,7 @@ final class SidebarViewController: NSViewController {
         backdrop.state = .followsWindowActiveState
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(backdrop)
+        self.backdrop = backdrop
         NSLayoutConstraint.activate([
             backdrop.topAnchor.constraint(equalTo: view.topAnchor),
             backdrop.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -223,7 +268,7 @@ final class SidebarViewController: NSViewController {
         searchField.sendsSearchStringImmediately = false
         searchField.sendsWholeSearchString = false
         searchField.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(searchField)
+        backdrop.addSubview(searchField)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
