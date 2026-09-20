@@ -47,6 +47,7 @@ struct PlayerBar: View {
         }
         .frame(height: Self.height)
         .frame(maxWidth: .infinity)
+        .overlay(alignment: .bottom) { Divider() }
         .fadesWhenInactive()
     }
 
@@ -71,10 +72,11 @@ struct PlayerBar: View {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 14))
                         .frame(width: playerControlSize, height: playerControlSize)
-                        .foregroundStyle(showQueue ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(.secondary)
                         // A held background while the panel is open, so the control reads
-                        // as a real toggle. Deliberately unlike shuffle and repeat, which
-                        // only take the accent when on — Music draws the same distinction.
+                        // as a real toggle — no accent as well, the background alone says
+                        // it. Deliberately unlike shuffle and repeat, which do take the
+                        // accent when on; Music draws the same distinction.
                         .background {
                             RoundedRectangle(cornerRadius: playerControlCornerRadius)
                                 .fill(Color.primary.opacity(showQueue ? 0.10 : 0))

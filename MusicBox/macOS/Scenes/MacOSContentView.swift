@@ -400,7 +400,11 @@ struct MacOSContentView: View {
                     .frame(width: Self.queueWidth)
                     .frame(maxHeight: .infinity)
                     .background(Color(NSColor.windowBackgroundColor))
-                    .shadow(color: Color.black.opacity(0.18), radius: 8, x: -2, y: 0)
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.14))
+                            .frame(width: 0.5)
+                    }
                     .transition(.move(edge: .trailing))
             }
         }
@@ -513,15 +517,6 @@ struct QueuePanel: View {
                 Text("Up Next")
                     .font(.headline)
                 Spacer()
-                Button { isPresented = false } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 22, height: 22)
-                        .background(Color.secondary.opacity(0.15), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.cancelAction)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -538,6 +533,8 @@ struct QueuePanel: View {
                 QueueList(upNext: upNext, rowHeight: 48, showsDuration: true)
             }
         }
+        // The close button went, but Escape shouldn't have to go with it.
+        .onExitCommand { isPresented = false }
     }
 }
 
