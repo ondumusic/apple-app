@@ -229,7 +229,12 @@ extension QueueTableViewController: NSTableViewDelegate {
         view.selectionColor = accentNSColor
         view.customSelectionLeftInset = 8
         view.customSelectionRightInset = 8
-        view.suppressDivider = true
+        // Starts where the title does, clear of the artwork — the same treatment
+        // Music.app gives its Up Next rows, and what the other tables here already do
+        // for rows that have no leading accessory.
+        view.suppressDivider = false
+        view.dividerLeadingInset = metrics.horizontalInset + metrics.artworkSize + 10
+        view.dividerTrailingInset = metrics.horizontalInset
         return view
     }
 

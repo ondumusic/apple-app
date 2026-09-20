@@ -10,6 +10,11 @@ final class AccentSelectionRowView: NSTableRowView {
     /// section-header rows, and rows immediately above section headers — wherever the
     /// divider would clash with the table's grouping or the row below.
     var suppressDivider: Bool = false
+    /// Where the hairline starts. A row with a leading accessory wants it to begin at the
+    /// text rather than run under the artwork — which is what Music.app does in its Up
+    /// Next, and what a plain list of names doesn't need.
+    var dividerLeadingInset: CGFloat = 8
+    var dividerTrailingInset: CGFloat = 8
 
     /// See DragVisibleView: AppKit hides a drag's source rows for its duration, which
     /// leaves gaps in the table. Declining the hide is the only flash-free way — undoing
@@ -113,9 +118,9 @@ final class AccentSelectionRowView: NSTableRowView {
         // Inter-row hairline. Skipped on suppressed rows, selected rows, and rows above
         // a selected row so the pill stays clean.
         guard !suppressDivider, !isSelected, !isNextRowSelected else { return }
-        let line = NSRect(x: bounds.minX + 8,
+        let line = NSRect(x: bounds.minX + dividerLeadingInset,
                           y: bounds.maxY - 0.5,
-                          width: bounds.width - 16,
+                          width: max(0, bounds.width - dividerLeadingInset - dividerTrailingInset),
                           height: 0.5)
         NSColor.separatorColor.setFill()
         line.fill()
