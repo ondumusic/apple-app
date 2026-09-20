@@ -25,6 +25,8 @@ final class PlaybackStateStore {
     private let fileURL: URL
     private let defaults: UserDefaults
     private let fileManager = FileManager.default
+    /// The most recent queued write, so the next one can chain after it.
+    private var pendingWrite: Task<Void, Never>?
 
     private enum Keys {
         static let positionTrackId = "playback.positionTrackId"
@@ -57,9 +59,26 @@ final class PlaybackStateStore {
         return try? JSONDecoder().decode(PlaybackState.self, from: data)
     }
 
+    /// Encodes on the caller, writes off it.
+    ///
+    /// An atomic write is a temp file, a write and a rename — real syscalls, and this is
+    /// called from interactive gestures like reordering the queue, where doing that on
+    /// the main thread is felt. Writes chain off each other so they still land in the
+    /// order they were made.
     func save(_ state: PlaybackState) {
         guard let data = try? JSONEncoder().encode(state) else { return }
-        try? data.write(to: fileURL, options: .atomic)
+        let url = fileURL
+        let previous = pendingWrite
+        pendingWrite = Task.detached(priority: .utility) {
+            await previous?.value
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    /// Lets a caller wait for queued writes — tests, and anywhere that needs the file on
+    /// disk before it reads it back.
+    func flush() async {
+        await pendingWrite?.value
     }
 
     // MARK: - Position

@@ -411,6 +411,7 @@ final class PlayerService {
     }
 
     func moveQueueItems(from source: IndexSet, to destination: Int) {
+        let nextBefore = upcomingTrackId
         let upNextStart = currentIndex + 1
         if let shuffled = shuffledIndices {
             var upNextIndices = Array(shuffled[upNextStart...])
@@ -422,8 +423,17 @@ final class PlayerService {
             queue.move(fromOffsets: sourceReal, toOffset: destReal)
         }
         isQueueUserModified = true
-        invalidateGaplessState()
+        if upcomingTrackId != nextBefore { invalidateGaplessState() }
         savePlaybackState()
+    }
+
+    /// The track queued to play after the current one, which is all the gapless prefetch
+    /// depends on.
+    private var upcomingTrackId: UUID? {
+        let next = currentIndex + 1
+        guard next < queue.count else { return nil }
+        let effective = shuffledIndices.map { next < $0.count ? $0[next] : next } ?? next
+        return queue.indices.contains(effective) ? queue[effective].track.id : nil
     }
 
     // MARK: - Shuffle

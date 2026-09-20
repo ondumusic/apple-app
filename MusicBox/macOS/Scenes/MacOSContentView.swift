@@ -98,6 +98,9 @@ struct MacOSContentView: View {
                     .overlay(alignment: .trailing) {
                         if !pushes { queueOverlay(visible: showQueue) }
                     }
+                    // On the content, not the window: it anchors to the top of whatever
+                    // it's attached to, which at window level is now the player row.
+                    .queueConfirmationOverlay()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -149,7 +152,6 @@ struct MacOSContentView: View {
             guard NSApp.keyWindow?.identifier != MiniPlayerWindowController.windowIdentifier else { return }
             showQueue.toggle()
         }
-        .queueConfirmationOverlay()
         .replaceQueueConfirmation()
         .removeDownloadConfirmation()
         .sheet(
@@ -594,9 +596,10 @@ struct QueueList: View {
                         guard let payload = payloads.first else { return false }
                         let sources = IndexSet(payload.originalIndices)
                         guard !sources.isEmpty,
-                              !payload.itemIds.contains(entry.item.id)
+                              !payload.itemIds.contains(entry.item.id),
+                              let target = upNext.firstIndex(where: { $0.item.id == entry.item.id })
                         else { return false }
-                        player.moveQueueItems(from: sources, to: entry.originalIndex)
+                        player.moveQueueItems(from: sources, to: target)
                         return true
                     } isTargeted: { hovering in
                         if hovering { dropTargetId = entry.item.id }
@@ -604,22 +607,47 @@ struct QueueList: View {
                     }
                     Divider().opacity(0.5)
                 }
+
+                // Dropping on a row inserts before it, which left the end of the queue
+                // unreachable. This catches drops past the last row.
+                Color.clear
+                    .frame(height: 28)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                    .dropDestination(for: QueueDragPayload.self) { payloads, _ in
+                        guard let payload = payloads.first else { return false }
+                        let sources = IndexSet(payload.originalIndices)
+                        guard !sources.isEmpty else { return false }
+                        player.moveQueueItems(from: sources, to: upNext.count)
+                        return true
+                    }
             }
         }
         .scrollContentBackground(.hidden)
+        .focusable()
+        .focusEffectDisabled()
+        .onDeleteCommand(perform: removeSelected)
     }
 
+    /// Positions within this list, *not* queue indices.
+    ///
+    /// moveQueueItems takes offsets into the up-next slice and adds the offset of the
+    /// slice itself. Handing it `originalIndex` — which is an index into the whole queue
+    /// — added that offset twice, so drops landed far below where they were aimed and
+    /// ran off the end of the queue entirely. iOS never hit this because `.onMove` hands
+    /// it positions in the displayed array already.
     private func payload(for entry: (originalIndex: Int, item: QueueItem)) -> QueueDragPayload {
         // Drag the whole selection if the dragged row is part of it; otherwise
         // just the dragged row.
         if selection.contains(entry.item.id), selection.count > 1 {
-            let entries = upNext.filter { selection.contains($0.item.id) }
+            let positions = upNext.indices.filter { selection.contains(upNext[$0].item.id) }
             return QueueDragPayload(
-                itemIds: entries.map { $0.item.id },
-                originalIndices: entries.map { $0.originalIndex }
+                itemIds: positions.map { upNext[$0].item.id },
+                originalIndices: positions
             )
         }
-        return QueueDragPayload(itemIds: [entry.item.id], originalIndices: [entry.originalIndex])
+        let position = upNext.firstIndex { $0.item.id == entry.item.id } ?? 0
+        return QueueDragPayload(itemIds: [entry.item.id], originalIndices: [position])
     }
 
     private func handleTap(_ entry: (originalIndex: Int, item: QueueItem)) {
@@ -641,15 +669,24 @@ struct QueueList: View {
         }
     }
 
+    /// Delete key. Removing from a queue isn't destructive — the track stays in the
+    /// library — so it doesn't ask first.
+    private func removeSelected() {
+        let targets = upNext.indices.filter { selection.contains(upNext[$0].item.id) }
+        guard !targets.isEmpty else { return }
+        selection.removeAll()
+        player.removeFromQueue(at: IndexSet(targets))
+    }
+
     private func remove(_ entry: (originalIndex: Int, item: QueueItem)) {
         // If the removed row is in the selection, remove all selected — otherwise
         // remove just this one.
         let targets: [Int]
         if selection.contains(entry.item.id) {
-            targets = upNext.filter { selection.contains($0.item.id) }.map(\.originalIndex)
+            targets = upNext.indices.filter { selection.contains(upNext[$0].item.id) }
             selection.removeAll()
         } else {
-            targets = [entry.originalIndex]
+            targets = [upNext.firstIndex { $0.item.id == entry.item.id }].compactMap { $0 }
         }
         player.removeFromQueue(at: IndexSet(targets))
     }
