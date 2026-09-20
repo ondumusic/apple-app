@@ -19,22 +19,17 @@ struct LibraryOptionsMenu<Sort: View>: View {
 
             sort
         } label: {
-            // Filled when a filter is narrowing what you see, so the menu says whether
-            // it's doing anything without being opened. Mail and Finder both do this.
-            Label(
-                "View Options",
-                systemImage: filter == .all
-                    ? "line.3.horizontal.decrease.circle"
-                    : "line.3.horizontal.decrease.circle.fill"
-            )
+            // Tinted when a filter is narrowing what you see, so the control says whether
+            // it's doing anything without being opened.
+            Label("View Options", systemImage: "line.3.horizontal.decrease")
+                .foregroundStyle(filter == .all ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
         }
         // Outside a toolbar a Menu draws itself bordered and stretches to fill, which
         // made it a full-width "View Options" bar across the header. Music's is a bare
-        // glyph at the trailing edge.
+        // glyph with its popup chevron, at the trailing edge.
         .labelStyle(.iconOnly)
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .menuIndicator(.hidden)
         .help("Filter and sort")
     }
 }

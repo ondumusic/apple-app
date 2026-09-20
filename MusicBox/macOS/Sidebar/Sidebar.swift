@@ -158,6 +158,23 @@ final class SidebarViewController: NSViewController {
     override func loadView() {
         view = NSView()
 
+        // A real sidebar material, as a backdrop behind everything else. Without one the
+        // sidebar showed the window through it, so its top 52pt picked up the titlebar's
+        // material and read as a toolbar strip. It also gives the search field its
+        // translucent grey — the stock field is bright white on a plain background.
+        let backdrop = NSVisualEffectView()
+        backdrop.material = .sidebar
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .followsWindowActiveState
+        backdrop.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(backdrop)
+        NSLayoutConstraint.activate([
+            backdrop.topAnchor.constraint(equalTo: view.topAnchor),
+            backdrop.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+
         outlineView.headerView = nil
         outlineView.style = .sourceList
         // .none so our own accent pill paints; .sourceList always uses the system accent.

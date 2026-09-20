@@ -20,16 +20,13 @@ struct ContentHeader<Trailing: View>: View {
         HStack(spacing: 8) {
             if let backDestination {
                 Button { dismiss() } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "chevron.backward")
-                            .font(.body.weight(.medium))
-                        Text(backDestination)
-                    }
+                    Image(systemName: "chevron.backward")
+                        .font(.body.weight(.medium))
+                        .frame(width: 22, height: 22)
                     // The glyph and label are smaller than the target, so without this
                     // only the text itself would take the hover and the click.
                     .contentShape(Rectangle())
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, 3)
                     .background {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(Color.primary.opacity(isHoveringBack ? 0.10 : 0))
@@ -48,6 +45,9 @@ struct ContentHeader<Trailing: View>: View {
         .padding(.horizontal, 14)
         .frame(height: Self.height)
         .frame(maxWidth: .infinity)
+        // The content's background rather than the window's. Sharing the window
+        // background with the player row above made the two read as one tall bar.
+        .background(Color(nsColor: .textBackgroundColor))
     }
 }
 
