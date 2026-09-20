@@ -735,6 +735,30 @@ extension TracksTableViewController: NSTableViewDataSource {
         displayRows.count
     }
 
+    func tableView(
+        _ tableView: NSTableView,
+        draggingSession session: NSDraggingSession,
+        willBeginAt screenPoint: NSPoint,
+        forRowIndexes rowIndexes: IndexSet
+    ) {
+        for row in rowIndexes {
+            (tableView.rowView(atRow: row, makeIfNecessary: false) as? AccentSelectionRowView)?
+                .suppressesHiding = true
+        }
+    }
+
+    func tableView(
+        _ tableView: NSTableView,
+        draggingSession session: NSDraggingSession,
+        endedAt screenPoint: NSPoint,
+        operation: NSDragOperation
+    ) {
+        tableView.enumerateAvailableRowViews { rowView, _ in
+            (rowView as? AccentSelectionRowView)?.suppressesHiding = false
+            rowView.isHidden = false
+        }
+    }
+
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
         // Only track rows are draggable; section headers are not.
         guard let trackIdx = flatTrackIndex(forRow: row) else { return nil }

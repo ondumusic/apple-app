@@ -11,6 +11,24 @@ final class AccentSelectionRowView: NSTableRowView {
     /// divider would clash with the table's grouping or the row below.
     var suppressDivider: Bool = false
 
+    /// See DragVisibleView: AppKit hides a drag's source rows for its duration, which
+    /// leaves gaps in the table. Declining the hide is the only flash-free way — undoing
+    /// it afterwards is always a frame late.
+    var suppressesHiding = false {
+        // Clearing on the way in matters: AppKit may already have hidden the row by the
+        // time the drag session reports itself, and the override below only blocks
+        // *new* attempts.
+        didSet { if suppressesHiding { isHidden = false } }
+    }
+
+    override var isHidden: Bool {
+        get { super.isHidden }
+        set {
+            guard !(suppressesHiding && newValue) else { return }
+            super.isHidden = newValue
+        }
+    }
+
     override var focusRingType: NSFocusRingType {
         get { .none }
         set { /* ignore — pinned to .none so NSTableView's right-click target ring
