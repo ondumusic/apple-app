@@ -90,7 +90,7 @@ struct MacOSContentView: View {
                     // Only the floating panel casts a shadow; a pushed one is tiled
                     // beside the content and has nothing to lift off.
                     .overlay(alignment: .trailing) {
-                        if showQueue && !pushes { queueSlideOver }
+                        if !pushes { queueOverlay(visible: showQueue) }
                     }
                 }
             }
@@ -386,28 +386,33 @@ struct MacOSContentView: View {
     /// this the column would be too narrow to be worth keeping visible.
     static let queuePushMinContent: CGFloat = 720
 
-    /// The floating form of the queue panel, used when there isn't room to push. The
-    /// dismiss area is a sibling rather than an overlay, so it's genuinely separate from
-    /// the panel and no invisible click-catcher sits over the list.
-    private var queueSlideOver: some View {
-        Group {
-            HStack(spacing: 0) {
+    /// The floating form of the queue panel, used when there isn't room to push.
+    ///
+    /// Always laid out and moved with `offset` rather than inserted behind an `if`:
+    /// inserting it gave it SwiftUI's default opacity transition, so it faded in where
+    /// the pushed form slides. The dismiss area is a sibling, so no invisible
+    /// click-catcher sits over the list.
+    private func queueOverlay(visible: Bool) -> some View {
+        ZStack(alignment: .trailing) {
+            if visible {
                 Color.clear
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .onTapGesture { showQueue = false }
-                QueuePanel(isPresented: $showQueue)
-                    .frame(width: Self.queueWidth)
-                    .frame(maxHeight: .infinity)
-                    .background(Color(NSColor.windowBackgroundColor))
-                    .overlay(alignment: .leading) {
-                        Rectangle()
-                            .fill(Color.primary.opacity(0.14))
-                            .frame(width: 0.5)
-                    }
-                    .transition(.move(edge: .trailing))
             }
+            QueuePanel(isPresented: $showQueue)
+                .frame(width: Self.queueWidth)
+                .frame(maxHeight: .infinity)
+                .background(Color(NSColor.windowBackgroundColor))
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.14))
+                        .frame(width: 0.5)
+                }
+                .offset(x: visible ? 0 : Self.queueWidth)
         }
+        .clipped()
+        .allowsHitTesting(visible)
     }
 
     /// What a pushed detail view returns to — the search results if that's where the
@@ -519,7 +524,7 @@ struct QueuePanel: View {
                 Spacer()
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .frame(height: contentHeaderHeight)
             Divider()
 
             if upNext.isEmpty {

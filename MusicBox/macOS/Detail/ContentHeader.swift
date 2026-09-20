@@ -7,8 +7,11 @@ import SwiftUI
 /// Music.app puts its filter menu and search in exactly this position — top-right of the
 /// content column, below the player row — which is where these lived before the window
 /// lost its toolbar.
+/// Shared so Up Next's header can line its bottom border up with this one's.
+let contentHeaderHeight: CGFloat = 38
+
 struct ContentHeader<Trailing: View>: View {
-    static var height: CGFloat { 38 }
+    static var height: CGFloat { contentHeaderHeight }
 
     var backDestination: String?
     @ViewBuilder var trailing: Trailing
