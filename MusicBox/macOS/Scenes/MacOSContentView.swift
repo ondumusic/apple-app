@@ -70,7 +70,29 @@ struct MacOSContentView: View {
             // reserved insets, no scroller to lift clear.
             VStack(spacing: 0) {
                 PlayerBar(showQueue: $showQueue)
-                detailStack
+                GeometryReader { geo in
+                    // Music pushes Up Next aside only while enough content survives, and
+                    // floats it over the content when it wouldn't — measured by toggling
+                    // theirs across widths: it pushes at a 1300pt window and overlays at
+                    // 1275, the switch landing where the remaining column would drop
+                    // below about 790pt for their 300pt panel.
+                    let pushes = showQueue
+                        && geo.size.width - Self.queueWidth >= Self.queuePushMinContent
+                    HStack(spacing: 0) {
+                        detailStack
+                        if pushes {
+                            Divider()
+                            QueuePanel(isPresented: $showQueue)
+                                .frame(width: Self.queueWidth)
+                                .transition(.move(edge: .trailing))
+                        }
+                    }
+                    // Only the floating panel casts a shadow; a pushed one is tiled
+                    // beside the content and has nothing to lift off.
+                    .overlay(alignment: .trailing) {
+                        if showQueue && !pushes { queueSlideOver }
+                    }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -112,7 +134,6 @@ struct MacOSContentView: View {
             // filter drops under `»` by 1000. Below that it's the sidebar that has to
             // give, not the transport.
             .frame(minWidth: 900, minHeight: 600)
-            .overlay(alignment: .trailing) { queueSlideOver }
             .animation(.easeInOut(duration: 0.22), value: showQueue)
     }
 
@@ -360,19 +381,23 @@ struct MacOSContentView: View {
         }
     }
 
-    /// Slide-over queue panel — overlays detail content from the right edge, doesn't
-    /// push other content away. Side-by-side HStack so the dismiss area is genuinely
-    /// separate from the panel (no invisible click-catcher overlapping the list).
-    @ViewBuilder
+    static let queueWidth: CGFloat = 360
+    /// How much content has to survive for the panel to push rather than float. Below
+    /// this the column would be too narrow to be worth keeping visible.
+    static let queuePushMinContent: CGFloat = 720
+
+    /// The floating form of the queue panel, used when there isn't room to push. The
+    /// dismiss area is a sibling rather than an overlay, so it's genuinely separate from
+    /// the panel and no invisible click-catcher sits over the list.
     private var queueSlideOver: some View {
-        if showQueue {
+        Group {
             HStack(spacing: 0) {
                 Color.clear
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .onTapGesture { showQueue = false }
                 QueuePanel(isPresented: $showQueue)
-                    .frame(width: 360)
+                    .frame(width: Self.queueWidth)
                     .frame(maxHeight: .infinity)
                     .background(Color(NSColor.windowBackgroundColor))
                     .shadow(color: Color.black.opacity(0.18), radius: 8, x: -2, y: 0)
