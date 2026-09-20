@@ -79,7 +79,6 @@ final class ArtistsTableViewController: NSViewController {
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
-        scrollView.reserveSpaceForPlayerBar()
         view = scrollView
     }
 

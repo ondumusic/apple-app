@@ -49,8 +49,6 @@ struct PlaylistDetailMac: View {
                 onDelete: removeRows(_:)
             )
         }
-        .navigationTitle("Playlist")
-        .navigationSubtitle("^[\(tracks.count) song](inflect: true)")
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: playlistId) {
             isRenamingHeader = false

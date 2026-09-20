@@ -29,11 +29,6 @@ struct AlbumsViewMac: View {
             onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) }
         )
         .background(Color(NSColor.controlBackgroundColor))
-        .navigationTitle("Albums")
-        // The count belongs in the window subtitle, which is where macOS puts secondary
-        // information about what's on screen. As an in-page header it cost a row of
-        // vertical space on every view and repeated what the sidebar selection says.
-        .navigationSubtitle("^[\(albums.count) album](inflect: true)")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 LibraryOptionsMenu(filter: $libraryFilter) {

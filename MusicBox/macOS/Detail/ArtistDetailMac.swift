@@ -79,8 +79,6 @@ struct ArtistDetailMac: View {
         .background(Color(NSColor.textBackgroundColor))
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }
-        .windowTitle(isEmbedded ? nil : "Artist",
-                     subtitle: "^[\(albums.count) album](inflect: true)")
     }
 
     /// The split layout reserves a fixed 200pt for the artwork, which leaves the track

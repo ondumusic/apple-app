@@ -50,8 +50,6 @@ struct ArtistsViewMac: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationTitle("Artists")
-        .navigationSubtitle("^[\(artists.count) artist](inflect: true)")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 LibraryOptionsMenu(filter: $libraryFilter)

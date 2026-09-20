@@ -68,8 +68,6 @@ struct SearchViewMac: View {
                 resultsBody
             }
         }
-        .navigationTitle("Search")
-        .navigationSubtitle(subtitle)
         .task(id: query) {
             // Debounce so each keystroke doesn't fire a fetch. .task cancels when query
             // changes, so a stale closure can't overwrite results with an older match.
@@ -86,12 +84,6 @@ struct SearchViewMac: View {
             artistArtwork = musicLibrary.artistArtwork(for: found.artists)
             displayedQuery = query
         }
-    }
-
-    private var subtitle: String {
-        guard !displayedQuery.isEmpty else { return "" }
-        let total = results.tracks.count + results.artists.count + results.albums.count
-        return String(AttributedString(localized: "^[\(total) result](inflect: true)").characters)
     }
 
     @ViewBuilder

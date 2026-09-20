@@ -41,8 +41,6 @@ struct DownloadsViewMac: View {
                 )
             }
         }
-        .navigationTitle("Downloads")
-        .navigationSubtitle(subtitle)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -92,13 +90,6 @@ struct DownloadsViewMac: View {
             : String(AttributedString(localized: "^[\(albums.count) album](inflect: true)").characters)
         DownloadRemovalRequest.post(trackIds: Set(ids), subject: subject)
         selection = []
-    }
-
-    /// No filter control here — everything in this view is downloaded by definition.
-    private var subtitle: String {
-        let count = String(AttributedString(localized: "^[\(entries.count) album](inflect: true)").characters)
-        guard totalSize > 0 else { return count }
-        return "\(count) · \(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))"
     }
 
     private func reload() {

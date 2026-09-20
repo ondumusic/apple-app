@@ -31,6 +31,7 @@ struct PlayerToolbar: ToolbarContent {
             NowPlayingLabel()
                 .fadesWhenInactive()
                 .frame(width: Self.nowPlayingWidth)
+
         }
         ToolbarItemGroup(placement: .primaryAction) {
             VolumeControl()
@@ -56,94 +57,6 @@ struct PlayerToolbar: ToolbarContent {
 
 }
 
-// PROTOTYPE — not for keeping. The same controls as a bottom bar instead of toolbar
-// items. Ordinary content at the bottom of the window: no titlebar to fight, no safe
-// area, no item model that can push controls into an overflow menu, and centring is just
-// a ZStack. Lives in this file so it can see the control views without changing their
-// visibility.
-struct PlayerBottomBar: View {
-    static let height: CGFloat = 64
-
-    @Environment(PlayerService.self) private var player
-    @Binding var showQueue: Bool
-
-    /// Dominant colour of the current cover, washed over the bar. Subtle on purpose: the
-    /// bar carries text and controls that have to stay legible, so this is a tint on top
-    /// of the standard material rather than a background in its own right.
-    @State private var tint: Color?
-
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var artworkURL: URL? { player.currentTrack?.album?.artworkUrl }
-
-    /// The cover's hue, at a lightness the bar chooses rather than the artwork. Applying
-    /// the extracted colour directly means a dark saturated sleeve darkens the bar under
-    /// its own text; normalising keeps every cover legible while still reading as that
-    /// record's colour.
-    private var wash: Color? {
-        guard let tint else { return nil }
-        let ns = NSColor(tint).usingColorSpace(.deviceRGB) ?? .windowBackgroundColor
-        var h: CGFloat = 0, sat: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        ns.getHue(&h, saturation: &sat, brightness: &b, alpha: &a)
-        return Color(NSColor(hue: h,
-                             saturation: min(sat, 0.60),
-                             brightness: colorScheme == .dark ? 0.32 : 0.94,
-                             alpha: 1))
-    }
-
-    var body: some View {
-        ZStack {
-            HStack(spacing: 16) {
-                Spacer(minLength: 20)
-                ShuffleButton()
-                RepeatButton()
-                VolumeControl()
-                AirPlayPicker()
-                    .frame(width: 18, height: 18)
-                    .help("AirPlay")
-                Button { showQueue.toggle() } label: {
-                    Image(systemName: "list.bullet")
-                        .foregroundStyle(showQueue ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                }
-                .help("Queue")
-                .accessibilityLabel("Queue")
-                .disabled(player.currentTrack == nil)
-            }
-            .padding(.leading, 24)
-            .padding(.trailing, 20)
-
-            // Transport and display centre together as one group. Apart — transport hard
-            // left, display centred — the controls read as stranded from what they
-            // control; centring the display alone and leading the transport were both
-            // worse than keeping them adjacent.
-            HStack(spacing: 20) {
-                TransportButtons()
-                NowPlayingLabel()
-                    .frame(width: 420)
-            }
-        }
-        .buttonStyle(.plain)
-        .frame(height: Self.height)
-        .frame(maxWidth: .infinity)
-        .background {
-            ZStack {
-                Rectangle().fill(.bar)
-                if let wash {
-                    LinearGradient(
-                        colors: [wash.opacity(0.95), wash.opacity(0.45)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                }
-            }
-            .animation(.easeInOut(duration: 0.8), value: wash)
-        }
-        .overlay(alignment: .top) { Divider() }
-        .task(id: artworkURL) {
-            tint = await ArtworkColorExtractor.extractColor(from: artworkURL, maxBrightness: 0.8)
-        }
-    }
-}
 
 private struct ShuffleButton: View {
     @Environment(PlayerService.self) private var player
@@ -270,13 +183,33 @@ private struct NowPlayingLabel: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
             .frame(maxWidth: .infinity)
-            // Shorter than the 52pt toolbar so it sits inside it with a margin, rather
-            // than filling it edge to edge and spilling into the content below.
-            .frame(height: 42)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+            .frame(height: 34)
+            // A well, the way iTunes' centre display was: recessed into the chrome
+            // rather than sitting on it. Shallow on purpose — the lip along the bottom
+            // is what sells the deboss, so the shadow only has to hint at it. Deeper
+            // reads as a hole punched in the toolbar.
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(.quaternary.shadow(.inner(color: .black.opacity(0.11), radius: 1.5, y: 1)))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5)
+                    }
+                    .overlay(alignment: .bottom) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(Color.white.opacity(0.55), lineWidth: 0.5)
+                            .mask {
+                                LinearGradient(
+                                    colors: [.clear, .black],
+                                    startPoint: .center,
+                                    endPoint: .bottom
+                                )
+                            }
+                    }
+            }
         }
     }
 

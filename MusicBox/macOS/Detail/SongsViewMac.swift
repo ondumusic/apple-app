@@ -24,8 +24,6 @@ struct SongsViewMac: View {
             currentlyPlayingTrackId: player.currentTrack?.id,
             isPlaying: player.isPlaying
         )
-        .navigationTitle("Songs")
-        .navigationSubtitle(subtitle)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 LibraryOptionsMenu(filter: $libraryFilter)
@@ -36,13 +34,6 @@ struct SongsViewMac: View {
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &tracks)
         }
-    }
-
-    private var subtitle: String {
-        let count = String(AttributedString(localized: "^[\(tracks.count) song](inflect: true)").characters)
-        let total = tracks.reduce(0) { $0 + $1.duration }
-        guard total > 0 else { return count }
-        return "\(count) · \(formattedTotalDuration(total))"
     }
 
     private func reload() {

@@ -23,10 +23,12 @@ class BackgroundSessionDelegate: NSObject, UIApplicationDelegate {
 #if os(macOS)
 final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     private var didClearLaunchFocus = false
+    /// Strong refs so the KVO observers stay alive for the window's lifetime.
+    private var titleObservers: [NSKeyValueObservation] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         for window in NSApp.windows {
-            clearLaunchFocus(in: window)
+            configure(window)
         }
         NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeMainNotification,
@@ -34,8 +36,31 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] note in
             guard let window = note.object as? NSWindow else { return }
-            self?.clearLaunchFocus(in: window)
+            self?.configure(window)
         }
+    }
+
+    private func configure(_ window: NSWindow) {
+        hideTitle(on: window)
+        clearLaunchFocus(in: window)
+    }
+
+    /// The toolbar carries the player, and a title beside it is what pushes the controls
+    /// into the overflow menu at the minimum window width — measured: with the title
+    /// shown, volume, AirPlay, queue and filter all land under `»` at 900pt. The sidebar
+    /// selection says which view you're in, so the title earns none of that width.
+    /// KVO rather than a one-shot: toolbar reconfigurations re-set it underneath us.
+    private func hideTitle(on window: NSWindow) {
+        // Both halves are needed: hiding alone doesn't stick, because SwiftUI re-sets
+        // titleVisibility whenever it rebuilds the toolbar, and the string still
+        // reserves its width.
+        if !window.title.isEmpty { window.title = "" }
+        window.titleVisibility = .hidden
+        let observation = window.observe(\.title, options: [.new]) { window, _ in
+            if !window.title.isEmpty { window.title = "" }
+            window.titleVisibility = .hidden
+        }
+        titleObservers.append(observation)
     }
 
     private func clearLaunchFocus(in window: NSWindow) {

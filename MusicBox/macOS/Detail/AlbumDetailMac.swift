@@ -64,11 +64,6 @@ struct AlbumDetailMac: View {
             )
             .background(Color(NSColor.textBackgroundColor))
         }
-        // "Album", not the album's name: the page header already sets that in largeTitle
-        // right below, and repeating it twice in one glance is what made the titlebar
-        // read as duplicated chrome.
-        .navigationTitle("Album")
-        .navigationSubtitle(album.artistName ?? "")
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &tracks)

@@ -95,7 +95,6 @@ final class AlbumsGridViewController: NSViewController {
         scrollView.documentView = collectionView
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
-        scrollView.reserveSpaceForPlayerBar()
         scrollView.contentView.postsBoundsChangedNotifications = true
         view = scrollView
 

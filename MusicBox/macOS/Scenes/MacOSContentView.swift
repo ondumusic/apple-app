@@ -34,11 +34,6 @@ struct MacOSContentView: View {
     @State private var batchCompleted = 0
     @State private var miniPlayer: MiniPlayerWindowController?
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
-    /// Width of the detail column, measured rather than assumed — the sidebar is
-    /// user-resizable. The player bar is sized to match so it spans the content column
-    /// exactly. Measuring the sidebar instead left the bar a couple of points wide of
-    /// the divider, overlapping it.
-    @State private var detailWidth: CGFloat = 0
     @State private var spaceKeyMonitor: Any?
     /// Drives the toolbar's search field for Cmd+F. Search moved out of the sidebar.
     @FocusState private var searchFieldFocused: Bool
@@ -50,14 +45,6 @@ struct MacOSContentView: View {
         // over the content column is done by insetting the overlay past the sidebar's
         // measured width instead, which also lets the sidebar run the full height.
         splitViewChrome
-            .overlay(alignment: .bottomTrailing) {
-                // Sized to the detail column and pinned trailing, rather than padded in
-                // from the leading edge by the sidebar's width — that measurement omits
-                // the split divider, which left the bar lapping a couple of points over
-                // the sidebar.
-                PlayerBottomBar(showQueue: $showQueue)
-                    .frame(width: detailWidth > 0 ? detailWidth : nil)
-            }
     }
 
     private var splitView: some View {
@@ -79,13 +66,6 @@ struct MacOSContentView: View {
             // NavigationStack claims the full height and a stacked sibling never gets laid
             // out. This reserves the space properly and keeps scroll content clear of it.
             detailStack
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { detailWidth = $0 }
-                // Reserves the bar's height inside the detail column so lists end above
-                // it and their scrollers inset with them. The bar itself is drawn by the
-                // window-level overlay — a visible safeAreaInset never rendered here.
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    Color.clear.frame(height: PlayerBottomBar.height)
-                }
         }
     }
 
@@ -117,11 +97,21 @@ struct MacOSContentView: View {
         }
     }
 
-    private var splitViewChrome: some View {
+    /// Split out from splitViewChrome purely so the type checker can finish.
+    private var splitViewWithPlayer: some View {
         splitView
-        .frame(minWidth: 900, minHeight: 600)
-        .overlay(alignment: .trailing) { queueSlideOver }
-        .animation(.easeInOut(duration: 0.22), value: showQueue)
+            // The toolbar carries the player, and SwiftUI's toolbar overflows well before
+            // the space actually runs out: measured, everything survives at 1100 and the
+            // filter drops under `»` by 1000. Below that it's the sidebar that has to
+            // give, not the transport.
+            .frame(minWidth: 1120, minHeight: 600)
+            .overlay(alignment: .trailing) { queueSlideOver }
+            .animation(.easeInOut(duration: 0.22), value: showQueue)
+            .toolbar { PlayerToolbar(showQueue: $showQueue) }
+    }
+
+    private var splitViewChrome: some View {
+        splitViewWithPlayer
         // The system's own search field rather than a TextField in a toolbar item: it
         // anchors itself at the trailing edge, collapses to a magnifier when the window
         // is narrow, and is the only thing `searchFocused` can drive — a `focused`
