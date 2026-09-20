@@ -1,69 +1,16 @@
 #if os(macOS)
 import SwiftUI
 
-/// Player content for the macOS window toolbar. Built as a set of ToolbarContent items
-/// rather than one principal item — putting a complex interactive view (incl. a popover)
-/// inside a single ToolbarItem.principal caused beachball/hang in earlier iterations.
-struct PlayerToolbar: ToolbarContent {
-    @Environment(PlayerService.self) private var player
-    @Binding var showQueue: Bool
-    /// Fixed, and deliberately conservative.
-    ///
-    /// A measured width arrives *after* layout, so during a live resize the toolbar lays
-    /// out with the previous, too-wide value, decides to overflow, and the correction
-    /// lands too late — controls vanished behind `»` on a one-pixel drag and only came
-    /// back when something else forced an update. Sized to what survives the 900pt
-    /// minimum window — measured, since the toolbar overflows well before the space runs
-    /// out: 260 still evicted the queue button at 900 with 137pt to spare. The cost is
-    /// that it no longer grows on a wide window.
-    private static let nowPlayingWidth: CGFloat = 200
-
-    var body: some ToolbarContent {
-        // The display sits with the transport rather than in `.principal`. Measured,
-        // `.principal` doesn't centre: it anchors the item at a fixed offset — 562pt at
-        // every window width — and reserves a 160pt gap after the transport that never
-        // closes. Packing it with the controls and sizing it to fill uses that gap
-        // instead of protecting it.
-        ToolbarItemGroup(placement: .navigation) {
-            ShuffleButton().fadesWhenInactive()
-            TransportButtons().fadesWhenInactive()
-            RepeatButton().fadesWhenInactive()
-            NowPlayingLabel()
-                .fadesWhenInactive()
-                .frame(width: Self.nowPlayingWidth)
-
-        }
-        ToolbarItemGroup(placement: .primaryAction) {
-            VolumeControl()
-                .fadesWhenInactive()
-
-            AirPlayPicker()
-                .frame(width: 18, height: 18)
-                .help("AirPlay")
-                .fadesWhenInactive()
-
-            Button {
-                showQueue.toggle()
-            } label: {
-                Image(systemName: "list.bullet")
-                    .foregroundStyle(showQueue ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-            }
-            .help("Queue")
-            .accessibilityLabel("Queue")
-            .disabled(player.currentTrack == nil)
-            .fadesWhenInactive()
-        }
-    }
-
-}
-
-
-private struct ShuffleButton: View {
+/// The player's individual controls, shared by the window's player row and the mini
+/// player.
+struct ShuffleButton: View {
     @Environment(PlayerService.self) private var player
 
     var body: some View {
         Button { player.toggleShuffle() } label: {
             Image(systemName: "shuffle")
+                .font(.system(size: 14))
+                .frame(width: playerControlSize, height: playerControlSize)
                 .foregroundStyle(player.isShuffled ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
         }
         .help(player.isShuffled ? "Disable Shuffle" : "Shuffle")
@@ -73,12 +20,14 @@ private struct ShuffleButton: View {
     }
 }
 
-private struct RepeatButton: View {
+struct RepeatButton: View {
     @Environment(PlayerService.self) private var player
 
     var body: some View {
         Button { player.cycleRepeatMode() } label: {
             Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
+                .font(.system(size: 14))
+                .frame(width: playerControlSize, height: playerControlSize)
                 .foregroundStyle(player.repeatMode != .off ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
         }
         .help(help)
@@ -96,16 +45,19 @@ private struct RepeatButton: View {
     }
 }
 
-private struct TransportButtons: View {
+/// Every control in the player row shares this frame. Measured in Music.app: shuffle,
+/// previous, play, next and repeat are all 34x34, butted edge to edge.
+let playerControlSize: CGFloat = 34
+
+struct TransportButtons: View {
     @Environment(PlayerService.self) private var player
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 0) {
             Button { player.back() } label: {
                 Image(systemName: "backward.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 15, height: 15)
+                    .font(.system(size: 14))
+                    .frame(width: playerControlSize, height: playerControlSize)
             }
             .disabled(!player.canGoBack || player.currentTrack == nil)
             .help("Previous")
@@ -113,9 +65,8 @@ private struct TransportButtons: View {
 
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 24, height: 24)
+                    .font(.system(size: 19))
+                    .frame(width: playerControlSize, height: playerControlSize)
             }
             .disabled(player.currentTrack == nil)
             .help(player.isPlaying ? "Pause" : "Play")
@@ -123,9 +74,8 @@ private struct TransportButtons: View {
 
             Button { player.skip() } label: {
                 Image(systemName: "forward.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 15, height: 15)
+                    .font(.system(size: 14))
+                    .frame(width: playerControlSize, height: playerControlSize)
             }
             .disabled(!player.canSkip || player.currentTrack == nil)
             .help("Next")
@@ -134,7 +84,7 @@ private struct TransportButtons: View {
     }
 }
 
-private struct NowPlayingLabel: View {
+struct NowPlayingLabel: View {
     @Environment(PlayerService.self) private var player
 
     private var track: Track? { player.currentTrack }
@@ -183,33 +133,25 @@ private struct NowPlayingLabel: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
+            .padding(.trailing, 9)
             .frame(maxWidth: .infinity)
-            .frame(height: 34)
-            // A well, the way iTunes' centre display was: recessed into the chrome
-            // rather than sitting on it. Shallow on purpose — the lip along the bottom
-            // is what sells the deboss, so the shadow only has to hint at it. Deeper
-            // reads as a hole punched in the toolbar.
+            .frame(height: 44)
+            // Light rather than grey, with the artwork flush to the leading edge — that's
+            // what Music's LCD does, and the grey fill was most of why ours read as a
+            // different kind of object. Shallow inset: the lip along the bottom sells the
+            // recess, so the shadow only has to hint.
             .background {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(.quaternary.shadow(.inner(color: .black.opacity(0.11), radius: 1.5, y: 1)))
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(
+                        Color(nsColor: .textBackgroundColor)
+                            .shadow(.inner(color: .black.opacity(0.10), radius: 1.5, y: 1))
+                    )
                     .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5)
-                    }
-                    .overlay(alignment: .bottom) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(Color.white.opacity(0.55), lineWidth: 0.5)
-                            .mask {
-                                LinearGradient(
-                                    colors: [.clear, .black],
-                                    startPoint: .center,
-                                    endPoint: .bottom
-                                )
-                            }
+                        RoundedRectangle(cornerRadius: 5)
+                            .strokeBorder(Color.primary.opacity(0.13), lineWidth: 0.5)
                     }
             }
+            .clipShape(RoundedRectangle(cornerRadius: 5))
         }
     }
 
@@ -217,12 +159,12 @@ private struct NowPlayingLabel: View {
     private var artwork: some View {
         Group {
             if track != nil {
-                ArtworkView(url: artworkURL, cornerRadius: 3)
-                    .frame(width: 30, height: 30)
+                ArtworkView(url: artworkURL, cornerRadius: 0)
+                    .frame(width: 44, height: 44)
             } else {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(.tertiary)
-                    .frame(width: 30, height: 30)
+                Rectangle()
+                    .fill(.quaternary)
+                    .frame(width: 44, height: 44)
                     .overlay {
                         Image(systemName: "music.note")
                             .font(.system(size: 11))
@@ -280,7 +222,55 @@ struct VolumeControl: View {
     }
 }
 
-private struct ScrubberView: View {
+/// Volume inline, as Music.app has it: a mute button, a short slider, and a full-volume
+/// button. The popover version above stays for the mini player, where there's no room.
+struct VolumeSlider: View {
+    @Environment(PlayerService.self) private var player
+    /// Restored when unmuting, so the button is a toggle rather than a one-way trip.
+    @State private var volumeBeforeMute: Double?
+
+    var body: some View {
+        @Bindable var player = player
+        HStack(spacing: 0) {
+            Button {
+                if let previous = volumeBeforeMute {
+                    player.volume = previous
+                    volumeBeforeMute = nil
+                } else {
+                    volumeBeforeMute = player.volume
+                    player.volume = 0
+                }
+            } label: {
+                Image(systemName: player.volume < 0.01 ? "speaker.slash.fill" : "speaker.fill")
+                    .font(.system(size: 12))
+                    .frame(width: playerControlSize, height: playerControlSize)
+            }
+            .help(player.volume < 0.01 ? "Unmute" : "Mute")
+            .accessibilityLabel(player.volume < 0.01 ? "Unmute" : "Mute")
+
+            Slider(value: $player.volume, in: 0...1)
+                .controlSize(.mini)
+                .frame(width: 72)
+                .tint(.secondary)
+                .accessibilityLabel("Volume")
+
+            Button { player.volume = 1 } label: {
+                Image(systemName: "speaker.wave.3.fill")
+                    .font(.system(size: 12))
+                    .frame(width: playerControlSize, height: playerControlSize)
+            }
+            .help("Full Volume")
+            .accessibilityLabel("Full Volume")
+        }
+        .buttonStyle(VolumeIconButtonStyle())
+        .onChange(of: player.volume) { _, new in
+            // Dragging the slider off zero is an unmute too.
+            if new > 0.01 { volumeBeforeMute = nil }
+        }
+    }
+}
+
+struct ScrubberView: View {
     @Environment(PlayerService.self) private var player
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false

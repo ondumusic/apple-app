@@ -41,19 +41,23 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configure(_ window: NSWindow) {
-        hideTitle(on: window)
+        makeChromeless(window)
         clearLaunchFocus(in: window)
     }
 
-    /// The toolbar carries the player, and a title beside it is what pushes the controls
-    /// into the overflow menu at the minimum window width — measured: with the title
-    /// shown, volume, AirPlay, queue and filter all land under `»` at 900pt. The sidebar
-    /// selection says which view you're in, so the title earns none of that width.
-    /// KVO rather than a one-shot: toolbar reconfigurations re-set it underneath us.
-    private func hideTitle(on window: NSWindow) {
-        // Both halves are needed: hiding alone doesn't stick, because SwiftUI re-sets
-        // titleVisibility whenever it rebuilds the toolbar, and the string still
-        // reserves its width.
+    /// Music.app's window has no toolbar at all — inspected: its window holds exactly
+    /// one split view and three traffic lights, and the player controls are ordinary
+    /// subviews inside that split view. So the content runs to the top of the window and
+    /// the traffic lights float over it.
+    ///
+    /// A toolbar is what forces an overflow model on the player, and what reserves a
+    /// titlebar strip the content then has to sit below. Refusing one is the whole point.
+    /// KVO on the title because SwiftUI re-sets it whenever it rebuilds.
+    private func makeChromeless(_ window: NSWindow) {
+        guard window.identifier != MiniPlayerWindowController.windowIdentifier else { return }
+        window.styleMask.insert(.fullSizeContentView)
+        window.titlebarAppearsTransparent = true
+        window.toolbar = nil
         if !window.title.isEmpty { window.title = "" }
         window.titleVisibility = .hidden
         let observation = window.observe(\.title, options: [.new]) { window, _ in
@@ -234,7 +238,11 @@ struct MusicBoxApp: App {
         Window("MusicBox", id: "main") {
             rootView
         }
-        .windowToolbarStyle(.unified)
+        // No toolbar at all, and no titlebar strip reserved — the window Music.app has.
+        // Doing this by hand with fullSizeContentView plus ignoresSafeArea either left a
+        // 28pt band above the player row or grew the content past the window's top edge
+        // and clipped it.
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(after: .pasteboard) {
                 Divider()

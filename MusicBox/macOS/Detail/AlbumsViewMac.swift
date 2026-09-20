@@ -29,13 +29,6 @@ struct AlbumsViewMac: View {
             onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) }
         )
         .background(Color(NSColor.controlBackgroundColor))
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                LibraryOptionsMenu(filter: $libraryFilter) {
-                    SortOptionsSection(selection: $sortOption, ascending: $sortAscending)
-                }
-            }
-        }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }
         .onChange(of: sortOption) { reload() }

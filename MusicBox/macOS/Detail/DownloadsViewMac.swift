@@ -41,20 +41,6 @@ struct DownloadsViewMac: View {
                 )
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button("Download All") { showDownloadAllConfirmation = true }
-                    if !entries.isEmpty {
-                        Button("Remove All", role: .destructive) { showRemoveAllConfirmation = true }
-                    }
-                } label: {
-                    Label("Download Options", systemImage: "ellipsis.circle")
-                }
-                .menuIndicator(.hidden)
-                .help("Download options")
-            }
-        }
         .background(Color(NSColor.controlBackgroundColor))
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }

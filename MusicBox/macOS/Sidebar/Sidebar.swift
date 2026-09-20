@@ -105,6 +105,9 @@ final class SidebarViewController: NSViewController {
             }
         }
     }
+    /// Matches Music.app: its sidebar scroll area starts 52pt below the window top.
+    private static let trafficLightClearance: CGFloat = 52
+
     private let addButton = NSButton()
     private let bottomBar = NSView()
     /// Mail-style activity strip: overall progress while transfers run, click for the
@@ -262,19 +265,11 @@ final class SidebarViewController: NSViewController {
         // the visible area on every layout.
         outlineView.sizeLastColumnToFit()
 
-        // How far this view overhangs the window's content area — i.e. how much of it is
-        // currently behind the titlebar. SwiftUI hands the representable the full window
-        // height for the first frames after launch and only insets it once the toolbar is
-        // configured, so a fixed top inset drew the skeleton rows behind the titlebar and
-        // then dropped them into place. Measuring against contentLayoutRect is right in
-        // both states: it's the titlebar's height at launch and zero once settled.
-        let overhang: CGFloat = view.window.map { window in
-            let contentRect = view.convert(window.contentLayoutRect, from: nil)
-            return view.isFlipped
-                ? max(0, contentRect.minY - view.bounds.minY)
-                : max(0, view.bounds.maxY - contentRect.maxY)
-        } ?? 0
-        let top = overhang + 8
+        // The window has no toolbar, so the sidebar starts at its very top and the
+        // traffic lights float over it — the same arrangement Music.app uses, where the
+        // sidebar's scroll area begins 52pt down. Nothing to measure: without a titlebar
+        // strip there is no safe area to react to.
+        let top = Self.trafficLightClearance
         if abs(scrollView.contentInsets.top - top) > 0.5 {
             scrollView.contentInsets = NSEdgeInsets(top: top, left: 0, bottom: 0, right: 0)
         }

@@ -24,11 +24,6 @@ struct SongsViewMac: View {
             currentlyPlayingTrackId: player.currentTrack?.id,
             isPlaying: player.isPlaying
         )
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                LibraryOptionsMenu(filter: $libraryFilter)
-            }
-        }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }
         .onChange(of: musicLibrary.downloadChanged) {

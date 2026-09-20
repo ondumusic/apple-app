@@ -6,20 +6,64 @@ import SwiftUI
 /// uses works here — no separate device-switching UI to build.
 struct AirPlayPicker: NSViewRepresentable {
     var size: CGFloat = 20
+    /// Outer hit and hover area. Defaults to the glyph, which is what the mini player
+    /// wants; the player row passes the shared control size so its highlight matches the
+    /// buttons beside it.
+    var controlSize: CGFloat?
+    /// AVRoutePickerView has its own tracking, which swallows SwiftUI's `.onHover` — a
+    /// hover background on the wrapper never lit up. Reporting it from inside is the way
+    /// to have this one control behave like the rest of the row.
+    var onHoverChange: ((Bool) -> Void)?
 
-    func makeNSView(context: Context) -> AVRoutePickerView {
-        let view = AVRoutePickerView()
-        view.isRoutePickerButtonBordered = false
-        view.setRoutePickerButtonColor(.secondaryLabelColor, for: .normal)
-        view.setRoutePickerButtonColor(.controlAccentColor, for: .active)
-        view.setAccessibilityLabel("AirPlay")
-        return view
+    private var outerSize: CGFloat { controlSize ?? size }
+
+    func makeNSView(context: Context) -> HoverReportingView {
+        let picker = AVRoutePickerView()
+        picker.isRoutePickerButtonBordered = false
+        picker.setRoutePickerButtonColor(.secondaryLabelColor, for: .normal)
+        picker.setRoutePickerButtonColor(.controlAccentColor, for: .active)
+        picker.setAccessibilityLabel("AirPlay")
+        picker.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = HoverReportingView()
+        container.onHoverChange = onHoverChange
+        container.addSubview(picker)
+        NSLayoutConstraint.activate([
+            picker.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            picker.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            picker.widthAnchor.constraint(equalToConstant: size),
+            picker.heightAnchor.constraint(equalToConstant: size),
+        ])
+        return container
     }
 
-    func updateNSView(_ nsView: AVRoutePickerView, context: Context) {}
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: AVRoutePickerView, context: Context) -> CGSize {
-        CGSize(width: size, height: size)
+    func updateNSView(_ nsView: HoverReportingView, context: Context) {
+        nsView.onHoverChange = onHoverChange
     }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: HoverReportingView, context: Context) -> CGSize {
+        CGSize(width: outerSize, height: outerSize)
+    }
+}
+
+/// Reports hover out to SwiftUI. The picker stays a subview, so clicks still reach it.
+final class HoverReportingView: NSView {
+    var onHoverChange: ((Bool) -> Void)?
+    private var trackingArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { onHoverChange?(true) }
+    override func mouseExited(with event: NSEvent) { onHoverChange?(false) }
 }
 #endif

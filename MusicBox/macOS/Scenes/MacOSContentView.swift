@@ -33,22 +33,24 @@ struct MacOSContentView: View {
     @State private var batchTotal = 0
     @State private var batchCompleted = 0
     @State private var miniPlayer: MiniPlayerWindowController?
-    @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
+    @AppStorage("macSidebarWidth") private var sidebarWidth: Double = 240
     @State private var spaceKeyMonitor: Any?
     /// Drives the toolbar's search field for Cmd+F. Search moved out of the sidebar.
     @FocusState private var searchFieldFocused: Bool
     @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
 
     var body: some View {
-        // The bar still lives at window level — inside `detail:` it never lays out at
-        // all, which a plain red probe confirmed isn't specific to the bar. Floating it
-        // over the content column is done by insetting the overlay past the sidebar's
-        // measured width instead, which also lets the sidebar run the full height.
+        // The window draws under its titlebar, but SwiftUI reserves the strip until told
+        // otherwise — measured without this, the player row sat 39pt below the window top
+        // and the sidebar 80pt, where Music.app's sit at 0 and 52. It has to be outermost:
+        // applied part-way down the chain it grows that view past the window's top edge
+        // instead, and the row gets clipped.
         splitViewChrome
+            .ignoresSafeArea(.container, edges: .top)
     }
 
     private var splitView: some View {
-        NavigationSplitView(columnVisibility: $sidebarVisibility) {
+        HStack(spacing: 0) {
             Sidebar(
                 selection: $sidebarSelection,
                 musicLibrary: musicLibrary,
@@ -57,15 +59,19 @@ struct MacOSContentView: View {
                 downloadProgress: overallDownloadProgress,
                 accent: settings.resolvedAccentColor
             )
-            .toolbar(removing: .sidebarToggle)
-            // Capped: the split view otherwise lets the sidebar eat most of the window,
-            // and nothing in it benefits from more than a couple of hundred points.
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
-        } detail: {
-            // safeAreaInset rather than a VStack: inside a split view's detail column the
-            // NavigationStack claims the full height and a stacked sibling never gets laid
-            // out. This reserves the space properly and keeps scroll content clear of it.
-            detailStack
+            .frame(width: sidebarWidth)
+
+            SidebarDivider(width: $sidebarWidth, range: 200...360)
+
+            // A plain VStack lays out here, unlike inside NavigationSplitView's detail
+            // column where a sibling never got laid out at all. So the player row simply
+            // sits above the content and the content starts below it — no overlay, no
+            // reserved insets, no scroller to lift clear.
+            VStack(spacing: 0) {
+                PlayerBar(showQueue: $showQueue)
+                detailStack
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -81,17 +87,14 @@ struct MacOSContentView: View {
                 }
                 .navigationDestination(for: Album.self) { album in
                     AlbumDetailMac(album: album)
-                        .backToolbar(backDestination)
                         .onAppear { rememberDetail("album:\(album.id.uuidString)") }
                 }
                 .navigationDestination(for: Artist.self) { artist in
                     ArtistDetailMac(artist: artist)
-                        .backToolbar(backDestination)
                         .onAppear { rememberDetail("artist:\(artist.id.uuidString)") }
                 }
                 .navigationDestination(for: SearchAllRequest.self) { request in
                     SearchAllViewMac(request: request)
-                        .backToolbar("Search")
                 }
             }
         }
@@ -104,26 +107,13 @@ struct MacOSContentView: View {
             // the space actually runs out: measured, everything survives at 1100 and the
             // filter drops under `»` by 1000. Below that it's the sidebar that has to
             // give, not the transport.
-            .frame(minWidth: 1120, minHeight: 600)
+            .frame(minWidth: 900, minHeight: 600)
             .overlay(alignment: .trailing) { queueSlideOver }
             .animation(.easeInOut(duration: 0.22), value: showQueue)
-            .toolbar { PlayerToolbar(showQueue: $showQueue) }
     }
 
     private var splitViewChrome: some View {
         splitViewWithPlayer
-        // The system's own search field rather than a TextField in a toolbar item: it
-        // anchors itself at the trailing edge, collapses to a magnifier when the window
-        // is narrow, and is the only thing `searchFocused` can drive — a `focused`
-        // binding on a toolbar TextField never fires, which is why Cmd+F did nothing.
-        .searchable(text: $searchText, prompt: "Search")
-        .searchFocused($searchFieldFocused)
-        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
-            searchFieldFocused = true
-        }
-        // Only the front window responds. The mini player is a plain NSWindow rather
-        // than an NSPanel, so canBecomeMain is true for it too and can't tell them apart
-        // — both queues were toggling at once. Its identifier can.
         .onReceive(NotificationCenter.default.publisher(for: .toggleUpNext)) { _ in
             guard NSApp.keyWindow?.identifier != MiniPlayerWindowController.windowIdentifier else { return }
             showQueue.toggle()
@@ -131,9 +121,6 @@ struct MacOSContentView: View {
         .queueConfirmationOverlay()
         .replaceQueueConfirmation()
         .removeDownloadConfirmation()
-        .toolbar(removing: .sidebarToggle)
-
-        .toolbarBackground(.visible, for: .windowToolbar)
         .sheet(
             isPresented: Binding(
                 get: { !addToPlaylistTrackIds.isEmpty },
@@ -191,13 +178,6 @@ struct MacOSContentView: View {
                 // Refining the query drops any "show all" drill-in — it was built from
                 // the previous query and would otherwise sit there showing stale results.
                 detailPath = NavigationPath()
-            }
-        }
-        .onChange(of: sidebarVisibility) { _, newValue in
-            // We don't allow the sidebar to be hidden — clamp back to .all if anything
-            // (toolbar button, View menu, keyboard shortcut) tries to collapse it.
-            if newValue != .all {
-                sidebarVisibility = .all
             }
         }
         .onAppear {

@@ -50,11 +50,6 @@ struct ArtistsViewMac: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                LibraryOptionsMenu(filter: $libraryFilter)
-            }
-        }
         .onChange(of: musicLibrary.revision, initial: true) { reloadArtists() }
         .onChange(of: libraryFilter) { reloadArtists() }
         .onChange(of: pendingArtistSelection) { _, newValue in
