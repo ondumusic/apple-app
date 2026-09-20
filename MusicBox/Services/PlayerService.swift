@@ -252,6 +252,38 @@ final class PlayerService {
         savePlaybackState()
     }
 
+    /// Inserts at a position within up-next, where 0 is "plays next" and `upNextEntries.count`
+    /// is the end of the queue.
+    ///
+    /// The position is an offset into the up-next slice, matching moveQueueItems and
+    /// removeFromQueue — not an index into `queue`, which is what `upNextEntries` reports.
+    func insertIntoQueue(_ items: [QueueItem], at position: Int) {
+        guard !items.isEmpty else { return }
+        if queue.isEmpty {
+            playNow(queue: items)
+            return
+        }
+        let nextBefore = upcomingTrackId
+        let slot = max(0, min(position, upNextEntries.count))
+
+        if var shuffled = shuffledIndices {
+            // Shuffled: the new items go on the end of `queue` and their positions are
+            // spliced into the shuffle order, since that's what decides play order.
+            let appendIndex = queue.count
+            queue.append(contentsOf: items)
+            let newIndices = items.indices.map { appendIndex + $0 }
+            shuffled.insert(contentsOf: newIndices, at: min(currentIndex + 1 + slot, shuffled.count))
+            shuffledIndices = shuffled
+        } else {
+            let insertIndex = min(currentIndex + 1 + slot, queue.count)
+            queue.insert(contentsOf: items, at: insertIndex)
+        }
+
+        isQueueUserModified = true
+        if upcomingTrackId != nextBefore { invalidateGaplessState() }
+        savePlaybackState()
+    }
+
     func addToEnd(tracks: [Track], artworkURL: URL? = nil) {
         let items = tracks.map { QueueItem(track: $0, artworkURL: artworkURL ?? $0.album?.artworkUrl) }
         addToEnd(queue: items)

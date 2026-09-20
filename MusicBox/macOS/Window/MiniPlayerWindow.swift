@@ -40,11 +40,12 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     /// last working in. Relaunch restores key to whichever it was.
     static let lastKeyDefaultsKey = "MiniPlayerWasLastKeyWindow"
     private static var isTerminating = false
+    private static var didClearInitialFocus = false
     /// Default frame — square (width × width), which puts the user in overlay mode
     /// where the artwork dominates and transport overlays at the bottom.
     private static let defaultFrame = NSRect(x: 0, y: 0, width: 300, height: 300)
 
-    init(player: PlayerService, settings: SettingsStore) {
+    init(player: PlayerService, settings: SettingsStore, musicLibrary: MusicLibrary, network: NetworkMonitor) {
         // Plain NSWindow with hidden title bar so the artwork extends edge-to-edge.
         // Restore the user's last frame, or fall back to the square overlay default.
         let savedFrame = Self.loadSavedFrame()
@@ -101,6 +102,13 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
             MainActor.assumeIsolated {
                 guard let window = note.object as? NSWindow else { return }
                 Self.recordKeyWindowPreference(keyWindow: window, panel: panel)
+                // Clearing in init doesn't hold: AppKit assigns a first responder when
+                // the window first becomes key, which is after that. Only the first
+                // time — after that, whatever the user focused is theirs.
+                if window === panel, !Self.didClearInitialFocus {
+                    Self.didClearInitialFocus = true
+                    window.makeFirstResponder(nil)
+                }
             }
         }
 
@@ -114,6 +122,10 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         .environment(player)
         .environment(state)
         .environment(settings)
+        // NSHostingView starts a fresh environment scope, so the queue table's actions
+        // have to be handed these explicitly.
+        .environment(musicLibrary)
+        .environment(network)
         host.rootView = AnyView(content)
         observeUpNextShortcut()
 
@@ -674,9 +686,13 @@ private struct TransportRow: View {
 }
 
 /// Inline queue rendered below the player in the mini window when the queue toggle
-/// is on. Reuses the main slide-over's QueueList so interaction behavior matches.
+/// is on. Shares the main slide-over's QueueTable, so reordering, multi-select,
+/// delete and dropping tracks in behave identically in both.
 private struct InlineQueue: View {
     @Environment(PlayerService.self) private var player
+    @Environment(SettingsStore.self) private var settings
+    @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(NetworkMonitor.self) private var network
 
     private var upNext: [(originalIndex: Int, item: QueueItem)] { player.upNextEntries }
 
@@ -711,7 +727,13 @@ private struct InlineQueue: View {
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {
-                QueueList(upNext: upNext, rowHeight: 40, showsDuration: false)
+                QueueTable(
+                    items: upNext.map(\.item),
+                    rowHeight: 40,
+                    showsDuration: false,
+                    accent: settings.resolvedAccentColor,
+                    actions: .standard(player: player, musicLibrary: musicLibrary, network: network)
+                )
             }
         }
         // Its own surface, so the queue reads as a separate region rather than more

@@ -224,7 +224,7 @@ struct MacOSContentView: View {
             // Reopen the mini player if it was showing when the app last quit, in
             // whichever z-order and focus the user left the two windows in.
             if UserDefaults.standard.bool(forKey: MiniPlayerWindowController.visibleDefaultsKey) {
-                let mp = miniPlayer ?? MiniPlayerWindowController(player: player, settings: settings)
+                let mp = miniPlayer ?? MiniPlayerWindowController(player: player, settings: settings, musicLibrary: musicLibrary, network: network)
                 miniPlayer = mp
                 mp.restoreAtLaunch()
             }
@@ -382,7 +382,7 @@ struct MacOSContentView: View {
         if let mp = miniPlayer {
             mp.toggle()
         } else {
-            let mp = MiniPlayerWindowController(player: player, settings: settings)
+            let mp = MiniPlayerWindowController(player: player, settings: settings, musicLibrary: musicLibrary, network: network)
             miniPlayer = mp
             mp.showWindow(nil)
             UserDefaults.standard.set(true, forKey: MiniPlayerWindowController.visibleDefaultsKey)
@@ -526,6 +526,9 @@ private struct DetailPlaceholder: View {
 /// click skips to the track; right-click for context menu.
 struct QueuePanel: View {
     @Environment(PlayerService.self) private var player
+    @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(NetworkMonitor.self) private var network
+    @Environment(SettingsStore.self) private var settings
     @Binding var isPresented: Bool
 
     private var upNext: [(originalIndex: Int, item: QueueItem)] { player.upNextEntries }
@@ -549,7 +552,13 @@ struct QueuePanel: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                QueueList(upNext: upNext, rowHeight: 48, showsDuration: true)
+                QueueTable(
+                    items: upNext.map(\.item),
+                    rowHeight: 48,
+                    showsDuration: true,
+                    accent: settings.resolvedAccentColor,
+                    actions: .standard(player: player, musicLibrary: musicLibrary, network: network)
+                )
             }
         }
         // The close button went, but Escape shouldn't have to go with it.
@@ -557,232 +566,6 @@ struct QueuePanel: View {
     }
 }
 
-/// Reusable queue list — used by both the main slide-over and the mini player's
-/// inline panel. ScrollView + LazyVStack with selection (click + cmd-click),
-/// per-row hover-revealed Remove, double-click to skip, drag-to-reorder with
-/// insertion-line indicator, multi-drag of selected items.
-struct QueueList: View {
-    @Environment(PlayerService.self) private var player
-
-    let upNext: [(originalIndex: Int, item: QueueItem)]
-    let rowHeight: CGFloat
-    let showsDuration: Bool
-
-    @State private var selection: Set<UUID> = []
-    @State private var hoveredId: UUID?
-    @State private var dropTargetId: UUID?
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(upNext, id: \.item.id) { entry in
-                    QueueListRow(
-                        originalIndex: entry.originalIndex,
-                        item: entry.item,
-                        isHovered: hoveredId == entry.item.id,
-                        isSelected: selection.contains(entry.item.id),
-                        isDropTarget: dropTargetId == entry.item.id,
-                        showsDuration: showsDuration,
-                        onTap: { handleTap(entry) },
-                        onRemove: { remove(entry) }
-                    )
-                    .onHover { hovering in
-                        if hovering { hoveredId = entry.item.id }
-                        else if hoveredId == entry.item.id { hoveredId = nil }
-                    }
-                    .draggable(payload(for: entry))
-                    .dropDestination(for: QueueDragPayload.self) { payloads, _ in
-                        defer { dropTargetId = nil }
-                        guard let payload = payloads.first else { return false }
-                        let sources = IndexSet(payload.originalIndices)
-                        guard !sources.isEmpty,
-                              !payload.itemIds.contains(entry.item.id),
-                              let target = upNext.firstIndex(where: { $0.item.id == entry.item.id })
-                        else { return false }
-                        player.moveQueueItems(from: sources, to: target)
-                        return true
-                    } isTargeted: { hovering in
-                        if hovering { dropTargetId = entry.item.id }
-                        else if dropTargetId == entry.item.id { dropTargetId = nil }
-                    }
-                    Divider().opacity(0.5)
-                }
-
-                // Dropping on a row inserts before it, which left the end of the queue
-                // unreachable. This catches drops past the last row.
-                Color.clear
-                    .frame(height: 28)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                    .dropDestination(for: QueueDragPayload.self) { payloads, _ in
-                        guard let payload = payloads.first else { return false }
-                        let sources = IndexSet(payload.originalIndices)
-                        guard !sources.isEmpty else { return false }
-                        player.moveQueueItems(from: sources, to: upNext.count)
-                        return true
-                    }
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .focusable()
-        .focusEffectDisabled()
-        .onDeleteCommand(perform: removeSelected)
-    }
-
-    /// Positions within this list, *not* queue indices.
-    ///
-    /// moveQueueItems takes offsets into the up-next slice and adds the offset of the
-    /// slice itself. Handing it `originalIndex` — which is an index into the whole queue
-    /// — added that offset twice, so drops landed far below where they were aimed and
-    /// ran off the end of the queue entirely. iOS never hit this because `.onMove` hands
-    /// it positions in the displayed array already.
-    private func payload(for entry: (originalIndex: Int, item: QueueItem)) -> QueueDragPayload {
-        // Drag the whole selection if the dragged row is part of it; otherwise
-        // just the dragged row.
-        if selection.contains(entry.item.id), selection.count > 1 {
-            let positions = upNext.indices.filter { selection.contains(upNext[$0].item.id) }
-            return QueueDragPayload(
-                itemIds: positions.map { upNext[$0].item.id },
-                originalIndices: positions
-            )
-        }
-        let position = upNext.firstIndex { $0.item.id == entry.item.id } ?? 0
-        return QueueDragPayload(itemIds: [entry.item.id], originalIndices: [position])
-    }
-
-    private func handleTap(_ entry: (originalIndex: Int, item: QueueItem)) {
-        let modifiers = NSEvent.modifierFlags
-        if modifiers.contains(.command) {
-            if selection.contains(entry.item.id) {
-                selection.remove(entry.item.id)
-            } else {
-                selection.insert(entry.item.id)
-            }
-        } else if modifiers.contains(.shift), let last = selection.first,
-                  let lastIdx = upNext.firstIndex(where: { $0.item.id == last }),
-                  let curIdx = upNext.firstIndex(where: { $0.item.id == entry.item.id }) {
-            let lo = min(lastIdx, curIdx)
-            let hi = max(lastIdx, curIdx)
-            selection.formUnion(upNext[lo...hi].map(\.item.id))
-        } else {
-            selection = [entry.item.id]
-        }
-    }
-
-    /// Delete key. Removing from a queue isn't destructive — the track stays in the
-    /// library — so it doesn't ask first.
-    private func removeSelected() {
-        let targets = upNext.indices.filter { selection.contains(upNext[$0].item.id) }
-        guard !targets.isEmpty else { return }
-        selection.removeAll()
-        player.removeFromQueue(at: IndexSet(targets))
-    }
-
-    private func remove(_ entry: (originalIndex: Int, item: QueueItem)) {
-        // If the removed row is in the selection, remove all selected — otherwise
-        // remove just this one.
-        let targets: [Int]
-        if selection.contains(entry.item.id) {
-            targets = upNext.indices.filter { selection.contains(upNext[$0].item.id) }
-            selection.removeAll()
-        } else {
-            targets = [upNext.firstIndex { $0.item.id == entry.item.id }].compactMap { $0 }
-        }
-        player.removeFromQueue(at: IndexSet(targets))
-    }
-}
-
-/// Pasteboard payload used for in-queue drag-to-reorder. Carries one or more
-/// item ids + their original queue indices so multi-drag works.
-struct QueueDragPayload: Codable, Transferable {
-    let itemIds: [UUID]
-    let originalIndices: [Int]
-
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .data)
-    }
-}
-
-/// One queue row. Title + artist + (optional) duration + remove button. Visual
-/// states: hover (subtle bg), selected (accent tint), drop target (top insertion
-/// line).
-struct QueueListRow: View {
-    @Environment(PlayerService.self) private var player
-    let originalIndex: Int
-    let item: QueueItem
-    let isHovered: Bool
-    let isSelected: Bool
-    let isDropTarget: Bool
-    let showsDuration: Bool
-    let onTap: () -> Void
-    let onRemove: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            ArtworkView(url: item.artworkURL, cornerRadius: 3)
-                .frame(width: 36, height: 36)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.track.name)
-                    .lineLimit(1)
-                    .foregroundStyle(isSelected ? Color.white : Color.primary)
-                Text(item.track.artist.name)
-                    .font(.caption)
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            if showsDuration && !isHovered {
-                Text(item.track.formattedDuration)
-                    .monospacedDigit()
-                    .font(.caption)
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
-            }
-            if isHovered {
-                Button(action: onRemove) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(isSelected ? Color.white : Color.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Remove from queue")
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .contentShape(Rectangle())
-        .background(rowBackground)
-        .overlay(alignment: .top) {
-            if isDropTarget {
-                Rectangle()
-                    .fill(Color.accentColor)
-                    .frame(height: 2)
-            }
-        }
-        .onTapGesture(count: 2) {
-            player.skipTo(queueIndex: originalIndex)
-        }
-        .simultaneousGesture(TapGesture().onEnded { onTap() })
-        .contextMenu {
-            Button("Play") {
-                player.skipTo(queueIndex: originalIndex)
-            }
-            Button(role: .destructive, action: onRemove) {
-                Label(isSelected ? "Remove Selected" : "Remove", systemImage: "trash")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var rowBackground: some View {
-        if isSelected {
-            Color.accentColor
-        } else if isHovered {
-            Color.secondary.opacity(0.08)
-        } else {
-            Color.clear
-        }
-    }
-}
 /// The window's notification wiring, lifted out of MacOSContentView.body — the modifier
 /// chain there had grown past what the type checker will infer in reasonable time.
 private struct WindowNotificationHandlers: ViewModifier {
