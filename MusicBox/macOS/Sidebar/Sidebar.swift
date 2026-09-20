@@ -789,6 +789,11 @@ extension SidebarViewController: NSOutlineViewDelegate {
             }
             return nil
         }()
+        if case .playlist = node.kind {
+            cell.usesAccentIcon = false
+        } else {
+            cell.usesAccentIcon = true
+        }
         cell.configure(for: node, compensateIndent: shouldCompensateIndent(for: node), badgeCount: badge)
         // Emphasis from the row's current state, not just from selection *changes*. A
         // cell built for an already-selected row — which is every launch, since selection
@@ -1018,6 +1023,8 @@ private final class SidebarCell: NSTableCellView {
     /// The app accent, for icons. Unselected they'd otherwise render in the system
     /// accent, which is the inconsistency the selection pill was fixing.
     var accentColor: NSColor = .controlAccentColor { didSet { applyEmphasis() } }
+    /// Library categories carry the accent; playlists are grey, the way Music.app has it.
+    var usesAccentIcon: Bool = true { didSet { applyEmphasis() } }
     private var isSectionHeader = false
 
     /// The cell used to get white-on-selection for free from NSTableCellView, because
@@ -1034,7 +1041,9 @@ private final class SidebarCell: NSTableCellView {
             return
         }
         label.textColor = emphasized ? .alternateSelectedControlTextColor : .labelColor
-        icon.contentTintColor = emphasized ? .alternateSelectedControlTextColor : accentColor
+        icon.contentTintColor = emphasized
+            ? .alternateSelectedControlTextColor
+            : (usesAccentIcon ? accentColor : .secondaryLabelColor)
         badge.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
     }
 
