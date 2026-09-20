@@ -554,7 +554,7 @@ struct QueuePanel: View {
             } else {
                 QueueTable(
                     items: upNext.map(\.item),
-                    rowHeight: 48,
+                    rowHeight: 52,
                     showsDuration: true,
                     accent: settings.resolvedAccentColor,
                     actions: .standard(player: player, musicLibrary: musicLibrary, network: network)

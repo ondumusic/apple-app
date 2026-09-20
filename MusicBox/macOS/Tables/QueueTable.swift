@@ -18,6 +18,12 @@ struct QueueTable: NSViewControllerRepresentable {
     let showsDuration: Bool
     let accent: Color
     let actions: QueueActions
+    /// Matched to the panel's own header padding — the window's is 16, the mini player's
+    /// 12 — so the artwork lines up under the "Up Next" title in both.
+    var horizontalInset: CGFloat = 16
+    /// Sized against the row so the gap above and below stays even; a fixed size looked
+    /// cramped in the mini player's shorter rows.
+    var artworkSize: CGFloat = 34
 
     func makeNSViewController(context: Context) -> QueueTableViewController {
         let vc = QueueTableViewController()
@@ -34,6 +40,7 @@ struct QueueTable: NSViewControllerRepresentable {
         vc.actions = actions
         vc.showsDuration = showsDuration
         vc.rowHeightValue = rowHeight
+        vc.metrics = QueueCellMetrics(horizontalInset: horizontalInset, artworkSize: artworkSize)
         vc.apply(items: items)
     }
 }
@@ -42,7 +49,8 @@ final class QueueTableViewController: NSViewController {
     fileprivate var items: [QueueItem] = []
     var actions = QueueActions()
     var showsDuration = true
-    var rowHeightValue: CGFloat = 48 {
+    var metrics = QueueCellMetrics(horizontalInset: 16, artworkSize: 34)
+    var rowHeightValue: CGFloat = 52 {
         didSet {
             guard rowHeightValue != oldValue, isViewLoaded else { return }
             tableView.rowHeight = rowHeightValue
@@ -66,7 +74,10 @@ final class QueueTableViewController: NSViewController {
         column.resizingMask = .autoresizingMask
         tableView.addTableColumn(column)
         tableView.headerView = nil
-        tableView.style = .inset
+        // .plain, not .inset: the inset style adds its own horizontal padding on top of
+        // the cell's, which put the artwork at 30pt from the panel edge against the
+        // header's 16 and made the panel look over-padded on both sides.
+        tableView.style = .plain
         // .none so AccentSelectionRowView paints the accent pill, as every other table
         // in the app does.
         tableView.selectionHighlightStyle = .none
@@ -75,6 +86,9 @@ final class QueueTableViewController: NSViewController {
         tableView.allowsEmptySelection = true
         tableView.backgroundColor = .clear
         tableView.gridStyleMask = []
+        // The table still insets its cells a little of its own accord; zeroing this and
+        // measuring what's left is what lets the artwork line up with the header.
+        tableView.intercellSpacing = NSSize(width: 0, height: 0)
         tableView.dataSource = self
         tableView.delegate = self
         tableView.target = self
@@ -204,6 +218,7 @@ extension QueueTableViewController: NSTableViewDelegate {
         let cell = tableView.makeView(withIdentifier: QueueCell.identifier, owner: self) as? QueueCell
             ?? QueueCell()
         cell.showsDuration = showsDuration
+        cell.metrics = metrics
         cell.onRemove = { [weak self] in self?.remove(row: row) }
         cell.configure(item: items[row])
         return cell
@@ -246,6 +261,12 @@ final class QueueCell: NSTableCellView {
 
     var showsDuration = true
     var onRemove: (() -> Void)?
+    var metrics = QueueCellMetrics(horizontalInset: 16, artworkSize: 34) {
+        didSet {
+            guard metrics != oldValue else { return }
+            applyMetrics()
+        }
+    }
 
     private let artwork = NSImageView()
     private let title = NSTextField(labelWithString: "")
@@ -255,6 +276,11 @@ final class QueueCell: NSTableCellView {
     private var loadingURL: URL?
     private var imageTask: ImageTask?
     private var trackingArea: NSTrackingArea?
+    private var artworkLeading: NSLayoutConstraint!
+    private var artworkWidth: NSLayoutConstraint!
+    private var artworkHeight: NSLayoutConstraint!
+    private var durationTrailing: NSLayoutConstraint!
+    private var removeTrailing: NSLayoutConstraint!
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -309,13 +335,17 @@ final class QueueCell: NSTableCellView {
         removeButton.toolTip = NSLocalizedString("Remove from queue", comment: "")
         addSubview(removeButton)
 
+        artworkLeading = artwork.leadingAnchor.constraint(equalTo: leadingAnchor, constant: metrics.horizontalInset)
+        artworkWidth = artwork.widthAnchor.constraint(equalToConstant: metrics.artworkSize)
+        artworkHeight = artwork.heightAnchor.constraint(equalToConstant: metrics.artworkSize)
+        durationTrailing = duration.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -metrics.horizontalInset)
+        removeTrailing = removeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(metrics.horizontalInset - 2))
+
         NSLayoutConstraint.activate([
-            // 16 matches the panel header's horizontal padding, so the artwork lines up
-            // under "Up Next" rather than sitting two points inside it.
-            artwork.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            artworkLeading,
             artwork.centerYAnchor.constraint(equalTo: centerYAnchor),
-            artwork.widthAnchor.constraint(equalToConstant: 34),
-            artwork.heightAnchor.constraint(equalToConstant: 34),
+            artworkWidth,
+            artworkHeight,
 
             title.leadingAnchor.constraint(equalTo: artwork.trailingAnchor, constant: 10),
             title.trailingAnchor.constraint(lessThanOrEqualTo: duration.leadingAnchor, constant: -8),
@@ -325,14 +355,22 @@ final class QueueCell: NSTableCellView {
             artist.trailingAnchor.constraint(lessThanOrEqualTo: duration.leadingAnchor, constant: -8),
             artist.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 1),
 
-            duration.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            durationTrailing,
             duration.centerYAnchor.constraint(equalTo: centerYAnchor),
 
-            removeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            removeTrailing,
             removeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             removeButton.widthAnchor.constraint(equalToConstant: 16),
             removeButton.heightAnchor.constraint(equalToConstant: 16),
         ])
+    }
+
+    private func applyMetrics() {
+        artworkLeading.constant = metrics.horizontalInset
+        artworkWidth.constant = metrics.artworkSize
+        artworkHeight.constant = metrics.artworkSize
+        durationTrailing.constant = -metrics.horizontalInset
+        removeTrailing.constant = -(metrics.horizontalInset - 2)
     }
 
     func configure(item: QueueItem) {
@@ -404,4 +442,11 @@ final class QueueCell: NSTableCellView {
     }
 }
 
+/// How a queue row is inset and how big its artwork is. The window's panel and the mini
+/// player's differ in both, and a row that ignores that either misaligns with its header
+/// or crowds its own artwork.
+struct QueueCellMetrics: Equatable {
+    var horizontalInset: CGFloat
+    var artworkSize: CGFloat
+}
 #endif

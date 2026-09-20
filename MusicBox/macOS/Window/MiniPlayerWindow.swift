@@ -126,6 +126,10 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         // have to be handed these explicitly.
         .environment(musicLibrary)
         .environment(network)
+        // Clearing the window's first responder isn't enough on its own: SwiftUI runs
+        // its own focus inside the hosting view and rings whichever control it picks,
+        // which is the volume button. Nothing in this HUD benefits from a focus ring.
+        .focusEffectDisabled()
         host.rootView = AnyView(content)
         observeUpNextShortcut()
 
@@ -729,10 +733,14 @@ private struct InlineQueue: View {
             } else {
                 QueueTable(
                     items: upNext.map(\.item),
-                    rowHeight: 40,
+                    rowHeight: 44,
                     showsDuration: false,
                     accent: settings.resolvedAccentColor,
-                    actions: .standard(player: player, musicLibrary: musicLibrary, network: network)
+                    actions: .standard(player: player, musicLibrary: musicLibrary, network: network),
+                    // This panel's header pads 12, not the window's 16, and its shorter
+                    // rows need smaller artwork to keep an even gap above and below.
+                    horizontalInset: 12,
+                    artworkSize: 28
                 )
             }
         }
