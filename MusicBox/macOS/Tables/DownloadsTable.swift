@@ -91,6 +91,7 @@ final class DownloadsTableViewController: NSViewController {
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = true
+        scrollView.addBottomContentPadding()
         view = scrollView
     }
 

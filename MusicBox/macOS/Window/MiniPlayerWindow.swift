@@ -116,6 +116,12 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         .environment(settings)
         host.rootView = AnyView(content)
         observeUpNextShortcut()
+
+        // Nothing focused at launch. AppKit otherwise parks focus on the first control
+        // it finds — the volume button — where Space and Return would act on it, and
+        // Space is already play/pause everywhere else.
+        panel.initialFirstResponder = nil
+        panel.makeFirstResponder(nil)
     }
 
     /// Remembers which of the two windows the user was last working in so relaunch can
