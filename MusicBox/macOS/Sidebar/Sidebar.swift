@@ -96,39 +96,76 @@ final class SidebarNode: NSObject {
 /// AccentSelectionRowView exists to fix — the app paints its own selection everywhere
 /// else, so a blue ring here is the one thing that doesn't match.
 final class AccentSearchField: NSSearchField {
-    var accentColor: NSColor = .controlAccentColor { didSet { needsDisplay = true } }
+    var accentColor: NSColor = .controlAccentColor {
+        didSet { ringLayer.strokeColor = accentColor.withAlphaComponent(0.9).cgColor }
+    }
+
+    private let ringLayer = CAShapeLayer()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setUpRing()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setUpRing()
+    }
+
+    private func setUpRing() {
+        wantsLayer = true
+        ringLayer.fillColor = NSColor.clear.cgColor
+        ringLayer.strokeColor = accentColor.withAlphaComponent(0.9).cgColor
+        ringLayer.lineWidth = 2.5
+        ringLayer.opacity = 0
+        layer?.addSublayer(ringLayer)
+    }
 
     override var focusRingType: NSFocusRingType {
         get { .none }
         set { /* pinned: we draw our own */ }
     }
 
-    private var isEditing: Bool {
-        guard let editor = currentEditor() else { return false }
-        return window?.firstResponder === editor
+    override func layout() {
+        super.layout()
+        ringLayer.frame = bounds
+        ringLayer.path = CGPath(
+            roundedRect: bounds.insetBy(dx: 1.25, dy: 1.25),
+            cornerWidth: 6,
+            cornerHeight: 6,
+            transform: nil
+        )
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        guard isEditing else { return }
-        let ring = NSBezierPath(
-            roundedRect: bounds.insetBy(dx: 1.25, dy: 1.25),
-            xRadius: 6,
-            yRadius: 6
-        )
-        ring.lineWidth = 2.5
-        accentColor.withAlphaComponent(0.9).setStroke()
-        ring.stroke()
+    /// Music eases its ring in rather than snapping it on, which is most of why theirs
+    /// feels like a response and a drawn-instantly one doesn't. A touch of scale with the
+    /// fade reads as the ring settling onto the field.
+    private func setRingVisible(_ visible: Bool) {
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = ringLayer.opacity
+        fade.toValue = visible ? 1 : 0
+
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = visible ? 1.04 : 1.0
+        scale.toValue = 1.0
+
+        let group = CAAnimationGroup()
+        group.animations = [fade, scale]
+        group.duration = 0.18
+        group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        ringLayer.add(group, forKey: "focus")
+        ringLayer.opacity = visible ? 1 : 0
     }
 
     override func becomeFirstResponder() -> Bool {
-        defer { needsDisplay = true }
-        return super.becomeFirstResponder()
+        let accepted = super.becomeFirstResponder()
+        if accepted { setRingVisible(true) }
+        return accepted
     }
 
     override func textDidEndEditing(_ notification: Notification) {
         super.textDidEndEditing(notification)
-        needsDisplay = true
+        setRingVisible(false)
     }
 }
 
@@ -297,6 +334,7 @@ final class SidebarViewController: NSViewController {
             searchField.topAnchor.constraint(equalTo: view.topAnchor, constant: Self.trafficLightClearance),
             searchField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
             searchField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+            searchField.heightAnchor.constraint(equalToConstant: 28),
             scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 6),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
