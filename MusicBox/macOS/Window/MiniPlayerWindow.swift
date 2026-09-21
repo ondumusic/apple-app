@@ -614,6 +614,10 @@ private struct TransportRow: View {
     let onQueueToggleRequest: () -> Void
     var tintForeground: Color? = nil
 
+    /// One size for every control in the row, so their hover backgrounds line up. The
+    /// play button is the exception — it's deliberately the largest thing here.
+    private static let controlSize: CGFloat = 30
+
     var body: some View {
         VStack(spacing: 6) {
             VStack(spacing: 2) {
@@ -635,11 +639,11 @@ private struct TransportRow: View {
             // the parent's bounds — implicit `.title3` widths were stacking up
             // wider than the narrow mini-player window in overlay mode.
             ZStack {
-                HStack(spacing: 18) {
+                HStack(spacing: 6) {
                     Button { player.back() } label: {
                         Image(systemName: "backward.fill")
-                            .font(.system(size: 16))
-                            .frame(width: 24, height: 24)
+                            .font(.system(size: 15))
+                            .frame(width: Self.controlSize, height: Self.controlSize)
                     }
                     .disabled(track == nil || !player.canGoBack)
                     Button { player.togglePlayPause() } label: {
@@ -650,21 +654,17 @@ private struct TransportRow: View {
                     .disabled(track == nil)
                     Button { player.skip() } label: {
                         Image(systemName: "forward.fill")
-                            .font(.system(size: 16))
-                            .frame(width: 24, height: 24)
+                            .font(.system(size: 15))
+                            .frame(width: Self.controlSize, height: Self.controlSize)
                     }
                     .disabled(track == nil || !player.canSkip)
                 }
                 // Mirrors the queue toggle on the opposite side so the play button stays
                 // centred between them.
                 HStack(spacing: 2) {
-                    VolumeControl(iconSize: 13)
-                        .buttonStyle(VolumeIconButtonStyle())
+                    VolumeControl(iconSize: 13, controlSize: Self.controlSize)
                         .foregroundStyle(tintForeground.map { $0.opacity(0.85) } ?? Color.secondary)
-                        .frame(width: 26, height: 26)
-                    AirPlayPicker(size: 15)
-                        .frame(width: 15, height: 15)
-                        .help("AirPlay")
+                    AirPlayControl(glyphSize: 16, controlSize: Self.controlSize)
                     Spacer()
                 }
                 HStack(spacing: 0) {

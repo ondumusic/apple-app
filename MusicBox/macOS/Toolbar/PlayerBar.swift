@@ -98,15 +98,19 @@ struct PlayerBar: View {
 }
 /// AirPlay, with the row's hover treatment. Its own view reports the hover, since the
 /// AppKit picker inside swallows SwiftUI's.
-private struct AirPlayControl: View {
+struct AirPlayControl: View {
+    var glyphSize: CGFloat = 20
+    var controlSize: CGFloat = playerControlSize
+
     @State private var isHovering = false
 
     var body: some View {
         AirPlayPicker(
-            controlSize: playerControlSize,
+            size: glyphSize,
+            controlSize: controlSize,
             onHoverChange: { isHovering = $0 }
         )
-        .frame(width: playerControlSize, height: playerControlSize)
+        .frame(width: controlSize, height: controlSize)
         .background {
             RoundedRectangle(cornerRadius: playerControlCornerRadius)
                 .fill(Color.primary.opacity(isHovering ? 0.08 : 0))

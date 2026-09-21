@@ -201,6 +201,10 @@ struct VolumeControl: View {
     @Environment(PlayerService.self) private var player
     @State private var showingSlider = false
     var iconSize: CGFloat? = nil
+    /// Hit and hover area around the glyph. Without it the row's button style draws its
+    /// highlight tight around the speaker, which reads as a different control from the
+    /// transport buttons beside it.
+    var controlSize: CGFloat? = nil
 
     var body: some View {
         @Bindable var player = player
@@ -208,6 +212,7 @@ struct VolumeControl: View {
             Image(systemName: iconName)
                 .font(iconSize.map { .system(size: $0) })
                 .foregroundStyle(.secondary)
+                .frame(width: controlSize, height: controlSize)
         }
         .help("Volume")
         .accessibilityLabel("Volume")
