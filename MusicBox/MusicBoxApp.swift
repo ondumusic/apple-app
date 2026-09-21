@@ -389,25 +389,40 @@ private struct ReopenMainWindowButton: View {
 /// Stands in for the window's chrome while the session restores and services come up.
 /// An empty window reads as a hang; the app's own shape reads as loading.
 private struct LaunchPlaceholder: View {
+    /// The real sidebar's width, so the placeholder doesn't jump sideways when the
+    /// window loads with a sidebar the user has resized.
+    @AppStorage("macSidebarWidth") private var sidebarWidth: Double = 240
+
     var body: some View {
         HStack(spacing: 0) {
             Rectangle()
                 .fill(.quaternary.opacity(0.5))
-                .frame(width: 240)
+                .frame(width: sidebarWidth)
                 .overlay(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Stands in for the search field, at the position and size the
+                        // real one has — 52pt down to clear the traffic lights, 28 tall,
+                        // inset 10. It was starting at 14 with a 22pt bar, so the whole
+                        // sidebar visibly dropped into place when the window loaded.
                         RoundedRectangle(cornerRadius: 6)
                             .fill(.quaternary)
-                            .frame(height: 22)
-                        ForEach(0..<4, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(.quaternary.opacity(0.7))
-                                .frame(height: 14)
-                                .padding(.trailing, 60)
+                            .frame(height: 28)
+                            .padding(.horizontal, 10)
+
+                        // Clears the field, its 6pt gap and the first section header.
+                        Spacer().frame(height: 40)
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(0..<4, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(.quaternary.opacity(0.7))
+                                    .frame(height: 14)
+                                    .padding(.trailing, 60)
+                            }
                         }
+                        .padding(.horizontal, 14)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 14)
+                    .padding(.top, 52)
                 }
             Divider()
             Rectangle().fill(.background)
