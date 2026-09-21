@@ -101,10 +101,10 @@ struct PlaylistDetailMac: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .center, spacing: Spacing.block) {
             PlaylistArtworkMosaic(tracks: tracks)
                 .frame(width: 88, height: 88)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
                 if isRenamingHeader {
                     TextField("", text: $headerNameDraft)
                         .textFieldStyle(.plain)
@@ -126,7 +126,7 @@ struct PlaylistDetailMac: View {
                 DetailMetadataLine(parts: metadataParts)
             }
             Spacer()
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.related) {
                 PlayShuffleButtons(
                     accent: settings.resolvedAccentColor,
                     onPlay: { playAll(shuffle: false) },

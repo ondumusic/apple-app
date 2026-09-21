@@ -17,12 +17,14 @@ struct SearchViewMac: View {
     @State private var displayedQuery: String = ""
     @State private var trackSelection: Set<UUID> = []
     @State private var albumSelection: Set<Album.ID> = []
+    @State private var albumColumns = 1
+    @State private var albumRowHeight: CGFloat = 0
     @State private var songsHeight: CGFloat = 0
     @State private var contentWidth: CGFloat = 0
 
     private static let artistCell: CGFloat = 108
-    private static let artistSpacing: CGFloat = 12
-    private static let horizontalPadding: CGFloat = 20
+    private static let artistSpacing = Spacing.element
+    private static let horizontalPadding = Spacing.page
     /// What sits left of the row artwork: the table's own cell inset (measured off a
     /// render) plus the gap the selection pill needs. Cancelling exactly this much puts
     /// the artwork on the same line as the album covers above it.
@@ -48,8 +50,9 @@ struct SearchViewMac: View {
     }
 
     /// The grid itself decides how many fit; trim to one row of them.
+    /// Taken from the grid rather than computed here — see `AlbumsGrid.onMetricsChange`.
     private var shownAlbums: [Album] {
-        Array(results.albums.prefix(AlbumsGridViewController.columns(forWidth: contentWidth)))
+        Array(results.albums.prefix(max(1, albumColumns)))
     }
 
     private var shownTracks: [Track] {
@@ -98,13 +101,13 @@ struct SearchViewMac: View {
     @ViewBuilder
     private var resultsBody: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 34) {
+            VStack(alignment: .leading, spacing: Spacing.section) {
                 if !results.artists.isEmpty { artistsSection }
                 if !results.albums.isEmpty { albumsSection }
                 if !results.tracks.isEmpty { songsSection }
             }
             .padding(.horizontal, Self.horizontalPadding)
-            .padding(.vertical, 16)
+            .padding(.vertical, Spacing.block)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -116,7 +119,7 @@ struct SearchViewMac: View {
 
     private func sectionHeader(_ title: String, count: Int, unit: String,
                                showAll: SearchAllRequest.Kind? = nil) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.related) {
             Text(title)
                 .font(.title3.weight(.semibold))
             Text(countLabel(count, unit: unit))
@@ -125,7 +128,7 @@ struct SearchViewMac: View {
             Spacer(minLength: 12)
             if let showAll {
                 NavigationLink(value: SearchAllRequest(kind: showAll, query: query)) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: Spacing.tight) {
                         Text("Show all")
                         Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
                     }
@@ -145,10 +148,10 @@ struct SearchViewMac: View {
     }
 
     private var artistsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.element) {
             sectionHeader("Artists", count: results.artists.count, unit: "artist",
                           showAll: shownArtists.count < results.artists.count ? .artists : nil)
-            LazyVGrid(columns: artistColumns, alignment: .leading, spacing: 14) {
+            LazyVGrid(columns: artistColumns, alignment: .leading, spacing: Spacing.block) {
                 ForEach(shownArtists) { artist in
                     SearchArtistCell(artist: artist, artworkURL: artistArtwork[artist.id])
                 }
@@ -161,7 +164,7 @@ struct SearchViewMac: View {
     /// same context menus as everywhere else. Both are embedded, so this page keeps the
     /// scroll and each is framed to its content.
     private var albumsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.element) {
             sectionHeader("Albums", count: results.albums.count, unit: "album",
                           showAll: shownAlbums.count < results.albums.count ? .albums : nil)
             AlbumsGrid(
@@ -171,17 +174,21 @@ struct SearchViewMac: View {
                                    network: network, downloadService: downloadService),
                 accent: settings.resolvedAccentColor,
                 onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) },
+                titleLines: 1,
+                onMetricsChange: { columns, rowHeight in
+                    albumColumns = columns
+                    albumRowHeight = rowHeight
+                },
                 embedded: true
             )
-            .frame(height: AlbumsGridViewController.height(forWidth: contentWidth, rows: 1,
-                                                          embedded: true))
+            .frame(height: albumRowHeight)
             // The grid carries its own section inset; the page's padding would double it.
             .padding(.horizontal, -Self.horizontalPadding)
         }
     }
 
     private var songsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.element) {
             sectionHeader("Songs", count: results.tracks.count, unit: "song",
                           showAll: shownTracks.count < results.tracks.count ? .songs : nil)
             TracksTable(
@@ -199,6 +206,7 @@ struct SearchViewMac: View {
                 hidesColumnHeaders: true,
                 rowHeight: Self.songRowHeight,
                 embeddedStyle: true,
+                fitsContentHeight: true,
                 onContentHeightChange: { songsHeight = $0 }
             )
             .frame(height: max(songsHeight, CGFloat(shownTracks.count) * Self.songRowHeight))

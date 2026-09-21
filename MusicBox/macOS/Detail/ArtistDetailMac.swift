@@ -103,7 +103,7 @@ struct ArtistDetailMac: View {
 
     private var header: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
                 Text(artist.name)
                     .font(.largeTitle.bold())
                 DetailMetadataLine(parts: metadataParts)

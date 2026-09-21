@@ -30,7 +30,7 @@ struct AlbumSectionHeader: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Spacing.element) {
             if inlineArtwork {
                 NavigationLink(value: album) {
                     ArtworkView(url: album.artworkUrl)
@@ -38,7 +38,7 @@ struct AlbumSectionHeader: View {
                 }
                 .buttonStyle(.plain)
             }
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
                 Text(album.name)
                     .font(.title2.bold())
                     .lineLimit(2)
@@ -58,7 +58,7 @@ struct AlbumSectionHeader: View {
                 .lineLimit(1)
             }
             Spacer(minLength: 12)
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.related) {
                 Button { onPlay() } label: {
                     Image(systemName: "play.fill")
                 }
@@ -85,11 +85,11 @@ struct AlbumSectionHeader: View {
         // text inset (4), so the album title sits in the same x position as the track
         // titles below.
         .padding(.leading, leadingInset)
-        .padding(.trailing, 20)
-        // Top padding matches artworkInset (20) so the title baseline aligns with the
-        // top edge of the artwork.
-        .padding(.top, 20)
-        .padding(.bottom, 8)
+        .padding(.trailing, Spacing.page)
+        // Top padding matches the artwork overlay's inset so the title baseline aligns
+        // with the top edge of the artwork.
+        .padding(.top, Spacing.page)
+        .padding(.bottom, Spacing.related)
     }
 }
 
@@ -118,7 +118,7 @@ struct AlbumArtworkOverlay: View {
     let album: Album
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
             NavigationLink(value: album) {
                 ArtworkView(url: album.artworkUrl)
                     .frame(width: 160, height: 160)

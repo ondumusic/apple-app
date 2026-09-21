@@ -30,7 +30,7 @@ struct SearchAllViewMac: View {
     @State private var albumSelection: Set<Album.ID> = []
     @State private var artistArtwork: [UUID: URL] = [:]
 
-    private let artistColumns = [GridItem(.adaptive(minimum: 108), spacing: 12)]
+    private let artistColumns = [GridItem(.adaptive(minimum: 108), spacing: Spacing.element)]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -65,12 +65,12 @@ struct SearchAllViewMac: View {
                 )
             } else {
                 ScrollView {
-                    LazyVGrid(columns: artistColumns, alignment: .leading, spacing: 14) {
+                    LazyVGrid(columns: artistColumns, alignment: .leading, spacing: Spacing.block) {
                         ForEach(artists) { artist in
                             SearchArtistCell(artist: artist, artworkURL: artistArtwork[artist.id])
                         }
                     }
-                    .padding(20)
+                    .padding(Spacing.page)
                 }
             }
         }
@@ -88,7 +88,7 @@ struct SearchAllViewMac: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.related) {
             Text(title).font(.title3.weight(.semibold))
             switch request.kind {
             case .artists:
@@ -109,8 +109,8 @@ struct SearchAllViewMac: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, Spacing.page)
+        .padding(.vertical, Spacing.element)
     }
 
     private func reload() {
@@ -139,7 +139,7 @@ struct SearchArtistCell: View {
         Button {
             NotificationCenter.default.post(name: .navigateToArtist, object: artist)
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: Spacing.tight) {
                 Group {
                     if let artworkURL {
                         ArtworkView(url: artworkURL)

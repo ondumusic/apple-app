@@ -13,6 +13,16 @@ struct AlbumsGrid: NSViewControllerRepresentable {
     let actions: AlbumActions
     let accent: Color
     let onOpen: (Album) -> Void
+    /// One line in a summary row, where the height is reserved by the caller and has to
+    /// be right; two in the library grid, where a long album name would otherwise lose
+    /// its end.
+    var titleLines: Int = 2
+    /// How many cells fit across, and how tall one row is, as the grid actually laid it
+    /// out. A caller that reserves the grid's height can't work this out from the width
+    /// it thinks the grid has: the scroll view keeps some of that for its scroller, and
+    /// being a few points out is invisible until it crosses a column breakpoint, where
+    /// the reserved height is suddenly for a different cell size than the one built.
+    var onMetricsChange: ((Int, CGFloat) -> Void)? = nil
     /// Embedded in a taller scrolling page rather than owning the scroll. Drops the
     /// scroller and the elastic bounce so the wheel reaches the page behind it.
     var embedded: Bool = false
@@ -28,6 +38,8 @@ struct AlbumsGrid: NSViewControllerRepresentable {
     }
 
     private func apply(to vc: AlbumsGridViewController) {
+        vc.titleLines = titleLines
+        vc.onMetricsChange = onMetricsChange
         vc.applyEmbedded(embedded)
         vc.accentNSColor = NSColor(accent)
         vc.actions = actions
@@ -62,12 +74,35 @@ final class AlbumsGridViewController: NSViewController {
     /// the same space. The margin stays at 20 rather than their 38 — it's shared with
     /// the detail pages, and a cover shouldn't move when you open it.
     static let minimumItemWidth: CGFloat = 190
-    static let interitemSpacing: CGFloat = 18
-    private static let lineSpacing: CGFloat = 22
-    static let sectionInset: CGFloat = DetailPageMetrics.horizontalInset
-    /// Two lines of title, one of artist, and the gap above them — the part of a cell
-    /// that isn't artwork.
-    static let captionHeight: CGFloat = 58
+    static let interitemSpacing = Spacing.block
+    private static let lineSpacing = Spacing.page
+    static let sectionInset = Spacing.page
+    /// The part of a cell that isn't artwork: the gap above the caption, the title, and
+    /// the artist under it.
+    static func captionHeight(titleLines: Int) -> CGFloat {
+        titleLines >= 2 ? 58 : 42
+    }
+
+    var onMetricsChange: ((Int, CGFloat) -> Void)?
+    private var lastReportedMetrics: (columns: Int, rowHeight: CGFloat)?
+
+    var titleLines: Int = 2 {
+        didSet {
+            guard titleLines != oldValue, isViewLoaded else { return }
+            collectionView.reloadData()
+            collectionView.collectionViewLayout?.invalidateLayout()
+        }
+    }
+
+    private func reportMetrics(forWidth width: CGFloat) {
+        guard let onMetricsChange else { return }
+        let columns = Self.columns(forWidth: width)
+        let rowHeight = itemSize(forWidth: width).height
+        if let last = lastReportedMetrics,
+           last.columns == columns, abs(last.rowHeight - rowHeight) < 0.5 { return }
+        lastReportedMetrics = (columns, rowHeight)
+        onMetricsChange(columns, rowHeight)
+    }
 
     /// How many cells fit across, for callers that trim their data to whole rows.
     static func columns(forWidth width: CGFloat) -> Int {
@@ -78,12 +113,13 @@ final class AlbumsGridViewController: NSViewController {
 
     /// Height of a grid showing `rows` rows at this width — what an embedded caller has
     /// to reserve, since the grid can't size itself inside a page that scrolls.
-    static func height(forWidth width: CGFloat, rows: Int, embedded: Bool = false) -> CGFloat {
+    static func height(forWidth width: CGFloat, rows: Int, embedded: Bool = false,
+                       titleLines: Int = 2) -> CGFloat {
         let columns = CGFloat(columns(forWidth: width))
         let available = width - sectionInset * 2
         let itemWidth = max(minimumItemWidth,
                             floor((available - interitemSpacing * (columns - 1)) / columns))
-        let itemHeight = itemWidth + captionHeight
+        let itemHeight = itemWidth + captionHeight(titleLines: titleLines)
         return CGFloat(rows) * itemHeight
             + CGFloat(max(0, rows - 1)) * lineSpacing
             + (embedded ? 0 : sectionInset * 2)
@@ -108,8 +144,14 @@ final class AlbumsGridViewController: NSViewController {
         scrollView.autohidesScrollers = true
         scrollView.hasVerticalScroller = !isEmbedded
         scrollView.verticalScrollElasticity = isEmbedded ? .none : .automatic
-        scrollView.automaticallyAdjustsContentInsets = !isEmbedded
-        if isEmbedded { scrollView.contentInsets = NSEdgeInsets() }
+        if isEmbedded {
+            scrollView.automaticallyAdjustsContentInsets = false
+            scrollView.contentInsets = NSEdgeInsets()
+        } else {
+            // Same courtesy the tables give their last row: a selected cover in the last
+            // line shouldn't sit flush against the window's bottom edge.
+            scrollView.addBottomContentPadding()
+        }
         guard let layout = collectionView.collectionViewLayout as? NSCollectionViewFlowLayout
         else { return }
         let vertical = isEmbedded ? 0 : Self.sectionInset
@@ -181,17 +223,21 @@ final class AlbumsGridViewController: NSViewController {
         guard width > 0, width != lastLaidOutWidth else { return }
         lastLaidOutWidth = width
         collectionView.collectionViewLayout?.invalidateLayout()
+        reportMetrics(forWidth: width)
     }
 
     /// Flow layout wants a fixed item size, so the adaptive-column arithmetic that
     /// `GridItem(.adaptive(minimum:))` did for us happens here instead.
     fileprivate func itemSize(forWidth width: CGFloat) -> NSSize {
         let available = width - Self.sectionInset * 2
-        guard available > 0 else { return NSSize(width: Self.minimumItemWidth, height: Self.minimumItemWidth + Self.captionHeight) }
+        guard available > 0 else {
+            return NSSize(width: Self.minimumItemWidth,
+                          height: Self.minimumItemWidth + Self.captionHeight(titleLines: titleLines))
+        }
         let spacing = Self.interitemSpacing
         let columns = max(1, Int((available + spacing) / (Self.minimumItemWidth + spacing)))
         let itemWidth = floor((available - spacing * CGFloat(columns - 1)) / CGFloat(columns))
-        return NSSize(width: itemWidth, height: itemWidth + Self.captionHeight)
+        return NSSize(width: itemWidth, height: itemWidth + Self.captionHeight(titleLines: titleLines))
     }
 
     func apply(albums newAlbums: [Album], selection: Set<Album.ID>) {
@@ -310,6 +356,7 @@ extension AlbumsGridViewController: NSCollectionViewDataSource {
     func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
         let item = collectionView.makeItem(withIdentifier: AlbumGridItem.identifier, for: indexPath)
         guard let cell = item as? AlbumGridItem, albums.indices.contains(indexPath.item) else { return item }
+        cell.titleLines = titleLines
         let album = albums[indexPath.item]
         cell.accentColor = accentNSColor
         cell.isEmphasized = self.collectionView.usesAccentSelection

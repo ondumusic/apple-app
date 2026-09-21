@@ -114,14 +114,7 @@ final class AlbumGridItem: NSCollectionViewItem {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize)
         titleLabel.lineBreakMode = .byTruncatingTail
-        // Two lines, as Music.app gives it. A long album name truncated to one line was
-        // the reason the second line had to be something short like a year.
-        titleLabel.maximumNumberOfLines = 2
-        titleLabel.cell?.usesSingleLineMode = false
-        // maximumNumberOfLines alone doesn't wrap an NSTextField — the cell has to be
-        // told it may, and to truncate the line it stops on rather than the first.
-        titleLabel.cell?.wraps = true
-        titleLabel.cell?.truncatesLastVisibleLine = true
+        applyTitleLines()
         view.addSubview(titleLabel)
 
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -160,6 +153,25 @@ final class AlbumGridItem: NSCollectionViewItem {
             subtitleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             subtitleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
+    }
+
+    /// Two lines, as Music.app gives it — a long album name truncated to one line was
+    /// the reason the second line had to be something short like a year. One where the
+    /// caller reserves the height and a wrap would push the caption out of it.
+    var titleLines: Int = 2 {
+        didSet {
+            guard titleLines != oldValue else { return }
+            applyTitleLines()
+        }
+    }
+
+    private func applyTitleLines() {
+        titleLabel.maximumNumberOfLines = titleLines
+        // maximumNumberOfLines alone doesn't wrap an NSTextField — the cell has to be
+        // told it may, and to truncate the line it stops on rather than the first.
+        titleLabel.cell?.usesSingleLineMode = titleLines < 2
+        titleLabel.cell?.wraps = titleLines >= 2
+        titleLabel.cell?.truncatesLastVisibleLine = true
     }
 
     func configure(album: Album) {

@@ -20,7 +20,7 @@ struct ContentHeader<Trailing: View>: View {
     @State private var isHoveringBack = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.related) {
             if let backDestination {
                 Button { dismiss() } label: {
                     Image(systemName: "chevron.backward")
@@ -41,11 +41,11 @@ struct ContentHeader<Trailing: View>: View {
                 .accessibilityLabel("Back to \(backDestination)")
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.related)
 
             trailing
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, Spacing.block)
         .frame(height: Self.height)
         .frame(maxWidth: .infinity)
         // The content's background rather than the window's. Sharing the window

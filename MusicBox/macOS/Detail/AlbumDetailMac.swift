@@ -84,14 +84,14 @@ struct AlbumDetailMac: View {
     /// cramped fast in a narrow window. The artist page keeps that gutter for its
     /// per-album sections, where scrolling past several covers is the point.
     private var albumHeader: some View {
-        HStack(alignment: .bottom, spacing: 20) {
+        HStack(alignment: .bottom, spacing: Spacing.page) {
             ArtworkView(url: album.artworkUrl)
                 .frame(width: DetailPageMetrics.artworkSize, height: DetailPageMetrics.artworkSize)
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
                 }
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
                 Text(album.name)
                     .font(.largeTitle.bold())
                     .lineLimit(2)
@@ -101,7 +101,7 @@ struct AlbumDetailMac: View {
                     .lineLimit(1)
                 DetailMetadataLine(parts: metadataParts)
 
-                HStack(spacing: 8) {
+                HStack(spacing: Spacing.related) {
                     PlayShuffleButtons(
                         accent: settings.resolvedAccentColor,
                         onPlay: { playAll(shuffle: false) },
@@ -110,7 +110,7 @@ struct AlbumDetailMac: View {
                     )
                     albumDownloadButton
                 }
-                .padding(.top, 6)
+                .padding(.top, Spacing.related)
             }
             Spacer(minLength: 0)
         }

@@ -74,6 +74,11 @@ struct TracksTable: NSViewControllerRepresentable {
     /// to that flat array. Selection works natively across all albums (cmd-click /
     /// shift-range), since it's a single NSTableView.
     var sections: [TracksTableSection]? = nil
+    /// The caller reserves exactly this table's content height, so the room kept under
+    /// the last row would be height the caller doesn't know about — enough to make the
+    /// table scroll inside itself. Only search does this; a detail page owns its scroll
+    /// and wants the room, or a selected last row sits flush against the window edge.
+    var fitsContentHeight: Bool = false
     /// Reports the table's laid-out content height. An embedded caller has to reserve
     /// the height itself, and rows × rowHeight isn't it — the inset style pads the top
     /// and bottom, which left the last of a fixed-height list scrollable inside itself.
@@ -134,6 +139,7 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.groupLabels = groupLabels
         vc.showsArtwork = showsArtwork
         vc.onContentHeightChange = onContentHeightChange
+        vc.fitsContentHeight = fitsContentHeight
         vc.update(
             tracks: tracks,
             sections: sections,
@@ -234,6 +240,22 @@ final class TracksTableViewController: NSViewController {
 
     private var suppressSelectionCallback = false
     var onContentHeightChange: ((CGFloat) -> Void)?
+    var fitsContentHeight = false {
+        didSet {
+            guard fitsContentHeight != oldValue, isViewLoaded else { return }
+            applyBottomContentPadding()
+        }
+    }
+
+    private func applyBottomContentPadding() {
+        if fitsContentHeight {
+            scrollView.automaticallyAdjustsContentInsets = false
+            scrollView.contentInsets = NSEdgeInsets()
+        } else {
+            scrollView.addBottomContentPadding()
+        }
+    }
+
     private var lastReportedContentHeight: CGFloat = 0
     private var hoveredRow: Int?
     private var trackingArea: NSTrackingArea?
@@ -520,12 +542,7 @@ final class TracksTableViewController: NSViewController {
             scrollView.hasHorizontalScroller = false
             scrollView.verticalScrollElasticity = .none
             scrollView.horizontalScrollElasticity = .none
-            // Standalone tables keep a little room under the last row so a selected one
-            // isn't flush against the window edge. Embedded, that inset is just 10pt the
-            // caller's fixed height doesn't know about — enough to make the table scroll
-            // inside itself.
-            scrollView.automaticallyAdjustsContentInsets = false
-            scrollView.contentInsets = NSEdgeInsets()
+            applyBottomContentPadding()
             scrollView.borderType = .noBorder
             scrollView.contentView.drawsBackground = false
             scrollView.contentView.backgroundColor = .clear
@@ -1381,7 +1398,8 @@ private final class GroupLabelCell: NSTableCellView {
     init(identifier: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         self.identifier = identifier
-        label.font = .systemFont(ofSize: 11, weight: .bold)
+        // The same treatment the sidebar gives its section headings.
+        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
         label.textColor = .secondaryLabelColor
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)

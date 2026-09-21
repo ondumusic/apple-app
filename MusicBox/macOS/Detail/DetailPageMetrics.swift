@@ -9,9 +9,11 @@ import SwiftUI
 enum DetailPageMetrics {
     /// Matches `AlbumsGridViewController.sectionInset`, so a cover doesn't step sideways
     /// when you open the album it belongs to.
-    static let horizontalInset: CGFloat = 20
-    static let topInset: CGFloat = 20
-    static let bottomInset: CGFloat = 18
+    static let horizontalInset = Spacing.page
+    static let topInset = Spacing.page
+    /// Less under the block than above it: the track list starts immediately below,
+    /// where above it there's only the header strip.
+    static let bottomInset = Spacing.block
     static let artworkSize: CGFloat = 180
 
     /// A track row. Tall enough that a long title can take a second line rather than
@@ -45,7 +47,7 @@ struct PlayShuffleButtons: View {
     var isEnabled: Bool = true
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.related) {
             Button(action: onPlay) {
                 Label("Play", systemImage: "play.fill")
             }
