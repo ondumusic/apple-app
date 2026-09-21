@@ -47,6 +47,7 @@ struct ArtistDetailMac: View {
                 actions: trackActions,
                 showArtist: false,
                 showAlbum: false,
+                isOffline: !network.isOnline,
                 accent: settings.resolvedAccentColor,
                 currentlyPlayingTrackId: player.currentTrack?.id,
                 isPlaying: player.isPlaying,

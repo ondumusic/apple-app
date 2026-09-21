@@ -199,6 +199,7 @@ struct SearchViewMac: View {
                 showArtist: true,
                 showAlbum: false,
                 showsArtwork: true,
+                isOffline: !network.isOnline,
                 showTrackNumber: false,
                 accent: settings.resolvedAccentColor,
                 currentlyPlayingTrackId: player.currentTrack?.id,

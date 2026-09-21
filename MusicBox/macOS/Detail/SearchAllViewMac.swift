@@ -47,6 +47,7 @@ struct SearchAllViewMac: View {
                                        network: network, downloadService: downloadService),
                     showArtist: true,
                     showAlbum: true,
+                    isOffline: !network.isOnline,
                     accent: settings.resolvedAccentColor,
                     currentlyPlayingTrackId: player.currentTrack?.id,
                     isPlaying: player.isPlaying,

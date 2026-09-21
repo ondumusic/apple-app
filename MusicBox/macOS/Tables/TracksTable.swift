@@ -39,6 +39,10 @@ struct TracksTable: NSViewControllerRepresentable {
     /// search results. Off by default: album and artist detail already sit under one
     /// cover, so repeating it down every row would be noise.
     var showsArtwork: Bool = false
+    /// Offline, a track that isn't downloaded can't be played — `availableTracks` drops
+    /// it when building a queue, silently. Dimmed here so the row says so first, the way
+    /// iOS's TrackRow already does.
+    var isOffline: Bool = false
     /// Whether to render the # column. Meaningful where ordering is (album detail,
     /// playlists); in a flat all-songs list the per-album numbers just repeat.
     var showTrackNumber: Bool = true
@@ -138,6 +142,7 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.artworkInset = artworkInset
         vc.groupLabels = groupLabels
         vc.showsArtwork = showsArtwork
+        vc.isOffline = isOffline
         vc.onContentHeightChange = onContentHeightChange
         vc.fitsContentHeight = fitsContentHeight
         vc.update(
@@ -193,7 +198,11 @@ final class TracksTableViewController: NSViewController {
     private static let artworkTrailingGap: CGFloat = 10
     static var artworkColumnWidth: CGFloat { artworkLeadingGap + artworkSize + artworkTrailingGap }
 
-    var showsArtwork: Bool = false {
+    var showsArtwork: Bool = false
+    /// Offline, a track that isn't downloaded can't be played — `availableTracks` drops
+    /// it when building a queue, silently. Dimmed here so the row says so first, the way
+    /// iOS's TrackRow already does.
+    var isOffline: Bool = false {
         didSet {
             guard showsArtwork != oldValue, isViewLoaded else { return }
             artworkColumn.isHidden = !showsArtwork
@@ -1095,6 +1104,7 @@ extension TracksTableViewController: NSTableViewDelegate {
         }
         guard let column = tableColumn, let trackIdx = flatTrackIndex(forRow: row) else { return nil }
         let track = tracks[trackIdx]
+        let isUnavailable = isOffline && !track.isDownloaded
         let isCurrent = currentlyPlayingTrackId == track.id
         // sections mode uses selectionHighlightStyle = .none, so NSTableView doesn't
         // propagate emphasis to cells. Set it explicitly based on the row's selection
@@ -1117,11 +1127,13 @@ extension TracksTableViewController: NSTableViewDelegate {
                 ?? TrackArtworkCell(identifier: column.identifier, size: Self.artworkSize,
                                     leading: Self.artworkLeadingGap)
             c.show(url: track.album?.artworkUrl)
+            c.isUnavailable = isUnavailable
             cell = c
         case "number":
             let c = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? NumberOrSpeakerCell
                 ?? NumberOrSpeakerCell(identifier: column.identifier)
             c.accentColor = accentNSColor
+            c.isUnavailable = isUnavailable
             if isCurrent {
                 c.showSpeaker(playing: isPlaying)
             } else {
@@ -1177,6 +1189,8 @@ extension TracksTableViewController: NSTableViewDelegate {
         default:
             cell = nil
         }
+        if let textCell = cell as? TextCell { textCell.isUnavailable = isUnavailable }
+        if let titleCell = cell as? TitleCell { titleCell.isUnavailable = isUnavailable }
         cell?.backgroundStyle = cellStyle
         return cell
     }
@@ -1358,6 +1372,10 @@ private final class TrackArtworkCell: NSTableCellView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    var isUnavailable = false {
+        didSet { artwork.alphaValue = isUnavailable ? 0.4 : 1 }
+    }
+
     func show(url: URL?) {
         guard loadingURL != url else { return }
         imageTask?.cancel()
@@ -1500,10 +1518,14 @@ private final class TextCell: NSTableCellView {
         didSet { applyEmphasis() }
     }
 
+    var isUnavailable = false {
+        didSet { if isUnavailable != oldValue { applyEmphasis() } }
+    }
+
     private func applyEmphasis() {
         label.textColor = backgroundStyle == .emphasized
             ? .alternateSelectedControlTextColor
-            : unselectedColor
+            : (isUnavailable ? .tertiaryLabelColor : unselectedColor)
     }
 }
 
@@ -1589,9 +1611,14 @@ private final class NumberOrSpeakerCell: NSTableCellView {
         didSet { applyEmphasis() }
     }
 
+    var isUnavailable = false {
+        didSet { if isUnavailable != oldValue { applyEmphasis() } }
+    }
+
     private func applyEmphasis() {
         let emphasized = backgroundStyle == .emphasized
-        label.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
+        let resting: NSColor = isUnavailable ? .tertiaryLabelColor : .secondaryLabelColor
+        label.textColor = emphasized ? .alternateSelectedControlTextColor : resting
         icon.contentTintColor = emphasized ? .alternateSelectedControlTextColor : accentColor
     }
 }
@@ -1607,6 +1634,9 @@ private final class TitleCell: NSTableCellView {
     let artistLabel = NSTextField(labelWithString: "")
     let downloadedIcon = NSImageView()
     private var isCurrent: Bool = false
+    var isUnavailable = false {
+        didSet { if isUnavailable != oldValue { applyEmphasis() } }
+    }
 
     /// Off when the artist is stacked under the title: two lines of title plus a line of
     /// artist is more than any row height here allows.
@@ -1702,6 +1732,10 @@ private final class TitleCell: NSTableCellView {
             label.textColor = .alternateSelectedControlTextColor
             artistLabel.textColor = .alternateSelectedControlTextColor
             downloadedIcon.contentTintColor = .alternateSelectedControlTextColor
+        } else if isUnavailable {
+            label.textColor = .tertiaryLabelColor
+            artistLabel.textColor = .tertiaryLabelColor
+            downloadedIcon.contentTintColor = .tertiaryLabelColor
         } else {
             label.textColor = isCurrent ? accentColor : .labelColor
             artistLabel.textColor = .secondaryLabelColor

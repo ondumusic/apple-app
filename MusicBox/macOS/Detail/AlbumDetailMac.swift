@@ -44,6 +44,7 @@ struct AlbumDetailMac: View {
                 actions: trackActions,
                 showArtist: hasMultipleArtists,
                 showAlbum: false,
+                isOffline: !network.isOnline,
                 accent: settings.resolvedAccentColor,
                 currentlyPlayingTrackId: player.currentTrack?.id,
                 isPlaying: player.isPlaying,

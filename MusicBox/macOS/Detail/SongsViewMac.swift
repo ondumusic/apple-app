@@ -30,6 +30,7 @@ struct SongsViewMac: View {
                 actions: trackActions,
                 showArtist: true,
                 showAlbum: true,
+                isOffline: !network.isOnline,
                 accent: settings.resolvedAccentColor,
                 currentlyPlayingTrackId: player.currentTrack?.id,
                 isPlaying: player.isPlaying,
