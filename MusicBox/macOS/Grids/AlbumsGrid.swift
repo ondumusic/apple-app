@@ -232,6 +232,21 @@ final class AlbumsGridViewController: NSViewController {
     private func publishSelection() {
         guard !isApplyingExternalSelection else { return }
         onSelectionChange?(Set(selectedAlbums().map(\.id)))
+        scrollSelectionIntoEnclosingScrollView()
+    }
+
+    /// Embedded, the grid is sized to its content and has nothing to scroll, so arrowing
+    /// to an item below the fold left it off screen. Ask the page's scroll view instead,
+    /// and only while the grid has focus — a click already has the item in view.
+    private func scrollSelectionIntoEnclosingScrollView() {
+        guard isEmbedded,
+              collectionView.window?.firstResponder === collectionView,
+              let path = collectionView.selectionIndexPaths.sorted().last,
+              let item = collectionView.item(at: path),
+              let outer = view.enclosingScrollView,
+              let document = outer.documentView else { return }
+        let rect = collectionView.convert(item.view.frame, to: document)
+        document.scrollToVisible(rect.insetBy(dx: 0, dy: -12))
     }
 
     // MARK: - Context menu targets

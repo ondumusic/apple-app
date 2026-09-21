@@ -1133,8 +1133,10 @@ extension TracksTableViewController: NSTableViewDelegate {
             c.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
             c.unselectedColor = .secondaryLabelColor
             // Extra right padding so the duration text has breathing room to the
-            // selection pill's right edge instead of touching it.
-            c.labelTrailingInset = 12
+            // selection pill's right edge instead of touching it. Artwork rows run the
+            // pill closer to the row's edge — it has to clear the duration rather than
+            // clip it — so they need more of this, not less.
+            c.labelTrailingInset = showsArtwork ? 22 : 12
             cell = c
         default:
             cell = nil
@@ -1148,6 +1150,21 @@ extension TracksTableViewController: NSTableViewDelegate {
             return existing
         }
         return TextCell(identifier: identifier)
+    }
+
+    /// Keyboard selection in an embedded table has nowhere to scroll: the table is sized
+    /// to its content, so NSTableView's own scrollRowToVisible is a no-op and arrowing
+    /// past the fold moved the selection out of sight. Ask the page's scroll view
+    /// instead. Only while the table has focus — a click or a restored selection
+    /// shouldn't move the page under the user.
+    private func scrollSelectionIntoEnclosingScrollView() {
+        guard isEmbedded,
+              tableView.window?.firstResponder === tableView,
+              let row = tableView.selectedRowIndexes.last,
+              let outer = view.enclosingScrollView,
+              let document = outer.documentView else { return }
+        let rect = tableView.convert(tableView.rect(ofRow: row), to: document)
+        document.scrollToVisible(rect.insetBy(dx: 0, dy: -12))
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
@@ -1164,6 +1181,7 @@ extension TracksTableViewController: NSTableViewDelegate {
                 }
             }
         }
+        scrollSelectionIntoEnclosingScrollView()
         if suppressSelectionCallback { return }
         let ids = Set(tableView.selectedRowIndexes.compactMap { row -> UUID? in
             guard let trackIdx = flatTrackIndex(forRow: row) else { return nil }
