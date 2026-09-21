@@ -19,7 +19,7 @@ final class AlbumGridItem: NSCollectionViewItem {
     private let artwork = NSImageView()
     private let artworkContainer = NSView()
     private let titleLabel = NSTextField(labelWithString: "")
-    private let yearLabel = NSTextField(labelWithString: "")
+    private let subtitleLabel = NSTextField(labelWithString: "")
     private let playButton = NSButton()
     private let scrim = NSView()
     private var loadingURL: URL?
@@ -114,14 +114,22 @@ final class AlbumGridItem: NSCollectionViewItem {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize)
         titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.cell?.usesSingleLineMode = true
+        // Two lines, as Music.app gives it. A long album name truncated to one line was
+        // the reason the second line had to be something short like a year.
+        titleLabel.maximumNumberOfLines = 2
+        titleLabel.cell?.usesSingleLineMode = false
+        // maximumNumberOfLines alone doesn't wrap an NSTextField — the cell has to be
+        // told it may, and to truncate the line it stops on rather than the first.
+        titleLabel.cell?.wraps = true
+        titleLabel.cell?.truncatesLastVisibleLine = true
         view.addSubview(titleLabel)
 
-        yearLabel.translatesAutoresizingMaskIntoConstraints = false
-        yearLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        yearLabel.textColor = .secondaryLabelColor
-        yearLabel.cell?.usesSingleLineMode = true
-        view.addSubview(yearLabel)
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        subtitleLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        subtitleLabel.textColor = .secondaryLabelColor
+        subtitleLabel.lineBreakMode = .byTruncatingTail
+        subtitleLabel.cell?.usesSingleLineMode = true
+        view.addSubview(subtitleLabel)
 
         NSLayoutConstraint.activate([
             artworkContainer.topAnchor.constraint(equalTo: view.topAnchor),
@@ -148,15 +156,17 @@ final class AlbumGridItem: NSCollectionViewItem {
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 
-            yearLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
-            yearLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            yearLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
+            subtitleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            subtitleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
     }
 
     func configure(album: Album) {
         titleLabel.stringValue = album.name
-        yearLabel.stringValue = album.releaseYear.map(String.init) ?? ""
+        // The artist, not the year — the year says less about which album this is, and
+        // Music.app doesn't show one in the grid at all.
+        subtitleLabel.stringValue = album.artistName ?? ""
         applySelection()
 
         guard loadingURL != album.artworkUrl else { return }

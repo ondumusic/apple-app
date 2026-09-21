@@ -27,9 +27,7 @@ struct SearchViewMac: View {
     /// render) plus the gap the selection pill needs. Cancelling exactly this much puts
     /// the artwork on the same line as the album covers above it.
     private static let songsTableInset: CGFloat = 6 + TracksTableViewController.artworkLeadingGap
-    /// Taller than the detail views' 40: results stack the artist under the title, and
-    /// 40 clipped the two lines against the selection pill.
-    private static let songRowHeight: CGFloat = 48
+    private static let songRowHeight = DetailPageMetrics.trackRowHeightTwoLine
 
     private let artistColumns = [GridItem(.adaptive(minimum: SearchViewMac.artistCell), spacing: SearchViewMac.artistSpacing)]
 

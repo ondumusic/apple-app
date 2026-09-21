@@ -46,7 +46,8 @@ struct PlaylistDetailMac: View {
                 isPlaying: player.isPlaying,
                 usesPlaylistPosition: true,
                 onReorder: reorderRows(_:to:),
-                onDelete: removeRows(_:)
+                onDelete: removeRows(_:),
+                rowHeight: DetailPageMetrics.trackRowHeight
             )
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
@@ -61,28 +62,28 @@ struct PlaylistDetailMac: View {
 
     /// Mirrors the album header's control: a spinner while any of the playlist's tracks
     /// are in flight, a filled badge once every track is on disk, an arrow otherwise.
-    @ViewBuilder
     private var downloadButton: some View {
         let ids = Set(tracks.map(\.id))
         let isDownloading = tracks.contains { downloadService.isDownloading(trackId: $0.id) }
         let isComplete = !tracks.isEmpty && tracks.allSatisfy(\.isDownloaded)
-        Button {
-            if isComplete {
-                DownloadRemovalRequest.post(trackIds: ids, subject: playlist?.name ?? "",
-                                            playlistId: playlistId)
-            } else {
-                playlistController.enableAutoDownload(playlistId)
-            }
-        } label: {
-            if isDownloading {
-                ProgressView().controlSize(.small)
-            } else {
-                Image(systemName: isComplete ? "arrow.down.circle.fill" : "arrow.down.circle")
-            }
-        }
-        .disabled(tracks.isEmpty || isDownloading)
-        .help(isComplete ? "Remove Download" : "Download")
+        return DownloadStateButton(
+            state: isDownloading ? .downloading : (isComplete ? .downloaded : .notDownloaded),
+            action: {
+                if isComplete {
+                    DownloadRemovalRequest.post(trackIds: ids, subject: playlist?.name ?? "",
+                                                playlistId: playlistId)
+                } else {
+                    playlistController.enableAutoDownload(playlistId)
+                }
+            },
+            isEnabled: !tracks.isEmpty && !isDownloading
+        )
+    }
 
+    private var metadataParts: [String] {
+        var parts = [String(AttributedString(localized: "^[\(tracks.count) song](inflect: true)").characters)]
+        if totalDuration > 0 { parts.append(formattedTotalDuration(totalDuration)) }
+        return parts
     }
 
     private var totalDuration: TimeInterval {
@@ -112,33 +113,22 @@ struct PlaylistDetailMac: View {
                             isRenamingHeader = true
                         }
                 }
-                HStack(spacing: 6) {
-                    Text("^[\(tracks.count) song](inflect: true)")
-                    if totalDuration > 0 {
-                        Text("·")
-                        Text(formattedTotalDuration(totalDuration))
-                    }
-                }
-                .foregroundStyle(.secondary)
+                DetailMetadataLine(parts: metadataParts)
             }
             Spacer()
             HStack(spacing: 8) {
-                Button { playAll(shuffle: false) } label: {
-                    Image(systemName: "play.fill")
-                }
-                .disabled(tracks.isEmpty)
-                Button { playAll(shuffle: true) } label: {
-                    Image(systemName: "shuffle")
-                }
-                .disabled(tracks.isEmpty)
+                PlayShuffleButtons(
+                    accent: settings.resolvedAccentColor,
+                    onPlay: { playAll(shuffle: false) },
+                    onShuffle: { playAll(shuffle: true) },
+                    isEnabled: !tracks.isEmpty
+                )
                 downloadButton
             }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
-            .controlSize(.large)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.horizontal, DetailPageMetrics.horizontalInset)
+        .padding(.top, DetailPageMetrics.topInset)
+        .padding(.bottom, DetailPageMetrics.bottomInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background)
         .overlay(alignment: .bottom) {

@@ -57,12 +57,17 @@ final class AlbumsGridViewController: NSViewController {
 
     /// Matches the SwiftUI grid this replaced: cards stretch to fill the row, never
     /// narrower than this.
-    static let minimumItemWidth: CGFloat = 160
-    static let interitemSpacing: CGFloat = 16
-    private static let lineSpacing: CGFloat = 20
-    static let sectionInset: CGFloat = 20
-    /// Title plus year plus the gap above them — the part of a cell that isn't artwork.
-    static let captionHeight: CGFloat = 42
+    /// Measured off Music.app at 1458pt wide: ~217pt covers, ~18.5pt gaps, ~38pt
+    /// margins. Ours were 160/16/20, which packed noticeably more, smaller covers into
+    /// the same space. The margin stays at 20 rather than their 38 — it's shared with
+    /// the detail pages, and a cover shouldn't move when you open it.
+    static let minimumItemWidth: CGFloat = 190
+    static let interitemSpacing: CGFloat = 18
+    private static let lineSpacing: CGFloat = 22
+    static let sectionInset: CGFloat = DetailPageMetrics.horizontalInset
+    /// Two lines of title, one of artist, and the gap above them — the part of a cell
+    /// that isn't artwork.
+    static let captionHeight: CGFloat = 58
 
     /// How many cells fit across, for callers that trim their data to whole rows.
     static func columns(forWidth width: CGFloat) -> Int {

@@ -48,7 +48,9 @@ struct AlbumDetailMac: View {
                 currentlyPlayingTrackId: player.currentTrack?.id,
                 isPlaying: player.isPlaying,
                 hidesColumnHeaders: true,
-                rowHeight: 40,
+                rowHeight: hasMultipleArtists
+                    ? DetailPageMetrics.trackRowHeightTwoLine
+                    : DetailPageMetrics.trackRowHeight,
                 embeddedStyle: true,
                 sections: sections,
                 groupLabels: TrackGrouping.discLabels(for: tracks),
@@ -83,7 +85,7 @@ struct AlbumDetailMac: View {
     private var albumHeader: some View {
         HStack(alignment: .bottom, spacing: 20) {
             ArtworkView(url: album.artworkUrl)
-                .frame(width: 180, height: 180)
+                .frame(width: DetailPageMetrics.artworkSize, height: DetailPageMetrics.artworkSize)
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
@@ -96,49 +98,44 @@ struct AlbumDetailMac: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                HStack(spacing: 6) {
-                    if let year = album.releaseYear {
-                        Text(String(year))
-                        Text("·")
-                    }
-                    Text("^[\(tracks.count) song](inflect: true)")
-                    if totalDuration > 0 {
-                        Text("·")
-                        Text(formattedTotalDuration(totalDuration))
-                    }
-                }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                DetailMetadataLine(parts: metadataParts)
 
                 HStack(spacing: 8) {
-                    Button { playAll(shuffle: false) } label: {
-                        Label("Play", systemImage: "play.fill")
-                    }
-                    Button { playAll(shuffle: true) } label: {
-                        Label("Shuffle", systemImage: "shuffle")
-                    }
+                    PlayShuffleButtons(
+                        accent: settings.resolvedAccentColor,
+                        onPlay: { playAll(shuffle: false) },
+                        onShuffle: { playAll(shuffle: true) },
+                        isEnabled: !tracks.isEmpty
+                    )
                     albumDownloadButton
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
                 .padding(.top, 6)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 20)
-        .padding(.bottom, 18)
+        .padding(.horizontal, DetailPageMetrics.horizontalInset)
+        .padding(.top, DetailPageMetrics.topInset)
+        .padding(.bottom, DetailPageMetrics.bottomInset)
+    }
+
+    private var metadataParts: [String] {
+        var parts: [String] = []
+        if let year = album.releaseYear { parts.append(String(year)) }
+        parts.append(String(AttributedString(localized: "^[\(tracks.count) song](inflect: true)").characters))
+        if totalDuration > 0 { parts.append(formattedTotalDuration(totalDuration)) }
+        return parts
     }
 
     private var totalDuration: TimeInterval {
         tracks.reduce(0) { $0 + $1.duration }
     }
 
-    @ViewBuilder
     private var albumDownloadButton: some View {
         let isDownloading = downloadService.isAlbumDownloading(albumId: album.id)
         let isComplete = musicLibrary.isAlbumFullyDownloaded(albumId: album.id)
-        Button {
+        return DownloadStateButton(
+            state: isDownloading ? .downloading : (isComplete ? .downloaded : .notDownloaded)
+        ) {
             if isDownloading {
                 downloadService.cancelAlbumDownloads(albumId: album.id)
             } else if isComplete {
@@ -149,14 +146,7 @@ struct AlbumDetailMac: View {
             } else {
                 downloadAlbum()
             }
-        } label: {
-            if isDownloading {
-                ProgressView().controlSize(.small)
-            } else {
-                Image(systemName: isComplete ? "arrow.down.circle.fill" : "arrow.down.circle")
-            }
         }
-        .help(isComplete ? "Remove Download" : (isDownloading ? "Cancel Download" : "Download"))
     }
 
     private func reload() {

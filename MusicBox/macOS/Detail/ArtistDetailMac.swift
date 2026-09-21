@@ -37,7 +37,9 @@ struct ArtistDetailMac: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-                .padding(20)
+                .padding(.horizontal, DetailPageMetrics.horizontalInset)
+                .padding(.top, DetailPageMetrics.topInset)
+                .padding(.bottom, DetailPageMetrics.bottomInset)
             TracksTable(
                 tracks: allTracks,
                 selection: $selection,
@@ -49,7 +51,7 @@ struct ArtistDetailMac: View {
                 currentlyPlayingTrackId: player.currentTrack?.id,
                 isPlaying: player.isPlaying,
                 hidesColumnHeaders: true,
-                rowHeight: 40,
+                rowHeight: DetailPageMetrics.trackRowHeight,
                 embeddedStyle: true,
                 sections: sections,
                 groupLabels: TrackGrouping.discLabels(forSections: albums.map { $0.tracks ?? [] }),
@@ -104,24 +106,23 @@ struct ArtistDetailMac: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(artist.name)
                     .font(.largeTitle.bold())
-                Text("^[\(albums.count) album](inflect: true) • ^[\(totalSongs) song](inflect: true)")
-                    .foregroundStyle(.secondary)
+                DetailMetadataLine(parts: metadataParts)
             }
             Spacer()
-            HStack(spacing: 8) {
-                Button { playAll(shuffle: false) } label: {
-                    Image(systemName: "play.fill")
-                }
-                .disabled(albums.isEmpty)
-                Button { playAll(shuffle: true) } label: {
-                    Image(systemName: "shuffle")
-                }
-                .disabled(albums.isEmpty)
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
-            .controlSize(.large)
+            PlayShuffleButtons(
+                accent: settings.resolvedAccentColor,
+                onPlay: { playAll(shuffle: false) },
+                onShuffle: { playAll(shuffle: true) },
+                isEnabled: !albums.isEmpty
+            )
         }
+    }
+
+    private var metadataParts: [String] {
+        [
+            String(AttributedString(localized: "^[\(albums.count) album](inflect: true)").characters),
+            String(AttributedString(localized: "^[\(totalSongs) song](inflect: true)").characters)
+        ]
     }
 
     private var trackActions: TrackActions {

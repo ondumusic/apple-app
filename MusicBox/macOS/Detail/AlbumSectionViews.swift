@@ -65,24 +65,20 @@ struct AlbumSectionHeader: View {
                 Button { onShuffle() } label: {
                     Image(systemName: "shuffle")
                 }
-                switch downloadState {
-                case .downloading:
-                    Button { onCancelDownload() } label: {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(width: 14, height: 14)
-                    }
-                case .partial:
-                    Button { onDownload() } label: {
-                        Image(systemName: "arrow.down")
-                    }
-                case .complete:
-                    EmptyView()
-                }
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.circle)
             .controlSize(.large)
+            // Outside the group above so it keeps the shared download treatment rather
+            // than inheriting this row's circular icon buttons.
+            switch downloadState {
+            case .downloading:
+                DownloadStateButton(state: .downloading) { onCancelDownload() }
+            case .partial:
+                DownloadStateButton(state: .notDownloaded) { onDownload() }
+            case .complete:
+                EmptyView()
+            }
         }
         // In the split layout this pushes past the spacer column (artworkSize 160 + 2 ×
         // inset 20 = 200) AND past the number column (36) plus the title cell's leading

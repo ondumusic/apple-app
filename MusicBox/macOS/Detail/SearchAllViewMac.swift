@@ -49,7 +49,8 @@ struct SearchAllViewMac: View {
                     showAlbum: true,
                     accent: settings.resolvedAccentColor,
                     currentlyPlayingTrackId: player.currentTrack?.id,
-                    isPlaying: player.isPlaying
+                    isPlaying: player.isPlaying,
+                    rowHeight: DetailPageMetrics.trackRowHeight
                 )
             } else if request.kind == .albums {
                 // The library's own grid, so results select, open on double-click and

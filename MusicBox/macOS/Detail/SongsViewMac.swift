@@ -27,7 +27,8 @@ struct SongsViewMac: View {
                 showAlbum: true,
                 accent: settings.resolvedAccentColor,
                 currentlyPlayingTrackId: player.currentTrack?.id,
-                isPlaying: player.isPlaying
+                isPlaying: player.isPlaying,
+                rowHeight: DetailPageMetrics.trackRowHeight
             )
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
