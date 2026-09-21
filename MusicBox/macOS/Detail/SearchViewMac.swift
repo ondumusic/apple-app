@@ -23,9 +23,10 @@ struct SearchViewMac: View {
     private static let artistCell: CGFloat = 108
     private static let artistSpacing: CGFloat = 12
     private static let horizontalPadding: CGFloat = 20
-    /// The tracks table's own leading inset, measured off a render. Cancelling exactly
-    /// this much puts the row artwork on the same line as the album covers above it.
-    private static let songsTableInset: CGFloat = 6
+    /// What sits left of the row artwork: the table's own cell inset (measured off a
+    /// render) plus the gap the selection pill needs. Cancelling exactly this much puts
+    /// the artwork on the same line as the album covers above it.
+    private static let songsTableInset: CGFloat = 6 + TracksTableViewController.artworkLeadingGap
     /// Taller than the detail views' 40: results stack the artist under the title, and
     /// 40 clipped the two lines against the selection pill.
     private static let songRowHeight: CGFloat = 48

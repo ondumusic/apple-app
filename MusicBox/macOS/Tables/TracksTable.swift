@@ -173,9 +173,12 @@ final class TracksTableViewController: NSViewController {
     private var rowForTrackIndex: [Int: Int] = [:]
     private var sections: [TracksTableSection]? = nil
     var sectionHeaderBuilder: ((Album) -> AnyView)?
-    /// Column width = artwork plus the gap to the title.
+    /// Column width = the gap the selection pill needs on its left, the artwork, and
+    /// the gap to the title.
     static let artworkSize: CGFloat = 36
+    static let artworkLeadingGap: CGFloat = 6
     private static let artworkTrailingGap: CGFloat = 10
+    static var artworkColumnWidth: CGFloat { artworkLeadingGap + artworkSize + artworkTrailingGap }
 
     var showsArtwork: Bool = false {
         didSet {
@@ -240,7 +243,7 @@ final class TracksTableViewController: NSViewController {
         tableView.delegate = self
         tableView.onEnter = { [weak self] in self?.handleEnter() }
 
-        let artworkWidth = Self.artworkSize + Self.artworkTrailingGap
+        let artworkWidth = Self.artworkColumnWidth
         configureColumn(artworkColumn,  title: "",         width: artworkWidth, alignment: .left, resizable: false)
         artworkColumn.minWidth = artworkWidth
         artworkColumn.maxWidth = artworkWidth
@@ -356,7 +359,7 @@ final class TracksTableViewController: NSViewController {
         }()
         // Title absorbs the remainder after the locked-width columns and the source-list
         // insets (and the spacer column when in sections mode).
-        let artworkWidth: CGFloat = artworkColumn.isHidden ? 0 : Self.artworkSize + Self.artworkTrailingGap
+        let artworkWidth: CGFloat = artworkColumn.isHidden ? 0 : Self.artworkColumnWidth
         let numberWidth: CGFloat = numberColumn.isHidden ? 0 : 36
         let durationWidth: CGFloat = 70
         var remaining: CGFloat = target - sectionsLeftInset
@@ -1011,7 +1014,12 @@ extension TracksTableViewController: NSTableViewDelegate {
             view.customSelectionRightInset = 12
         }
         if showsArtwork {
-            view.dividerLeadingInset = 12 + Self.artworkSize + Self.artworkTrailingGap
+            // The pill has to start outside the artwork — inset the usual 12 and the
+            // cover hangs off its left edge — and end outside the duration, which the
+            // usual trailing inset clipped.
+            view.customSelectionLeftInset = 0
+            view.customSelectionRightInset = 4
+            view.dividerLeadingInset = Self.artworkColumnWidth
         }
         return view
     }
@@ -1070,7 +1078,8 @@ extension TracksTableViewController: NSTableViewDelegate {
         switch column.identifier.rawValue {
         case "artwork":
             let c = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TrackArtworkCell
-                ?? TrackArtworkCell(identifier: column.identifier, size: Self.artworkSize)
+                ?? TrackArtworkCell(identifier: column.identifier, size: Self.artworkSize,
+                                    leading: Self.artworkLeadingGap)
             c.show(url: track.album?.artworkUrl)
             cell = c
         case "number":
@@ -1276,7 +1285,7 @@ private final class TrackArtworkCell: NSTableCellView {
     private var imageTask: ImageTask?
     private var loadingURL: URL?
 
-    init(identifier: NSUserInterfaceItemIdentifier, size: CGFloat) {
+    init(identifier: NSUserInterfaceItemIdentifier, size: CGFloat, leading: CGFloat) {
         super.init(frame: .zero)
         self.identifier = identifier
         artwork.translatesAutoresizingMaskIntoConstraints = false
@@ -1286,7 +1295,7 @@ private final class TrackArtworkCell: NSTableCellView {
         artwork.layer?.masksToBounds = true
         addSubview(artwork)
         NSLayoutConstraint.activate([
-            artwork.leadingAnchor.constraint(equalTo: leadingAnchor),
+            artwork.leadingAnchor.constraint(equalTo: leadingAnchor, constant: leading),
             artwork.centerYAnchor.constraint(equalTo: centerYAnchor),
             artwork.widthAnchor.constraint(equalToConstant: size),
             artwork.heightAnchor.constraint(equalToConstant: size)
