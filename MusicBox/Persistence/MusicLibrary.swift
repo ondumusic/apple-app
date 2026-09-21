@@ -412,6 +412,24 @@ final class MusicLibrary {
         return Set(tracks.map(\.serverId))
     }
 
+    /// Playlist ids holding at least one downloaded track — what the downloaded-only
+    /// filter keeps in the sidebar. Two fetches rather than one per playlist, since the
+    /// sidebar rebuilds its tree on every library change.
+    func playlistIdsWithDownloads() -> Set<UUID> {
+        _ = revision
+        let downloadedTracks = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.isDownloaded }
+        )
+        let downloadedIds = Set((fetch(downloadedTracks) ?? []).map(\.serverId))
+        guard !downloadedIds.isEmpty else { return [] }
+        let items = fetch(FetchDescriptor<LibraryPlaylistItem>()) ?? []
+        var result: Set<UUID> = []
+        for item in items where downloadedIds.contains(item.trackId) {
+            result.insert(item.playlistId)
+        }
+        return result
+    }
+
     func playlistItems(_ playlistId: UUID) -> [PlaylistItem] {
         _ = revision
         let descriptor = FetchDescriptor<LibraryPlaylistItem>(

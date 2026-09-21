@@ -23,6 +23,11 @@ struct AlbumsViewMac: View {
                 }
             }
             Divider()
+            if albums.isEmpty {
+                LibraryEmptyState(subject: .albums, isFiltered: libraryFilter == .downloaded) {
+                    libraryFilter = .all
+                }
+            } else {
             AlbumsGrid(
                 albums: albums,
                 selection: $selection,
@@ -36,6 +41,7 @@ struct AlbumsViewMac: View {
                 onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) }
             )
             .background(Color(NSColor.controlBackgroundColor))
+            }
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }

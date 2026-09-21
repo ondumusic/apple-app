@@ -18,6 +18,9 @@ struct Sidebar: NSViewControllerRepresentable {
     /// The app accent. .sourceList selection would otherwise paint the system accent,
     /// the way the track tables used to.
     var accent: Color = .accentColor
+    /// Downloaded-only hides playlists with nothing on disk, and folders left empty by
+    /// that — the same rule the library views apply to artists and albums.
+    var libraryFilter: LibraryFilter = .all
 
     func makeNSViewController(context: Context) -> SidebarViewController {
         let vc = SidebarViewController()
@@ -37,20 +40,37 @@ struct Sidebar: NSViewControllerRepresentable {
         nsViewController.actions = actions
         nsViewController.accentNSColor = NSColor(accent)
         nsViewController.applyDownloadingCount(downloadingCount, progress: downloadProgress)
-        let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists())
+        let withDownloads = libraryFilter == .downloaded
+            ? musicLibrary.playlistIdsWithDownloads()
+            : nil
+        let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists(),
+                                           keeping: withDownloads)
+        nsViewController.applyPlaylistSectionVisibility(
+            hidden: libraryFilter == .downloaded && nodes.isEmpty
+        )
         nsViewController.update(playlistNodes: nodes, externalSelection: selection)
         nsViewController.applyExternalSearchText(searchText)
     }
 
-    private static func buildPlaylistTree(allPlaylists: [Playlist]) -> [SidebarNode] {
+    /// `keeping` non-nil means the downloaded-only filter is on: a playlist survives if
+    /// it holds a downloaded track, and a folder survives if anything under it did.
+    private static func buildPlaylistTree(allPlaylists: [Playlist],
+                                          keeping withDownloads: Set<UUID>?) -> [SidebarNode] {
         let byParent = Dictionary(grouping: allPlaylists, by: { $0.parentId })
         func makeNodes(parent: UUID?) -> [SidebarNode] {
             let kids = (byParent[parent] ?? []).sorted { a, b in
                 if a.isFolder != b.isFolder { return a.isFolder && !b.isFolder }
                 return a.name.localizedStandardCompare(b.name) == .orderedAscending
             }
-            return kids.map { playlist in
+            return kids.compactMap { playlist in
                 let children = playlist.isFolder ? makeNodes(parent: playlist.id) : []
+                if let withDownloads {
+                    if playlist.isFolder {
+                        guard !children.isEmpty else { return nil }
+                    } else {
+                        guard withDownloads.contains(playlist.id) else { return nil }
+                    }
+                }
                 return SidebarNode(kind: .playlist(playlist), children: children)
             }
         }
@@ -523,6 +543,18 @@ final class SidebarViewController: NSViewController {
     /// Rebuilds the playlist branch and applies any external selection change. Tries to
     /// preserve expansion state across reloads — only the children of the playlists
     /// section change, so we reload that subtree, not the whole view.
+    /// Hides the Playlists heading when the downloaded-only filter has emptied it. With
+    /// no filter an empty section still earns its place — it and the + button below are
+    /// how a first playlist gets made.
+    func applyPlaylistSectionVisibility(hidden: Bool) {
+        let wanted = hidden ? [librarySection!] : [librarySection!, playlistsSection!]
+        guard wanted.count != rootNodes.count else { return }
+        rootNodes = wanted
+        outlineView.reloadData()
+        outlineView.expandItem(librarySection)
+        if !hidden { outlineView.expandItem(playlistsSection) }
+    }
+
     func update(playlistNodes: [SidebarNode], externalSelection: SidebarSelection?) {
         let expandedFolderIds = capturedExpandedFolderIds()
         let changed = !nodeTreesMatch(playlistsSection.children, playlistNodes)

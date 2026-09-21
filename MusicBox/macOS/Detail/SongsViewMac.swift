@@ -18,6 +18,11 @@ struct SongsViewMac: View {
                 LibraryOptionsMenu(filter: $libraryFilter)
             }
             Divider()
+            if tracks.isEmpty {
+                LibraryEmptyState(subject: .songs, isFiltered: libraryFilter == .downloaded) {
+                    libraryFilter = .all
+                }
+            } else {
             TracksTable(
                 tracks: tracks,
                 selection: $selection,
@@ -30,6 +35,7 @@ struct SongsViewMac: View {
                 isPlaying: player.isPlaying,
                 rowHeight: DetailPageMetrics.trackRowHeight
             )
+            }
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }

@@ -57,7 +57,8 @@ struct MacOSContentView: View {
                 actions: sidebarActions,
                 downloadingCount: downloadService.activeDownloads.count + downloadService.pendingQueue.count,
                 downloadProgress: overallDownloadProgress,
-                accent: settings.resolvedAccentColor
+                accent: settings.resolvedAccentColor,
+                libraryFilter: libraryFilter
             )
             .frame(width: sidebarWidth)
 

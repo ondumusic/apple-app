@@ -28,6 +28,11 @@ struct ArtistsViewMac: View {
             // window toolbar (it doesn't respect the parent's toolbar safe area), and the
             // nested NavigationSplitView had its own grey chrome problem. A regular HStack
             // sits cleanly inside the outer detail column.
+            if artists.isEmpty {
+                LibraryEmptyState(subject: .artists, isFiltered: libraryFilter == .downloaded) {
+                    libraryFilter = .all
+                }
+            } else {
             HStack(spacing: 0) {
                 ArtistsTable(
                     artists: artists,
@@ -54,6 +59,7 @@ struct ArtistsViewMac: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
             }
         }
         .onChange(of: musicLibrary.revision, initial: true) { reloadArtists() }

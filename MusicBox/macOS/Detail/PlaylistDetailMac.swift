@@ -6,6 +6,7 @@ struct PlaylistDetailMac: View {
 
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(SettingsStore.self) private var settings
+    @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
     @Environment(PlaylistController.self) private var playlistController
@@ -34,6 +35,12 @@ struct PlaylistDetailMac: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if tracks.isEmpty {
+                LibraryEmptyState(subject: .playlist,
+                                  isFiltered: libraryFilter == .downloaded) {
+                    libraryFilter = .all
+                }
+            } else {
             TracksTable(
                 tracks: tracks,
                 selection: $selection,
@@ -49,8 +56,10 @@ struct PlaylistDetailMac: View {
                 onDelete: removeRows(_:),
                 rowHeight: DetailPageMetrics.trackRowHeight
             )
+            }
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
+        .onChange(of: libraryFilter) { reload() }
         .onChange(of: playlistId) {
             isRenamingHeader = false
             reload()
@@ -158,8 +167,9 @@ struct PlaylistDetailMac: View {
         for track in availableTracks { trackById[track.id] = track }
         var alignedItems: [PlaylistItem] = []
         var alignedTracks: [Track] = []
+        let downloadedOnly = libraryFilter == .downloaded
         for item in allItems {
-            if let track = trackById[item.trackId] {
+            if let track = trackById[item.trackId], !downloadedOnly || track.isDownloaded {
                 alignedItems.append(item)
                 alignedTracks.append(track)
             }
