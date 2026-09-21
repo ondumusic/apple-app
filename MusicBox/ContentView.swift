@@ -13,6 +13,10 @@ extension Notification.Name {
     /// artwork does, as in Music.app.
     static let switchToMiniPlayer = Notification.Name("MusicBox.switchToMiniPlayer")
     static let newPlaylistRequested = Notification.Name("MusicBox.newPlaylistRequested")
+    /// Reveal whatever is playing in the library — Music.app's Go to Current Song.
+    static let goToCurrentSong = Notification.Name("MusicBox.goToCurrentSong")
+    /// Object is a `SidebarCategory`. Menu-driven section switching.
+    static let selectLibrarySection = Notification.Name("MusicBox.selectLibrarySection")
     static let showDownloadActivity = Notification.Name("MusicBox.showDownloadActivity")
     static let togglePlayPause = Notification.Name("MusicBox.togglePlayPause")
     /// Handled by whichever surface is key — the mini player's inline queue if that

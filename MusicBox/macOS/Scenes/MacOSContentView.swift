@@ -241,6 +241,14 @@ struct MacOSContentView: View {
             newPlaylist: { sidebarActions.createPlaylist(nil) },
             showActivity: { openWindow(id: "activity") },
             navigateToAlbum: { detailPath.append($0) },
+            selectSection: { sidebarSelection = .category($0) },
+            goToCurrentSong: {
+                // The album is as close as the library gets to "where this song lives",
+                // and it's what a click on the now-playing artwork would reach.
+                guard let track = player.currentTrack,
+                      let album = musicLibrary.album(track.albumId) else { return }
+                detailPath.append(album)
+            },
             navigateToArtist: handleArtistNavigation,
             addToPlaylist: { addToPlaylistTrackIds = $0 }
         ))
@@ -583,6 +591,8 @@ private struct WindowNotificationHandlers: ViewModifier {
     let newPlaylist: () -> Void
     let showActivity: () -> Void
     let navigateToAlbum: (Album) -> Void
+    let selectSection: (SidebarCategory) -> Void
+    let goToCurrentSong: () -> Void
     let navigateToArtist: (Artist) -> Void
     let addToPlaylist: ([UUID]) -> Void
 
@@ -599,6 +609,13 @@ private struct WindowNotificationHandlers: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .showDownloadActivity)) { _ in
                 showActivity()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .selectLibrarySection)) { note in
+                guard let category = note.object as? SidebarCategory else { return }
+                selectSection(category)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .goToCurrentSong)) { _ in
+                goToCurrentSong()
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { note in
                 guard let album = note.object as? Album else { return }

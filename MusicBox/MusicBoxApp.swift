@@ -355,6 +355,7 @@ struct MusicBoxApp: App {
         // 28pt band above the player row or grew the content past the window's top edge
         // and clipped it.
         .windowStyle(.hiddenTitleBar)
+        .commandsRemoved()
         .commands {
             CommandGroup(after: .pasteboard) {
                 Divider()
@@ -362,25 +363,26 @@ struct MusicBoxApp: App {
                     NotificationCenter.default.post(name: .focusSearch, object: nil)
                 }
                 .keyboardShortcut("f", modifiers: .command)
-                Button("Up Next") {
-                    NotificationCenter.default.post(name: .toggleUpNext, object: nil)
-                }
-                .keyboardShortcut("u", modifiers: [.command, .option])
             }
             CommandGroup(after: .windowArrangement) {
                 // Closing the window shouldn't strand the app: Cmd+N used to be the only
                 // way back, and it's the shortcut for a *new* document, not this.
+                // Music.app puts its main window on Cmd+0.
                 ReopenMainWindowButton()
+                // Music.app's split: one command shows the mini player beside the main
+                // window, another swaps to it. Both shortcuts are theirs.
                 Button("Mini Player") {
                     NotificationCenter.default.post(name: .toggleMiniPlayer, object: nil)
                 }
-                // Cmd+M is Minimize on macOS and AppKit wins that fight; Music.app puts
-                // the mini player on Cmd+Shift+M.
+                .keyboardShortcut("m", modifiers: [.command, .option])
+                Button("Switch to Mini Player") {
+                    NotificationCenter.default.post(name: .switchToMiniPlayer, object: nil)
+                }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
                 Button("Activity") {
                     NotificationCenter.default.post(name: .showDownloadActivity, object: nil)
                 }
-                .keyboardShortcut("0", modifiers: [.command, .option])
+                .keyboardShortcut("l", modifiers: [.command, .option])
             }
             CommandGroup(replacing: .newItem) {
                 Button("New Playlist") {
@@ -394,14 +396,77 @@ struct MusicBoxApp: App {
                     set: { libraryFilter = $0 ? .downloaded : .all }
                 ))
                 .keyboardShortcut("d", modifiers: [.command, .shift])
+                Button("Up Next") {
+                    NotificationCenter.default.post(name: .toggleUpNext, object: nil)
+                }
+                .keyboardShortcut("u", modifiers: [.command, .option])
+                Divider()
+                // Music.app reaches its library sections through the sidebar alone, but
+                // it has no equivalent of these four fixed ones — numbering them is the
+                // ordinary Mac idiom for a fixed set of views.
+                ForEach(Array(SidebarCategory.allCases.enumerated()), id: \.element) { index, category in
+                    Button(category.title) {
+                        NotificationCenter.default.post(name: .selectLibrarySection, object: category)
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                }
                 Divider()
             }
             CommandMenu("Controls") {
-                // No key equivalent here: a menu shortcut fires even while a text field
-                // has focus, so Space would toggle playback mid-search. MacOSContentView
-                // installs a local key monitor that can see the first responder instead.
-                Button("Play / Pause") {
-                    NotificationCenter.default.post(name: .togglePlayPause, object: nil)
+                // No key equivalent on Play / Pause: a menu shortcut fires even while a
+                // text field has focus, so Space would toggle playback mid-search. The
+                // app delegate's key monitor can see the first responder and does it
+                // properly — the cost is that the menu can't advertise the shortcut.
+                Button(player?.isPlaying == true ? "Pause" : "Play") {
+                    player?.togglePlayPause()
+                }
+                .disabled(player?.currentTrack == nil)
+
+                Button("Next Track") { player?.skip() }
+                    .keyboardShortcut(.rightArrow, modifiers: .command)
+                    .disabled(player?.canSkip != true)
+                Button("Previous Track") { player?.back() }
+                    .keyboardShortcut(.leftArrow, modifiers: .command)
+                    .disabled(player?.canGoBack != true)
+
+                Button("Go to Current Song") {
+                    NotificationCenter.default.post(name: .goToCurrentSong, object: nil)
+                }
+                .keyboardShortcut("l", modifiers: .command)
+                .disabled(player?.currentTrack == nil)
+
+                Divider()
+
+                Button("Increase Volume") {
+                    player?.volume = min(1, (player?.volume ?? 0) + 0.1)
+                }
+                .keyboardShortcut(.upArrow, modifiers: .command)
+                Button("Decrease Volume") {
+                    player?.volume = max(0, (player?.volume ?? 0) - 0.1)
+                }
+                .keyboardShortcut(.downArrow, modifiers: .command)
+
+                Divider()
+
+                Toggle("Shuffle", isOn: Binding(
+                    get: { player?.isShuffled ?? false },
+                    set: { _ in player?.toggleShuffle() }
+                ))
+                .disabled(player?.queue.isEmpty != false)
+
+                Picker("Repeat", selection: Binding(
+                    get: { player?.repeatMode ?? .off },
+                    set: { mode in
+                        guard let player else { return }
+                        // cycleRepeatMode is the only writer that keeps SettingsStore and
+                        // the gapless state in step, so step to the chosen mode rather
+                        // than assigning it.
+                        while player.repeatMode != mode { player.cycleRepeatMode() }
+                    }
+                )) {
+                    Text("Off").tag(RepeatMode.off)
+                    Text("All").tag(RepeatMode.all)
+                    Text("One").tag(RepeatMode.one)
                 }
             }
         }
@@ -413,6 +478,7 @@ struct MusicBoxApp: App {
         }
         .defaultSize(width: 520, height: 340)
         .windowResizability(.contentMinSize)
+        .commandsRemoved()
         #else
         WindowGroup {
             rootView
