@@ -93,6 +93,18 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// The library window, as opposed to the mini player, Settings or Activity. SwiftUI
+    /// stamps a `Window` scene's id onto its NSWindow, which is the only reliable way to
+    /// tell them apart — stripping the chrome off Settings took its tab bar with it,
+    /// since SwiftUI renders a Settings TabView's tabs as an NSToolbar.
+    static func isMainWindow(_ window: NSWindow) -> Bool {
+        window.identifier?.rawValue == mainWindowSceneId
+    }
+
+    static let mainWindowSceneId = "main"
+
+    private func isMainWindow(_ window: NSWindow) -> Bool { Self.isMainWindow(window) }
+
     /// Whether the main window was open when the app last quit. Closing with only the
     /// mini player showing should come back the same way.
     static let mainWindowVisibleKey = "MainWindowVisible"
@@ -100,9 +112,7 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     private func configure(_ window: NSWindow) {
         makeChromeless(window)
         clearLaunchFocus(in: window)
-        if Self.suppressesMainWindow,
-           window.identifier != MiniPlayerWindowController.windowIdentifier,
-           window.canBecomeMain {
+        if Self.suppressesMainWindow, isMainWindow(window) {
             window.orderOut(nil)
             return
         }
@@ -121,16 +131,13 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
                     $0.identifier == MiniPlayerWindowController.windowIdentifier && $0.isVisible
                 }
                 guard !miniIsUp else { return }
-                NSApp.windows
-                    .first { $0.identifier != MiniPlayerWindowController.windowIdentifier && $0.canBecomeMain }?
-                    .makeKeyAndOrderFront(nil)
+                NSApp.windows.first(where: Self.isMainWindow)?.makeKeyAndOrderFront(nil)
             }
         }
     }
 
     private func trackMainWindowVisibility(_ window: NSWindow) {
-        guard window.identifier != MiniPlayerWindowController.windowIdentifier,
-              window.canBecomeMain else { return }
+        guard isMainWindow(window) else { return }
         UserDefaults.standard.set(true, forKey: Self.mainWindowVisibleKey)
         guard !trackedMainWindows.contains(ObjectIdentifier(window)) else { return }
         trackedMainWindows.insert(ObjectIdentifier(window))
@@ -153,7 +160,7 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     /// titlebar strip the content then has to sit below. Refusing one is the whole point.
     /// KVO on the title because SwiftUI re-sets it whenever it rebuilds.
     private func makeChromeless(_ window: NSWindow) {
-        guard window.identifier != MiniPlayerWindowController.windowIdentifier else { return }
+        guard isMainWindow(window) else { return }
         window.styleMask.insert(.fullSizeContentView)
         // Dropping the toolbar also dropped the window out of the zoom/full-screen
         // machinery, which is what took "Enter Full Screen" off the View menu.

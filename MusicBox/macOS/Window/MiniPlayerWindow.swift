@@ -578,22 +578,25 @@ private struct CompactLayout: View {
                 }
             }
             Spacer(minLength: 4)
-            HStack(spacing: 12) {
+            HStack(spacing: 4) {
                 Button { player.back() } label: {
                     Image(systemName: "backward.fill")
+                        .frame(width: 26, height: 26)
                 }
                 .disabled(track == nil || !player.canGoBack)
                 Button { player.togglePlayPause() } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 14))
+                        .frame(width: 26, height: 26)
                 }
                 .disabled(track == nil)
                 Button { player.skip() } label: {
                     Image(systemName: "forward.fill")
+                        .frame(width: 26, height: 26)
                 }
                 .disabled(track == nil || !player.canSkip)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlayerControlButtonStyle())
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -656,7 +659,7 @@ private struct TransportRow: View {
                 // centred between them.
                 HStack(spacing: 2) {
                     VolumeControl(iconSize: 13)
-                        .buttonStyle(.plain)
+                        .buttonStyle(VolumeIconButtonStyle())
                         .foregroundStyle(tintForeground.map { $0.opacity(0.85) } ?? Color.secondary)
                         .frame(width: 26, height: 26)
                     AirPlayPicker(size: 15)
@@ -671,15 +674,17 @@ private struct TransportRow: View {
                             .font(.system(size: 14))
                             .frame(width: 36, height: 36)
                             .contentShape(Rectangle())
+                            .background {
+                                RoundedRectangle(cornerRadius: playerControlCornerRadius)
+                                    .fill(Color.primary.opacity(isQueueVisible ? 0.10 : 0))
+                            }
                     }
                     .disabled(track == nil)
-                    .foregroundStyle(isQueueVisible
-                        ? AnyShapeStyle(Color.accentColor)
-                        : tintForeground.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
+                    .foregroundStyle(tintForeground.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
                 }
             }
             .frame(maxWidth: .infinity)
-            .buttonStyle(.plain)
+            .buttonStyle(PlayerControlButtonStyle())
             .foregroundStyle(tintForeground ?? Color.primary)
 
             if track != nil {

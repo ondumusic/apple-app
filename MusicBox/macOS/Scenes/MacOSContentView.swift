@@ -148,7 +148,7 @@ struct MacOSContentView: View {
     private var splitViewChrome: some View {
         splitViewWithPlayer
         .onReceive(NotificationCenter.default.publisher(for: .toggleUpNext)) { _ in
-            guard NSApp.keyWindow?.identifier != MiniPlayerWindowController.windowIdentifier else { return }
+            guard let key = NSApp.keyWindow, MacOSAppDelegate.isMainWindow(key) else { return }
             showQueue.toggle()
         }
         .replaceQueueConfirmation()
@@ -369,11 +369,8 @@ struct MacOSContentView: View {
         }
     }
 
-    /// Everything except the mini player that can take main — the main window, whatever
-    /// its title happens to be.
     private func closeMainWindow() {
-        for window in NSApp.windows
-        where window.identifier != MiniPlayerWindowController.windowIdentifier && window.canBecomeMain {
+        for window in NSApp.windows where MacOSAppDelegate.isMainWindow(window) {
             window.close()
         }
     }
