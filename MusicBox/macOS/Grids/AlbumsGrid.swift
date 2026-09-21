@@ -13,6 +13,9 @@ struct AlbumsGrid: NSViewControllerRepresentable {
     let actions: AlbumActions
     let accent: Color
     let onOpen: (Album) -> Void
+    /// Embedded in a taller scrolling page rather than owning the scroll. Drops the
+    /// scroller and the elastic bounce so the wheel reaches the page behind it.
+    var embedded: Bool = false
 
     func makeNSViewController(context: Context) -> AlbumsGridViewController {
         let vc = AlbumsGridViewController()
@@ -25,6 +28,7 @@ struct AlbumsGrid: NSViewControllerRepresentable {
     }
 
     private func apply(to vc: AlbumsGridViewController) {
+        vc.isEmbedded = embedded
         vc.accentNSColor = NSColor(accent)
         vc.actions = actions
         vc.onOpen = onOpen
@@ -53,12 +57,51 @@ final class AlbumsGridViewController: NSViewController {
 
     /// Matches the SwiftUI grid this replaced: cards stretch to fill the row, never
     /// narrower than this.
-    private static let minimumItemWidth: CGFloat = 160
-    private static let interitemSpacing: CGFloat = 16
+    static let minimumItemWidth: CGFloat = 160
+    static let interitemSpacing: CGFloat = 16
     private static let lineSpacing: CGFloat = 20
-    private static let sectionInset: CGFloat = 20
+    static let sectionInset: CGFloat = 20
     /// Title plus year plus the gap above them — the part of a cell that isn't artwork.
-    private static let captionHeight: CGFloat = 42
+    static let captionHeight: CGFloat = 42
+
+    /// How many cells fit across, for callers that trim their data to whole rows.
+    static func columns(forWidth width: CGFloat) -> Int {
+        let available = width - sectionInset * 2
+        guard available > 0 else { return 1 }
+        return max(1, Int((available + interitemSpacing) / (minimumItemWidth + interitemSpacing)))
+    }
+
+    /// Height of a grid showing `rows` rows at this width — what an embedded caller has
+    /// to reserve, since the grid can't size itself inside a page that scrolls.
+    static func height(forWidth width: CGFloat, rows: Int, embedded: Bool = false) -> CGFloat {
+        let columns = CGFloat(columns(forWidth: width))
+        let available = width - sectionInset * 2
+        let itemWidth = max(minimumItemWidth,
+                            floor((available - interitemSpacing * (columns - 1)) / columns))
+        let itemHeight = itemWidth + captionHeight
+        return CGFloat(rows) * itemHeight
+            + CGFloat(max(0, rows - 1)) * lineSpacing
+            + (embedded ? 0 : sectionInset * 2)
+    }
+
+    var isEmbedded: Bool = false {
+        didSet {
+            guard isEmbedded != oldValue, isViewLoaded else { return }
+            applyEmbeddedStyle()
+        }
+    }
+
+    private func applyEmbeddedStyle() {
+        scrollView.hasVerticalScroller = !isEmbedded
+        scrollView.verticalScrollElasticity = isEmbedded ? .none : .automatic
+        scrollView.automaticallyAdjustsContentInsets = !isEmbedded
+        if isEmbedded { scrollView.contentInsets = NSEdgeInsets() }
+        guard let layout = collectionView.collectionViewLayout as? NSCollectionViewFlowLayout
+        else { return }
+        let vertical = isEmbedded ? 0 : Self.sectionInset
+        layout.sectionInset = NSEdgeInsets(top: vertical, left: Self.sectionInset,
+                                           bottom: vertical, right: Self.sectionInset)
+    }
 
     override func loadView() {
         let layout = NSCollectionViewFlowLayout()
@@ -70,6 +113,7 @@ final class AlbumsGridViewController: NSViewController {
         )
 
         collectionView.collectionViewLayout = layout
+        defer { applyEmbeddedStyle() }
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.isSelectable = true
@@ -93,7 +137,8 @@ final class AlbumsGridViewController: NSViewController {
         collectionView.menu = menu
 
         scrollView.documentView = collectionView
-        scrollView.hasVerticalScroller = true
+        scrollView.hasVerticalScroller = !isEmbedded
+        scrollView.verticalScrollElasticity = isEmbedded ? .none : .automatic
         scrollView.drawsBackground = false
         scrollView.contentView.postsBoundsChangedNotifications = true
         view = scrollView

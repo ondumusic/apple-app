@@ -69,6 +69,10 @@ struct TracksTable: NSViewControllerRepresentable {
     /// to that flat array. Selection works natively across all albums (cmd-click /
     /// shift-range), since it's a single NSTableView.
     var sections: [TracksTableSection]? = nil
+    /// Reports the table's laid-out content height. An embedded caller has to reserve
+    /// the height itself, and rows × rowHeight isn't it — the inset style pads the top
+    /// and bottom, which left the last of a fixed-height list scrollable inside itself.
+    var onContentHeightChange: ((CGFloat) -> Void)? = nil
     /// Flat track index → text of a divider row inserted above it. Album detail uses it
     /// for "Disc 1"/"Disc 2"; a multi-disc album otherwise restarts at track 1 with
     /// nothing to say why.
@@ -116,6 +120,7 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.artworkSize = artworkSize
         vc.artworkInset = artworkInset
         vc.groupLabels = groupLabels
+        vc.onContentHeightChange = onContentHeightChange
         vc.update(
             tracks: tracks,
             sections: sections,
@@ -196,6 +201,8 @@ final class TracksTableViewController: NSViewController {
     private let durationColumn = NSTableColumn(identifier: .init("duration"))
 
     private var suppressSelectionCallback = false
+    var onContentHeightChange: ((CGFloat) -> Void)?
+    private var lastReportedContentHeight: CGFloat = 0
     private var hoveredRow: Int?
     private var trackingArea: NSTrackingArea?
 
@@ -291,6 +298,13 @@ final class TracksTableViewController: NSViewController {
         )
         view.addTrackingArea(area)
         trackingArea = area
+        if let onContentHeightChange {
+            let height = tableView.frame.height
+            if height > 0, abs(height - lastReportedContentHeight) > 0.5 {
+                lastReportedContentHeight = height
+                onContentHeightChange(height)
+            }
+        }
         guard isEmbedded else { return }
         // .sourceList highlight inserts NSVisualEffectViews into the row hierarchy for
         // the rounded selection backdrop. We want the rounded pill but not the blur —
@@ -440,6 +454,11 @@ final class TracksTableViewController: NSViewController {
                 tableView.removeTableColumn(albumColumn)
             }
             tableView.columnAutoresizingStyle = .noColumnAutoresizing
+            // Rows butt up against each other and the hairline separates them, as in the
+            // queue table. AppKit's default 2pt gap also made the table 2pt per row taller
+            // than rows × rowHeight, which is the only height an embedded caller can
+            // reserve — the search page's list scrolled inside itself because of it.
+            tableView.intercellSpacing = .zero
             // Don't pin album-header group rows to the top during scroll — Apple Music's
             // artist page lets them scroll away naturally.
             tableView.floatsGroupRows = false
@@ -449,6 +468,12 @@ final class TracksTableViewController: NSViewController {
             scrollView.hasHorizontalScroller = false
             scrollView.verticalScrollElasticity = .none
             scrollView.horizontalScrollElasticity = .none
+            // Standalone tables keep a little room under the last row so a selected one
+            // isn't flush against the window edge. Embedded, that inset is just 10pt the
+            // caller's fixed height doesn't know about — enough to make the table scroll
+            // inside itself.
+            scrollView.automaticallyAdjustsContentInsets = false
+            scrollView.contentInsets = NSEdgeInsets()
             scrollView.borderType = .noBorder
             scrollView.contentView.drawsBackground = false
             scrollView.contentView.backgroundColor = .clear

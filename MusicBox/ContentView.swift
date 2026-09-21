@@ -17,6 +17,7 @@ extension Notification.Name {
     static let goToCurrentSong = Notification.Name("MusicBox.goToCurrentSong")
     /// Object is a `SidebarCategory`. Menu-driven section switching.
     static let selectLibrarySection = Notification.Name("MusicBox.selectLibrarySection")
+    static let navigateBack = Notification.Name("MusicBox.navigateBack")
     static let showDownloadActivity = Notification.Name("MusicBox.showDownloadActivity")
     static let togglePlayPause = Notification.Name("MusicBox.togglePlayPause")
     /// Handled by whichever surface is key — the mini player's inline queue if that

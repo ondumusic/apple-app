@@ -242,6 +242,7 @@ struct MacOSContentView: View {
             showActivity: { openWindow(id: "activity") },
             navigateToAlbum: { detailPath.append($0) },
             selectSection: { sidebarSelection = .category($0) },
+            navigateBack: { if !detailPath.isEmpty { detailPath.removeLast() } },
             goToCurrentSong: {
                 // The album is as close as the library gets to "where this song lives",
                 // and it's what a click on the now-playing artwork would reach.
@@ -592,6 +593,7 @@ private struct WindowNotificationHandlers: ViewModifier {
     let showActivity: () -> Void
     let navigateToAlbum: (Album) -> Void
     let selectSection: (SidebarCategory) -> Void
+    let navigateBack: () -> Void
     let goToCurrentSong: () -> Void
     let navigateToArtist: (Artist) -> Void
     let addToPlaylist: ([UUID]) -> Void
@@ -609,6 +611,9 @@ private struct WindowNotificationHandlers: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: .showDownloadActivity)) { _ in
                 showActivity()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateBack)) { _ in
+                navigateBack()
             }
             .onReceive(NotificationCenter.default.publisher(for: .selectLibrarySection)) { note in
                 guard let category = note.object as? SidebarCategory else { return }

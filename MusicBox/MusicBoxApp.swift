@@ -429,6 +429,10 @@ struct MusicBoxApp: App {
                     .keyboardShortcut(.leftArrow, modifiers: .command)
                     .disabled(player?.canGoBack != true)
 
+                Button("Back") {
+                    NotificationCenter.default.post(name: .navigateBack, object: nil)
+                }
+                .keyboardShortcut("[", modifiers: .command)
                 Button("Go to Current Song") {
                     NotificationCenter.default.post(name: .goToCurrentSong, object: nil)
                 }

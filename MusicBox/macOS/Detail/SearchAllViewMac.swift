@@ -27,10 +27,10 @@ struct SearchAllViewMac: View {
     @State private var albums: [Album] = []
     @State private var tracks: [Track] = []
     @State private var trackSelection: Set<UUID> = []
+    @State private var albumSelection: Set<Album.ID> = []
     @State private var artistArtwork: [UUID: URL] = [:]
 
     private let artistColumns = [GridItem(.adaptive(minimum: 108), spacing: 12)]
-    private let albumColumns = [GridItem(.adaptive(minimum: 124), spacing: 16)]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -51,31 +51,26 @@ struct SearchAllViewMac: View {
                     currentlyPlayingTrackId: player.currentTrack?.id,
                     isPlaying: player.isPlaying
                 )
+            } else if request.kind == .albums {
+                // The library's own grid, so results select, open on double-click and
+                // drag exactly like every other album in the app.
+                AlbumsGrid(
+                    albums: albums,
+                    selection: $albumSelection,
+                    actions: .standard(player: player, musicLibrary: musicLibrary,
+                                       network: network, downloadService: downloadService),
+                    accent: settings.resolvedAccentColor,
+                    onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) }
+                )
             } else {
-            ScrollView {
-                switch request.kind {
-                case .songs:
-                    EmptyView()
-                case .artists:
+                ScrollView {
                     LazyVGrid(columns: artistColumns, alignment: .leading, spacing: 14) {
                         ForEach(artists) { artist in
                             SearchArtistCell(artist: artist, artworkURL: artistArtwork[artist.id])
                         }
                     }
                     .padding(20)
-                case .albums:
-                    LazyVGrid(columns: albumColumns, alignment: .leading, spacing: 16) {
-                        ForEach(albums) { album in
-                            NavigationLink(value: album) {
-                                AlbumCard(album: album)
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu { AlbumContextMenuItems(album: album) }
-                        }
-                    }
-                    .padding(20)
                 }
-            }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -130,44 +125,6 @@ struct SearchAllViewMac: View {
         let queue = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
         guard let queueIndex = queue.firstIndex(where: { $0.id == tracks[index].id }) else { return }
         player.requestPlay { player.playNow(tracks: queue, startingAt: queueIndex) }
-    }
-}
-
-/// Compact song row for the results page's Songs summary. Deliberately lighter than the
-/// tracks table it stands in for: artwork, title, artist, duration, and no columns.
-struct SearchTrackRow: View {
-    let track: Track
-    let onPlay: () -> Void
-
-    @Environment(PlayerService.self) private var player
-
-    private var isCurrent: Bool { player.currentTrack?.id == track.id }
-
-    var body: some View {
-        Button(action: onPlay) {
-            HStack(spacing: 10) {
-                ArtworkView(url: track.album?.artworkUrl, cornerRadius: 4)
-                    .frame(width: 36, height: 36)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(track.name)
-                        .lineLimit(1)
-                        .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
-                    Text(track.artist.name)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 12)
-                Text(track.formattedDuration)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .contextMenu { TrackContextMenuItems(track: track) }
     }
 }
 

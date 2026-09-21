@@ -16,16 +16,21 @@ struct SearchViewMac: View {
     @State private var artistArtwork: [UUID: URL] = [:]
     @State private var displayedQuery: String = ""
     @State private var trackSelection: Set<UUID> = []
+    @State private var albumSelection: Set<Album.ID> = []
+    @State private var songsHeight: CGFloat = 0
     @State private var contentWidth: CGFloat = 0
 
     private static let artistCell: CGFloat = 108
-    private static let albumCell: CGFloat = 124
     private static let artistSpacing: CGFloat = 12
-    private static let albumSpacing: CGFloat = 16
     private static let horizontalPadding: CGFloat = 20
+    /// The tracks table's own leading inset, measured off a render. Cancelling the
+    /// page's padding by this much less lines its rows up with the section headers.
+    private static let songsTableInset: CGFloat = 6
+    /// Taller than the detail views' 40: results stack the artist under the title, and
+    /// 40 clipped the two lines against the selection pill.
+    private static let songRowHeight: CGFloat = 48
 
     private let artistColumns = [GridItem(.adaptive(minimum: SearchViewMac.artistCell), spacing: SearchViewMac.artistSpacing)]
-    private let albumColumns = [GridItem(.adaptive(minimum: SearchViewMac.albumCell), spacing: SearchViewMac.albumSpacing)]
 
     /// How many cells the adaptive grid will fit across — the same arithmetic LazyVGrid
     /// does. Used to trim the results to whole rows: capping the region by height instead
@@ -43,8 +48,9 @@ struct SearchViewMac: View {
         Array(results.artists.prefix(perRow(cell: Self.artistCell, spacing: Self.artistSpacing)))
     }
 
+    /// The grid itself decides how many fit; trim to one row of them.
     private var shownAlbums: [Album] {
-        Array(results.albums.prefix(perRow(cell: Self.albumCell, spacing: Self.albumSpacing)))
+        Array(results.albums.prefix(AlbumsGridViewController.columns(forWidth: contentWidth)))
     }
 
     private var shownTracks: [Track] {
@@ -147,23 +153,27 @@ struct SearchViewMac: View {
         }
     }
 
+    /// The library's own grid and table rather than bespoke rows: results then select,
+    /// open or play on double-click, drag into Up Next and onto playlists, and take the
+    /// same context menus as everywhere else. Both are embedded, so this page keeps the
+    /// scroll and each is framed to its content.
     private var albumsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Albums", count: results.albums.count, unit: "album",
                           showAll: shownAlbums.count < results.albums.count ? .albums : nil)
-            LazyVGrid(columns: albumColumns, alignment: .leading, spacing: 16) {
-                ForEach(shownAlbums) { album in
-                    Button {
-                        NotificationCenter.default.post(name: .navigateToAlbum, object: album)
-                    } label: {
-                        AlbumCard(album: album)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        AlbumContextMenuItems(album: album)
-                    }
-                }
-            }
+            AlbumsGrid(
+                albums: shownAlbums,
+                selection: $albumSelection,
+                actions: .standard(player: player, musicLibrary: musicLibrary,
+                                   network: network, downloadService: downloadService),
+                accent: settings.resolvedAccentColor,
+                onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) },
+                embedded: true
+            )
+            .frame(height: AlbumsGridViewController.height(forWidth: contentWidth, rows: 1,
+                                                          embedded: true))
+            // The grid carries its own section inset; the page's padding would double it.
+            .padding(.horizontal, -Self.horizontalPadding)
         }
     }
 
@@ -171,12 +181,26 @@ struct SearchViewMac: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Songs", count: results.tracks.count, unit: "song",
                           showAll: shownTracks.count < results.tracks.count ? .songs : nil)
-            VStack(spacing: 0) {
-                ForEach(Array(shownTracks.enumerated()), id: \.element.id) { index, track in
-                    if index > 0 { Divider() }
-                    SearchTrackRow(track: track) { playTrack(at: index) }
-                }
-            }
+            TracksTable(
+                tracks: shownTracks,
+                selection: $trackSelection,
+                onPlay: playTrack(at:),
+                actions: trackActions,
+                showArtist: true,
+                showAlbum: false,
+                showTrackNumber: false,
+                accent: settings.resolvedAccentColor,
+                currentlyPlayingTrackId: player.currentTrack?.id,
+                isPlaying: player.isPlaying,
+                hidesColumnHeaders: true,
+                rowHeight: Self.songRowHeight,
+                embeddedStyle: true,
+                onContentHeightChange: { songsHeight = $0 }
+            )
+            .frame(height: max(songsHeight, CGFloat(shownTracks.count) * Self.songRowHeight))
+            // The table carries its own cell inset; the page's padding on top of it
+            // pushed every row in past its section header.
+            .padding(.horizontal, -(Self.horizontalPadding - Self.songsTableInset))
         }
     }
 
