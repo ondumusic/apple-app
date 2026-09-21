@@ -65,9 +65,9 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
         for window in NSApp.windows {
             configure(window)
         }
-        // macOS 15 puts full screen on Globe-F, which nobody reaches for. Control-Command-F
-        // is the shortcut the rest of the system trained people on.
-        retuneFullScreenShortcut()
+        for window in NSApp.windows {
+            configure(window)
+        }
         NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeMainNotification,
             object: nil,
@@ -84,21 +84,13 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     private func installSpaceKeyMonitor() {
         guard spaceKeyMonitor == nil else { return }
         spaceKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             let spaceKeyCode: UInt16 = 49
-            guard event.keyCode == spaceKeyCode,
-                  event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
+            guard event.keyCode == spaceKeyCode, modifiers.isEmpty,
                   !(NSApp.keyWindow?.firstResponder is NSText) else { return event }
             MainActor.assumeIsolated { self?.player?.togglePlayPause() }
             return nil
         }
-    }
-
-    private func retuneFullScreenShortcut() {
-        guard let view = NSApp.mainMenu?.items.first(where: { $0.submenu?.title == "View" })?.submenu,
-              let item = view.items.first(where: { $0.action == #selector(NSWindow.toggleFullScreen(_:)) })
-        else { return }
-        item.keyEquivalent = "f"
-        item.keyEquivalentModifierMask = [.control, .command]
     }
 
     /// Whether the main window was open when the app last quit. Closing with only the

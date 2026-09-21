@@ -97,6 +97,9 @@ final class PlaylistController {
     }
 
     func deletePlaylist(_ id: UUID) {
+        // Before the row goes: a delete that doesn't land server-side comes back on the
+        // next sync, and it would come back still wanting to download itself.
+        musicLibrary.setPlaylistAutoDownload(id: id, enabled: false)
         musicLibrary.deleteLocalPlaylist(id)
         // Drop pending mutations for this playlist. If the playlist was never created
         // server-side (pending create still queued), there's nothing to delete remotely.

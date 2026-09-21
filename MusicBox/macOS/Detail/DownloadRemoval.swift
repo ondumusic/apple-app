@@ -8,6 +8,10 @@ nonisolated struct DownloadRemovalRequest: Sendable {
     let trackIds: Set<UUID>
     /// What's being removed, as it should read in the dialog title.
     let subject: String
+    /// Set when the removal is a whole playlist. Its auto-download flag has to go with
+    /// the files — otherwise the next sync sees an auto-download playlist with missing
+    /// tracks and fetches the lot again.
+    var playlistId: UUID?
 }
 
 extension Notification.Name {
@@ -15,11 +19,11 @@ extension Notification.Name {
 }
 
 extension DownloadRemovalRequest {
-    static func post(trackIds: Set<UUID>, subject: String) {
+    static func post(trackIds: Set<UUID>, subject: String, playlistId: UUID? = nil) {
         guard !trackIds.isEmpty else { return }
         NotificationCenter.default.post(
             name: .requestRemoveDownload,
-            object: DownloadRemovalRequest(trackIds: trackIds, subject: subject)
+            object: DownloadRemovalRequest(trackIds: trackIds, subject: subject, playlistId: playlistId)
         )
     }
 
@@ -31,6 +35,7 @@ extension DownloadRemovalRequest {
 
 private struct RemoveDownloadConfirmation: ViewModifier {
     @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(PlaylistController.self) private var playlistController
     @State private var pending: DownloadRemovalRequest?
 
     func body(content: Content) -> some View {
@@ -44,7 +49,13 @@ private struct RemoveDownloadConfirmation: ViewModifier {
                 titleVisibility: .visible
             ) {
                 Button("Remove", role: .destructive) {
-                    if let pending { musicLibrary.markTracksUndownloaded(trackIds: pending.trackIds) }
+                    if let pending {
+                        if let playlistId = pending.playlistId {
+                            playlistController.disableAutoDownloadAndRemove(playlistId)
+                        } else {
+                            musicLibrary.markTracksUndownloaded(trackIds: pending.trackIds)
+                        }
+                    }
                     pending = nil
                 }
                 Button("Cancel", role: .cancel) { pending = nil }

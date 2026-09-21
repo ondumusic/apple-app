@@ -68,9 +68,10 @@ struct PlaylistDetailMac: View {
         let isComplete = !tracks.isEmpty && tracks.allSatisfy(\.isDownloaded)
         Button {
             if isComplete {
-                DownloadRemovalRequest.post(trackIds: ids, subject: playlist?.name ?? "")
+                DownloadRemovalRequest.post(trackIds: ids, subject: playlist?.name ?? "",
+                                            playlistId: playlistId)
             } else {
-                downloadService.downloadTracks(ids: ids, library: musicLibrary)
+                playlistController.enableAutoDownload(playlistId)
             }
         } label: {
             if isDownloading {

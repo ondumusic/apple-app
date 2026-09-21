@@ -452,14 +452,10 @@ struct MacOSContentView: View {
 
     private var sidebarActions: SidebarActions {
         var a = SidebarActions()
-        a.downloadPlaylist = { [musicLibrary, downloadService] playlist in
-            let ids = Set(musicLibrary.tracksForPlaylist(playlist.id).map(\.id))
-            guard !ids.isEmpty else { return }
-            downloadService.downloadTracks(ids: ids, library: musicLibrary)
-        }
+        a.downloadPlaylist = { playlistController.enableAutoDownload($0.id) }
         a.removePlaylistDownload = { [musicLibrary] playlist in
             let ids = Set(musicLibrary.tracksForPlaylist(playlist.id).filter(\.isDownloaded).map(\.id))
-            DownloadRemovalRequest.post(trackIds: ids, subject: playlist.name)
+            DownloadRemovalRequest.post(trackIds: ids, subject: playlist.name, playlistId: playlist.id)
         }
         a.isPlaylistDownloaded = { [musicLibrary] playlist in
             let tracks = musicLibrary.tracksForPlaylist(playlist.id)
