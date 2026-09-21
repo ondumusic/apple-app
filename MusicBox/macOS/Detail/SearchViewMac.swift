@@ -73,6 +73,10 @@ struct SearchViewMac: View {
                 resultsBody
             }
         }
+        // The results body sets these for itself; without them here the empty states sat
+        // in whatever space they happened to need, against the window's background.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.controlBackgroundColor))
         .task(id: query) {
             // Debounce so each keystroke doesn't fire a fetch. .task cancels when query
             // changes, so a stale closure can't overwrite results with an older match.

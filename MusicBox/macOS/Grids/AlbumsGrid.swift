@@ -230,7 +230,7 @@ final class AlbumsGridViewController: NSViewController {
     private func applyItemChrome() {
         for item in collectionView.visibleItems().compactMap({ $0 as? AlbumGridItem }) {
             item.accentColor = accentNSColor
-            item.isEmphasized = collectionView.isFirstResponderEmphasis
+            item.isEmphasized = collectionView.usesAccentSelection
         }
     }
 
@@ -312,7 +312,7 @@ extension AlbumsGridViewController: NSCollectionViewDataSource {
         guard let cell = item as? AlbumGridItem, albums.indices.contains(indexPath.item) else { return item }
         let album = albums[indexPath.item]
         cell.accentColor = accentNSColor
-        cell.isEmphasized = self.collectionView.isFirstResponderEmphasis
+        cell.isEmphasized = self.collectionView.usesAccentSelection
         cell.onPlay = { [weak self] in self?.actions.play([album]) }
         cell.isHovered = indexPath == hoveredIndexPath
         cell.configure(album: album)
@@ -447,9 +447,32 @@ final class AlbumsCollectionView: NSCollectionView {
     private(set) var clickedIndexPath: IndexPath?
     private var trackingArea: NSTrackingArea?
 
-    /// Selection paints the accent only while the grid has focus, matching the tables.
-    var isFirstResponderEmphasis: Bool {
-        window?.firstResponder === self && (window?.isKeyWindow ?? false)
+    /// Accent while the window is key, which is what the tables do — requiring focus as
+    /// well meant a restored selection sat grey until you clicked the grid, and the same
+    /// selection in a table beside it was accent.
+    var usesAccentSelection: Bool {
+        window?.isKeyWindow ?? false
+    }
+
+    private var keyObservers: [NSObjectProtocol] = []
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        keyObservers.forEach(NotificationCenter.default.removeObserver)
+        keyObservers.removeAll()
+        onEmphasisChange?()
+        guard let window else { return }
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            keyObservers.append(NotificationCenter.default.addObserver(
+                forName: name, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.onEmphasisChange?() }
+            })
+        }
+    }
+
+    deinit {
+        keyObservers.forEach(NotificationCenter.default.removeObserver)
     }
 
     override func updateTrackingAreas() {

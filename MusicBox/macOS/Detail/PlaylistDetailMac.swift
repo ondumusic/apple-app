@@ -76,6 +76,7 @@ struct PlaylistDetailMac: View {
                     playlistController.enableAutoDownload(playlistId)
                 }
             },
+            accent: settings.resolvedAccentColor,
             isEnabled: !tracks.isEmpty && !isDownloading
         )
     }

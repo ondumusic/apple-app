@@ -63,6 +63,7 @@ struct AlbumDetailMac: View {
                             .environment(network)
                     )
                 },
+                sectionHeaderIgnoresCellInset: true,
                 sectionHeaderHeight: Self.headerHeight
             )
             .background(Color(NSColor.textBackgroundColor))
@@ -134,19 +135,21 @@ struct AlbumDetailMac: View {
         let isDownloading = downloadService.isAlbumDownloading(albumId: album.id)
         let isComplete = musicLibrary.isAlbumFullyDownloaded(albumId: album.id)
         return DownloadStateButton(
-            state: isDownloading ? .downloading : (isComplete ? .downloaded : .notDownloaded)
-        ) {
-            if isDownloading {
-                downloadService.cancelAlbumDownloads(albumId: album.id)
-            } else if isComplete {
-                DownloadRemovalRequest.post(
-                    trackIds: Set(tracks.filter(\.isDownloaded).map(\.id)),
-                    subject: album.name
-                )
-            } else {
-                downloadAlbum()
-            }
-        }
+            state: isDownloading ? .downloading : (isComplete ? .downloaded : .notDownloaded),
+            action: {
+                if isDownloading {
+                    downloadService.cancelAlbumDownloads(albumId: album.id)
+                } else if isComplete {
+                    DownloadRemovalRequest.post(
+                        trackIds: Set(tracks.filter(\.isDownloaded).map(\.id)),
+                        subject: album.name
+                    )
+                } else {
+                    downloadAlbum()
+                }
+            },
+            accent: settings.resolvedAccentColor
+        )
     }
 
     private func reload() {

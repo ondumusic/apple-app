@@ -85,6 +85,12 @@ struct TracksTable: NSViewControllerRepresentable {
     /// Caller-supplied SwiftUI view used to render an album header row. The view is
     /// hosted via NSHostingView. Only consulted when `sections` is set.
     var sectionHeader: ((Album) -> AnyView)? = nil
+    /// Pull the section header back out of NSTableView's cell inset, so its content
+    /// lines up with the page around the table rather than with the track rows inside
+    /// it. Album detail wants this — its header is the page's header, and its artwork
+    /// has to sit where the same cover sat in the grid. The artist page does not: its
+    /// section headers align with the track titles beneath them on purpose.
+    var sectionHeaderIgnoresCellInset: Bool = false
     /// Pixel height of section header rows. Tall enough to fit artwork + title + actions.
     var sectionHeaderHeight: CGFloat = 80
     /// Caller-supplied SwiftUI view used to render the album artwork as an overlay on
@@ -120,6 +126,7 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.accentNSColor = NSColor(accent)
         vc.applyRowHeight(rowHeight)
         vc.sectionHeaderHeight = sectionHeaderHeight
+        vc.sectionHeaderIgnoresCellInset = sectionHeaderIgnoresCellInset
         vc.sectionHeaderBuilder = sectionHeader
         vc.artworkBuilder = artwork
         vc.artworkSize = artworkSize
@@ -192,6 +199,10 @@ final class TracksTableViewController: NSViewController {
     }
     private static let labelRowHeight: CGFloat = 30
     var sectionHeaderHeight: CGFloat = 80
+    var sectionHeaderIgnoresCellInset = false
+    /// NSTableView's own cell inset, measured in viewDidLayout. Section headers that opt
+    /// out of it are shifted back by this much.
+    private var cellInset: CGFloat = 16
     /// Presence — not identity — decides whether the artwork gutter exists, and that
     /// flip has to reach the columns even when the tracks themselves didn't change.
     var artworkBuilder: ((Album) -> AnyView)? {
@@ -357,6 +368,13 @@ final class TracksTableViewController: NSViewController {
             }
             return 16
         }()
+        if abs(cellInset - detectedInset) > 0.5 {
+            cellInset = detectedInset
+            for row in 0..<tableView.numberOfRows where isHeaderRow(row) {
+                (tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? SectionHeaderCell)?
+                    .horizontalOutset = sectionHeaderIgnoresCellInset ? detectedInset : 0
+            }
+        }
         // Title absorbs the remainder after the locked-width columns and the source-list
         // insets (and the spacer column when in sections mode).
         let artworkWidth: CGFloat = artworkColumn.isHidden ? 0 : Self.artworkColumnWidth
@@ -1040,6 +1058,7 @@ extension TracksTableViewController: NSTableViewDelegate {
             let cellId = NSUserInterfaceItemIdentifier("trackSectionHeader")
             let cell = tableView.makeView(withIdentifier: cellId, owner: nil) as? SectionHeaderCell
                 ?? SectionHeaderCell(identifier: cellId)
+            cell.horizontalOutset = sectionHeaderIgnoresCellInset ? cellInset : 0
             if let builder = sectionHeaderBuilder {
                 cell.host(view: builder(album))
             }
@@ -1378,6 +1397,18 @@ private final class GroupLabelCell: NSTableCellView {
 
 private final class SectionHeaderCell: NSTableCellView {
     private var hostingView: NSHostingView<AnyView>?
+    private var leading: NSLayoutConstraint?
+    private var trailing: NSLayoutConstraint?
+
+    /// How far outside the cell's own bounds the hosted view reaches on each side, so a
+    /// header can sit where the page around the table sits rather than where its rows do.
+    var horizontalOutset: CGFloat = 0 {
+        didSet {
+            guard horizontalOutset != oldValue else { return }
+            leading?.constant = -horizontalOutset
+            trailing?.constant = horizontalOutset
+        }
+    }
 
     init(identifier: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
@@ -1395,8 +1426,8 @@ private final class SectionHeaderCell: NSTableCellView {
         h.translatesAutoresizingMaskIntoConstraints = false
         addSubview(h)
         NSLayoutConstraint.activate([
-            h.leadingAnchor.constraint(equalTo: leadingAnchor),
-            h.trailingAnchor.constraint(equalTo: trailingAnchor),
+            { let c = h.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -horizontalOutset); leading = c; return c }(),
+            { let c = h.trailingAnchor.constraint(equalTo: trailingAnchor, constant: horizontalOutset); trailing = c; return c }(),
             h.topAnchor.constraint(equalTo: topAnchor),
             h.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
@@ -1559,17 +1590,37 @@ private final class TitleCell: NSTableCellView {
     let downloadedIcon = NSImageView()
     private var isCurrent: Bool = false
 
+    /// Off when the artist is stacked under the title: two lines of title plus a line of
+    /// artist is more than any row height here allows.
+    private var allowsTwoLineTitle = true {
+        didSet {
+            guard allowsTwoLineTitle != oldValue else { return }
+            applyTitleLineLimit()
+        }
+    }
+
+    private func applyTitleLineLimit() {
+        label.maximumNumberOfLines = allowsTwoLineTitle ? 2 : 1
+        label.cell?.wraps = allowsTwoLineTitle
+        label.cell?.usesSingleLineMode = !allowsTwoLineTitle
+        // A wrapping label needs word wrapping, not tail truncation: with
+        // .byTruncatingTail a title too long for two lines stopped mid-word against the
+        // column edge with no ellipsis, while a shorter one wrapped correctly.
+        // truncatesLastVisibleLine is what puts the ellipsis on line two.
+        label.lineBreakMode = allowsTwoLineTitle ? .byWordWrapping : .byTruncatingTail
+    }
+
     init(identifier: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         self.identifier = identifier
 
         label.translatesAutoresizingMaskIntoConstraints = false
-        // One line, truncated. Wrapping put long titles on two lines at any width, which
-        // broke the row rhythm of a table whose other columns are all single-line.
-        label.lineBreakMode = .byTruncatingTail
-        label.maximumNumberOfLines = 1
-        label.cell?.wraps = false
-        label.cell?.usesSingleLineMode = true
+        // A long title takes a second line rather than truncating, as Music.app allows,
+        // and never a third. The row height is fixed, so a wrapped title stays inside its
+        // row and the rhythm holds — which is what the earlier single-line rule was
+        // protecting, at a row height too short to contain two lines.
+        label.cell?.truncatesLastVisibleLine = true
+        applyTitleLineLimit()
         addSubview(label)
         // Deliberately not assigned to NSTableCellView.textField: that hands the label to
         // AppKit's automatic text-colour management, and under the .sourceList selection
@@ -1614,6 +1665,7 @@ private final class TitleCell: NSTableCellView {
 
     func configure(track: Track, isCurrent: Bool, showArtistInline: Bool) {
         self.isCurrent = isCurrent
+        allowsTwoLineTitle = !showArtistInline
         label.stringValue = track.name
         label.font = .systemFont(ofSize: NSFont.systemFontSize)
         artistLabel.stringValue = track.artist.name
