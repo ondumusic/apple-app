@@ -214,9 +214,8 @@ struct VolumeControl: View {
                 .foregroundStyle(.secondary)
                 .frame(width: controlSize, height: controlSize)
         }
-        .help(player.isExternalPlaybackActive ? "Volume is set on the AirPlay device" : "Volume")
+        .help("Volume")
         .accessibilityLabel("Volume")
-        .disabled(player.isExternalPlaybackActive)
         .popover(isPresented: $showingSlider, arrowEdge: .bottom) {
             HStack(spacing: 8) {
                 Image(systemName: "speaker.fill")
@@ -284,12 +283,6 @@ struct VolumeSlider: View {
             .accessibilityLabel("Full Volume")
         }
         .buttonStyle(VolumeIconButtonStyle())
-        // AirPlay plays the stream on the receiver, so our volume isn't in the path any
-        // more. A live slider that moves nothing is worse than one that's plainly off.
-        .disabled(player.isExternalPlaybackActive)
-        .help(player.isExternalPlaybackActive
-              ? "Volume is set on the AirPlay device"
-              : "")
         .onChange(of: player.volume) { _, new in
             // Dragging the slider off zero is an unmute too.
             if new > 0.01 { volumeBeforeMute = nil }

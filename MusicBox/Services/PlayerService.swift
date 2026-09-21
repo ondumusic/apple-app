@@ -31,13 +31,6 @@ final class PlayerService {
     private(set) var isBuffering: Bool = false
     /// Output volume, 0...1. Scales everything the crossfade ramp does rather than
     /// competing with it, so a fade still lands at the level the user chose.
-    /// AirPlay hands the stream to the receiver rather than mixing it here, so our
-    /// `volume` stops being anywhere in the path — the receiver's own volume governs,
-    /// which is the one in the AirPlay menu. Surfaced so the UI can stop offering a
-    /// slider that does nothing.
-    private(set) var isExternalPlaybackActive = false
-    @ObservationIgnored private var externalPlaybackObservation: NSKeyValueObservation?
-
     var volume: Double = 1.0 {
         didSet {
             settings.volume = volume
@@ -119,9 +112,7 @@ final class PlayerService {
     /// Position to resume at, from a restored snapshot. Keyed by track so a skip before
     /// the first play doesn't seek the wrong track.
     @ObservationIgnored private var pendingResume: (trackId: UUID, time: Double)?
-    @ObservationIgnored private var primaryPlayer = AVQueuePlayer() {
-        didSet { observeExternalPlayback() }
-    }
+    @ObservationIgnored private var primaryPlayer = AVQueuePlayer()
     @ObservationIgnored private var secondaryPlayer: AVQueuePlayer?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var crossfadeObserver: Any?
@@ -185,19 +176,9 @@ final class PlayerService {
         setupEndObserver()
         setupAudioSession()
         setupRemoteCommands()
-        observeExternalPlayback()
         // Off the first-frame path: nothing on screen needs the saved queue, and
         // resolving it here made launch scale with however many tracks were queued.
         restoreTask = Task { @MainActor [weak self] in self?.restoreState() }
-    }
-
-    private func observeExternalPlayback() {
-        externalPlaybackObservation = primaryPlayer.observe(
-            \.isExternalPlaybackActive, options: [.initial, .new]
-        ) { [weak self] player, _ in
-            let active = player.isExternalPlaybackActive
-            Task { @MainActor [weak self] in self?.isExternalPlaybackActive = active }
-        }
     }
 
     private func applyVolume() {

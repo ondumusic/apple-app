@@ -240,7 +240,7 @@ final class TracksTableViewController: NSViewController {
     /// Columns the user turned off, as opposed to ones this table never offers. Kept
     /// apart because `update` re-applies the caller's choices on every pass and would
     /// otherwise put a hidden column straight back.
-    private var userHiddenColumns: Set<String> = []
+    private var userHiddenColumns: Set<String> = TracksTableViewController.defaultHiddenColumns
     private var activeSort: TrackSort?
     private var suppressSortCallback = false
     private var offersTrackNumber = true
@@ -309,8 +309,12 @@ final class TracksTableViewController: NSViewController {
     }
 
     func applyColumnVisibility() {
-        discColumn.isHidden = userHiddenColumns.contains("disc")
-        yearColumn.isHidden = userHiddenColumns.contains("year")
+        // Only a table with a header menu can offer these, so only it can show them —
+        // otherwise every embedded table got them with no way to turn them off, since
+        // the hidden set is only loaded when a preference key arrives.
+        let customisable = columnPreferenceKey != nil
+        discColumn.isHidden = !customisable || userHiddenColumns.contains("disc")
+        yearColumn.isHidden = !customisable || userHiddenColumns.contains("year")
         numberColumn.isHidden = !callerOffers(numberColumn) || userHiddenColumns.contains("number")
         artistColumn.isHidden = !callerOffers(artistColumn) || userHiddenColumns.contains("artist")
         albumColumn.isHidden = !callerOffers(albumColumn) || userHiddenColumns.contains("album")
