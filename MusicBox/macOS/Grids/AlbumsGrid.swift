@@ -114,17 +114,21 @@ final class AlbumsGridViewController: NSViewController {
         NotificationCenter.default.removeObserver(self)
     }
 
+    /// Last width the layout was invalidated for. Flow layout caches item sizes, so a
+    /// width change has to invalidate explicitly — see sizeForItemAt below.
+    private var lastLaidOutWidth: CGFloat = 0
+
     override func viewDidLayout() {
         super.viewDidLayout()
-        guard let layout = collectionView.collectionViewLayout as? NSCollectionViewFlowLayout else { return }
-        let size = itemSize(forWidth: scrollView.contentSize.width)
-        guard layout.itemSize != size else { return }
-        layout.itemSize = size
+        let width = collectionView.bounds.width
+        guard width > 0, width != lastLaidOutWidth else { return }
+        lastLaidOutWidth = width
+        collectionView.collectionViewLayout?.invalidateLayout()
     }
 
     /// Flow layout wants a fixed item size, so the adaptive-column arithmetic that
     /// `GridItem(.adaptive(minimum:))` did for us happens here instead.
-    private func itemSize(forWidth width: CGFloat) -> NSSize {
+    fileprivate func itemSize(forWidth width: CGFloat) -> NSSize {
         let available = width - Self.sectionInset * 2
         guard available > 0 else { return NSSize(width: Self.minimumItemWidth, height: Self.minimumItemWidth + Self.captionHeight) }
         let spacing = Self.interitemSpacing
@@ -209,6 +213,20 @@ final class AlbumsGridViewController: NSViewController {
         let target = albumsForContextAction()
         guard !target.isEmpty else { return }
         body(target)
+    }
+}
+
+extension AlbumsGridViewController: NSCollectionViewDelegateFlowLayout {
+    /// Asked per layout pass rather than cached on the layout's `itemSize`. The cached
+    /// form was computed from whatever width the scroll view happened to have at the
+    /// first layout — on launch that's before the window has its restored size, and
+    /// nothing recomputed it afterwards. Undersized items don't just look small:
+    /// NSCollectionViewFlowLayout justifies each row, so the slack turns into gaps, and
+    /// the grid opens with the covers spread far apart until the window is nudged.
+    func collectionView(_ collectionView: NSCollectionView,
+                        layout collectionViewLayout: NSCollectionViewLayout,
+                        sizeForItemAt indexPath: IndexPath) -> NSSize {
+        itemSize(forWidth: collectionView.bounds.width)
     }
 }
 

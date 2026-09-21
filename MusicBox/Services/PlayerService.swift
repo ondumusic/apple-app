@@ -386,6 +386,19 @@ final class PlayerService {
         savePlaybackPosition()
     }
 
+    /// Resume only if paused. The remote `play` command arrives while playing more often
+    /// than you'd think — a headset button, another app handing back an interruption —
+    /// and toggling on it pauses the music the caller just asked to hear.
+    func resumePlayback() {
+        guard !isPlaying else { return }
+        togglePlayPause()
+    }
+
+    func pausePlayback() {
+        guard isPlaying else { return }
+        togglePlayPause()
+    }
+
     func seek(to time: Double) {
         isSeeking = true
         progress = time
@@ -1205,12 +1218,21 @@ final class PlayerService {
     private func setupRemoteCommands() {
         let center = MPRemoteCommandCenter.shared()
 
-        center.playCommand.addTarget { [weak self] _ in
+        // The play/pause media key reaches the Now Playing app as this command, and with
+        // no handler for it the system falls back to guessing play or pause from
+        // `MPNowPlayingInfoCenter.playbackState`. That guess is what made the key feel
+        // unreliable — it has to match our state exactly, and it's stale for a moment
+        // after every track change.
+        center.togglePlayPauseCommand.addTarget { [weak self] _ in
             self?.togglePlayPause()
             return .success
         }
+        center.playCommand.addTarget { [weak self] _ in
+            self?.resumePlayback()
+            return .success
+        }
         center.pauseCommand.addTarget { [weak self] _ in
-            self?.togglePlayPause()
+            self?.pausePlayback()
             return .success
         }
         center.nextTrackCommand.addTarget { [weak self] _ in
