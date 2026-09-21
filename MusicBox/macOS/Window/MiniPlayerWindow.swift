@@ -703,49 +703,58 @@ private struct InlineQueue: View {
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(NetworkMonitor.self) private var network
 
-    private var upNext: [(originalIndex: Int, item: QueueItem)] { player.upNextEntries }
+    @State private var scope: QueueScope = .upNext
+
+    private var entries: [(originalIndex: Int, item: QueueItem)] {
+        scope == .upNext ? player.upNextEntries : player.historyEntries
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 6) {
-                Text("Up Next")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                if !upNext.isEmpty {
-                    Text("\(upNext.count)")
+                QueueScopeMenu(scope: $scope, font: .caption.bold())
+                if !entries.isEmpty {
+                    Text("\(entries.count)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.tertiary)
                 }
                 Spacer()
-                if !upNext.isEmpty {
-                    Button("Clear") { player.clearUpNext() }
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .help("Remove everything after the current track")
+                if !entries.isEmpty {
+                    Button("Clear") {
+                        scope == .upNext ? player.clearUpNext() : player.clearHistory()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help(scope == .upNext
+                          ? "Remove everything after the current track"
+                          : "Remove everything before the current track")
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
 
-            if upNext.isEmpty {
+            if entries.isEmpty {
                 Spacer()
-                Text("Nothing up next")
+                Text(scope == .upNext ? "Nothing up next" : "Nothing played yet")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {
                 QueueTable(
-                    items: upNext.map(\.item),
+                    items: entries.map(\.item),
                     rowHeight: 44,
                     showsDuration: false,
                     accent: settings.resolvedAccentColor,
-                    actions: .standard(player: player, musicLibrary: musicLibrary, network: network),
+                    actions: scope == .upNext
+                        ? .standard(player: player, musicLibrary: musicLibrary, network: network)
+                        : .history(player: player),
                     // This panel's header pads 12, not the window's 16, and its shorter
                     // rows need smaller artwork to keep an even gap above and below.
                     horizontalInset: 12,
-                    artworkSize: 28
+                    artworkSize: 28,
+                    allowsEditing: scope == .upNext
                 )
             }
         }

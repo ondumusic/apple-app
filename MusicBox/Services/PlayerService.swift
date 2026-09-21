@@ -69,6 +69,22 @@ final class PlayerService {
     /// which is the shuffled order when shuffle is on. Walking the raw queue and
     /// comparing against `effectiveIndex` instead drops whatever shuffle placed earlier
     /// and lists the rest in the wrong order.
+    /// What has already played, most recent first — the same walk as `upNextEntries`
+    /// but backwards from the current track, so it reads in shuffle order too.
+    var historyEntries: [(originalIndex: Int, item: QueueItem)] {
+        guard !queue.isEmpty, currentIndex > 0 else { return [] }
+        return (0..<currentIndex).reversed().compactMap { position in
+            let effective: Int
+            if let shuffled = shuffledIndices, position < shuffled.count {
+                effective = shuffled[position]
+            } else {
+                effective = position
+            }
+            guard queue.indices.contains(effective) else { return nil }
+            return (effective, queue[effective])
+        }
+    }
+
     var upNextEntries: [(originalIndex: Int, item: QueueItem)] {
         guard !queue.isEmpty, currentIndex >= 0 else { return [] }
         let start = currentIndex + 1
@@ -425,6 +441,28 @@ final class PlayerService {
         }
         isQueueUserModified = true
         invalidateGaplessState()
+        savePlaybackState()
+    }
+
+    /// Drops everything before the current track. Mirrors clearUpNext from the other
+    /// side, including the shuffle map rebuild — the played entries have to come out of
+    /// `queue` itself, not just out of the map, or they'd come back on the next shuffle.
+    func clearHistory() {
+        guard currentIndex > 0 else { return }
+        if let shuffled = shuffledIndices {
+            let keptRealIndices = Array(shuffled.dropFirst(currentIndex))
+            let sortedKept = keptRealIndices.sorted()
+            var oldToNew: [Int: Int] = [:]
+            for (newIdx, oldIdx) in sortedKept.enumerated() {
+                oldToNew[oldIdx] = newIdx
+            }
+            queue = sortedKept.map { queue[$0] }
+            shuffledIndices = keptRealIndices.map { oldToNew[$0]! }
+        } else {
+            queue = Array(queue.dropFirst(currentIndex))
+        }
+        currentIndex = 0
+        isQueueUserModified = true
         savePlaybackState()
     }
 

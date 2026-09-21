@@ -24,6 +24,9 @@ struct QueueTable: NSViewControllerRepresentable {
     /// Sized against the row so the gap above and below stays even; a fixed size looked
     /// cramped in the mini player's shorter rows.
     var artworkSize: CGFloat = 34
+    /// Off for History, which is a record of what happened rather than a list you
+    /// arrange: no reorder, no drops in, no remove button, no Delete key.
+    var allowsEditing: Bool = true
 
     func makeNSViewController(context: Context) -> QueueTableViewController {
         let vc = QueueTableViewController()
@@ -41,6 +44,7 @@ struct QueueTable: NSViewControllerRepresentable {
         vc.showsDuration = showsDuration
         vc.rowHeightValue = rowHeight
         vc.metrics = QueueCellMetrics(horizontalInset: horizontalInset, artworkSize: artworkSize)
+        vc.allowsEditing = allowsEditing
         vc.apply(items: items)
     }
 }
@@ -48,6 +52,23 @@ struct QueueTable: NSViewControllerRepresentable {
 final class QueueTableViewController: NSViewController {
     fileprivate var items: [QueueItem] = []
     var actions = QueueActions()
+    var allowsEditing: Bool = true {
+        didSet {
+            guard allowsEditing != oldValue, isViewLoaded else { return }
+            applyEditingAffordances()
+        }
+    }
+
+    private func applyEditingAffordances() {
+        if allowsEditing {
+            tableView.registerForDraggedTypes([
+                .musicBoxQueueRows, .musicBoxTracks, .musicBoxAlbums, .musicBoxSidebarPlaylist,
+            ])
+        } else {
+            tableView.unregisterDraggedTypes()
+        }
+        tableView.setDraggingSourceOperationMask(allowsEditing ? .move : [], forLocal: true)
+    }
     var showsDuration = true
     var metrics = QueueCellMetrics(horizontalInset: 16, artworkSize: 34)
     var rowHeightValue: CGFloat = 52 {
@@ -95,15 +116,15 @@ final class QueueTableViewController: NSViewController {
         tableView.delegate = self
         tableView.target = self
         tableView.doubleAction = #selector(handleDoubleClick)
-        tableView.onDelete = { [weak self] in self?.removeSelected() }
+        tableView.onDelete = { [weak self] in
+            guard let self, self.allowsEditing else { return }
+            self.removeSelected()
+        }
 
         // A gap feedback style is what draws the insertion point between rows, which is
         // the whole reason a drop can land at a position rather than just "in the list".
         tableView.draggingDestinationFeedbackStyle = .gap
-        tableView.registerForDraggedTypes([
-            .musicBoxQueueRows, .musicBoxTracks, .musicBoxAlbums, .musicBoxSidebarPlaylist,
-        ])
-        tableView.setDraggingSourceOperationMask(.move, forLocal: true)
+        applyEditingAffordances()
 
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
@@ -245,6 +266,7 @@ extension QueueTableViewController: NSTableViewDataSource {
     func numberOfRows(in tableView: NSTableView) -> Int { items.count }
 
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard allowsEditing else { return nil }
         guard items.indices.contains(row) else { return nil }
         let item = NSPasteboardItem()
         item.setString(String(row), forType: .musicBoxQueueRows)
@@ -335,6 +357,7 @@ extension QueueTableViewController: NSMenuDelegate {
         addItem(to: menu, title: "Play", action: #selector(menuPlay))
         menu.addItem(.separator())
         addItem(to: menu, title: "Add to Playlist…", action: #selector(menuAddToPlaylist))
+        guard allowsEditing else { return }
         menu.addItem(.separator())
         addItem(to: menu, title: "Remove from Queue", action: #selector(menuRemove))
     }
@@ -352,6 +375,7 @@ extension QueueTableViewController: NSTableViewDelegate {
         let cell = tableView.makeView(withIdentifier: QueueCell.identifier, owner: self) as? QueueCell
             ?? QueueCell()
         cell.showsDuration = showsDuration
+        cell.showsRemoveButton = allowsEditing
         cell.metrics = metrics
         // From the row's *current* state, not only from later changes: a recycled cell
         // otherwise keeps the emphasis of whatever row it last showed.
@@ -578,9 +602,22 @@ final class QueueCell: NSTableCellView {
     var isHovered: Bool = false {
         didSet {
             guard isHovered != oldValue else { return }
-            removeButton.isHidden = !isHovered
-            duration.isHidden = isHovered || !showsDuration
+            applyHoverAffordance()
         }
+    }
+
+    /// Nothing to remove in History, so the duration stays put on hover.
+    var showsRemoveButton: Bool = true {
+        didSet {
+            guard showsRemoveButton != oldValue else { return }
+            applyHoverAffordance()
+        }
+    }
+
+    private func applyHoverAffordance() {
+        let showsRemove = isHovered && showsRemoveButton
+        removeButton.isHidden = !showsRemove
+        duration.isHidden = showsRemove || !showsDuration
     }
 }
 

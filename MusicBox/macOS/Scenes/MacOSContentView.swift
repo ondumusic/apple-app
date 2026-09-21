@@ -542,40 +542,51 @@ struct QueuePanel: View {
     @Environment(NetworkMonitor.self) private var network
     @Environment(SettingsStore.self) private var settings
     @Binding var isPresented: Bool
+    @State private var scope: QueueScope = .upNext
 
-    private var upNext: [(originalIndex: Int, item: QueueItem)] { player.upNextEntries }
+    private var entries: [(originalIndex: Int, item: QueueItem)] {
+        scope == .upNext ? player.upNextEntries : player.historyEntries
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Up Next")
-                    .font(.headline)
+                QueueScopeMenu(scope: $scope)
                 Spacer()
-                if !upNext.isEmpty {
-                    Button("Clear") { player.clearUpNext() }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .help("Remove everything after the current track")
+                if !entries.isEmpty {
+                    Button("Clear") {
+                        scope == .upNext ? player.clearUpNext() : player.clearHistory()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help(scope == .upNext
+                          ? "Remove everything after the current track"
+                          : "Remove everything before the current track")
                 }
             }
             .padding(.horizontal, 16)
             .frame(height: contentHeaderHeight)
             Divider()
 
-            if upNext.isEmpty {
+            if entries.isEmpty {
                 ContentUnavailableView(
-                    "Nothing Up Next",
-                    systemImage: "list.bullet",
-                    description: Text("Add tracks to the queue to see them here.")
+                    scope == .upNext ? "Nothing Up Next" : "Nothing Played Yet",
+                    systemImage: scope == .upNext ? "list.bullet" : "clock.arrow.circlepath",
+                    description: Text(scope == .upNext
+                                      ? "Add tracks to the queue to see them here."
+                                      : "Tracks you've played will appear here.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 QueueTable(
-                    items: upNext.map(\.item),
+                    items: entries.map(\.item),
                     rowHeight: 52,
                     showsDuration: true,
                     accent: settings.resolvedAccentColor,
-                    actions: .standard(player: player, musicLibrary: musicLibrary, network: network)
+                    actions: scope == .upNext
+                        ? .standard(player: player, musicLibrary: musicLibrary, network: network)
+                        : .history(player: player),
+                    allowsEditing: scope == .upNext
                 )
             }
         }

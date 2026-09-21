@@ -62,6 +62,21 @@ struct QueueActions {
         }
         return a
     }
+
+    /// History is read-only: the only thing a row does is take you back to it. Positions
+    /// here count backwards from the current track, 0 being what played last — which is
+    /// the order `historyEntries` reports.
+    static func history(player: PlayerService) -> QueueActions {
+        var a = QueueActions()
+        a.play = { position in
+            player.skipTo(queueIndex: player.currentIndex - 1 - position)
+        }
+        a.addToPlaylist = { trackIds in
+            guard !trackIds.isEmpty else { return }
+            NotificationCenter.default.post(name: .requestAddToPlaylist, object: trackIds)
+        }
+        return a
+    }
 }
 
 extension NSPasteboard.PasteboardType {

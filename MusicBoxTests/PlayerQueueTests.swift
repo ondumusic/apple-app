@@ -668,3 +668,84 @@ struct PlayerUpNextTests {
         #expect(player.upNextEntries.isEmpty)
     }
 }
+
+// MARK: - History
+
+/// Queue A,B,C,D shuffled to play D,B,A,C, stopped on A — so B and D are history and
+/// C is still to come.
+@MainActor
+private func shuffledPlayerMidway() -> PlayerService {
+    let player = makePlayer()
+    player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                           makeQueueItem(name: "C"), makeQueueItem(name: "D")],
+                   startingAt: 0)
+    player.shuffledIndices = [3, 1, 0, 2]
+    player.currentIndex = 2
+    return player
+}
+
+@MainActor
+struct PlayerHistoryTests {
+
+    @Test func historyIsWhatPlayedMostRecentFirst() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                               makeQueueItem(name: "C"), makeQueueItem(name: "D")],
+                       startingAt: 2)
+
+        #expect(player.historyEntries.map(\.item.track.name) == ["B", "A"])
+        #expect(player.upNextEntries.map(\.item.track.name) == ["D"])
+    }
+
+    @Test func nothingPlayedYetMeansNoHistory() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B")], startingAt: 0)
+
+        #expect(player.historyEntries.isEmpty)
+    }
+
+    /// History reads in the order the shuffle actually played, not queue order.
+    @Test func historyFollowsTheShuffleOrder() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                               makeQueueItem(name: "C")],
+                       startingAt: 0)
+        player.shuffledIndices = [2, 0, 1]
+        player.currentIndex = 2
+
+        #expect(player.historyEntries.map(\.item.track.name) == ["A", "C"])
+    }
+
+    @Test func clearHistoryDropsWhatPlayedAndKeepsTheRest() {
+        let player = makePlayer()
+        player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                               makeQueueItem(name: "C")],
+                       startingAt: 2)
+        player.clearHistory()
+
+        #expect(player.queue.map(\.track.name) == ["C"])
+        #expect(player.currentIndex == 0)
+        #expect(player.historyEntries.isEmpty)
+    }
+
+    /// The played entries have to leave `queue` itself, not just the shuffle map —
+    /// otherwise a later reshuffle would deal them back in.
+    @Test func clearHistoryRebuildsTheShuffleMapQueue() {
+        let player = shuffledPlayerMidway()
+        player.clearHistory()
+        #expect(player.queue.map(\.track.name).sorted() == ["A", "C"])
+    }
+
+    @Test func clearHistoryRebuildsTheShuffleMapIndex() {
+        let player = shuffledPlayerMidway()
+        player.clearHistory()
+        #expect(player.currentIndex == 0)
+        #expect(player.shuffledIndices?.count == 2)
+    }
+
+    @Test func clearHistoryKeepsWhatComesNext() {
+        let player = shuffledPlayerMidway()
+        player.clearHistory()
+        #expect(player.upNextEntries.map(\.item.track.name) == ["C"])
+    }
+}
