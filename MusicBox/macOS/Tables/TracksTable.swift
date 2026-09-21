@@ -43,6 +43,18 @@ struct TracksTable: NSViewControllerRepresentable {
     /// it when building a queue, silently. Dimmed here so the row says so first, the way
     /// iOS's TrackRow already does.
     var isOffline: Bool = false
+    /// Sorting and column visibility, for the tables that show a header to click. Nil
+    /// means the view's own order, which for Songs is album artist / album / disc /
+    /// number — no column expresses that, so it can't be represented as a sort.
+    var sort: TrackSort? = nil
+    /// The table reports the sort the header asked for; the caller re-sorts its own
+    /// array and passes it back. Sorting the copy here instead would put the table's row
+    /// indices out of step with the caller's, which is the bug this file's index-space
+    /// comment already records three of.
+    var onSortChange: ((TrackSort?) -> Void)? = nil
+    /// Where this table's hidden-column choice is remembered. Nil disables the header's
+    /// column menu — embedded tables have no header to right-click.
+    var columnPreferenceKey: String? = nil
     /// Whether to render the # column. Meaningful where ordering is (album detail,
     /// playlists); in a flat all-songs list the per-album numbers just repeat.
     var showTrackNumber: Bool = true
@@ -143,6 +155,10 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.groupLabels = groupLabels
         vc.showsArtwork = showsArtwork
         vc.isOffline = isOffline
+        vc.setSortable(onSortChange != nil)
+        vc.onSortChange = onSortChange
+        vc.columnPreferenceKey = columnPreferenceKey
+        vc.applySort(sort)
         vc.onContentHeightChange = onContentHeightChange
         vc.fitsContentHeight = fitsContentHeight
         vc.update(
@@ -198,17 +214,162 @@ final class TracksTableViewController: NSViewController {
     private static let artworkTrailingGap: CGFloat = 10
     static var artworkColumnWidth: CGFloat { artworkLeadingGap + artworkSize + artworkTrailingGap }
 
-    var showsArtwork: Bool = false
-    /// Offline, a track that isn't downloaded can't be played — `availableTracks` drops
-    /// it when building a queue, silently. Dimmed here so the row says so first, the way
-    /// iOS's TrackRow already does.
-    var isOffline: Bool = false {
+    var showsArtwork: Bool = false {
         didSet {
             guard showsArtwork != oldValue, isViewLoaded else { return }
-            artworkColumn.isHidden = !showsArtwork
+            applyColumnVisibility()
             tableView.reloadData()
         }
     }
+    var isOffline = false {
+        didSet {
+            guard isOffline != oldValue, isViewLoaded else { return }
+            tableView.reloadData()
+        }
+    }
+    var onSortChange: ((TrackSort?) -> Void)?
+    var columnPreferenceKey: String? {
+        didSet {
+            guard columnPreferenceKey != oldValue else { return }
+            userHiddenColumns = Self.loadHiddenColumns(key: columnPreferenceKey)
+            applyColumnVisibility()
+            rebuildHeaderMenu()
+        }
+    }
+
+    /// Columns the user turned off, as opposed to ones this table never offers. Kept
+    /// apart because `update` re-applies the caller's choices on every pass and would
+    /// otherwise put a hidden column straight back.
+    private var userHiddenColumns: Set<String> = []
+    private var activeSort: TrackSort?
+    private var suppressSortCallback = false
+    private var offersTrackNumber = true
+    private var offersArtist = true
+    private var offersAlbum = false
+
+    /// A header only gets its click-to-sort arrow where a caller is listening for the
+    /// result. Without this the tables that don't sort still drew the arrow and then
+    /// ignored it.
+    func setSortable(_ sortable: Bool) {
+        _ = view
+        for column in tableView.tableColumns {
+            guard let sortColumn = TrackSortColumn(rawValue: column.identifier.rawValue) else { continue }
+            column.sortDescriptorPrototype = sortable
+                ? NSSortDescriptor(key: sortColumn.rawValue, ascending: true)
+                : nil
+        }
+    }
+
+    func applySort(_ sort: TrackSort?) {
+        guard activeSort != sort else { return }
+        activeSort = sort
+        guard isViewLoaded else { return }
+        applySortIndicator()
+        rebuildHeaderMenu()
+    }
+
+    private func applySortIndicator() {
+        let wanted: [NSSortDescriptor] = activeSort.map {
+            [NSSortDescriptor(key: $0.column.rawValue, ascending: $0.ascending)]
+        } ?? []
+        guard tableView.sortDescriptors != wanted else { return }
+        suppressSortCallback = true
+        tableView.sortDescriptors = wanted
+        suppressSortCallback = false
+    }
+
+    private static func hiddenColumnsDefaultsKey(_ key: String) -> String {
+        "tracksTable.\(key).hiddenColumns"
+    }
+
+    /// Columns that exist but aren't worth the width until someone asks for them.
+    private static let defaultHiddenColumns: Set<String> = ["disc", "year"]
+
+    private static func loadHiddenColumns(key: String?) -> Set<String> {
+        guard let key,
+              let stored = UserDefaults.standard.stringArray(forKey: hiddenColumnsDefaultsKey(key))
+        else { return defaultHiddenColumns }
+        return Set(stored)
+    }
+
+    private func persistHiddenColumns() {
+        guard let columnPreferenceKey else { return }
+        UserDefaults.standard.set(userHiddenColumns.sorted(),
+                                  forKey: Self.hiddenColumnsDefaultsKey(columnPreferenceKey))
+    }
+
+    /// Whether this table offers the column at all, before the user's choice.
+    private func callerOffers(_ column: NSTableColumn) -> Bool {
+        switch column.identifier.rawValue {
+        case "number": return offersTrackNumber
+        case "artist": return offersArtist && !isEmbedded
+        case "album": return offersAlbum
+        default: return true
+        }
+    }
+
+    func applyColumnVisibility() {
+        discColumn.isHidden = userHiddenColumns.contains("disc")
+        yearColumn.isHidden = userHiddenColumns.contains("year")
+        numberColumn.isHidden = !callerOffers(numberColumn) || userHiddenColumns.contains("number")
+        artistColumn.isHidden = !callerOffers(artistColumn) || userHiddenColumns.contains("artist")
+        albumColumn.isHidden = !callerOffers(albumColumn) || userHiddenColumns.contains("album")
+        durationColumn.isHidden = userHiddenColumns.contains("duration")
+        artworkColumn.isHidden = !showsArtwork
+        view.needsLayout = true
+    }
+
+    /// Right-click a column header to choose which columns show — the standard Mac
+    /// idiom, and what Music.app does. Title is never offered: a row of durations with
+    /// nothing naming them isn't a track list.
+    func rebuildHeaderMenu() {
+        guard isViewLoaded, let header = tableView.headerView else { return }
+        guard columnPreferenceKey != nil else {
+            header.menu = nil
+            return
+        }
+        let menu = NSMenu()
+        for column in [numberColumn, discColumn, artistColumn, albumColumn, yearColumn, durationColumn]
+        where callerOffers(column) {
+            let item = NSMenuItem(title: column.title, action: #selector(toggleColumn(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = column.identifier.rawValue
+            item.state = userHiddenColumns.contains(column.identifier.rawValue) ? .off : .on
+            menu.addItem(item)
+        }
+        guard !menu.items.isEmpty else {
+            header.menu = nil
+            return
+        }
+        menu.addItem(.separator())
+        // The way back to the view's own order, which no column can express.
+        let reset = NSMenuItem(title: NSLocalizedString("Default Order", comment: ""),
+                               action: #selector(resetSort), keyEquivalent: "")
+        reset.target = self
+        reset.state = activeSort == nil ? .on : .off
+        menu.addItem(reset)
+        header.menu = menu
+    }
+
+    @objc private func toggleColumn(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        if userHiddenColumns.contains(id) {
+            userHiddenColumns.remove(id)
+        } else {
+            userHiddenColumns.insert(id)
+        }
+        persistHiddenColumns()
+        applyColumnVisibility()
+        rebuildHeaderMenu()
+    }
+
+    @objc private func resetSort() {
+        activeSort = nil
+        applySortIndicator()
+        onSortChange?(nil)
+        rebuildHeaderMenu()
+    }
+
     var groupLabels: [Int: String] = [:] {
         didSet { if groupLabels != oldValue { rebuildDisplayRows(); tableView.reloadData() } }
     }
@@ -242,6 +403,8 @@ final class TracksTableViewController: NSViewController {
     private let spacerColumn = NSTableColumn(identifier: .init("sectionSpacer"))
     private let artworkColumn = NSTableColumn(identifier: .init("artwork"))
     private let numberColumn = NSTableColumn(identifier: .init("number"))
+    private let discColumn = NSTableColumn(identifier: .init("disc"))
+    private let yearColumn = NSTableColumn(identifier: .init("year"))
     private let titleColumn  = NSTableColumn(identifier: .init("title"))
     private let artistColumn = NSTableColumn(identifier: .init("artist"))
     private let albumColumn  = NSTableColumn(identifier: .init("album"))
@@ -295,8 +458,13 @@ final class TracksTableViewController: NSViewController {
         configureColumn(artistColumn,   title: "Artist",   width: 180, alignment: .left,   resizable: true)
         configureColumn(albumColumn,    title: "Album",    width: 180, alignment: .left,   resizable: true)
         configureColumn(durationColumn, title: "Duration", width: 70,  alignment: .right,  resizable: false)
+        // Off unless asked for, via the header's menu. Useful when they matter — a
+        // multi-disc set, or sorting a library by year — and noise the rest of the time.
+        configureColumn(discColumn,     title: "Disc",     width: 44,  alignment: .right,  resizable: false)
+        configureColumn(yearColumn,     title: "Year",     width: 54,  alignment: .right,  resizable: false)
 
-        for column in [artworkColumn, numberColumn, titleColumn, artistColumn, albumColumn, durationColumn] {
+        for column in [artworkColumn, numberColumn, discColumn, titleColumn, artistColumn,
+                       albumColumn, yearColumn, durationColumn] {
             tableView.addTableColumn(column)
         }
 
@@ -414,6 +582,8 @@ final class TracksTableViewController: NSViewController {
         var remaining: CGFloat = target - sectionsLeftInset
         remaining -= artworkWidth
         remaining -= numberWidth
+        remaining -= discColumn.isHidden ? 0 : 44
+        remaining -= yearColumn.isHidden ? 0 : 54
         remaining -= durationWidth
         remaining -= 2 * detectedInset
         let titleWidth = max(120, remaining)
@@ -586,10 +756,11 @@ final class TracksTableViewController: NSViewController {
         self.embeddedShowsArtist = showArtist
         // Artist column is always hidden in embedded mode — the title cell stacks the
         // artist beneath the title when needed.
-        artistColumn.isHidden = isEmbedded || !showArtist
-        albumColumn.isHidden = !showAlbum
-        numberColumn.isHidden = !showTrackNumber
-        artworkColumn.isHidden = !showsArtwork
+        offersArtist = showArtist
+        offersAlbum = showAlbum
+        offersTrackNumber = showTrackNumber
+        applyColumnVisibility()
+        rebuildHeaderMenu()
 
         let changed = !tracksMatch(self.tracks, newTracks) || !sectionsMatch(self.sections, newSections)
         // Detect rows whose `isDownloaded` flipped without otherwise changing — we want
@@ -1174,6 +1345,20 @@ extension TracksTableViewController: NSTableViewDelegate {
             c.label.font = .systemFont(ofSize: NSFont.systemFontSize)
             c.unselectedColor = .secondaryLabelColor
             cell = c
+        case "disc":
+            let c = textCell(for: column.identifier, in: tableView)
+            c.label.stringValue = String(track.disc)
+            c.label.alignment = .right
+            c.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            c.unselectedColor = .secondaryLabelColor
+            cell = c
+        case "year":
+            let c = textCell(for: column.identifier, in: tableView)
+            c.label.stringValue = track.album?.releaseYear.map(String.init) ?? ""
+            c.label.alignment = .right
+            c.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            c.unselectedColor = .secondaryLabelColor
+            cell = c
         case "duration":
             let c = textCell(for: column.identifier, in: tableView)
             c.label.stringValue = track.formattedDuration
@@ -1215,6 +1400,21 @@ extension TracksTableViewController: NSTableViewDelegate {
               let document = outer.documentView else { return }
         let rect = tableView.convert(tableView.rect(ofRow: row), to: document)
         document.scrollToVisible(rect.insetBy(dx: 0, dy: -12))
+    }
+
+    func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
+        guard !suppressSortCallback else { return }
+        guard let descriptor = tableView.sortDescriptors.first,
+              let key = descriptor.key,
+              let column = TrackSortColumn(rawValue: key) else {
+            activeSort = nil
+            onSortChange?(nil)
+            rebuildHeaderMenu()
+            return
+        }
+        activeSort = TrackSort(column: column, ascending: descriptor.ascending)
+        onSortChange?(activeSort)
+        rebuildHeaderMenu()
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {

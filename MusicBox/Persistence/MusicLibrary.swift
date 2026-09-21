@@ -659,7 +659,8 @@ final class MusicLibrary {
         } ?? Artist(id: lt.artistId, name: "Unknown", sortName: "Unknown", slug: "unknown")
 
         let trackAlbum = album.map {
-            Track.TrackAlbum(id: $0.serverId, name: $0.name, artworkUrl: $0.artworkUrl)
+            Track.TrackAlbum(id: $0.serverId, name: $0.name, artworkUrl: $0.artworkUrl,
+                             releaseYear: $0.releaseYear)
         }
 
         let albumArtistName = artistMap[lt.albumArtistId]?.name ?? artist.name
@@ -683,7 +684,8 @@ final class MusicLibrary {
         } ?? Artist(id: lt.artistId, name: "Unknown", sortName: "Unknown", slug: "unknown")
 
         let trackAlbum = album.map {
-            Track.TrackAlbum(id: $0.id, name: $0.name, artworkUrl: $0.artworkUrl)
+            Track.TrackAlbum(id: $0.id, name: $0.name, artworkUrl: $0.artworkUrl,
+                             releaseYear: $0.releaseYear)
         }
 
         let albumArtistName = albumArtist?.name ?? artistModel.name

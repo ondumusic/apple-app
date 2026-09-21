@@ -9,6 +9,11 @@ struct SongsViewMac: View {
     @Environment(DownloadService.self) private var downloadService
 
     @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
+    /// Empty means the library's own order — album artist, album, disc, track number —
+    /// which is what keeps an album's tracks together instead of interleaving them. No
+    /// column expresses it, so a header click is an override, not a replacement, and the
+    /// header menu's Default Order is the way back.
+    @AppStorage("songsSort") private var storedSort: String = ""
     @State private var tracks: [Track] = []
     @State private var selection: Set<UUID> = []
 
@@ -31,6 +36,11 @@ struct SongsViewMac: View {
                 showArtist: true,
                 showAlbum: true,
                 isOffline: !network.isOnline,
+                sort: sort,
+                onSortChange: { newSort in
+                    storedSort = newSort?.rawValue ?? ""
+                },
+                columnPreferenceKey: "songs",
                 accent: settings.resolvedAccentColor,
                 currentlyPlayingTrackId: player.currentTrack?.id,
                 isPlaying: player.isPlaying,
@@ -40,18 +50,25 @@ struct SongsViewMac: View {
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }
+        .onChange(of: storedSort) { reload() }
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &tracks)
         }
     }
 
+    private var sort: TrackSort? { TrackSort(rawValue: storedSort) }
+
+    private func ordered(_ source: [Track]) -> [Track] {
+        sort.map { $0.sorted(source) } ?? source
+    }
+
     private func reload() {
         guard libraryFilter != .downloaded else {
-            tracks = musicLibrary.downloadedTracks()
+            tracks = ordered(musicLibrary.downloadedTracks())
             return
         }
         if let warm = musicLibrary.cachedAllTracks {
-            tracks = warm
+            tracks = ordered(warm)
             return
         }
         // Cold cache — build it off the main actor rather than freezing the window. On a
@@ -59,7 +76,7 @@ struct SongsViewMac: View {
         // on screen stays until the real list arrives.
         Task {
             await musicLibrary.prepareAllTracks()
-            if libraryFilter != .downloaded { tracks = musicLibrary.cachedAllTracks ?? [] }
+            if libraryFilter != .downloaded { tracks = ordered(musicLibrary.cachedAllTracks ?? []) }
         }
     }
 

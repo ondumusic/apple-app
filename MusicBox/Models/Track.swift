@@ -22,6 +22,7 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         var id: UUID
         var name: String
         var artworkUrl: URL?
+        var releaseYear: Int?
     }
 
     var formattedDuration: String {
