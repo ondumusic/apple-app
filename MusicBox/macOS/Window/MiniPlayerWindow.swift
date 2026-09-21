@@ -614,9 +614,9 @@ private struct TransportRow: View {
     let onQueueToggleRequest: () -> Void
     var tintForeground: Color? = nil
 
-    /// One size for every control in the row, so their hover backgrounds line up. The
-    /// play button is the exception — it's deliberately the largest thing here.
-    private static let controlSize: CGFloat = 30
+    /// Every control in the row is the same size, as in the player bar — play is set
+    /// apart by its glyph, not by a bigger button.
+    private static let controlSize: CGFloat = playerControlSize
 
     var body: some View {
         VStack(spacing: 6) {
@@ -639,22 +639,22 @@ private struct TransportRow: View {
             // the parent's bounds — implicit `.title3` widths were stacking up
             // wider than the narrow mini-player window in overlay mode.
             ZStack {
-                HStack(spacing: 6) {
+                HStack(spacing: 0) {
                     Button { player.back() } label: {
                         Image(systemName: "backward.fill")
-                            .font(.system(size: 15))
+                            .font(.system(size: 14))
                             .frame(width: Self.controlSize, height: Self.controlSize)
                     }
                     .disabled(track == nil || !player.canGoBack)
                     Button { player.togglePlayPause() } label: {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 26))
-                            .frame(width: 36, height: 36)
+                            .font(.system(size: 19))
+                            .frame(width: Self.controlSize, height: Self.controlSize)
                     }
                     .disabled(track == nil)
                     Button { player.skip() } label: {
                         Image(systemName: "forward.fill")
-                            .font(.system(size: 15))
+                            .font(.system(size: 14))
                             .frame(width: Self.controlSize, height: Self.controlSize)
                     }
                     .disabled(track == nil || !player.canSkip)
@@ -662,9 +662,9 @@ private struct TransportRow: View {
                 // Mirrors the queue toggle on the opposite side so the play button stays
                 // centred between them.
                 HStack(spacing: 2) {
-                    VolumeControl(iconSize: 13, controlSize: Self.controlSize)
+                    VolumeControl(iconSize: 12, controlSize: Self.controlSize)
                         .foregroundStyle(tintForeground.map { $0.opacity(0.85) } ?? Color.secondary)
-                    AirPlayControl(glyphSize: 16, controlSize: Self.controlSize)
+                    AirPlayControl(controlSize: Self.controlSize)
                     Spacer()
                 }
                 HStack(spacing: 0) {
@@ -672,7 +672,7 @@ private struct TransportRow: View {
                     Button { onQueueToggleRequest() } label: {
                         Image(systemName: "list.bullet")
                             .font(.system(size: 14))
-                            .frame(width: 36, height: 36)
+                            .frame(width: Self.controlSize, height: Self.controlSize)
                             .contentShape(Rectangle())
                             .background {
                                 RoundedRectangle(cornerRadius: playerControlCornerRadius)
