@@ -23,8 +23,8 @@ struct SearchViewMac: View {
     private static let artistCell: CGFloat = 108
     private static let artistSpacing: CGFloat = 12
     private static let horizontalPadding: CGFloat = 20
-    /// The tracks table's own leading inset, measured off a render. Cancelling the
-    /// page's padding by this much less lines its rows up with the section headers.
+    /// The tracks table's own leading inset, measured off a render. Cancelling exactly
+    /// this much puts the row artwork on the same line as the album covers above it.
     private static let songsTableInset: CGFloat = 6
     /// Taller than the detail views' 40: results stack the artist under the title, and
     /// 40 clipped the two lines against the selection pill.
@@ -188,6 +188,7 @@ struct SearchViewMac: View {
                 actions: trackActions,
                 showArtist: true,
                 showAlbum: false,
+                showsArtwork: true,
                 showTrackNumber: false,
                 accent: settings.resolvedAccentColor,
                 currentlyPlayingTrackId: player.currentTrack?.id,
@@ -200,7 +201,7 @@ struct SearchViewMac: View {
             .frame(height: max(songsHeight, CGFloat(shownTracks.count) * Self.songRowHeight))
             // The table carries its own cell inset; the page's padding on top of it
             // pushed every row in past its section header.
-            .padding(.horizontal, -(Self.horizontalPadding - Self.songsTableInset))
+            .padding(.horizontal, -Self.songsTableInset)
         }
     }
 

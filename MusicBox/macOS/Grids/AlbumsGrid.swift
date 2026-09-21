@@ -28,7 +28,7 @@ struct AlbumsGrid: NSViewControllerRepresentable {
     }
 
     private func apply(to vc: AlbumsGridViewController) {
-        vc.isEmbedded = embedded
+        vc.applyEmbedded(embedded)
         vc.accentNSColor = NSColor(accent)
         vc.actions = actions
         vc.onOpen = onOpen
@@ -84,14 +84,23 @@ final class AlbumsGridViewController: NSViewController {
             + (embedded ? 0 : sectionInset * 2)
     }
 
-    var isEmbedded: Bool = false {
-        didSet {
-            guard isEmbedded != oldValue, isViewLoaded else { return }
-            applyEmbeddedStyle()
-        }
+    private var isEmbedded: Bool = false
+
+    /// Re-applied on every update rather than only when the flag changes: the view can
+    /// load either side of the first assignment, and a scroller created before it does
+    /// isn't removed by setting the flag afterwards.
+    func applyEmbedded(_ embedded: Bool) {
+        isEmbedded = embedded
+        guard isViewLoaded else { return }
+        applyEmbeddedStyle()
     }
 
     private func applyEmbeddedStyle() {
+        // hasVerticalScroller alone isn't enough when the system is set to show scroll
+        // bars always: AppKit keeps a legacy 17pt scroller, which both shows as an empty
+        // track and steals the width the item size was computed against.
+        scrollView.scrollerStyle = isEmbedded ? .overlay : .legacy
+        scrollView.autohidesScrollers = true
         scrollView.hasVerticalScroller = !isEmbedded
         scrollView.verticalScrollElasticity = isEmbedded ? .none : .automatic
         scrollView.automaticallyAdjustsContentInsets = !isEmbedded
@@ -137,8 +146,6 @@ final class AlbumsGridViewController: NSViewController {
         collectionView.menu = menu
 
         scrollView.documentView = collectionView
-        scrollView.hasVerticalScroller = !isEmbedded
-        scrollView.verticalScrollElasticity = isEmbedded ? .none : .automatic
         scrollView.drawsBackground = false
         scrollView.contentView.postsBoundsChangedNotifications = true
         view = scrollView

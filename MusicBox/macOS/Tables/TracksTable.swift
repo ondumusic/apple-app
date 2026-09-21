@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import Nuke
 import SwiftUI
 
 /// One album section for sections-mode rendering. The album header is drawn as a
@@ -34,6 +35,10 @@ struct TracksTable: NSViewControllerRepresentable {
     /// Whether to render the Album column. Set true on Songs/Search views, false in
     /// album detail (already obvious).
     var showAlbum: Bool = false
+    /// Leading album artwork per row, as Music.app shows in its Songs list and its
+    /// search results. Off by default: album and artist detail already sit under one
+    /// cover, so repeating it down every row would be noise.
+    var showsArtwork: Bool = false
     /// Whether to render the # column. Meaningful where ordering is (album detail,
     /// playlists); in a flat all-songs list the per-album numbers just repeat.
     var showTrackNumber: Bool = true
@@ -120,6 +125,7 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.artworkSize = artworkSize
         vc.artworkInset = artworkInset
         vc.groupLabels = groupLabels
+        vc.showsArtwork = showsArtwork
         vc.onContentHeightChange = onContentHeightChange
         vc.update(
             tracks: tracks,
@@ -167,6 +173,17 @@ final class TracksTableViewController: NSViewController {
     private var rowForTrackIndex: [Int: Int] = [:]
     private var sections: [TracksTableSection]? = nil
     var sectionHeaderBuilder: ((Album) -> AnyView)?
+    /// Column width = artwork plus the gap to the title.
+    static let artworkSize: CGFloat = 36
+    private static let artworkTrailingGap: CGFloat = 10
+
+    var showsArtwork: Bool = false {
+        didSet {
+            guard showsArtwork != oldValue, isViewLoaded else { return }
+            artworkColumn.isHidden = !showsArtwork
+            tableView.reloadData()
+        }
+    }
     var groupLabels: [Int: String] = [:] {
         didSet { if groupLabels != oldValue { rebuildDisplayRows(); tableView.reloadData() } }
     }
@@ -194,6 +211,7 @@ final class TracksTableViewController: NSViewController {
     private var sectionsLeftInset: CGFloat = 0
 
     private let spacerColumn = NSTableColumn(identifier: .init("sectionSpacer"))
+    private let artworkColumn = NSTableColumn(identifier: .init("artwork"))
     private let numberColumn = NSTableColumn(identifier: .init("number"))
     private let titleColumn  = NSTableColumn(identifier: .init("title"))
     private let artistColumn = NSTableColumn(identifier: .init("artist"))
@@ -222,13 +240,18 @@ final class TracksTableViewController: NSViewController {
         tableView.delegate = self
         tableView.onEnter = { [weak self] in self?.handleEnter() }
 
+        let artworkWidth = Self.artworkSize + Self.artworkTrailingGap
+        configureColumn(artworkColumn,  title: "",         width: artworkWidth, alignment: .left, resizable: false)
+        artworkColumn.minWidth = artworkWidth
+        artworkColumn.maxWidth = artworkWidth
+        artworkColumn.isHidden = !showsArtwork
         configureColumn(numberColumn,   title: "#",        width: 36,  alignment: .right,  resizable: false)
         configureColumn(titleColumn,    title: "Title",    width: 280, alignment: .left,   resizable: true)
         configureColumn(artistColumn,   title: "Artist",   width: 180, alignment: .left,   resizable: true)
         configureColumn(albumColumn,    title: "Album",    width: 180, alignment: .left,   resizable: true)
         configureColumn(durationColumn, title: "Duration", width: 70,  alignment: .right,  resizable: false)
 
-        for column in [numberColumn, titleColumn, artistColumn, albumColumn, durationColumn] {
+        for column in [artworkColumn, numberColumn, titleColumn, artistColumn, albumColumn, durationColumn] {
             tableView.addTableColumn(column)
         }
 
@@ -333,7 +356,15 @@ final class TracksTableViewController: NSViewController {
         }()
         // Title absorbs the remainder after the locked-width columns and the source-list
         // insets (and the spacer column when in sections mode).
-        let titleWidth = max(120, target - sectionsLeftInset - 36 - 70 - 2 * detectedInset)
+        let artworkWidth: CGFloat = artworkColumn.isHidden ? 0 : Self.artworkSize + Self.artworkTrailingGap
+        let numberWidth: CGFloat = numberColumn.isHidden ? 0 : 36
+        let durationWidth: CGFloat = 70
+        var remaining: CGFloat = target - sectionsLeftInset
+        remaining -= artworkWidth
+        remaining -= numberWidth
+        remaining -= durationWidth
+        remaining -= 2 * detectedInset
+        let titleWidth = max(120, remaining)
         if abs(titleColumn.width - titleWidth) > 0.5 {
             titleColumn.width = titleWidth
         }
@@ -511,6 +542,7 @@ final class TracksTableViewController: NSViewController {
         artistColumn.isHidden = isEmbedded || !showArtist
         albumColumn.isHidden = !showAlbum
         numberColumn.isHidden = !showTrackNumber
+        artworkColumn.isHidden = !showsArtwork
 
         let changed = !tracksMatch(self.tracks, newTracks) || !sectionsMatch(self.sections, newSections)
         // Detect rows whose `isDownloaded` flipped without otherwise changing — we want
@@ -978,6 +1010,9 @@ extension TracksTableViewController: NSTableViewDelegate {
             view.customSelectionLeftInset = 12
             view.customSelectionRightInset = 12
         }
+        if showsArtwork {
+            view.dividerLeadingInset = 12 + Self.artworkSize + Self.artworkTrailingGap
+        }
         return view
     }
 
@@ -1033,6 +1068,11 @@ extension TracksTableViewController: NSTableViewDelegate {
 
         let cell: NSTableCellView?
         switch column.identifier.rawValue {
+        case "artwork":
+            let c = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TrackArtworkCell
+                ?? TrackArtworkCell(identifier: column.identifier, size: Self.artworkSize)
+            c.show(url: track.album?.artworkUrl)
+            cell = c
         case "number":
             let c = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? NumberOrSpeakerCell
                 ?? NumberOrSpeakerCell(identifier: column.identifier)
@@ -1228,6 +1268,54 @@ extension TracksTableViewController: NSMenuDelegate {
 /// Group-row cell that hosts a SwiftUI view (album header). Used in sections mode so
 /// the caller can render the album title, artwork, action buttons via a familiar
 /// SwiftUI subview while the table itself stays AppKit.
+/// Leading album cover. Plain NSImageView over Nuke rather than a hosted SwiftUI view:
+/// one of these exists per visible row, and hosting controllers at that rate is the
+/// expensive way to draw a 36pt square.
+private final class TrackArtworkCell: NSTableCellView {
+    private let artwork = NSImageView()
+    private var imageTask: ImageTask?
+    private var loadingURL: URL?
+
+    init(identifier: NSUserInterfaceItemIdentifier, size: CGFloat) {
+        super.init(frame: .zero)
+        self.identifier = identifier
+        artwork.translatesAutoresizingMaskIntoConstraints = false
+        artwork.imageScaling = .scaleProportionallyUpOrDown
+        artwork.wantsLayer = true
+        artwork.layer?.cornerRadius = 4
+        artwork.layer?.masksToBounds = true
+        addSubview(artwork)
+        NSLayoutConstraint.activate([
+            artwork.leadingAnchor.constraint(equalTo: leadingAnchor),
+            artwork.centerYAnchor.constraint(equalTo: centerYAnchor),
+            artwork.widthAnchor.constraint(equalToConstant: size),
+            artwork.heightAnchor.constraint(equalToConstant: size)
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func show(url: URL?) {
+        guard loadingURL != url else { return }
+        imageTask?.cancel()
+        loadingURL = url
+        artwork.image = nil
+        guard let url else { return }
+        imageTask = ImagePipeline.shared.loadImage(with: url) { [weak self] result in
+            guard let self else { return }
+            if case .success(let response) = result { self.artwork.image = response.image }
+        }
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        imageTask?.cancel()
+        imageTask = nil
+        loadingURL = nil
+        artwork.image = nil
+    }
+}
+
 /// Divider row naming a group of tracks ("Disc 1"). Plain AppKit rather than a hosted
 /// SwiftUI view: it's one label, and hosting each one costs a view controller.
 private final class GroupLabelCell: NSTableCellView {
