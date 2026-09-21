@@ -46,7 +46,7 @@ struct DownloadAllScaleTests {
 
         let service = DownloadService(baseURL: URL(string: "https://example.com/api")!,
                                       sessionToken: "test-token", musicLibrary: lib,
-                                      settings: SettingsStore())
+                                      settings: makeTestSettings())
         // Isolate the enqueue path — we're measuring the scan, not URLSession.
         service.isPaused = true
 

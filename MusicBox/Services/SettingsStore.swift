@@ -58,58 +58,58 @@ final class SettingsStore {
 
     /// Output volume, 0...1. Applied to the AVPlayers rather than the system volume.
     var volume: Double {
-        didSet { UserDefaults.standard.set(volume, forKey: "volume") }
+        didSet { defaults.set(volume, forKey: "volume") }
     }
 
     var crossfadeDuration: Double {
-        didSet { UserDefaults.standard.set(crossfadeDuration, forKey: "crossfadeDuration") }
+        didSet { defaults.set(crossfadeDuration, forKey: "crossfadeDuration") }
     }
 
     var maxConcurrentDownloads: Int {
-        didSet { UserDefaults.standard.set(maxConcurrentDownloads, forKey: "maxConcurrentDownloads") }
+        didSet { defaults.set(maxConcurrentDownloads, forKey: "maxConcurrentDownloads") }
     }
 
     var isShuffled: Bool {
-        didSet { UserDefaults.standard.set(isShuffled, forKey: "isShuffled") }
+        didSet { defaults.set(isShuffled, forKey: "isShuffled") }
     }
 
     var spreadShuffle: Bool {
-        didSet { UserDefaults.standard.set(spreadShuffle, forKey: "spreadShuffle") }
+        didSet { defaults.set(spreadShuffle, forKey: "spreadShuffle") }
     }
 
     var repeatMode: RepeatMode {
-        didSet { UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeatMode") }
+        didSet { defaults.set(repeatMode.rawValue, forKey: "repeatMode") }
     }
 
     /// Maximum playback cache size in bytes. 0 means unlimited.
     var playbackCacheLimit: Int64 {
-        didSet { UserDefaults.standard.set(playbackCacheLimit, forKey: "playbackCacheLimit") }
+        didSet { defaults.set(playbackCacheLimit, forKey: "playbackCacheLimit") }
     }
 
     var downloadQuality: DownloadQuality {
-        didSet { UserDefaults.standard.set(downloadQuality.rawValue, forKey: "downloadQuality") }
+        didSet { defaults.set(downloadQuality.rawValue, forKey: "downloadQuality") }
     }
 
     var streamingQuality: StreamingQuality {
-        didSet { UserDefaults.standard.set(streamingQuality.rawValue, forKey: "streamingQuality") }
+        didSet { defaults.set(streamingQuality.rawValue, forKey: "streamingQuality") }
     }
 
     var artworkTintedPlayer: Bool {
-        didSet { UserDefaults.standard.set(artworkTintedPlayer, forKey: "artworkTintedPlayer") }
+        didSet { defaults.set(artworkTintedPlayer, forKey: "artworkTintedPlayer") }
     }
 
     var accentColor: AccentColor {
-        didSet { UserDefaults.standard.set(accentColor.rawValue, forKey: "accentColor") }
+        didSet { defaults.set(accentColor.rawValue, forKey: "accentColor") }
     }
 
     var customAccentRed: Double {
-        didSet { UserDefaults.standard.set(customAccentRed, forKey: "customAccentRed") }
+        didSet { defaults.set(customAccentRed, forKey: "customAccentRed") }
     }
     var customAccentGreen: Double {
-        didSet { UserDefaults.standard.set(customAccentGreen, forKey: "customAccentGreen") }
+        didSet { defaults.set(customAccentGreen, forKey: "customAccentGreen") }
     }
     var customAccentBlue: Double {
-        didSet { UserDefaults.standard.set(customAccentBlue, forKey: "customAccentBlue") }
+        didSet { defaults.set(customAccentBlue, forKey: "customAccentBlue") }
     }
 
     var customAccentColor: Color {
@@ -122,15 +122,21 @@ final class SettingsStore {
     }
 
     var hapticsEnabled: Bool {
-        didSet { UserDefaults.standard.set(hapticsEnabled, forKey: "hapticsEnabled") }
+        didSet { defaults.set(hapticsEnabled, forKey: "hapticsEnabled") }
     }
 
     var autoDownloadNewTracks: Bool {
-        didSet { UserDefaults.standard.set(autoDownloadNewTracks, forKey: "autoDownloadNewTracks") }
+        didSet { defaults.set(autoDownloadNewTracks, forKey: "autoDownloadNewTracks") }
     }
 
-    init() {
-        let defaults = UserDefaults.standard
+    /// Where these persist. Injectable so tests get their own suite: every test that
+    /// builds a PlayerService builds one of these, and sharing
+    /// `UserDefaults.standard` across tests running in parallel meant they wrote each
+    /// other's volume, shuffle flag and repeat mode out from under themselves.
+    @ObservationIgnored private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         self.volume = defaults.object(forKey: "volume") as? Double ?? 1.0
         self.crossfadeDuration = defaults.object(forKey: "crossfadeDuration") as? Double ?? 1.0
         self.maxConcurrentDownloads = defaults.object(forKey: "maxConcurrentDownloads") as? Int ?? 3

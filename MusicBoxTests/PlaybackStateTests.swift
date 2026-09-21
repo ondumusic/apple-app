@@ -47,7 +47,7 @@ private func makeStore() -> PlaybackStateStore {
 
 private func makePlayer(library: MusicLibrary?, store: PlaybackStateStore) -> PlayerService {
     let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
-    return PlayerService(api: api, settings: SettingsStore(), musicLibrary: library, stateStore: store)
+    return PlayerService(api: api, settings: makeTestSettings(), musicLibrary: library, stateStore: store)
 }
 
 // MARK: - Store
@@ -55,10 +55,11 @@ private func makePlayer(library: MusicLibrary?, store: PlaybackStateStore) -> Pl
 @Suite(.serialized)
 struct PlaybackStateStoreTests {
 
-    @Test func roundTripsTheQueueThroughDisk() {
+    @Test func roundTripsTheQueueThroughDisk() async {
         let store = makeStore()
         let state = PlaybackState(trackIds: [UUID(), UUID()], currentIndex: 1, shuffledIndices: [1, 0], isUserModified: true)
         store.save(state)
+        await store.flush()
 
         #expect(store.load() == state)
     }
@@ -79,10 +80,12 @@ struct PlaybackStateStoreTests {
         #expect(makeStore().load() == nil)
     }
 
-    @Test func clearRemovesBothHalves() {
+    @Test func clearRemovesBothHalves() async {
         let store = makeStore()
         store.save(PlaybackState(trackIds: [UUID()], currentIndex: 0, shuffledIndices: nil))
         store.savePosition(PlaybackPosition(trackId: UUID(), elapsed: 10))
+        // Without the flush the queued write can land after the clear and recreate it.
+        await store.flush()
         store.clear()
 
         #expect(store.load() == nil)
@@ -101,6 +104,7 @@ struct PlayerStateRestoreTests {
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids, currentIndex: 2, shuffledIndices: nil))
         store.savePosition(PlaybackPosition(trackId: ids[2], elapsed: 61))
+        await store.flush()
 
         let player = makePlayer(library: lib, store: store)
         await player.restoreTask?.value
@@ -118,6 +122,7 @@ struct PlayerStateRestoreTests {
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids, currentIndex: 0, shuffledIndices: nil))
         store.savePosition(PlaybackPosition(trackId: ids[2], elapsed: 90))
+        await store.flush()
 
         let player = makePlayer(library: lib, store: store)
         await player.restoreTask?.value
@@ -131,6 +136,7 @@ struct PlayerStateRestoreTests {
         let ids = seedTracks(lib, count: 3)
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids, currentIndex: 0, shuffledIndices: [2, 0, 1]))
+        await store.flush()
 
         let player = makePlayer(library: lib, store: store)
         await player.restoreTask?.value
@@ -144,6 +150,7 @@ struct PlayerStateRestoreTests {
         let ids = seedTracks(lib, count: 2)
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids + [UUID()], currentIndex: 0, shuffledIndices: nil))
+        await store.flush()
 
         let player = makePlayer(library: lib, store: store)
         await player.restoreTask?.value
@@ -157,6 +164,7 @@ struct PlayerStateRestoreTests {
         let ids = seedTracks(lib, count: 3)
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids, currentIndex: 0, shuffledIndices: [1, 0]))
+        await store.flush()
 
         let player = makePlayer(library: lib, store: store)
         await player.restoreTask?.value
@@ -170,6 +178,7 @@ struct PlayerStateRestoreTests {
         let ids = seedTracks(lib, count: 2)
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids, currentIndex: 99, shuffledIndices: nil))
+        await store.flush()
 
         let player = makePlayer(library: lib, store: store)
         await player.restoreTask?.value
@@ -181,6 +190,7 @@ struct PlayerStateRestoreTests {
     @Test func restoresNothingWithoutALibrary() async {
         let store = makeStore()
         store.save(PlaybackState(trackIds: [UUID()], currentIndex: 0, shuffledIndices: nil))
+        await store.flush()
 
         let player = makePlayer(library: nil, store: store)
         await player.restoreTask?.value
@@ -202,6 +212,7 @@ struct PlayerStateSaveTests {
         await player.restoreTask?.value
 
         player.playNext(queue: ids.compactMap { lib.track($0) }.map { QueueItem(track: $0) })
+        await store.flush()
 
         let saved = store.load()
         #expect(saved?.trackIds == ids)
@@ -213,10 +224,12 @@ struct PlayerStateSaveTests {
         let store = makeStore()
         let state = PlaybackState(trackIds: ids, currentIndex: 0, shuffledIndices: nil)
         store.save(state)
+        await store.flush()
 
         let player = makePlayer(library: nil, store: store)
         await player.restoreTask?.value
         player.savePlaybackState()
+        await store.flush()
 
         #expect(store.load() == state)
     }
@@ -226,10 +239,13 @@ struct PlayerStateSaveTests {
         let ids = seedTracks(lib, count: 5)
         let store = makeStore()
         store.save(PlaybackState(trackIds: ids, currentIndex: 0, shuffledIndices: nil))
+        await store.flush()
+
         let player = makePlayer(library: lib, store: store)
         await player.restoreTask?.value
 
         player.toggleShuffle()
+        await store.flush()
 
         #expect(store.load()?.shuffledIndices?.sorted() == Array(0..<5))
     }
