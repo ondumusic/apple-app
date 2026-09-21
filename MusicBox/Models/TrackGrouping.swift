@@ -15,4 +15,18 @@ nonisolated enum TrackGrouping {
         }
         return labels
     }
+
+    /// The same labels for a table built out of per-album sections, keyed by index into
+    /// the flat concatenation the table is given.
+    static func discLabels(forSections sections: [[Track]]) -> [Int: String] {
+        var labels: [Int: String] = [:]
+        var offset = 0
+        for tracks in sections {
+            for (index, label) in discLabels(for: tracks) {
+                labels[offset + index] = label
+            }
+            offset += tracks.count
+        }
+        return labels
+    }
 }

@@ -1035,6 +1035,9 @@ private final class SidebarCell: NSTableCellView {
     }
 
     private func applyEmphasis() {
+        // While editing, the field editor paints a light box behind the text — white
+        // selection text on it is unreadable, so editing wins over emphasis.
+        guard !label.isEditable else { return }
         let emphasized = backgroundStyle == .emphasized
         if isSectionHeader {
             label.textColor = .secondaryLabelColor
@@ -1174,6 +1177,8 @@ private final class SidebarCell: NSTableCellView {
     func endInlineRename() {
         label.isEditable = false
         label.isSelectable = false
+        label.drawsBackground = false
+        applyEmphasis()
     }
 
     @objc fileprivate func commitRename(_ sender: NSTextField) {
@@ -1191,7 +1196,12 @@ private final class SidebarCell: NSTableCellView {
         label.isEditable = true
         label.isSelectable = true
         label.isBordered = false
-        label.drawsBackground = false
+        // The row underneath is selected, so the label is carrying white selection text.
+        // The field editor draws its own light background — leave it white and the name
+        // is invisible for as long as you're typing it.
+        label.drawsBackground = true
+        label.backgroundColor = .textBackgroundColor
+        label.textColor = .labelColor
         let beforeResponder = window?.firstResponder
         label.selectText(nil)
         let afterResponder = window?.firstResponder

@@ -51,6 +51,7 @@ struct AlbumDetailMac: View {
                 rowHeight: 40,
                 embeddedStyle: true,
                 sections: sections,
+                groupLabels: TrackGrouping.discLabels(for: tracks),
                 sectionHeader: { _ in
                     AnyView(
                         albumHeader
@@ -60,8 +61,7 @@ struct AlbumDetailMac: View {
                             .environment(network)
                     )
                 },
-                sectionHeaderHeight: Self.headerHeight,
-                groupLabels: TrackGrouping.discLabels(for: tracks)
+                sectionHeaderHeight: Self.headerHeight
             )
             .background(Color(NSColor.textBackgroundColor))
         }

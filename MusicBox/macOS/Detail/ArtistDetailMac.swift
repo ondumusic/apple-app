@@ -52,6 +52,7 @@ struct ArtistDetailMac: View {
                 rowHeight: 40,
                 embeddedStyle: true,
                 sections: sections,
+                groupLabels: TrackGrouping.discLabels(forSections: albums.map { $0.tracks ?? [] }),
                 sectionHeader: { album in
                     AnyView(
                         AlbumSectionHeader(

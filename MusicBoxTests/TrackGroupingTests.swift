@@ -29,6 +29,16 @@ struct TrackGroupingTests {
         #expect(TrackGrouping.discLabels(for: tracks).keys.sorted() == [0, 1, 2])
     }
 
+    @Test func sectionLabelsAreKeyedByFlatIndex() {
+        let single = [makeTrack(disc: 1, number: 1), makeTrack(disc: 1, number: 2)]
+        let double = [makeTrack(disc: 1, number: 1), makeTrack(disc: 2, number: 1)]
+        let labels = TrackGrouping.discLabels(forSections: [single, double])
+        // The single-disc album contributes nothing; the next album's indices start at 2.
+        #expect(labels.keys.sorted() == [2, 3])
+        #expect(labels[2] == "Disc 1")
+        #expect(labels[3] == "Disc 2")
+    }
+
     @Test func emptyAlbumGetsNoLabels() {
         #expect(TrackGrouping.discLabels(for: []).isEmpty)
     }

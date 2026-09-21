@@ -34,6 +34,11 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     /// Strong refs so the KVO observers stay alive for the window's lifetime.
     private var titleObservers: [NSKeyValueObservation] = []
     private var spaceKeyMonitor: Any?
+    /// Set at launch when the app should come back as mini-player-only. The Window scene
+    /// always creates its window, so the main one is kept off-screen from the moment it
+    /// exists rather than being shown and then closed — closing it is MacOSContentView's
+    /// job, once the mini player is actually up.
+    static var suppressesMainWindow = false
 
     func applicationWillTerminate(_ notification: Notification) {
         NSApplication.isTerminatingForReal = true
@@ -45,6 +50,10 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     var player: PlayerService?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Self.suppressesMainWindow =
+            UserDefaults.standard.bool(forKey: MiniPlayerWindowController.visibleDefaultsKey)
+            && !UserDefaults.standard.bool(forKey: Self.mainWindowVisibleKey)
+        if Self.suppressesMainWindow { scheduleMainWindowFallback() }
         installSpaceKeyMonitor()
         NotificationCenter.default.addObserver(
             forName: .togglePlayPause,
@@ -56,6 +65,9 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
         for window in NSApp.windows {
             configure(window)
         }
+        // macOS 15 puts full screen on Globe-F, which nobody reaches for. Control-Command-F
+        // is the shortcut the rest of the system trained people on.
+        retuneFullScreenShortcut()
         NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeMainNotification,
             object: nil,
@@ -81,6 +93,14 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func retuneFullScreenShortcut() {
+        guard let view = NSApp.mainMenu?.items.first(where: { $0.submenu?.title == "View" })?.submenu,
+              let item = view.items.first(where: { $0.action == #selector(NSWindow.toggleFullScreen(_:)) })
+        else { return }
+        item.keyEquivalent = "f"
+        item.keyEquivalentModifierMask = [.control, .command]
+    }
+
     /// Whether the main window was open when the app last quit. Closing with only the
     /// mini player showing should come back the same way.
     static let mainWindowVisibleKey = "MainWindowVisible"
@@ -88,7 +108,32 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     private func configure(_ window: NSWindow) {
         makeChromeless(window)
         clearLaunchFocus(in: window)
+        if Self.suppressesMainWindow,
+           window.identifier != MiniPlayerWindowController.windowIdentifier,
+           window.canBecomeMain {
+            window.orderOut(nil)
+            return
+        }
         trackMainWindowVisibility(window)
+    }
+
+    /// If the mini player never arrives — a login is due, or session restore failed —
+    /// the hidden main window is all there is, so put it back rather than leave the app
+    /// running with nothing on screen.
+    private func scheduleMainWindowFallback() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            MainActor.assumeIsolated {
+                guard Self.suppressesMainWindow else { return }
+                Self.suppressesMainWindow = false
+                let miniIsUp = NSApp.windows.contains {
+                    $0.identifier == MiniPlayerWindowController.windowIdentifier && $0.isVisible
+                }
+                guard !miniIsUp else { return }
+                NSApp.windows
+                    .first { $0.identifier != MiniPlayerWindowController.windowIdentifier && $0.canBecomeMain }?
+                    .makeKeyAndOrderFront(nil)
+            }
+        }
     }
 
     private func trackMainWindowVisibility(_ window: NSWindow) {

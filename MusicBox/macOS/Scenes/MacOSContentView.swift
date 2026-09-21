@@ -226,10 +226,12 @@ struct MacOSContentView: View {
                 miniPlayer = mp
                 mp.restoreAtLaunch()
                 // Quit with only the mini player showing and that's what comes back. The
-                // Window scene always creates its window, so the main one is closed again
-                // rather than never opened — same runloop turn, before it can draw.
-                if !UserDefaults.standard.bool(forKey: MacOSAppDelegate.mainWindowVisibleKey) {
-                    Task { @MainActor in closeMainWindow() }
+                // Window scene always creates its window regardless, so the delegate has
+                // kept it off-screen since launch; now that the mini player is up it can
+                // be closed for real.
+                if MacOSAppDelegate.suppressesMainWindow {
+                    MacOSAppDelegate.suppressesMainWindow = false
+                    closeMainWindow()
                 }
             }
         }

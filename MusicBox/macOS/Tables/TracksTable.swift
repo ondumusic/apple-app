@@ -69,6 +69,10 @@ struct TracksTable: NSViewControllerRepresentable {
     /// to that flat array. Selection works natively across all albums (cmd-click /
     /// shift-range), since it's a single NSTableView.
     var sections: [TracksTableSection]? = nil
+    /// Flat track index → text of a divider row inserted above it. Album detail uses it
+    /// for "Disc 1"/"Disc 2"; a multi-disc album otherwise restarts at track 1 with
+    /// nothing to say why.
+    var groupLabels: [Int: String] = [:]
     /// Caller-supplied SwiftUI view used to render an album header row. The view is
     /// hosted via NSHostingView. Only consulted when `sections` is set.
     var sectionHeader: ((Album) -> AnyView)? = nil
@@ -84,10 +88,6 @@ struct TracksTable: NSViewControllerRepresentable {
     var artworkSize: CGFloat = 120
     /// Horizontal padding from the table's left edge to the artwork's left edge.
     var artworkInset: CGFloat = 20
-    /// Flat track index → text of a divider row inserted above it. Album detail uses it
-    /// for "Disc 1"/"Disc 2"; a multi-disc album otherwise restarts at track 1 with
-    /// nothing to say why.
-    var groupLabels: [Int: String] = [:]
 
     func makeNSViewController(context: Context) -> TracksTableViewController {
         let vc = TracksTableViewController()
@@ -510,6 +510,10 @@ final class TracksTableViewController: NSViewController {
         if changed {
             rebuildDisplayRows()
             tableView.reloadData()
+            // New sections get their overlay views built at the origin, and a row-set
+            // change on its own doesn't dirty the view's layout — so without this the
+            // artwork for every album that reappeared stacked up in the top-left.
+            updateArtworkOverlayPositions()
         } else {
             // Same row set — refresh just the cells that need it.
             var rows = downloadStateChangedRows
@@ -625,25 +629,19 @@ final class TracksTableViewController: NSViewController {
     /// don't draw on top of them.
     private func updateArtworkOverlayPositions() {
         guard sections != nil, !artworkOverlays.isEmpty else { return }
-        var rowIdx = 0
-        let sections = self.sections ?? []
-        for section in sections {
-            guard rowIdx < displayRows.count, case .header = displayRows[rowIdx] else {
-                rowIdx += 1 + section.tracks.count
-                continue
-            }
+        // Read the header rows out of displayRows rather than counting section lengths:
+        // group-label rows sit between tracks and would throw the arithmetic off.
+        for (rowIdx, row) in displayRows.enumerated() {
+            guard case .header(let album) = row, let view = artworkOverlays[album.id] else { continue }
             let headerFrame = tableView.rect(ofRow: rowIdx)
-            if let view = artworkOverlays[section.id] {
-                // Width = artworkSize (artwork itself); the SwiftUI overlay can render
-                // a caption below it, so reserve a bit of vertical space for that too.
-                view.frame = NSRect(
-                    x: artworkInset,
-                    y: headerFrame.minY + artworkInset,
-                    width: artworkSize,
-                    height: artworkSize + 40
-                )
-            }
-            rowIdx += 1 + section.tracks.count
+            // Width = artworkSize (artwork itself); the SwiftUI overlay can render
+            // a caption below it, so reserve a bit of vertical space for that too.
+            view.frame = NSRect(
+                x: artworkInset,
+                y: headerFrame.minY + artworkInset,
+                width: artworkSize,
+                height: artworkSize + 40
+            )
         }
         for (_, view) in artworkOverlays {
             tableView.addSubview(view, positioned: .above, relativeTo: nil)
@@ -986,7 +984,8 @@ extension TracksTableViewController: NSTableViewDelegate {
             cell.text = text
             let titleColumn = tableView.column(withIdentifier: self.titleColumn.identifier)
             if titleColumn >= 0 {
-                cell.leadingInset = tableView.frameOfCell(atColumn: titleColumn, row: row).minX
+                // -2: the title cell's text starts a couple of points inside its frame.
+                cell.leadingInset = tableView.frameOfCell(atColumn: titleColumn, row: row).minX - 2
             }
             return cell
         }
@@ -1211,7 +1210,7 @@ private final class GroupLabelCell: NSTableCellView {
     private var leading: NSLayoutConstraint!
 
     var text: String = "" {
-        didSet { label.stringValue = text }
+        didSet { label.stringValue = text.localizedUppercase }
     }
 
     /// Lined up with the track titles rather than the row's edge, which is where
@@ -1223,7 +1222,7 @@ private final class GroupLabelCell: NSTableCellView {
     init(identifier: NSUserInterfaceItemIdentifier) {
         super.init(frame: .zero)
         self.identifier = identifier
-        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        label.font = .systemFont(ofSize: 11, weight: .bold)
         label.textColor = .secondaryLabelColor
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
