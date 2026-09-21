@@ -17,6 +17,7 @@ struct ArtistDetailMac: View {
     /// Selection is hoisted up to the artist level so the single TracksTable can carry
     /// it across all album sections (cmd-click + shift-range work natively).
     @State private var selection: Set<UUID> = []
+    @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
     @State private var paneWidth: CGFloat = 0
 
     private var totalSongs: Int {
@@ -82,6 +83,7 @@ struct ArtistDetailMac: View {
         .animation(nil, value: isCompact)
         .background(Color(NSColor.textBackgroundColor))
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
+        .onChange(of: libraryFilter) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }
     }
 
@@ -128,7 +130,21 @@ struct ArtistDetailMac: View {
     }
 
     private func reload() {
-        albums = musicLibrary.albumsWithTracksForArtist(artist.id)
+        let all = musicLibrary.albumsWithTracksForArtist(artist.id)
+        guard libraryFilter == .downloaded else {
+            albums = all
+            return
+        }
+        // The filter reached the artist list but stopped here, so narrowing to
+        // downloads and opening an artist still listed everything they have. Albums keep
+        // only their downloaded tracks, and an album left with none drops out.
+        albums = all.compactMap { album in
+            let downloaded = (album.tracks ?? []).filter(\.isDownloaded)
+            guard !downloaded.isEmpty else { return nil }
+            var trimmed = album
+            trimmed.tracks = downloaded
+            return trimmed
+        }
     }
 
     private func playTrack(at index: Int) {

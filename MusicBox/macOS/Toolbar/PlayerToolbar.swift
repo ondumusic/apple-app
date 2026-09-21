@@ -88,6 +88,8 @@ struct NowPlayingLabel: View {
     @Environment(PlayerService.self) private var player
 
     private var track: Track? { player.currentTrack }
+    @State private var isHoveringArtwork = false
+
     private var artworkURL: URL? {
         guard player.queue.indices.contains(player.effectiveIndex) else { return nil }
         return player.queue[player.effectiveIndex].artworkURL
@@ -173,10 +175,23 @@ struct NowPlayingLabel: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            NotificationCenter.default.post(name: .toggleMiniPlayer, object: nil)
+        .overlay {
+            // Music.app marks the artwork on hover to say the click swaps windows
+            // rather than doing something to the track.
+            if isHoveringArtwork {
+                ZStack {
+                    Rectangle().fill(.black.opacity(0.35))
+                    Image(systemName: "arrow.down.right.and.arrow.up.left")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
         }
-        .help("Open Mini Player")
+        .onHover { isHoveringArtwork = $0 }
+        .onTapGesture {
+            NotificationCenter.default.post(name: .switchToMiniPlayer, object: nil)
+        }
+        .help("Switch to Mini Player")
     }
 }
 

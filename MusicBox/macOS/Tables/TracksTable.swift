@@ -84,6 +84,10 @@ struct TracksTable: NSViewControllerRepresentable {
     var artworkSize: CGFloat = 120
     /// Horizontal padding from the table's left edge to the artwork's left edge.
     var artworkInset: CGFloat = 20
+    /// Flat track index → text of a divider row inserted above it. Album detail uses it
+    /// for "Disc 1"/"Disc 2"; a multi-disc album otherwise restarts at track 1 with
+    /// nothing to say why.
+    var groupLabels: [Int: String] = [:]
 
     func makeNSViewController(context: Context) -> TracksTableViewController {
         let vc = TracksTableViewController()
@@ -111,6 +115,7 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.artworkBuilder = artwork
         vc.artworkSize = artworkSize
         vc.artworkInset = artworkInset
+        vc.groupLabels = groupLabels
         vc.update(
             tracks: tracks,
             sections: sections,
@@ -149,6 +154,7 @@ final class TracksTableViewController: NSViewController {
     /// the flat `tracks` array (the source of truth for selection / onPlay indices).
     fileprivate enum DisplayRow {
         case header(Album)
+        case label(String)
         case track(flatIndex: Int)
     }
     fileprivate private(set) var displayRows: [DisplayRow] = []
@@ -156,6 +162,10 @@ final class TracksTableViewController: NSViewController {
     private var rowForTrackIndex: [Int: Int] = [:]
     private var sections: [TracksTableSection]? = nil
     var sectionHeaderBuilder: ((Album) -> AnyView)?
+    var groupLabels: [Int: String] = [:] {
+        didSet { if groupLabels != oldValue { rebuildDisplayRows(); tableView.reloadData() } }
+    }
+    private static let labelRowHeight: CGFloat = 30
     var sectionHeaderHeight: CGFloat = 80
     /// Presence — not identity — decides whether the artwork gutter exists, and that
     /// flip has to reach the columns even when the tracks themselves didn't change.
@@ -186,6 +196,8 @@ final class TracksTableViewController: NSViewController {
     private let durationColumn = NSTableColumn(identifier: .init("duration"))
 
     private var suppressSelectionCallback = false
+    private var hoveredRow: Int?
+    private var trackingArea: NSTrackingArea?
 
     override func loadView() {
         view = NSView()
@@ -198,6 +210,7 @@ final class TracksTableViewController: NSViewController {
         tableView.style = .inset
         tableView.target = self
         tableView.doubleAction = #selector(handleDoubleClick)
+        tableView.onNumberColumnClick = { [weak self] row in self?.playRow(row) }
         tableView.dataSource = self
         tableView.delegate = self
         tableView.onEnter = { [weak self] in self?.handleEnter() }
@@ -215,6 +228,16 @@ final class TracksTableViewController: NSViewController {
         let menu = NSMenu()
         menu.delegate = self
         tableView.menu = menu
+
+        // Scrolling slides rows under a stationary cursor without producing a mouse
+        // event, so hover has to be re-derived from the pointer as well as from events.
+        NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshHoverFromPointer() }
+        }
 
         // Drag source: tracks can be dropped onto sidebar playlist rows (.copy externally)
         // or reordered within this same table (.move locally).
@@ -260,6 +283,14 @@ final class TracksTableViewController: NSViewController {
 
     override func viewDidLayout() {
         super.viewDidLayout()
+        if let trackingArea { view.removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: view.bounds,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        )
+        view.addTrackingArea(area)
+        trackingArea = area
         guard isEmbedded else { return }
         // .sourceList highlight inserts NSVisualEffectViews into the row hierarchy for
         // the rounded selection backdrop. We want the rounded pill but not the blur —
@@ -515,6 +546,7 @@ final class TracksTableViewController: NSViewController {
             for section in sections {
                 rows.append(.header(section.album))
                 for _ in section.tracks {
+                    if let label = groupLabels[flatIdx] { rows.append(.label(label)) }
                     rowForTrack[flatIdx] = rows.count
                     rows.append(.track(flatIndex: flatIdx))
                     flatIdx += 1
@@ -522,7 +554,8 @@ final class TracksTableViewController: NSViewController {
             }
         } else {
             for (idx, _) in tracks.enumerated() {
-                rowForTrack[idx] = idx
+                if let label = groupLabels[idx] { rows.append(.label(label)) }
+                rowForTrack[idx] = rows.count
                 rows.append(.track(flatIndex: idx))
             }
         }
@@ -664,6 +697,41 @@ final class TracksTableViewController: NSViewController {
         suppressSelectionCallback = false
     }
 
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        applyHover(row: tableView.row(at: tableView.convert(event.locationInWindow, from: nil)))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        applyHover(row: -1)
+    }
+
+    private func refreshHoverFromPointer() {
+        guard let window = view.window, window.isKeyWindow else { return applyHover(row: -1) }
+        let local = tableView.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        guard tableView.visibleRect.contains(local) else { return applyHover(row: -1) }
+        applyHover(row: tableView.row(at: local))
+    }
+
+    private func applyHover(row: Int) {
+        let target = flatTrackIndex(forRow: row) == nil ? nil : row
+        guard target != hoveredRow else { return }
+        hoveredRow = target
+        let column = tableView.column(withIdentifier: numberColumn.identifier)
+        guard column >= 0 else { return }
+        for visible in 0..<tableView.numberOfRows {
+            guard let cell = tableView.view(atColumn: column, row: visible, makeIfNecessary: false)
+                    as? NumberOrSpeakerCell else { continue }
+            cell.isHovered = (visible == target)
+        }
+    }
+
+    fileprivate func playRow(_ row: Int) {
+        guard let trackIdx = flatTrackIndex(forRow: row) else { return }
+        onPlay?(trackIdx)
+    }
+
     @objc private func handleDoubleClick() {
         let row = tableView.clickedRow
         guard let trackIdx = flatTrackIndex(forRow: row) else { return }
@@ -703,6 +771,8 @@ final class TracksTableViewController: NSViewController {
 private final class KeyAwareTableView: NSTableView {
     var onEnter: (() -> Void)?
     var onDelete: (() -> Void)?
+    /// Click in the # column, where the hover glyph promises a play button.
+    var onNumberColumnClick: ((Int) -> Void)?
     /// Right-clicked row recorded by our own rightMouseDown override (which bypasses
     /// NSTableView's default handler to suppress its full-row outline highlight).
     /// `clickedRow` returns this when set, otherwise falls through to super.
@@ -710,6 +780,18 @@ private final class KeyAwareTableView: NSTableView {
 
     override var clickedRow: Int {
         manualClickedRow != -1 ? manualClickedRow : super.clickedRow
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let clicked = column(at: point)
+        if event.clickCount == 1, clicked >= 0,
+           tableColumns[clicked].identifier.rawValue == "number",
+           row(at: point) >= 0 {
+            onNumberColumnClick?(row(at: point))
+            return
+        }
+        super.mouseDown(with: event)
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -821,6 +903,7 @@ extension TracksTableViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
         guard displayRows.indices.contains(row) else { return false }
         if case .header = displayRows[row] { return true }
+        if case .label = displayRows[row] { return true }
         return false
     }
 
@@ -832,6 +915,7 @@ extension TracksTableViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         guard displayRows.indices.contains(row) else { return tableView.rowHeight }
         if case .header = displayRows[row] { return sectionHeaderHeight }
+        if case .label = displayRows[row] { return Self.labelRowHeight }
         return tableView.rowHeight
     }
 
@@ -877,6 +961,7 @@ extension TracksTableViewController: NSTableViewDelegate {
     private func isHeaderRow(_ row: Int) -> Bool {
         guard displayRows.indices.contains(row) else { return false }
         if case .header = displayRows[row] { return true }
+        if case .label = displayRows[row] { return true }
         return false
     }
 
@@ -891,6 +976,17 @@ extension TracksTableViewController: NSTableViewDelegate {
                 ?? SectionHeaderCell(identifier: cellId)
             if let builder = sectionHeaderBuilder {
                 cell.host(view: builder(album))
+            }
+            return cell
+        }
+        if case .label(let text) = displayRows[row] {
+            let cellId = NSUserInterfaceItemIdentifier("trackGroupLabel")
+            let cell = tableView.makeView(withIdentifier: cellId, owner: nil) as? GroupLabelCell
+                ?? GroupLabelCell(identifier: cellId)
+            cell.text = text
+            let titleColumn = tableView.column(withIdentifier: self.titleColumn.identifier)
+            if titleColumn >= 0 {
+                cell.leadingInset = tableView.frameOfCell(atColumn: titleColumn, row: row).minX
             }
             return cell
         }
@@ -1108,6 +1204,39 @@ extension TracksTableViewController: NSMenuDelegate {
 /// Group-row cell that hosts a SwiftUI view (album header). Used in sections mode so
 /// the caller can render the album title, artwork, action buttons via a familiar
 /// SwiftUI subview while the table itself stays AppKit.
+/// Divider row naming a group of tracks ("Disc 1"). Plain AppKit rather than a hosted
+/// SwiftUI view: it's one label, and hosting each one costs a view controller.
+private final class GroupLabelCell: NSTableCellView {
+    private let label = NSTextField(labelWithString: "")
+    private var leading: NSLayoutConstraint!
+
+    var text: String = "" {
+        didSet { label.stringValue = text }
+    }
+
+    /// Lined up with the track titles rather than the row's edge, which is where
+    /// Music.app puts it — flush left it read as a heading for the whole table.
+    var leadingInset: CGFloat = 4 {
+        didSet { leading.constant = leadingInset }
+    }
+
+    init(identifier: NSUserInterfaceItemIdentifier) {
+        super.init(frame: .zero)
+        self.identifier = identifier
+        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        label.textColor = .secondaryLabelColor
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        leading = label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: leadingInset)
+        NSLayoutConstraint.activate([
+            leading,
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6)
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
 private final class SectionHeaderCell: NSTableCellView {
     private var hostingView: NSHostingView<AnyView>?
 
@@ -1226,17 +1355,46 @@ private final class NumberOrSpeakerCell: NSTableCellView {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Music.app swaps the track number for a play glyph under the pointer — it's the
+    /// only hint that the number column is a click target.
+    var isHovered: Bool = false {
+        didSet {
+            guard isHovered != oldValue else { return }
+            applyContent()
+        }
+    }
+
+    private var number: String = ""
+    private var speaker: Bool?
+
     func showNumber(_ text: String) {
-        label.stringValue = text
+        number = text
+        speaker = nil
+        applyContent()
+    }
+
+    private func applyContent() {
+        if let playing = speaker {
+            let symbol = playing ? "speaker.wave.2.fill" : "speaker.fill"
+            icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            icon.isHidden = false
+            label.isHidden = true
+            return
+        }
+        if isHovered {
+            icon.image = NSImage(systemSymbolName: "play.fill", accessibilityDescription: nil)
+            icon.isHidden = false
+            label.isHidden = true
+            return
+        }
+        label.stringValue = number
         label.isHidden = false
         icon.isHidden = true
     }
 
     func showSpeaker(playing: Bool) {
-        let symbol = playing ? "speaker.wave.2.fill" : "speaker.fill"
-        icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-        icon.isHidden = false
-        label.isHidden = true
+        speaker = playing
+        applyContent()
     }
 
     override var backgroundStyle: NSView.BackgroundStyle {

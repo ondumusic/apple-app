@@ -100,7 +100,9 @@ final class QueueTableViewController: NSViewController {
         // A gap feedback style is what draws the insertion point between rows, which is
         // the whole reason a drop can land at a position rather than just "in the list".
         tableView.draggingDestinationFeedbackStyle = .gap
-        tableView.registerForDraggedTypes([.musicBoxQueueRows, .musicBoxTracks, .musicBoxAlbums])
+        tableView.registerForDraggedTypes([
+            .musicBoxQueueRows, .musicBoxTracks, .musicBoxAlbums, .musicBoxSidebarPlaylist,
+        ])
         tableView.setDraggingSourceOperationMask(.move, forLocal: true)
 
         scrollView.documentView = tableView
@@ -259,7 +261,9 @@ extension QueueTableViewController: NSTableViewDataSource {
         guard dropOperation == .above else { return [] }
         let types = info.draggingPasteboard.types ?? []
         if types.contains(.musicBoxQueueRows) { return .move }
-        if types.contains(.musicBoxTracks) || types.contains(.musicBoxAlbums) { return .copy }
+        if types.contains(.musicBoxTracks)
+            || types.contains(.musicBoxAlbums)
+            || types.contains(.musicBoxSidebarPlaylist) { return .copy }
         return []
     }
 
@@ -274,6 +278,16 @@ extension QueueTableViewController: NSTableViewDataSource {
         let movedRows = pasteboardItems.compactMap { $0.string(forType: .musicBoxQueueRows).flatMap(Int.init) }
         if !movedRows.isEmpty {
             actions.move(IndexSet(movedRows), row)
+            return true
+        }
+
+        // Before tracks and albums: a playlist drag carries only this type, and the
+        // sidebar's own reorder never reaches here — that drop lands on the outline.
+        let playlistIds = pasteboardItems.compactMap {
+            $0.string(forType: .musicBoxSidebarPlaylist).flatMap(UUID.init)
+        }
+        if !playlistIds.isEmpty {
+            actions.insertPlaylists(playlistIds, row)
             return true
         }
 

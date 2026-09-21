@@ -21,12 +21,38 @@ class BackgroundSessionDelegate: NSObject, UIApplicationDelegate {
 #endif
 
 #if os(macOS)
+extension NSApplication {
+    /// Set during termination so the main window closing as part of quitting isn't
+    /// recorded as the user having closed it.
+    @MainActor static var isTerminatingForReal = false
+    @MainActor var isTerminatingForReal: Bool { NSApplication.isTerminatingForReal }
+}
+
 final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     private var didClearLaunchFocus = false
+    private var trackedMainWindows: Set<ObjectIdentifier> = []
     /// Strong refs so the KVO observers stay alive for the window's lifetime.
     private var titleObservers: [NSKeyValueObservation] = []
+    private var spaceKeyMonitor: Any?
+
+    func applicationWillTerminate(_ notification: Notification) {
+        NSApplication.isTerminatingForReal = true
+    }
+
+    /// Set by the app so playback shortcuts keep working with the main window closed —
+    /// they used to live in MacOSContentView, which unmounts with its window and took
+    /// Space away from the mini player.
+    var player: PlayerService?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installSpaceKeyMonitor()
+        NotificationCenter.default.addObserver(
+            forName: .togglePlayPause,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.player?.togglePlayPause() }
+        }
         for window in NSApp.windows {
             configure(window)
         }
@@ -40,9 +66,45 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Space toggles playback, but not while a text field has focus — which is why this
+    /// is a key monitor and not a menu key equivalent: a menu shortcut fires regardless
+    /// of the first responder and would toggle playback mid-search.
+    private func installSpaceKeyMonitor() {
+        guard spaceKeyMonitor == nil else { return }
+        spaceKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let spaceKeyCode: UInt16 = 49
+            guard event.keyCode == spaceKeyCode,
+                  event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
+                  !(NSApp.keyWindow?.firstResponder is NSText) else { return event }
+            MainActor.assumeIsolated { self?.player?.togglePlayPause() }
+            return nil
+        }
+    }
+
+    /// Whether the main window was open when the app last quit. Closing with only the
+    /// mini player showing should come back the same way.
+    static let mainWindowVisibleKey = "MainWindowVisible"
+
     private func configure(_ window: NSWindow) {
         makeChromeless(window)
         clearLaunchFocus(in: window)
+        trackMainWindowVisibility(window)
+    }
+
+    private func trackMainWindowVisibility(_ window: NSWindow) {
+        guard window.identifier != MiniPlayerWindowController.windowIdentifier,
+              window.canBecomeMain else { return }
+        UserDefaults.standard.set(true, forKey: Self.mainWindowVisibleKey)
+        guard !trackedMainWindows.contains(ObjectIdentifier(window)) else { return }
+        trackedMainWindows.insert(ObjectIdentifier(window))
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                guard !NSApp.isTerminatingForReal else { return }
+                UserDefaults.standard.set(false, forKey: Self.mainWindowVisibleKey)
+            }
+        }
     }
 
     /// Music.app's window has no toolbar at all — inspected: its window holds exactly
@@ -56,6 +118,9 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
     private func makeChromeless(_ window: NSWindow) {
         guard window.identifier != MiniPlayerWindowController.windowIdentifier else { return }
         window.styleMask.insert(.fullSizeContentView)
+        // Dropping the toolbar also dropped the window out of the zoom/full-screen
+        // machinery, which is what took "Enter Full Screen" off the View menu.
+        window.collectionBehavior.insert(.fullScreenPrimary)
         window.titlebarAppearsTransparent = true
         window.toolbar = nil
         if !window.title.isEmpty { window.title = "" }
@@ -163,6 +228,9 @@ struct MusicBoxApp: App {
             .environment(auth)
             .animation(.easeOut(duration: 0.18), value: auth.isRestoringSession)
             .task { await auth.beginSessionRestore() }
+            #if os(macOS)
+            .onChange(of: player == nil, initial: true) { _, _ in macAppDelegate.player = player }
+            #endif
             .accentColor(settings.resolvedAccentColor)
             .onChange(of: settings.hapticsEnabled, initial: true) { _, enabled in
                 Haptics.isEnabled = enabled
@@ -270,12 +338,19 @@ struct MusicBoxApp: App {
                 }
                 .keyboardShortcut("0", modifiers: [.command, .option])
             }
-            CommandGroup(after: .toolbar) {
-                Picker("Library Filter", selection: $libraryFilter) {
-                    Text("All Music").tag(LibraryFilter.all)
-                    Text("Downloaded").tag(LibraryFilter.downloaded)
+            CommandGroup(replacing: .newItem) {
+                Button("New Playlist") {
+                    NotificationCenter.default.post(name: .newPlaylistRequested, object: nil)
                 }
-                .pickerStyle(.inline)
+                .keyboardShortcut("n", modifiers: .command)
+            }
+            CommandGroup(after: .toolbar) {
+                Toggle("Downloaded Only", isOn: Binding(
+                    get: { libraryFilter == .downloaded },
+                    set: { libraryFilter = $0 ? .downloaded : .all }
+                ))
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                Divider()
             }
             CommandMenu("Controls") {
                 // No key equivalent here: a menu shortcut fires even while a text field

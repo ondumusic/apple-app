@@ -9,6 +9,10 @@ extension Notification.Name {
     static let requestAddToPlaylist = Notification.Name("MusicBox.requestAddToPlaylist")
     static let focusSearch = Notification.Name("MusicBox.focusSearch")
     static let toggleMiniPlayer = Notification.Name("MusicBox.toggleMiniPlayer")
+    /// Swap to the mini player, closing the main window — what clicking the player row's
+    /// artwork does, as in Music.app.
+    static let switchToMiniPlayer = Notification.Name("MusicBox.switchToMiniPlayer")
+    static let newPlaylistRequested = Notification.Name("MusicBox.newPlaylistRequested")
     static let showDownloadActivity = Notification.Name("MusicBox.showDownloadActivity")
     static let togglePlayPause = Notification.Name("MusicBox.togglePlayPause")
     /// Handled by whichever surface is key — the mini player's inline queue if that

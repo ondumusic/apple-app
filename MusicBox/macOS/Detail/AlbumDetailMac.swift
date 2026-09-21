@@ -60,7 +60,8 @@ struct AlbumDetailMac: View {
                             .environment(network)
                     )
                 },
-                sectionHeaderHeight: Self.headerHeight
+                sectionHeaderHeight: Self.headerHeight,
+                groupLabels: TrackGrouping.discLabels(for: tracks)
             )
             .background(Color(NSColor.textBackgroundColor))
         }

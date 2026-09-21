@@ -34,7 +34,6 @@ struct MacOSContentView: View {
     @State private var batchCompleted = 0
     @State private var miniPlayer: MiniPlayerWindowController?
     @AppStorage("macSidebarWidth") private var sidebarWidth: Double = 240
-    @State private var spaceKeyMonitor: Any?
     /// Drives the toolbar's search field for Cmd+F. Search moved out of the sidebar.
     @FocusState private var searchFieldFocused: Bool
     @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
@@ -220,23 +219,25 @@ struct MacOSContentView: View {
             restoreDetail()
             // Build the tracks cache before anyone opens Songs.
             Task { await musicLibrary.prepareAllTracks() }
-            installSpaceKeyMonitor()
             // Reopen the mini player if it was showing when the app last quit, in
             // whichever z-order and focus the user left the two windows in.
             if UserDefaults.standard.bool(forKey: MiniPlayerWindowController.visibleDefaultsKey) {
                 let mp = miniPlayer ?? MiniPlayerWindowController(player: player, settings: settings, musicLibrary: musicLibrary, network: network)
                 miniPlayer = mp
                 mp.restoreAtLaunch()
+                // Quit with only the mini player showing and that's what comes back. The
+                // Window scene always creates its window, so the main one is closed again
+                // rather than never opened — same runloop turn, before it can draw.
+                if !UserDefaults.standard.bool(forKey: MacOSAppDelegate.mainWindowVisibleKey) {
+                    Task { @MainActor in closeMainWindow() }
+                }
             }
-        }
-        .onDisappear {
-            if let spaceKeyMonitor { NSEvent.removeMonitor(spaceKeyMonitor) }
-            spaceKeyMonitor = nil
         }
         .modifier(WindowNotificationHandlers(
             toggleMiniPlayer: toggleMiniPlayer,
+            switchToMiniPlayer: switchToMiniPlayer,
+            newPlaylist: { sidebarActions.createPlaylist(nil) },
             showActivity: { openWindow(id: "activity") },
-            togglePlayPause: { player.togglePlayPause() },
             navigateToAlbum: { detailPath.append($0) },
             navigateToArtist: handleArtistNavigation,
             addToPlaylist: { addToPlaylistTrackIds = $0 }
@@ -247,18 +248,6 @@ struct MacOSContentView: View {
     /// equivalent can't make that distinction — it fires while the search field has
     /// focus — and a bare `.keyboardShortcut` never arrives at all once a list is first
     /// responder, because the list consumes the key first.
-    private func installSpaceKeyMonitor() {
-        guard spaceKeyMonitor == nil else { return }
-        spaceKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let spaceKeyCode: UInt16 = 49
-            guard event.keyCode == spaceKeyCode,
-                  event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
-                  !(NSApp.keyWindow?.firstResponder is NSText) else { return event }
-            NotificationCenter.default.post(name: .togglePlayPause, object: nil)
-            return nil
-        }
-    }
-
     /// Posts the inline-rename trigger for a freshly-created playlist/folder. The
     /// outbox can flush + remap the temp id to the real id within a few ms — faster
     /// than SwiftUI's tree rebuild — so we listen for .playlistIdRemapped during the
@@ -376,6 +365,25 @@ struct MacOSContentView: View {
             searchText = ""
             selectionBeforeSearch = nil
         }
+    }
+
+    /// Everything except the mini player that can take main — the main window, whatever
+    /// its title happens to be.
+    private func closeMainWindow() {
+        for window in NSApp.windows
+        where window.identifier != MiniPlayerWindowController.windowIdentifier && window.canBecomeMain {
+            window.close()
+        }
+    }
+
+    /// Clicking the artwork swaps windows rather than stacking a second one on top,
+    /// which is what Music.app does.
+    private func switchToMiniPlayer() {
+        let mp = miniPlayer ?? MiniPlayerWindowController(player: player, settings: settings, musicLibrary: musicLibrary, network: network)
+        miniPlayer = mp
+        mp.showWindow(nil)
+        UserDefaults.standard.set(true, forKey: MiniPlayerWindowController.visibleDefaultsKey)
+        closeMainWindow()
     }
 
     private func toggleMiniPlayer() {
@@ -576,22 +584,26 @@ struct QueuePanel: View {
 /// chain there had grown past what the type checker will infer in reasonable time.
 private struct WindowNotificationHandlers: ViewModifier {
     let toggleMiniPlayer: () -> Void
+    let switchToMiniPlayer: () -> Void
+    let newPlaylist: () -> Void
     let showActivity: () -> Void
-    let togglePlayPause: () -> Void
     let navigateToAlbum: (Album) -> Void
     let navigateToArtist: (Artist) -> Void
     let addToPlaylist: ([UUID]) -> Void
 
     func body(content: Content) -> some View {
         content
+            .onReceive(NotificationCenter.default.publisher(for: .newPlaylistRequested)) { _ in
+                newPlaylist()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .switchToMiniPlayer)) { _ in
+                switchToMiniPlayer()
+            }
             .onReceive(NotificationCenter.default.publisher(for: .toggleMiniPlayer)) { _ in
                 toggleMiniPlayer()
             }
             .onReceive(NotificationCenter.default.publisher(for: .showDownloadActivity)) { _ in
                 showActivity()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .togglePlayPause)) { _ in
-                togglePlayPause()
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToAlbum)) { note in
                 guard let album = note.object as? Album else { return }

@@ -16,6 +16,7 @@ struct QueueActions {
     var insertTracks: ([UUID], Int) -> Void = { _, _ in }
     var insertAlbums: ([UUID], Int) -> Void = { _, _ in }
     var addToPlaylist: ([UUID]) -> Void = { _ in }
+    var insertPlaylists: ([UUID], Int) -> Void = { _, _ in }
 
     static func standard(player: PlayerService, musicLibrary: MusicLibrary, network: NetworkMonitor) -> QueueActions {
         var a = QueueActions()
@@ -42,6 +43,15 @@ struct QueueActions {
                 let tracks = musicLibrary.tracksForAlbum(albumId)
                 let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
                 return available.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+            }
+            guard !items.isEmpty else { return }
+            player.insertIntoQueue(items, at: position)
+        }
+        a.insertPlaylists = { playlistIds, position in
+            let items = playlistIds.flatMap { playlistId -> [QueueItem] in
+                let tracks = musicLibrary.tracksForPlaylist(playlistId)
+                return musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
+                    .map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
             }
             guard !items.isEmpty else { return }
             player.insertIntoQueue(items, at: position)
