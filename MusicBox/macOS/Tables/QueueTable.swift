@@ -246,6 +246,22 @@ final class QueueTableViewController: NSViewController {
         actions.remove(rows)
     }
 
+    @objc private func menuPlayNext() {
+        let rows = contextRows()
+        guard !rows.isEmpty else { return }
+        actions.playNext(rows, tracks(at: rows))
+    }
+
+    @objc private func menuPlayLast() {
+        let rows = contextRows()
+        guard !rows.isEmpty else { return }
+        actions.playLast(rows, tracks(at: rows))
+    }
+
+    private func tracks(at rows: IndexSet) -> [Track] {
+        rows.compactMap { items.indices.contains($0) ? items[$0].track : nil }
+    }
+
     @objc private func menuAddToPlaylist() {
         let rows = contextRows()
         guard !rows.isEmpty else { return }
@@ -355,6 +371,8 @@ extension QueueTableViewController: NSMenuDelegate {
         menu.removeAllItems()
         guard items.indices.contains(tableView.clickedRow) else { return }
         addItem(to: menu, title: "Play", action: #selector(menuPlay))
+        addItem(to: menu, title: "Play Next", action: #selector(menuPlayNext))
+        addItem(to: menu, title: "Play Last", action: #selector(menuPlayLast))
         menu.addItem(.separator())
         addItem(to: menu, title: "Add to Playlist…", action: #selector(menuAddToPlaylist))
         guard allowsEditing else { return }

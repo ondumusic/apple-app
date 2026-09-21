@@ -17,6 +17,11 @@ struct QueueActions {
     var insertAlbums: ([UUID], Int) -> Void = { _, _ in }
     var addToPlaylist: ([UUID]) -> Void = { _ in }
     var insertPlaylists: ([UUID], Int) -> Void = { _, _ in }
+    /// Both the rows and the tracks they hold, because the two scopes mean different
+    /// things by it: in Up Next these move a row that's already queued, in History they
+    /// queue a copy of something that has already played.
+    var playNext: (IndexSet, [Track]) -> Void = { _, _ in }
+    var playLast: (IndexSet, [Track]) -> Void = { _, _ in }
 
     static func standard(player: PlayerService, musicLibrary: MusicLibrary, network: NetworkMonitor) -> QueueActions {
         var a = QueueActions()
@@ -56,6 +61,12 @@ struct QueueActions {
             guard !items.isEmpty else { return }
             player.insertIntoQueue(items, at: position)
         }
+        a.playNext = { positions, _ in
+            player.moveQueueItems(from: positions, to: 0)
+        }
+        a.playLast = { positions, _ in
+            player.moveQueueItems(from: positions, to: player.upNextEntries.count)
+        }
         a.addToPlaylist = { trackIds in
             guard !trackIds.isEmpty else { return }
             NotificationCenter.default.post(name: .requestAddToPlaylist, object: trackIds)
@@ -70,6 +81,15 @@ struct QueueActions {
         var a = QueueActions()
         a.play = { position in
             player.skipTo(queueIndex: player.currentIndex - 1 - position)
+        }
+        a.playNext = { _, tracks in
+            player.insertIntoQueue(tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }, at: 0)
+        }
+        a.playLast = { _, tracks in
+            player.insertIntoQueue(
+                tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) },
+                at: player.upNextEntries.count
+            )
         }
         a.addToPlaylist = { trackIds in
             guard !trackIds.isEmpty else { return }

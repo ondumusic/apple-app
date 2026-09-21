@@ -714,11 +714,6 @@ private struct InlineQueue: View {
             Divider()
             HStack(spacing: 6) {
                 QueueScopeMenu(scope: $scope, font: .caption.bold())
-                if !entries.isEmpty {
-                    Text("\(entries.count)")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.tertiary)
-                }
                 Spacer()
                 if !entries.isEmpty {
                     Button("Clear") {
