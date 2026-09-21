@@ -22,9 +22,13 @@ struct QueueActions {
     /// queue a copy of something that has already played.
     var playNext: (IndexSet, [Track]) -> Void = { _, _ in }
     var playLast: (IndexSet, [Track]) -> Void = { _, _ in }
+    var goToAlbum: (Track) -> Void = { _ in }
+    var goToArtist: (Track) -> Void = { _ in }
 
     static func standard(player: PlayerService, musicLibrary: MusicLibrary, network: NetworkMonitor) -> QueueActions {
         var a = QueueActions()
+        a.goToAlbum = navigateToAlbum(musicLibrary)
+        a.goToArtist = navigateToArtist(musicLibrary)
         a.play = { position in
             player.skipTo(queueIndex: player.currentIndex + 1 + position)
         }
@@ -77,8 +81,10 @@ struct QueueActions {
     /// History is read-only: the only thing a row does is take you back to it. Positions
     /// here count backwards from the current track, 0 being what played last — which is
     /// the order `historyEntries` reports.
-    static func history(player: PlayerService) -> QueueActions {
+    static func history(player: PlayerService, musicLibrary: MusicLibrary) -> QueueActions {
         var a = QueueActions()
+        a.goToAlbum = navigateToAlbum(musicLibrary)
+        a.goToArtist = navigateToArtist(musicLibrary)
         a.play = { position in
             player.skipTo(queueIndex: player.currentIndex - 1 - position)
         }
@@ -96,6 +102,24 @@ struct QueueActions {
             NotificationCenter.default.post(name: .requestAddToPlaylist, object: trackIds)
         }
         return a
+    }
+}
+
+@MainActor
+private func navigateToAlbum(_ musicLibrary: MusicLibrary) -> (Track) -> Void {
+    { track in
+        guard let album = musicLibrary.albumWithTracks(track.albumId) else { return }
+        MainWindowNavigation.request(.navigateToAlbum, object: album)
+    }
+}
+
+/// The album artist, not the track's own — a featuring credit isn't in the Artists list
+/// and wouldn't resolve.
+@MainActor
+private func navigateToArtist(_ musicLibrary: MusicLibrary) -> (Track) -> Void {
+    { track in
+        guard let artist = musicLibrary.artist(track.albumArtistId) else { return }
+        MainWindowNavigation.request(.navigateToArtist, object: artist)
     }
 }
 

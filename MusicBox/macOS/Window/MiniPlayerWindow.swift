@@ -713,7 +713,7 @@ private struct InlineQueue: View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 6) {
-                QueueScopeMenu(scope: $scope, font: .caption.bold())
+                QueueScopeMenu(scope: $scope, font: .subheadline.weight(.semibold))
                 Spacer()
                 if !entries.isEmpty {
                     Button("Clear") {
@@ -744,7 +744,7 @@ private struct InlineQueue: View {
                     accent: settings.resolvedAccentColor,
                     actions: scope == .upNext
                         ? .standard(player: player, musicLibrary: musicLibrary, network: network)
-                        : .history(player: player),
+                        : .history(player: player, musicLibrary: musicLibrary),
                     // This panel's header pads 12, not the window's 16, and its shorter
                     // rows need smaller artwork to keep an even gap above and below.
                     horizontalInset: 12,

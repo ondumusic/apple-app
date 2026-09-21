@@ -52,14 +52,14 @@ struct TrackActions {
         }
         a.goToAlbum = { track in
             if let album = musicLibrary.albumWithTracks(track.albumId) {
-                NotificationCenter.default.post(name: .navigateToAlbum, object: album)
+                MainWindowNavigation.request(.navigateToAlbum, object: album)
             }
         }
         a.goToArtist = { track in
             // Navigate to the album artist — track-level artists (e.g. featurings)
             // aren't in the Artists list and would fail to resolve.
             if let artist = musicLibrary.artist(track.albumArtistId) {
-                NotificationCenter.default.post(name: .navigateToArtist, object: artist)
+                MainWindowNavigation.request(.navigateToArtist, object: artist)
             }
         }
         if let downloadService {

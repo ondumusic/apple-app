@@ -217,6 +217,9 @@ struct MacOSContentView: View {
                 sidebarSelection = .category(.artists)
             }
             restoreDetail()
+            // Anything requested while this window was closed — Go to Album from the
+            // mini player, Go to Current Song from the menu bar — has been held for it.
+            Task { @MainActor in MainWindowNavigation.deliverPending() }
             // Build the tracks cache before anyone opens Songs.
             Task { await musicLibrary.prepareAllTracks() }
             // Reopen the mini player if it was showing when the app last quit, in
@@ -585,7 +588,7 @@ struct QueuePanel: View {
                     accent: settings.resolvedAccentColor,
                     actions: scope == .upNext
                         ? .standard(player: player, musicLibrary: musicLibrary, network: network)
-                        : .history(player: player),
+                        : .history(player: player, musicLibrary: musicLibrary),
                     allowsEditing: scope == .upNext
                 )
             }

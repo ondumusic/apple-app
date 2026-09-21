@@ -258,6 +258,16 @@ final class QueueTableViewController: NSViewController {
         actions.playLast(rows, tracks(at: rows))
     }
 
+    @objc private func menuGoToAlbum() {
+        guard let track = tracks(at: contextRows()).first else { return }
+        actions.goToAlbum(track)
+    }
+
+    @objc private func menuGoToArtist() {
+        guard let track = tracks(at: contextRows()).first else { return }
+        actions.goToArtist(track)
+    }
+
     private func tracks(at rows: IndexSet) -> [Track] {
         rows.compactMap { items.indices.contains($0) ? items[$0].track : nil }
     }
@@ -375,6 +385,9 @@ extension QueueTableViewController: NSMenuDelegate {
         addItem(to: menu, title: "Play Last", action: #selector(menuPlayLast))
         menu.addItem(.separator())
         addItem(to: menu, title: "Add to Playlist…", action: #selector(menuAddToPlaylist))
+        menu.addItem(.separator())
+        addItem(to: menu, title: "Go to Album", action: #selector(menuGoToAlbum))
+        addItem(to: menu, title: "Go to Artist", action: #selector(menuGoToArtist))
         guard allowsEditing else { return }
         menu.addItem(.separator())
         addItem(to: menu, title: "Remove from Queue", action: #selector(menuRemove))
