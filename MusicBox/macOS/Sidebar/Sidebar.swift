@@ -110,89 +110,6 @@ final class SidebarNode: NSObject {
     }
 }
 
-/// Search field whose focus ring is the app's accent rather than the system's.
-///
-/// AppKit's ring follows the *system* accent, which is the same mismatch
-/// AccentSelectionRowView exists to fix — the app paints its own selection everywhere
-/// else, so a blue ring here is the one thing that doesn't match.
-final class AccentSearchField: NSSearchField {
-    var accentColor: NSColor = .controlAccentColor {
-        didSet { ringLayer.strokeColor = accentColor.withAlphaComponent(0.9).cgColor }
-    }
-
-    private let ringLayer = CAShapeLayer()
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        setUpRing()
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setUpRing()
-    }
-
-    private func setUpRing() {
-        wantsLayer = true
-        ringLayer.fillColor = NSColor.clear.cgColor
-        ringLayer.strokeColor = accentColor.withAlphaComponent(0.9).cgColor
-        ringLayer.lineWidth = 2.5
-        ringLayer.opacity = 0
-        layer?.addSublayer(ringLayer)
-    }
-
-    override var focusRingType: NSFocusRingType {
-        get { .none }
-        set { /* pinned: we draw our own */ }
-    }
-
-    override func layout() {
-        super.layout()
-        ringLayer.frame = bounds
-        let inset = bounds.insetBy(dx: 1.25, dy: 1.25)
-        // Matched to the field's own bezel, which changed shape in macOS 26 — a fixed
-        // radius left the ring visibly squarer than the field it traces.
-        let radius = SystemChrome.fieldCornerRadius(height: inset.height)
-        ringLayer.path = CGPath(
-            roundedRect: inset,
-            cornerWidth: radius,
-            cornerHeight: radius,
-            transform: nil
-        )
-    }
-
-    /// Music eases its ring in rather than snapping it on, which is most of why theirs
-    /// feels like a response and a drawn-instantly one doesn't. A touch of scale with the
-    /// fade reads as the ring settling onto the field.
-    private func setRingVisible(_ visible: Bool) {
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = ringLayer.opacity
-        fade.toValue = visible ? 1 : 0
-
-        let scale = CABasicAnimation(keyPath: "transform.scale")
-        scale.fromValue = visible ? 1.04 : 1.0
-        scale.toValue = 1.0
-
-        let group = CAAnimationGroup()
-        group.animations = [fade, scale]
-        group.duration = 0.18
-        group.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        ringLayer.add(group, forKey: "focus")
-        ringLayer.opacity = visible ? 1 : 0
-    }
-
-    override func becomeFirstResponder() -> Bool {
-        let accepted = super.becomeFirstResponder()
-        if accepted { setRingVisible(true) }
-        return accepted
-    }
-
-    override func textDidEndEditing(_ notification: Notification) {
-        super.textDidEndEditing(notification)
-        setRingVisible(false)
-    }
-}
-
 // MARK: - View Controller
 
 final class SidebarViewController: NSViewController {
@@ -207,7 +124,6 @@ final class SidebarViewController: NSViewController {
     var accentNSColor: NSColor = .controlAccentColor {
         didSet {
             guard accentNSColor != oldValue, isViewLoaded else { return }
-            searchField.accentColor = accentNSColor
             outlineView.enumerateAvailableRowViews { rowView, row in
                 (rowView as? SidebarRowView)?.selectionColor = accentNSColor
                 (rowView.view(atColumn: 0) as? SidebarCell)?.accentColor = accentNSColor
@@ -218,7 +134,7 @@ final class SidebarViewController: NSViewController {
     /// Matches Music.app: its sidebar scroll area starts 52pt below the window top.
     private static let trafficLightClearance: CGFloat = 52
 
-    private let searchField = AccentSearchField()
+    private let searchField = NSSearchField()
     private weak var backdrop: NSVisualEffectView?
     private let addButton = NSButton()
     private let bottomBar = NSView()
