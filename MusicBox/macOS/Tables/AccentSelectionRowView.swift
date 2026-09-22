@@ -185,7 +185,7 @@ final class AccentSelectionRowView: NSTableRowView {
     }
 
     private func drawCustomSelectionPill(leftInset: CGFloat) {
-        let radius: CGFloat = 6
+        let radius = SystemChrome.selectionCornerRadius(height: bounds.height)
         let topRadius: CGFloat = isPreviousRowSelected ? 0 : radius
         let bottomRadius: CGFloat = isNextRowSelected ? 0 : radius
         let rect = NSRect(

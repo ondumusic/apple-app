@@ -149,10 +149,14 @@ final class AccentSearchField: NSSearchField {
     override func layout() {
         super.layout()
         ringLayer.frame = bounds
+        let inset = bounds.insetBy(dx: 1.25, dy: 1.25)
+        // Matched to the field's own bezel, which changed shape in macOS 26 — a fixed
+        // radius left the ring visibly squarer than the field it traces.
+        let radius = SystemChrome.fieldCornerRadius(height: inset.height)
         ringLayer.path = CGPath(
-            roundedRect: bounds.insetBy(dx: 1.25, dy: 1.25),
-            cornerWidth: 6,
-            cornerHeight: 6,
+            roundedRect: inset,
+            cornerWidth: radius,
+            cornerHeight: radius,
             transform: nil
         )
     }
@@ -398,9 +402,23 @@ final class SidebarViewController: NSViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        if view.window?.firstResponder === searchField || view.window?.firstResponder === view.window {
-            view.window?.makeFirstResponder(outlineView)
+        guard let window = view.window else { return }
+        // Tell AppKit where focus belongs when the window becomes key. Left to itself it
+        // picks the first key view, which is the search field — the reason the window
+        // sometimes came up with the caret already blinking in it.
+        window.initialFirstResponder = outlineView
+        if window.firstResponder === window || isSearchFieldFocused(in: window) {
+            window.makeFirstResponder(outlineView)
         }
+    }
+
+    /// A focused text field isn't the first responder — its field editor is, and that's
+    /// an NSText living inside the field. Checking for the field itself missed it, which
+    /// is why clearing focus at launch worked only some of the time.
+    private func isSearchFieldFocused(in window: NSWindow) -> Bool {
+        if window.firstResponder === searchField { return true }
+        guard let responder = window.firstResponder as? NSView else { return false }
+        return responder.isDescendant(of: searchField)
     }
 
     override func viewDidLayout() {
