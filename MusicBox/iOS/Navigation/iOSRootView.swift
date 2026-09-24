@@ -78,7 +78,13 @@ struct iOSRootView: View {
                 NavigationStack(path: $searchPath) {
                     SearchView(query: searchText, path: $searchPath)
                         .navigationTitle("Search")
-                        .searchable(text: $searchText, prompt: "Artists, albums, or songs")
+                        // .always, not the default: the automatic placement tucks the
+                        // field under the navigation bar whenever the content scrolls, so
+                        // arriving at the Search tab with a long history meant scrolling
+                        // up to find the one control the tab exists for.
+                        .searchable(text: $searchText,
+                                    placement: .navigationBarDrawer(displayMode: .always),
+                                    prompt: "Artists, albums, or songs")
                         .toolbar { userMenu }
                 }
                 .nowPlayingBar()
