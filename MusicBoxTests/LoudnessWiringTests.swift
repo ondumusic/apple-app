@@ -1,0 +1,121 @@
+import Foundation
+import SwiftData
+import Testing
+@testable import MusicBox
+
+/// The path from the Settings toggle to the gain on the playing track: the setting's
+/// didSet, the callback PlayerService installs on it, and the album-vs-track choice.
+/// Everything below this is AVPlayer's own `volume`.
+@Suite(.serialized)
+struct LoudnessWiringTests {
+
+    func makeLibrary() throws -> MusicLibrary {
+        let container = try ModelContainer(
+            for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
+                 LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        return MusicLibrary(container: container)
+    }
+
+    /// One album, one track per entry in `lufs`, returning the track ids in order.
+    func seed(_ lib: MusicLibrary, lufs: [Double?]) -> [UUID] {
+        let artistId = UUID(), albumId = UUID(), now = Date()
+        lib.upsertArtists([SyncArtist(id: artistId, name: "Artist", sortName: "Artist",
+                                      slug: "artist", albumCount: 1, insertedAt: now)])
+        lib.upsertAlbums([SyncAlbum(id: albumId, artistId: artistId, name: "Album", sortName: "Album",
+                                    slug: "album", releaseYear: nil, artworkUrl: nil, isUnknown: false,
+                                    trackCount: lufs.count, insertedAt: now)])
+        let tracks = lufs.enumerated().map { index, value in
+            SyncTrack(id: UUID(), artistId: artistId, albumArtistId: artistId, albumId: albumId,
+                      name: "Track \(index)", disc: 1, number: index + 1, duration: 200,
+                      mimetype: "audio/mp4", streamUrl: "/s/\(index)", downloadUrl: "/d/\(index)",
+                      insertedAt: now, lufs: value)
+        }
+        lib.upsertTracks(tracks)
+        lib.bumpRevision()
+        return tracks.map(\.id)
+    }
+
+    /// Restores a queue so `currentTrack` is set without needing a server to play from.
+    func makePlayer(_ lib: MusicLibrary, queue ids: [UUID],
+                            settings: SettingsStore) async -> PlayerService {
+        let store = PlaybackStateStore(
+            fileURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("loudness-wiring/\(UUID().uuidString).json"),
+            defaults: UserDefaults(suiteName: "loudness-wiring.\(UUID().uuidString)")!
+        )
+        store.save(PlaybackState(trackIds: ids, currentIndex: 0, shuffledIndices: nil))
+        await store.flush()
+        let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
+        let player = PlayerService(api: api, settings: settings, musicLibrary: lib, stateStore: store)
+        await player.restoreTask?.value
+        return player
+    }
+
+    func dB(_ gain: Float) -> Double { 20 * log10(Double(gain)) }
+
+    @Test func togglingTheSettingReappliesToTheTrackAlreadyPlaying() async throws {
+        let lib = try makeLibrary()
+        // Mixed album so the queue isn't a single-album one: this is track gain.
+        let ids = seed(lib, lufs: [-4, -23])
+        let settings = makeTestSettings()
+        settings.normalizeVolume = false
+        let player = await makePlayer(lib, queue: [ids[0]], settings: settings)
+
+        settings.normalizeVolume = true
+        #expect(dB(player.primaryGain) < -13)
+
+        settings.normalizeVolume = false
+        #expect(player.primaryGain == 1)
+    }
+
+    @Test func aQueueOfOneAlbumTakesTheAlbumGain() async throws {
+        let lib = try makeLibrary()
+        let ids = seed(lib, lufs: [-4, -23])
+        let settings = makeTestSettings()
+        let player = await makePlayer(lib, queue: ids, settings: settings)
+
+        settings.normalizeVolume = true
+        // The album sits near -7 LUFS, far above the -4 the loud track alone would give.
+        let albumGain = dB(player.primaryGain)
+        #expect(albumGain > -13)
+        #expect(albumGain < -8)
+    }
+
+    @Test func aMixedQueueTakesTheTrackGain() async throws {
+        let lib = try makeLibrary()
+        let loud = seed(lib, lufs: [-4])
+        let quiet = seed(lib, lufs: [-23])
+        let settings = makeTestSettings()
+        let player = await makePlayer(lib, queue: [loud[0], quiet[0]], settings: settings)
+
+        settings.normalizeVolume = true
+        #expect(dB(player.primaryGain) < -13)
+    }
+
+    @Test func anUnmeasuredTrackIsLeftAlone() async throws {
+        let lib = try makeLibrary()
+        let ids = seed(lib, lufs: [nil, nil])
+        let settings = makeTestSettings()
+        let player = await makePlayer(lib, queue: ids, settings: settings)
+
+        settings.normalizeVolume = true
+        #expect(player.primaryGain == 1)
+    }
+}
+
+extension LoudnessWiringTests {
+
+    /// A lone track is levelled as a track even though it trivially satisfies "every
+    /// track in the queue shares an album".
+    @Test func oneTrackOnItsOwnTakesTheTrackGain() async throws {
+        let lib = try makeLibrary()
+        let ids = seed(lib, lufs: [-4, -23])
+        let settings = makeTestSettings()
+        let player = await makePlayer(lib, queue: [ids[0]], settings: settings)
+
+        settings.normalizeVolume = true
+        #expect(dB(player.primaryGain) < -13)
+    }
+}

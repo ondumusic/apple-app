@@ -45,7 +45,7 @@ final class PlayerService {
     }
     /// Loudness-normalisation multipliers for the track each player is holding. They are
     /// per-player because a crossfade has two different tracks in the air at once.
-    @ObservationIgnored private var primaryGain: Float = 1
+    @ObservationIgnored private(set) var primaryGain: Float = 1
     @ObservationIgnored private var secondaryGain: Float = 1
     var showReplaceQueueConfirmation: Bool = false
     @ObservationIgnored private var pendingPlayAction: (() -> Void)?
@@ -197,8 +197,10 @@ final class PlayerService {
         secondaryPlayer?.volume = Float(volume) * secondaryGain
     }
 
+    /// One track on its own is not "listening to an album" — you asked for that song, so
+    /// it gets levelled like any other single song.
     private static func isSingleAlbum(_ items: [QueueItem]) -> Bool {
-        guard let first = items.first?.track.albumId else { return false }
+        guard items.count > 1, let first = items.first?.track.albumId else { return false }
         return items.allSatisfy { $0.track.albumId == first }
     }
 
