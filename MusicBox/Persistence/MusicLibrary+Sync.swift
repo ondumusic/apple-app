@@ -191,11 +191,19 @@ extension MusicLibrary {
         persistChanges()
     }
 
-    func clearAll() {
-        let fm = FileManager.default
-        if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let downloadsDir = appSupport.appendingPathComponent("MusicBox/Downloads", isDirectory: true)
-            try? fm.removeItem(at: downloadsDir)
+    /// Empties the library.
+    ///
+    /// `includingDownloads` is for logging out, which discards the user's data on
+    /// purpose. A re-sync must not pass it: an initial sync clears the tables before
+    /// repopulating them, and taking the audio files with it would leave
+    /// `reconcileDownloadedFiles()` nothing to put back.
+    func clearAll(includingDownloads: Bool = false) {
+        if includingDownloads {
+            let fm = FileManager.default
+            if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                let downloadsDir = appSupport.appendingPathComponent("MusicBox/Downloads", isDirectory: true)
+                try? fm.removeItem(at: downloadsDir)
+            }
         }
         try? modelContext.delete(model: LibraryTrack.self)
         try? modelContext.delete(model: LibraryAlbum.self)

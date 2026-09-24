@@ -14,6 +14,7 @@ struct SettingsView: View {
 
     @State private var showClearCacheConfirmation = false
     @State private var showLogoutConfirmation = false
+    @State private var showRebuildConfirmation = false
 
     fileprivate static let cacheLimitOptions: [(String, Int64)] = [
         ("500 MB", 500 * 1024 * 1024),
@@ -284,6 +285,14 @@ struct SettingsView: View {
                 }
             }
             .disabled(syncService.isSyncing)
+            Button("Rebuild Library") { showRebuildConfirmation = true }
+                .disabled(syncService.isSyncing)
+                .confirmationDialog("Rebuild Library?", isPresented: $showRebuildConfirmation) {
+                    Button("Rebuild") { Task { await syncService.rebuildLibrary() } }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Downloads your whole library again from the server. Downloaded music and playlists are kept.")
+                }
             if let error = syncService.syncError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)

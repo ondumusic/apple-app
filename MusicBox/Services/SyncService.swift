@@ -256,6 +256,8 @@ final class SyncService {
 
         let isInitialSync = syncCursor == nil
         if isInitialSync {
+            // Downloads survive: the files are still valid, and reconcileDownloadedFiles()
+            // re-marks them from the manifest once the tracks come back.
             musicLibrary.clearAll()
         }
 
@@ -374,6 +376,20 @@ final class SyncService {
         if let lastSync = lastSyncDate, Date().timeIntervalSince(lastSync) < 300 {
             return
         }
+        await sync()
+    }
+
+    /// Throws away the cursor and re-pages the whole library from scratch.
+    ///
+    /// A delta sync only sends what changed since the cursor, so a field added to the
+    /// client after the server already sent those rows — loudness was the first — is
+    /// invisible forever on an install whose cursor has outrun it. This is the way back.
+    /// Downloaded files are kept.
+    func rebuildLibrary() async {
+        MusicLibrary.writeReconciliationManifest()
+        Self.clearSyncState()
+        syncCursor = nil
+        hasCompletedInitialSync = false
         await sync()
     }
 

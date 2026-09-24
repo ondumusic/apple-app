@@ -294,7 +294,7 @@ struct MusicBoxApp: App {
                     }
                 } else {
                     SyncService.clearSyncState()
-                    musicLibrary.clearAll()
+                    musicLibrary.clearAll(includingDownloads: true)
                     downloadService.clearAuth()
                     PlaybackStateStore.clearPersisted()
                     player = nil
