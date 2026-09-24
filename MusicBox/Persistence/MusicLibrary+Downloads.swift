@@ -361,26 +361,28 @@ extension MusicLibrary {
             return
         }
 
+        // One fetch, not one per entry: a full library is thousands of rows and a
+        // per-entry FetchDescriptor made a rebuild sit on the sync screen for ten seconds.
+        let allTracks = (try? modelContext.fetch(FetchDescriptor<LibraryTrack>())) ?? []
+        let tracksById = Dictionary(allTracks.map { ($0.serverId, $0) }, uniquingKeysWith: { first, _ in first })
+        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+
         var matched: [UUID: Bool] = [:]
         var reclaimed = 0
         for entry in entries {
-            var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == entry.trackId })
-            descriptor.fetchLimit = 1
-            let fileExists = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            let fileExists = appSupport
                 .map { fm.fileExists(atPath: $0.appendingPathComponent(entry.relativePath).path) } ?? false
-            if let track = try? modelContext.fetch(descriptor).first, fileExists {
+            if let track = tracksById[entry.trackId], fileExists {
                 track.isDownloaded = true
                 track.localFilePath = entry.relativePath
                 track.downloadedFileSize = entry.fileSize
                 matched[entry.trackId] = true
                 reclaimed += 1
-            } else if fileExists {
+            } else if fileExists, let appSupport {
                 // Orphan — track no longer in library, remove the file. Only when the
                 // path resolves: a path we can't resolve is a manifest bug, not an
                 // orphan, and deleting on that basis would destroy the user's music.
-                if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-                    try? fm.removeItem(at: appSupport.appendingPathComponent(entry.relativePath))
-                }
+                try? fm.removeItem(at: appSupport.appendingPathComponent(entry.relativePath))
             }
         }
 

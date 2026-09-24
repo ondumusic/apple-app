@@ -348,8 +348,12 @@ final class SyncService {
         }
 
         if let downloadService {
-            // Global "auto-download new tracks" setting — only applies if enabled.
-            let globalAutoIds: Set<UUID> = settings?.autoDownloadNewTracks == true ? newTrackIds : []
+            // Global "auto-download new tracks" setting — only applies if enabled, and
+            // never on an initial sync. A rebuild or a fresh login reinserts the whole
+            // library, and "new tracks" means ones added on the server since last time,
+            // not every track there is.
+            let globalAutoIds: Set<UUID> = (settings?.autoDownloadNewTracks == true && !isInitialSync)
+                ? newTrackIds : []
             if !globalAutoIds.isEmpty {
                 #if DEBUG
                 print("SyncService: auto-downloading \(globalAutoIds.count) new tracks")
