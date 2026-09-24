@@ -6,6 +6,12 @@ struct SettingsView: View {
     @Environment(AuthService.self) private var auth
     @Environment(PlaybackCache.self) private var playbackCache
 
+    #if DEBUG && os(iOS)
+    /// Only to check that the gain reaches the player on a device, where the logs aren't
+    /// in reach. The macOS Settings scene has no player in its environment.
+    @Environment(PlayerService.self) private var debugPlayer
+    #endif
+
     @State private var showClearCacheConfirmation = false
     @State private var showLogoutConfirmation = false
 
@@ -112,10 +118,23 @@ struct SettingsView: View {
         @Bindable var settings = settings
         Section {
             Toggle("Normalize Volume", isOn: $settings.normalizeVolume)
+            #if DEBUG && os(iOS)
+            LabeledContent("Applied gain") {
+                Text(debugAppliedGain).monospacedDigit().foregroundStyle(.secondary)
+            }
+            #endif
         } footer: {
             Text("Plays every track at a similar loudness, so quiet albums and loud ones don't jump. Albums keep their own quiet and loud moments. Turns the volume down, never up.")
         }
     }
+
+    #if DEBUG && os(iOS)
+    private var debugAppliedGain: String {
+        guard debugPlayer.currentTrack != nil else { return "nothing playing" }
+        let dB = 20 * log10(Double(debugPlayer.primaryGain))
+        return String(format: "%.1f dB", dB)
+    }
+    #endif
 
     @ViewBuilder
     private var appearanceSection: some View {
