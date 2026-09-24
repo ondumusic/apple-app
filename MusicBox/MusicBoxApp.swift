@@ -357,6 +357,20 @@ struct MusicBoxApp: App {
         .windowStyle(.hiddenTitleBar)
         .commandsRemoved()
         .commands {
+            // .commandsRemoved() above strips this group wholesale, which took Cut,
+            // Copy, Paste and Select All with it — Cmd+A in any list, and Cmd+C/V in the
+            // sidebar's rename field. Standard first-responder forwarding puts them back.
+            CommandGroup(replacing: .pasteboard) {
+                Button("Cut") { NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("x", modifiers: .command)
+                Button("Copy") { NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("c", modifiers: .command)
+                Button("Paste") { NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("v", modifiers: .command)
+                Divider()
+                Button("Select All") { NSApp.sendAction(#selector(NSResponder.selectAll(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("a", modifiers: .command)
+            }
             CommandGroup(after: .pasteboard) {
                 Divider()
                 Button("Find") {
