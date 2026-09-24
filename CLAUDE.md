@@ -31,7 +31,7 @@ Base URL ends in `/api` (set during login). All bodies send lowercase UUID strin
 - `POST /auth/login`, `GET /auth/me`, `GET /auth/playtoken`, `DELETE /auth/session`
 - `GET /sync?cursor=`
 - `POST /playlists`, `PATCH /playlists/{id}`, `DELETE /playlists/{id}`
-- `PATCH /playlists/{id}/items` — batched add/move/remove (mixed). 400 returns the discriminated `PlaylistItemsError` union.
+- `PATCH /playlists/{id}/items` — batched add/move/remove (mixed). 422 returns the discriminated `PlaylistItemsError` union.
 - `GET /tracks/{id}/transcode` — SSE prepare stream.
 - Streaming: `track.streamUrl + ?token=`.
 
