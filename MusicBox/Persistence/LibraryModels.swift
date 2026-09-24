@@ -67,11 +67,13 @@ nonisolated class LibraryTrack {
     var downloadedFileSize: Int64 = 0
     /// Relative path from Application Support directory, e.g. "MusicBox/Downloads/{artistId}/{albumId}/{trackId}.flac"
     var localFilePath: String?
+    /// Integrated loudness in LUFS. Nil until the server has measured the file.
+    var lufs: Double?
 
     init(serverId: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
          name: String, disc: Int, number: Int?, duration: Double,
          mimetype: String, streamUrl: String, downloadUrl: String = "", insertedAt: Date,
-         isDownloaded: Bool = false, localFilePath: String? = nil) {
+         isDownloaded: Bool = false, localFilePath: String? = nil, lufs: Double? = nil) {
         self.serverId = serverId
         self.artistId = artistId
         self.albumArtistId = albumArtistId
@@ -86,6 +88,7 @@ nonisolated class LibraryTrack {
         self.insertedAt = insertedAt
         self.isDownloaded = isDownloaded
         self.localFilePath = localFilePath
+        self.lufs = lufs
     }
 
     /// Resolves the absolute file URL from the stored relative path.

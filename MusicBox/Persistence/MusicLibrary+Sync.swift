@@ -9,6 +9,7 @@ extension MusicLibrary {
         cachedArtistMap = nil
         cachedAlbumMap = nil
         cachedAllTracks = nil
+        cachedAlbumLoudness = [:]
         revision += 1
     }
 
@@ -90,12 +91,13 @@ extension MusicLibrary {
                 lt.streamUrl = st.streamUrl
                 lt.downloadUrl = st.downloadUrl
                 lt.insertedAt = st.insertedAt
+                lt.lufs = st.lufs
             } else {
                 modelContext.insert(LibraryTrack(
                     serverId: st.id, artistId: st.artistId, albumArtistId: st.albumArtistId,
                     albumId: st.albumId, name: st.name, disc: st.disc, number: st.number,
                     duration: st.duration, mimetype: st.mimetype, streamUrl: st.streamUrl,
-                    downloadUrl: st.downloadUrl, insertedAt: st.insertedAt))
+                    downloadUrl: st.downloadUrl, insertedAt: st.insertedAt, lufs: st.lufs))
                 inserted.insert(st.id)
             }
         }
@@ -205,6 +207,7 @@ extension MusicLibrary {
         cachedArtistMap = nil
         cachedAlbumMap = nil
         cachedAllTracks = nil
+        cachedAlbumLoudness = [:]
         revision += 1
     }
 

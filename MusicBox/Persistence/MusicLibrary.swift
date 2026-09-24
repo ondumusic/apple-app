@@ -22,6 +22,10 @@ final class MusicLibrary {
     /// library scale. Invalidated with the maps; download mutations patch it in place.
     @ObservationIgnored var cachedAllTracks: [Track]?
 
+    /// Derived album loudness, per album. The arithmetic is trivial but the fetch feeding
+    /// it isn't, and the player asks on every track change.
+    @ObservationIgnored var cachedAlbumLoudness: [UUID: Double?] = [:]
+
     /// Track IDs whose download state changed, mapped to the new `isDownloaded` value.
     /// Views observe this to update in-place without re-querying SwiftData.
     var downloadChanged: [UUID: Bool] = [:]
@@ -647,6 +651,17 @@ final class MusicLibrary {
               artistName: artist?.name, artistSortName: artist?.sortName)
     }
 
+    /// The album's loudness, derived from its tracks — see `LoudnessNormalization`.
+    func albumLUFS(for albumId: UUID) -> Double? {
+        _ = revision
+        if let cached = cachedAlbumLoudness[albumId] { return cached }
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId })
+        let tracks = fetch(descriptor) ?? []
+        let value = LoudnessNormalization.albumLUFS(tracks.lazy.map { ($0.lufs, $0.duration) })
+        cachedAlbumLoudness[albumId] = value
+        return value
+    }
+
     func buildTrack(_ lt: LibraryTrack, artistMap: [UUID: LibraryArtist], album: LibraryAlbum?) -> Track {
         Self.buildTrackValue(lt, artistMap: artistMap, album: album)
     }
@@ -673,7 +688,7 @@ final class MusicLibrary {
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
             mimetype: lt.mimetype, streamUrl: lt.streamUrl, downloadUrl: lt.downloadUrl,
-            isDownloaded: lt.isDownloaded
+            isDownloaded: lt.isDownloaded, lufs: lt.lufs
         )
     }
 
@@ -698,7 +713,7 @@ final class MusicLibrary {
             album: trackAlbum, name: lt.name,
             disc: lt.disc, number: lt.number, duration: lt.duration,
             mimetype: lt.mimetype, streamUrl: lt.streamUrl, downloadUrl: lt.downloadUrl,
-            isDownloaded: lt.isDownloaded
+            isDownloaded: lt.isDownloaded, lufs: lt.lufs
         )
     }
 }

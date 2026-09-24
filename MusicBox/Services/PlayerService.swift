@@ -11,7 +11,13 @@ nonisolated enum RepeatMode: String, Sendable {
 final class PlayerService {
     // MARK: - Public state
 
-    var queue: [QueueItem] = []
+    var queue: [QueueItem] = [] {
+        didSet { queueIsSingleAlbum = Self.isSingleAlbum(queue) }
+    }
+    /// Whether the whole queue is one album, which is what picks album gain over track
+    /// gain. Recomputed on every queue mutation rather than per track change — it is a
+    /// linear scan either way, and this way the answer is ready when a track starts.
+    @ObservationIgnored private var queueIsSingleAlbum = false
     var currentIndex: Int = 0
     var shuffledIndices: [Int]? = nil
     var repeatMode: RepeatMode = .off
@@ -37,6 +43,10 @@ final class PlayerService {
             applyVolume()
         }
     }
+    /// Loudness-normalisation multipliers for the track each player is holding. They are
+    /// per-player because a crossfade has two different tracks in the air at once.
+    @ObservationIgnored private var primaryGain: Float = 1
+    @ObservationIgnored private var secondaryGain: Float = 1
     var showReplaceQueueConfirmation: Bool = false
     @ObservationIgnored private var pendingPlayAction: (() -> Void)?
 
@@ -179,11 +189,38 @@ final class PlayerService {
         // Off the first-frame path: nothing on screen needs the saved queue, and
         // resolving it here made launch scale with however many tracks were queued.
         restoreTask = Task { @MainActor [weak self] in self?.restoreState() }
+        settings.onNormalizeVolumeChange = { [weak self] in self?.refreshNormalization() }
     }
 
     private func applyVolume() {
-        primaryPlayer.volume = Float(volume)
-        secondaryPlayer?.volume = Float(volume)
+        primaryPlayer.volume = Float(volume) * primaryGain
+        secondaryPlayer?.volume = Float(volume) * secondaryGain
+    }
+
+    private static func isSingleAlbum(_ items: [QueueItem]) -> Bool {
+        guard let first = items.first?.track.albumId else { return false }
+        return items.allSatisfy { $0.track.albumId == first }
+    }
+
+    /// The normalisation multiplier for a track.
+    ///
+    /// Album gain when the queue is one album: an album's quiet tracks are quiet on
+    /// purpose, and flattening them is exactly what album gain exists to prevent. Any
+    /// other queue is one the user assembled, where every track at the same level is the
+    /// point.
+    private func normalizationGain(for track: Track) -> Float {
+        guard settings.normalizeVolume else { return 1 }
+        if queueIsSingleAlbum, let albumLUFS = musicLibrary?.albumLUFS(for: track.albumId) {
+            return LoudnessNormalization.gain(forLUFS: albumLUFS)
+        }
+        return LoudnessNormalization.gain(forLUFS: track.lufs)
+    }
+
+    /// Re-applies normalisation to whatever is playing now. Called when the setting
+    /// changes, so it takes effect mid-track instead of at the next boundary.
+    func refreshNormalization() {
+        primaryGain = currentTrack.map(normalizationGain(for:)) ?? 1
+        applyVolume()
     }
 
     /// Adopts a freshly minted API service after re-auth. Rebuilding the player instead
@@ -602,7 +639,8 @@ final class PlayerService {
                 await primaryPlayer.seek(to: CMTime(seconds: resumeTime, preferredTimescale: 600),
                                          toleranceBefore: .zero, toleranceAfter: .zero)
             }
-            primaryPlayer.volume = Float(volume)
+            primaryGain = normalizationGain(for: track)
+            primaryPlayer.volume = Float(volume) * primaryGain
             primaryPlayer.play()
             isLoadingTrack = false
             isPlaying = true
@@ -905,6 +943,10 @@ final class PlayerService {
         progress = 0
         duration = nextTrack.duration
         isPlaying = true
+        // Both tracks share one AVQueuePlayer here, so the gain has to change under the
+        // playhead at the boundary rather than travelling with a second player.
+        primaryGain = normalizationGain(for: nextTrack)
+        applyVolume()
 
         updateNowPlayingInfo()
         savePlaybackState()
@@ -967,6 +1009,7 @@ final class PlayerService {
                     let item = self.makePlayerItem(url: playbackURL)
                     let crossfadePlayer = AVQueuePlayer(items: [item])
                     self.secondaryPlayer = crossfadePlayer
+                    self.secondaryGain = self.normalizationGain(for: nextTrack)
                     crossfadePlayer.volume = 0
                     crossfadePlayer.play()
                     self.startVolumeRamp(fadeDuration: min(fadeDuration, remaining), nextIndex: nextIdx, nextTrack: nextTrack)
@@ -990,8 +1033,8 @@ final class PlayerService {
             }
             let elapsed = Date().timeIntervalSince(startTime)
             let progress = min(Float(elapsed / fadeDuration), 1.0)
-            self.primaryPlayer.volume = Float(self.volume) * cos(progress * .pi * 0.5)
-            secondary.volume = Float(self.volume) * sin(progress * .pi * 0.5)
+            self.primaryPlayer.volume = Float(self.volume) * self.primaryGain * cos(progress * .pi * 0.5)
+            secondary.volume = Float(self.volume) * self.secondaryGain * sin(progress * .pi * 0.5)
 
             if progress >= 1.0 {
                 timer.invalidate()
@@ -1022,7 +1065,8 @@ final class PlayerService {
         if let secondary = secondaryPlayer {
             // Promote secondary directly — it's already an AVQueuePlayer playing at the correct position.
             // No pause/recreate/seek needed, which avoids stutter/rewind artifacts.
-            secondary.volume = Float(volume)
+            primaryGain = secondaryGain
+            secondary.volume = Float(volume) * primaryGain
             primaryPlayer = secondary
             currentPlayerItem = secondary.currentItem
             gaplessPlayerItem = nil
@@ -1052,6 +1096,7 @@ final class PlayerService {
         secondaryPlayer?.pause()
         secondaryPlayer?.replaceCurrentItem(with: nil)
         secondaryPlayer = nil
+        secondaryGain = 1
         if endObserver == nil {
             setupEndObserver()
         }

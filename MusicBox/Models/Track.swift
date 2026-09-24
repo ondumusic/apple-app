@@ -17,6 +17,8 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
     var streamUrl: String
     var downloadUrl: String
     var isDownloaded: Bool
+    /// Integrated loudness in LUFS. Nil until the server has measured the file.
+    var lufs: Double?
 
     nonisolated struct TrackAlbum: Codable, Sendable, Hashable {
         var id: UUID
@@ -36,7 +38,7 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
          album: TrackAlbum? = nil,
          name: String, disc: Int, number: Int?, duration: Double,
          mimetype: String, streamUrl: String, downloadUrl: String = "",
-         isDownloaded: Bool = false) {
+         isDownloaded: Bool = false, lufs: Double? = nil) {
         self.id = id
         self.artistId = artistId
         self.albumArtistId = albumArtistId
@@ -53,6 +55,7 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         self.streamUrl = streamUrl
         self.downloadUrl = downloadUrl
         self.isDownloaded = isDownloaded
+        self.lufs = lufs
     }
 
     init(from decoder: Decoder) throws {
@@ -73,5 +76,6 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         streamUrl = try container.decode(String.self, forKey: .streamUrl)
         downloadUrl = try container.decodeIfPresent(String.self, forKey: .downloadUrl) ?? streamUrl
         isDownloaded = false
+        lufs = try container.decodeIfPresent(Double.self, forKey: .lufs)
     }
 }

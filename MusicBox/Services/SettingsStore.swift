@@ -77,6 +77,19 @@ final class SettingsStore {
         didSet { defaults.set(spreadShuffle, forKey: "spreadShuffle") }
     }
 
+    /// Scale playback so every track lands near the same loudness. See
+    /// `LoudnessNormalization` for why this can only ever make things quieter.
+    var normalizeVolume: Bool {
+        didSet {
+            defaults.set(normalizeVolume, forKey: "normalizeVolume")
+            onNormalizeVolumeChange?()
+        }
+    }
+
+    /// Installed by `PlayerService` so the toggle lands on the track already playing
+    /// instead of the next one. Settings has no player in its environment to call.
+    @ObservationIgnored var onNormalizeVolumeChange: (() -> Void)?
+
     var repeatMode: RepeatMode {
         didSet { defaults.set(repeatMode.rawValue, forKey: "repeatMode") }
     }
@@ -142,6 +155,7 @@ final class SettingsStore {
         self.maxConcurrentDownloads = defaults.object(forKey: "maxConcurrentDownloads") as? Int ?? 3
         self.isShuffled = defaults.bool(forKey: "isShuffled")
         self.spreadShuffle = defaults.object(forKey: "spreadShuffle") as? Bool ?? true
+        self.normalizeVolume = defaults.object(forKey: "normalizeVolume") as? Bool ?? true
         self.repeatMode = RepeatMode(rawValue: defaults.string(forKey: "repeatMode") ?? "") ?? .off
         self.playbackCacheLimit = defaults.object(forKey: "playbackCacheLimit") as? Int64 ?? (2 * 1024 * 1024 * 1024) // 2 GB default
         self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original

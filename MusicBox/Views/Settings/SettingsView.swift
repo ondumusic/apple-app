@@ -25,6 +25,7 @@ struct SettingsView: View {
         Form {
             playbackSection
             spreadShuffleSection
+            normalizeVolumeSection
             appearanceSection
             accentColorSection
             cacheSection
@@ -44,6 +45,7 @@ struct SettingsView: View {
             Form {
                 playbackSection
                 spreadShuffleSection
+                normalizeVolumeSection
                 qualitySection
             }
             .formStyle(.grouped)
@@ -102,6 +104,16 @@ struct SettingsView: View {
             Toggle("Spread Shuffle", isOn: $settings.spreadShuffle)
         } footer: {
             Text("Avoids playing tracks from the same album or artist back-to-back when shuffling.")
+        }
+    }
+
+    @ViewBuilder
+    private var normalizeVolumeSection: some View {
+        @Bindable var settings = settings
+        Section {
+            Toggle("Normalize Volume", isOn: $settings.normalizeVolume)
+        } footer: {
+            Text("Plays every track at a similar loudness, so quiet albums and loud ones don't jump. Albums keep their own quiet and loud moments. Turns the volume down, never up.")
         }
     }
 
