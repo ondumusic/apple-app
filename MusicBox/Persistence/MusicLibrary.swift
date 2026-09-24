@@ -85,6 +85,20 @@ final class MusicLibrary {
         return appSupport.appendingPathComponent("MusicBox/.reconciliation-manifest.json")
     }
 
+    /// The stored path for a downloaded file, built from the last three path components
+    /// rather than by stripping the Downloads prefix off the absolute path.
+    ///
+    /// `FileManager.enumerator` hands back symlink-resolved URLs while
+    /// `urls(for:in:)` does not, and on iOS the container sits under `/var`, which is a
+    /// symlink to `/private/var`. Stripping the prefix silently failed there and stored
+    /// an absolute path glued onto "MusicBox/Downloads/", so every reconciled track
+    /// pointed at a file that did not exist.
+    nonisolated static func downloadRelativePath(for fileURL: URL) -> String? {
+        let parts = fileURL.pathComponents.suffix(3)
+        guard parts.count == 3 else { return nil }
+        return "MusicBox/Downloads/" + parts.joined(separator: "/")
+    }
+
     /// Scans Downloads/{artistId}/{albumId}/{trackId}.ext and writes a manifest of found files.
     /// Called from the store-reset catch path so we can rebuild download state after sync.
     nonisolated static func writeReconciliationManifest() {
@@ -99,8 +113,8 @@ final class MusicLibrary {
             let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
             guard values?.isRegularFile == true else { continue }
             let trackIdString = url.deletingPathExtension().lastPathComponent
-            guard let trackId = UUID(uuidString: trackIdString) else { continue }
-            let relativePath = "MusicBox/Downloads/\(url.path.replacingOccurrences(of: downloads.path + "/", with: ""))"
+            guard let trackId = UUID(uuidString: trackIdString),
+                  let relativePath = downloadRelativePath(for: url) else { continue }
             let size = Int64(values?.fileSize ?? 0)
             entries.append(DownloadManifestEntry(trackId: trackId, relativePath: relativePath, fileSize: size))
         }

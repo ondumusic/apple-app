@@ -119,3 +119,28 @@ extension LoudnessWiringTests {
         #expect(dB(player.primaryGain) < -13)
     }
 }
+
+/// `FileManager.enumerator` returns symlink-resolved URLs while `urls(for:in:)` does not.
+/// On iOS the container is under `/var`, a symlink to `/private/var`, so building the
+/// stored path by stripping a prefix produced an absolute path glued onto
+/// "MusicBox/Downloads/" and every reconciled track pointed at nothing.
+@Suite
+struct DownloadManifestPathTests {
+
+    @Test func buildsTheRelativePathFromTheTrailingComponents() {
+        let url = URL(fileURLWithPath: "/private/var/mobile/Containers/Data/Application/ABC/Library/Application Support/MusicBox/Downloads/artist-id/album-id/track-id.m4a")
+        #expect(MusicLibrary.downloadRelativePath(for: url) == "MusicBox/Downloads/artist-id/album-id/track-id.m4a")
+    }
+
+    /// The same file reached through the unresolved path has to store the same thing.
+    @Test func isUnaffectedByHowTheBasePathWasSpelled() {
+        let resolved = URL(fileURLWithPath: "/private/var/app/Library/Application Support/MusicBox/Downloads/a/b/c.m4a")
+        let unresolved = URL(fileURLWithPath: "/var/app/Library/Application Support/MusicBox/Downloads/a/b/c.m4a")
+        #expect(MusicLibrary.downloadRelativePath(for: resolved)
+                == MusicLibrary.downloadRelativePath(for: unresolved))
+    }
+
+    @Test func isNilForAPathTooShortToBeADownload() {
+        #expect(MusicLibrary.downloadRelativePath(for: URL(fileURLWithPath: "/a.m4a")) == nil)
+    }
+}

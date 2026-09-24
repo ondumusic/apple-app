@@ -74,8 +74,11 @@ extension MusicLibrary {
         _ = downloadChanged
         var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == trackId && $0.isDownloaded == true })
         descriptor.fetchLimit = 1
-        guard let track = try? modelContext.fetch(descriptor).first else { return nil }
-        return track.resolvedFileURL
+        guard let track = try? modelContext.fetch(descriptor).first,
+              let url = track.resolvedFileURL,
+              FileManager.default.fileExists(atPath: url.path)
+        else { return nil }
+        return url
     }
 
     nonisolated struct DownloadedSummary {
@@ -363,17 +366,20 @@ extension MusicLibrary {
         for entry in entries {
             var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == entry.trackId })
             descriptor.fetchLimit = 1
-            if let track = try? modelContext.fetch(descriptor).first {
+            let fileExists = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                .map { fm.fileExists(atPath: $0.appendingPathComponent(entry.relativePath).path) } ?? false
+            if let track = try? modelContext.fetch(descriptor).first, fileExists {
                 track.isDownloaded = true
                 track.localFilePath = entry.relativePath
                 track.downloadedFileSize = entry.fileSize
                 matched[entry.trackId] = true
                 reclaimed += 1
-            } else {
-                // Orphan — track no longer in library, remove the file.
+            } else if fileExists {
+                // Orphan — track no longer in library, remove the file. Only when the
+                // path resolves: a path we can't resolve is a manifest bug, not an
+                // orphan, and deleting on that basis would destroy the user's music.
                 if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-                    let fileURL = appSupport.appendingPathComponent(entry.relativePath)
-                    try? fm.removeItem(at: fileURL)
+                    try? fm.removeItem(at: appSupport.appendingPathComponent(entry.relativePath))
                 }
             }
         }
