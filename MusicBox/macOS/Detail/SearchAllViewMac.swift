@@ -136,32 +136,49 @@ struct SearchArtistCell: View {
     let artist: Artist
     let artworkURL: URL?
 
+    fileprivate static let artworkSize: CGFloat = 72
+    /// Wider than the artwork, so the name gets two lines before it truncates. It is also
+    /// what sets the cell's width, which is why the drag image has to be centred in it.
+    fileprivate static let captionWidth: CGFloat = 96
+
     var body: some View {
-        Button {
-            NotificationCenter.default.post(name: .navigateToArtist, object: artist)
-        } label: {
-            VStack(spacing: Spacing.tight) {
-                Group {
-                    if let artworkURL {
-                        ArtworkView(url: artworkURL)
-                    } else {
-                        Image(systemName: "music.mic")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(.quaternary)
-                    }
+        VStack(spacing: Spacing.tight) {
+            Group {
+                if let artworkURL {
+                    ArtworkView(url: artworkURL)
+                } else {
+                    Image(systemName: "music.mic")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.quaternary)
                 }
-                .frame(width: 72, height: 72)
-                .clipShape(Circle())
-                Text(artist.name)
-                    .font(.caption)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 96)
             }
+            .frame(width: Self.artworkSize, height: Self.artworkSize)
+            .clipShape(Circle())
+            Text(artist.name)
+                .font(.caption)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(width: Self.captionWidth)
         }
-        .buttonStyle(.plain)
+        // Deliberately not a Button, and not `.onDrag`: the handle owns both the click
+        // and the drag so a search result writes the same pasteboard item the artist
+        // list does, and drops into Up Next and onto playlists the same way.
+        .contentShape(Rectangle())
+        .overlay {
+            PasteboardDragHandle(
+                type: .musicBoxArtists,
+                value: artist.id.uuidString,
+                dragImageRect: CGRect(x: (Self.captionWidth - Self.artworkSize) / 2, y: 0,
+                                      width: Self.artworkSize, height: Self.artworkSize),
+                dragImageCornerRadius: Self.artworkSize / 2,
+                onClick: { NotificationCenter.default.post(name: .navigateToArtist, object: artist) }
+            )
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(artist.name)
+        .accessibilityAddTraits(.isButton)
     }
 }
 #endif

@@ -62,7 +62,8 @@ final class QueueTableViewController: NSViewController {
     private func applyEditingAffordances() {
         if allowsEditing {
             tableView.registerForDraggedTypes([
-                .musicBoxQueueRows, .musicBoxTracks, .musicBoxAlbums, .musicBoxSidebarPlaylist,
+                .musicBoxQueueRows, .musicBoxTracks, .musicBoxAlbums, .musicBoxArtists,
+                .musicBoxSidebarPlaylist,
             ])
         } else {
             tableView.unregisterDraggedTypes()
@@ -311,6 +312,7 @@ extension QueueTableViewController: NSTableViewDataSource {
         if types.contains(.musicBoxQueueRows) { return .move }
         if types.contains(.musicBoxTracks)
             || types.contains(.musicBoxAlbums)
+            || types.contains(.musicBoxArtists)
             || types.contains(.musicBoxSidebarPlaylist) { return .copy }
         return []
     }
@@ -331,21 +333,25 @@ extension QueueTableViewController: NSTableViewDataSource {
 
         // Before tracks and albums: a playlist drag carries only this type, and the
         // sidebar's own reorder never reaches here — that drop lands on the outline.
-        let playlistIds = pasteboardItems.compactMap {
-            $0.string(forType: .musicBoxSidebarPlaylist).flatMap(UUID.init)
-        }
+        let playlistIds = info.musicBoxIds(forType: .musicBoxSidebarPlaylist)
         if !playlistIds.isEmpty {
             actions.insertPlaylists(playlistIds, row)
             return true
         }
 
-        let albumIds = pasteboardItems.compactMap { $0.string(forType: .musicBoxAlbums).flatMap(UUID.init) }
+        let albumIds = info.musicBoxIds(forType: .musicBoxAlbums)
         if !albumIds.isEmpty {
             actions.insertAlbums(albumIds, row)
             return true
         }
 
-        let trackIds = pasteboardItems.compactMap { $0.string(forType: .musicBoxTracks).flatMap(UUID.init) }
+        let artistIds = info.musicBoxIds(forType: .musicBoxArtists)
+        if !artistIds.isEmpty {
+            actions.insertArtists(artistIds, row)
+            return true
+        }
+
+        let trackIds = info.musicBoxIds(forType: .musicBoxTracks)
         guard !trackIds.isEmpty else { return false }
         actions.insertTracks(trackIds, row)
         return true

@@ -15,6 +15,7 @@ struct QueueActions {
     var move: (IndexSet, Int) -> Void = { _, _ in }
     var insertTracks: ([UUID], Int) -> Void = { _, _ in }
     var insertAlbums: ([UUID], Int) -> Void = { _, _ in }
+    var insertArtists: ([UUID], Int) -> Void = { _, _ in }
     var addToPlaylist: ([UUID]) -> Void = { _ in }
     var insertPlaylists: ([UUID], Int) -> Void = { _, _ in }
     /// Both the rows and the tracks they hold, because the two scopes mean different
@@ -52,6 +53,17 @@ struct QueueActions {
                 let tracks = musicLibrary.tracksForAlbum(albumId)
                 let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
                 return available.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+            }
+            guard !items.isEmpty else { return }
+            player.insertIntoQueue(items, at: position)
+        }
+        a.insertArtists = { artistIds, position in
+            let items = artistIds.flatMap { artistId -> [QueueItem] in
+                musicLibrary.albumsWithTracksForArtist(artistId).flatMap { album -> [QueueItem] in
+                    let tracks = musicLibrary.tracksForAlbum(album.id)
+                    return musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
+                        .map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
+                }
             }
             guard !items.isEmpty else { return }
             player.insertIntoQueue(items, at: position)

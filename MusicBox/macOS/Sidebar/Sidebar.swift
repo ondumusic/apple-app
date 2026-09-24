@@ -226,7 +226,9 @@ final class SidebarViewController: NSViewController {
         menu.delegate = self
         outlineView.menu = menu
 
-        outlineView.registerForDraggedTypes([.musicBoxTracks, .musicBoxAlbums, .musicBoxSidebarPlaylist])
+        outlineView.registerForDraggedTypes([
+            .musicBoxTracks, .musicBoxAlbums, .musicBoxArtists, .musicBoxSidebarPlaylist,
+        ])
         outlineView.draggingDestinationFeedbackStyle = .regular
         outlineView.setDraggingSourceOperationMask(.move, forLocal: true)
 
@@ -631,10 +633,7 @@ extension SidebarViewController: NSOutlineViewDataSource {
     }
 
     private func validateTrackDrop(info: NSDraggingInfo, item: Any?, index: Int) -> NSDragOperation? {
-        guard let pasteboard = info.draggingPasteboard.pasteboardItems,
-              pasteboard.contains(where: {
-                  $0.string(forType: .musicBoxTracks) != nil || $0.string(forType: .musicBoxAlbums) != nil
-              })
+        guard info.carriesMusicBoxType(.musicBoxTracks, .musicBoxAlbums, .musicBoxArtists)
         else { return nil }
         // Only accept drops directly onto a non-folder playlist row.
         guard let node = item as? SidebarNode,
@@ -651,13 +650,17 @@ extension SidebarViewController: NSOutlineViewDataSource {
               case .playlist(let playlist) = node.kind,
               !playlist.isFolder
         else { return false }
-        let items = info.draggingPasteboard.pasteboardItems ?? []
-        let albumIds: [UUID] = items.compactMap { $0.string(forType: .musicBoxAlbums).flatMap(UUID.init) }
+        let albumIds = info.musicBoxIds(forType: .musicBoxAlbums)
         if !albumIds.isEmpty {
             actions.addAlbumsToPlaylist(albumIds, playlist)
             return true
         }
-        let trackIds: [UUID] = items.compactMap { $0.string(forType: .musicBoxTracks).flatMap(UUID.init) }
+        let artistIds = info.musicBoxIds(forType: .musicBoxArtists)
+        if !artistIds.isEmpty {
+            actions.addArtistsToPlaylist(artistIds, playlist)
+            return true
+        }
+        let trackIds = info.musicBoxIds(forType: .musicBoxTracks)
         guard !trackIds.isEmpty else { return false }
         actions.addTracksToPlaylist(trackIds, playlist)
         return true

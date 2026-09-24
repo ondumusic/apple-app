@@ -71,6 +71,9 @@ final class ArtistsTableViewController: NSViewController {
         tableView.delegate = self
         tableView.target = self
         tableView.doubleAction = #selector(handleDoubleClick)
+        // Drag source only — an artist can be dropped into Up Next or onto a playlist,
+        // but the list's order is the library's and isn't the user's to rearrange.
+        tableView.setDraggingSourceOperationMask(.copy, forLocal: true)
 
         let menu = NSMenu()
         menu.delegate = self
@@ -135,6 +138,13 @@ final class ArtistsTableViewController: NSViewController {
 
 extension ArtistsTableViewController: NSTableViewDataSource {
     func numberOfRows(in tableView: NSTableView) -> Int { artists.count }
+
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard artists.indices.contains(row) else { return nil }
+        let item = NSPasteboardItem()
+        item.setString(artists[row].id.uuidString, forType: .musicBoxArtists)
+        return item
+    }
 }
 
 extension ArtistsTableViewController: NSTableViewDelegate {

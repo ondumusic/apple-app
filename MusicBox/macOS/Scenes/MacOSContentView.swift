@@ -498,6 +498,14 @@ struct MacOSContentView: View {
             guard !trackIds.isEmpty else { return }
             playlistController.addTracks(trackIds, to: playlist.id)
         }
+        a.addArtistsToPlaylist = { artistIds, playlist in
+            let trackIds = artistIds.flatMap { artistId in
+                musicLibrary.albumsWithTracksForArtist(artistId)
+                    .flatMap { musicLibrary.tracksForAlbum($0.id).map(\.id) }
+            }
+            guard !trackIds.isEmpty else { return }
+            playlistController.addTracks(trackIds, to: playlist.id)
+        }
         a.createPlaylist = { parentId in
             guard let new = playlistController.createPlaylist(name: "Untitled Playlist", parentId: parentId) else { return }
             scheduleInlineRename(forTempId: new.id)
@@ -572,26 +580,30 @@ struct QueuePanel: View {
             .frame(height: contentHeaderHeight)
             Divider()
 
-            if entries.isEmpty {
-                ContentUnavailableView(
-                    scope == .upNext ? "Nothing Up Next" : "Nothing Played Yet",
-                    systemImage: scope == .upNext ? "list.bullet" : "clock.arrow.circlepath",
-                    description: Text(scope == .upNext
-                                      ? "Add tracks to the queue to see them here."
-                                      : "Tracks you've played will appear here.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                QueueTable(
-                    items: entries.map(\.item),
-                    rowHeight: 52,
-                    showsDuration: true,
-                    accent: settings.resolvedAccentColor,
-                    actions: scope == .upNext
-                        ? .standard(player: player, musicLibrary: musicLibrary, network: network)
-                        : .history(player: player, musicLibrary: musicLibrary),
-                    allowsEditing: scope == .upNext
-                )
+            QueueTable(
+                items: entries.map(\.item),
+                rowHeight: 52,
+                showsDuration: true,
+                accent: settings.resolvedAccentColor,
+                actions: scope == .upNext
+                    ? .standard(player: player, musicLibrary: musicLibrary, network: network)
+                    : .history(player: player, musicLibrary: musicLibrary),
+                allowsEditing: scope == .upNext
+            )
+            // Overlaid rather than swapped in: an empty queue is exactly when you want
+            // to drag something into it, and a table that isn't mounted can't take a
+            // drop. Hit testing off so the drag reaches the table underneath.
+            .overlay {
+                if entries.isEmpty {
+                    ContentUnavailableView(
+                        scope == .upNext ? "Nothing Up Next" : "Nothing Played Yet",
+                        systemImage: scope == .upNext ? "list.bullet" : "clock.arrow.circlepath",
+                        description: Text(scope == .upNext
+                                          ? "Add tracks to the queue to see them here."
+                                          : "Tracks you've played will appear here.")
+                    )
+                    .allowsHitTesting(false)
+                }
             }
         }
         // The close button went, but Escape shouldn't have to go with it.

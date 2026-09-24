@@ -30,6 +30,7 @@ struct SidebarActions {
     var isPlaylistDownloaded: (Playlist) -> Bool = { _ in false }
     /// Move playlist (or folder) into the given parent. Nil parent = root.
     var movePlaylist: (UUID, UUID?) -> Void = { _, _ in }
+    var addArtistsToPlaylist: ([UUID], Playlist) -> Void = { _, _ in }
 }
 
 extension NSPasteboard.PasteboardType {
@@ -40,8 +41,41 @@ extension NSPasteboard.PasteboardType {
     /// drop side expands it to tracks, since a single NSPasteboardItem can only carry
     /// one string per type and an album is many tracks.
     static let musicBoxAlbums = NSPasteboard.PasteboardType("com.musicbox.albums")
+    /// Pasteboard type used by artist drag operations. One artist UUID per item, expanded
+    /// to that artist's albums on drop, for the same reason albums are.
+    static let musicBoxArtists = NSPasteboard.PasteboardType("com.musicbox.artists")
     /// Pasteboard type used by sidebar playlist drag operations. Distinct from
     /// musicBoxTracks so a track drag can't accidentally land as a playlist move.
     static let musicBoxSidebarPlaylist = NSPasteboard.PasteboardType("com.musicbox.sidebar.playlist")
+}
+
+extension NSDraggingInfo {
+    /// The UUIDs a drag carries for one pasteboard type.
+    ///
+    /// Two kinds of writer feed these. AppKit tables and collection views write a string
+    /// per `NSPasteboardItem`; SwiftUI's `.onDrag` hands over an `NSItemProvider`, which
+    /// materialises the same bytes as raw data under a custom type identifier, and
+    /// `string(forType:)` returns nil for that. Reading both is what lets a search
+    /// result drop where a library row does.
+    func musicBoxIds(forType type: NSPasteboard.PasteboardType) -> [UUID] {
+        let ids = (draggingPasteboard.pasteboardItems ?? []).compactMap { item -> UUID? in
+            if let string = item.string(forType: type) { return UUID(uuidString: string) }
+            guard let data = item.data(forType: type) else { return nil }
+            return String(data: data, encoding: .utf8).flatMap(UUID.init(uuidString:))
+        }
+        if !ids.isEmpty { return ids }
+        // A promised item can leave the pasteboard with the type declared but no item
+        // carrying it until the data is pulled from the pasteboard itself.
+        guard let data = draggingPasteboard.data(forType: type),
+              let string = String(data: data, encoding: .utf8),
+              let id = UUID(uuidString: string)
+        else { return [] }
+        return [id]
+    }
+
+    func carriesMusicBoxType(_ types: NSPasteboard.PasteboardType...) -> Bool {
+        let available = draggingPasteboard.types ?? []
+        return types.contains { available.contains($0) }
+    }
 }
 #endif

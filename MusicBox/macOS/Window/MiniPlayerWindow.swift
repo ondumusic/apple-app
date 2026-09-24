@@ -730,27 +730,28 @@ private struct InlineQueue: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
 
-            if entries.isEmpty {
-                Spacer()
-                Text(scope == .upNext ? "Nothing up next" : "Nothing played yet")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            } else {
-                QueueTable(
-                    items: entries.map(\.item),
-                    rowHeight: 44,
-                    showsDuration: false,
-                    accent: settings.resolvedAccentColor,
-                    actions: scope == .upNext
-                        ? .standard(player: player, musicLibrary: musicLibrary, network: network)
-                        : .history(player: player, musicLibrary: musicLibrary),
-                    // This panel's header pads 12, not the window's 16, and its shorter
-                    // rows need smaller artwork to keep an even gap above and below.
-                    horizontalInset: 12,
-                    artworkSize: 28,
-                    allowsEditing: scope == .upNext
-                )
+            QueueTable(
+                items: entries.map(\.item),
+                rowHeight: 44,
+                showsDuration: false,
+                accent: settings.resolvedAccentColor,
+                actions: scope == .upNext
+                    ? .standard(player: player, musicLibrary: musicLibrary, network: network)
+                    : .history(player: player, musicLibrary: musicLibrary),
+                // This panel's header pads 12, not the window's 16, and its shorter
+                // rows need smaller artwork to keep an even gap above and below.
+                horizontalInset: 12,
+                artworkSize: 28,
+                allowsEditing: scope == .upNext
+            )
+            // Overlaid rather than swapped in, so an empty queue is still a drop target.
+            .overlay {
+                if entries.isEmpty {
+                    Text(scope == .upNext ? "Nothing up next" : "Nothing played yet")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .allowsHitTesting(false)
+                }
             }
         }
         // Its own surface, so the queue reads as a separate region rather than more
