@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 
 #if os(iOS)
@@ -47,4 +48,5 @@ nonisolated enum KeyboardAvoidance {
         return max(0, contentFrame.maxY - keyboardFrame.minY)
     }
 }
+#endif
 #endif

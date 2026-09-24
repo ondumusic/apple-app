@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 
 nonisolated enum iOSTab: String, Hashable, Sendable {
@@ -185,3 +186,4 @@ struct iOSRootView: View {
         }
     }
 }
+#endif
