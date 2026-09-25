@@ -15,6 +15,8 @@ struct ArtistsViewMac: View {
     @Environment(DownloadService.self) private var downloadService
 
     @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
+    /// Persisted like the sidebar's, so the split survives a relaunch.
+    @AppStorage("macArtistListWidth") private var artistListWidth: Double = 240
     @State private var artists: [Artist] = []
     @State private var selectedArtistId: Artist.ID?
 
@@ -46,9 +48,9 @@ struct ArtistsViewMac: View {
                     accent: settings.resolvedAccentColor
                 )
                 .background(.background)
-                .frame(width: 240)
+                .frame(width: artistListWidth)
 
-                Divider()
+                SidebarDivider(width: $artistListWidth, range: 180...420)
 
                 Group {
                     if let id = selectedArtistId, let artist = artists.first(where: { $0.id == id }) {
