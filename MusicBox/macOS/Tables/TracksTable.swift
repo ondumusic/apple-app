@@ -609,24 +609,6 @@ final class TracksTableViewController: NSViewController {
         if abs(tableView.frame.width - target) > 0.5 {
             tableView.setFrameSize(NSSize(width: target, height: tableView.frame.height))
         }
-        #if DEBUG
-        let columnDescriptions = tableView.tableColumns.map { col in
-            "\(col.identifier.rawValue)=\(col.width)(min=\(col.minWidth),max=\(col.maxWidth),hidden=\(col.isHidden))"
-        }.joined(separator: " ")
-        let sum = tableView.tableColumns.reduce(0) { $0 + $1.width }
-        var cellFrames: [String] = []
-        if tableView.numberOfRows > 0 {
-            for col in 0..<tableView.numberOfColumns {
-                let f = tableView.frameOfCell(atColumn: col, row: 0)
-                cellFrames.append("col\(col)=\(Int(f.minX))..\(Int(f.maxX))")
-            }
-        }
-        var rowFrame = "n/a"
-        if let rv = tableView.rowView(atRow: 0, makeIfNecessary: false) {
-            rowFrame = "\(rv.frame)"
-        }
-        print("[TT] target=\(target) titleWidth=\(titleWidth) sum=\(sum) tableFrame.w=\(tableView.frame.width) docVisible=\(scrollView.documentVisibleRect.width) intercell=\(tableView.intercellSpacing.width) style=\(tableView.style.rawValue) cellFrames=[\(cellFrames.joined(separator: " "))] row0Frame=\(rowFrame) cols=[\(columnDescriptions)]")
-        #endif
     }
 
     private func suppressEmbeddedVibrancy(in view: NSView) {
