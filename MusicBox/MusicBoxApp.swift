@@ -439,9 +439,15 @@ struct MusicBoxApp: App {
                 Button("Next Track") { player?.skip() }
                     .keyboardShortcut(.rightArrow, modifiers: .command)
                     .disabled(player?.canSkip != true)
+                // Not `canGoBack`: it reads `progress` to decide whether Back restarts
+                // the track, which makes this whole menu depend on a value that ticks
+                // twice a second — SwiftUI rebuilds the main menu on the dependency
+                // changing, not on the Bool changing, so a menu could be torn down and
+                // re-presented while open. Back always does something with a track
+                // loaded, so that's the honest condition anyway.
                 Button("Previous Track") { player?.back() }
                     .keyboardShortcut(.leftArrow, modifiers: .command)
-                    .disabled(player?.canGoBack != true)
+                    .disabled(player?.currentTrack == nil)
 
                 Button("Back") {
                     NotificationCenter.default.post(name: .navigateBack, object: nil)
