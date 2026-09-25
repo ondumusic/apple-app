@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import QuartzCore
 import SwiftUI
 
 /// NSPanel-backed mini player. Floating HUD-style window so it can stay above the main
@@ -71,6 +72,10 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         panel.maxSize = NSSize(width: 540, height: 900)
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
+        // Out of the way of the artwork until the pointer is in the window. Alpha rather
+        // than isHidden so it can fade, and because a hidden button stops being clickable
+        // — by the time the pointer reaches the corner the window has already revealed it.
+        panel.standardWindowButton(.closeButton)?.alphaValue = 0
 
         // Hosting view set up first; queue toggle plumbed in after super.init so we
         // can capture self.
@@ -84,6 +89,37 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
                 host.topAnchor.constraint(equalTo: cv.topAnchor),
                 host.bottomAnchor.constraint(equalTo: cv.bottomAnchor),
             ])
+
+            // Above the hosting view so nothing covers it, and transparent to clicks so
+            // the player underneath still gets them. A tracking area on the hosting view
+            // itself isn't an option — it's SwiftUI's to own and resize.
+            let probe = WindowHoverProbe()
+            probe.translatesAutoresizingMaskIntoConstraints = false
+            cv.addSubview(probe)
+            NSLayoutConstraint.activate([
+                probe.leadingAnchor.constraint(equalTo: cv.leadingAnchor),
+                probe.trailingAnchor.constraint(equalTo: cv.trailingAnchor),
+                probe.topAnchor.constraint(equalTo: cv.topAnchor),
+                probe.bottomAnchor.constraint(equalTo: cv.bottomAnchor),
+            ])
+            probe.onHoverChange = { [weak panel] inside in
+                guard let button = panel?.standardWindowButton(.closeButton) else { return }
+                guard inside else {
+                    // Gone outright rather than faded. A traffic light is a saturated dot
+                    // inside a pale ring, and every way of fading it — plain alphaValue,
+                    // or layer-backed so it composites as one bitmap — loses the red well
+                    // before the ring, which reads as the colour dropping out and a grey
+                    // circle hanging behind it. The delay above is the softener instead.
+                    button.alphaValue = 0
+                    return
+                }
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.16
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    context.allowsImplicitAnimation = true
+                    button.animator().alphaValue = 1
+                }
+            }
         }
         self.hostingView = host
         if savedFrame == nil { panel.center() }
@@ -909,6 +945,54 @@ private struct WindowAppearance: NSViewRepresentable {
         Task { @MainActor in
             guard nsView.window?.appearance != appearance else { return }
             nsView.window?.appearance = appearance
+        }
+    }
+}
+
+/// Reports pointer enter/exit for the whole mini player window.
+///
+/// `.activeAlways` on purpose: the point is to uncover the close button while the app is
+/// in the background and you're just looking at the artwork.
+private final class WindowHoverProbe: NSView {
+    var onHoverChange: ((Bool) -> Void)?
+    /// Just long enough to swallow a pointer clipping the window edge in passing.
+    ///
+    /// Deliberately short. AppKit drops a traffic light's hover colour the instant the
+    /// pointer leaves, so anything longer leaves a grey button sitting there before the
+    /// fade even starts — the wait is more conspicuous than the button was.
+    var hideDelay: Duration = .milliseconds(400)
+
+    private var trackingArea: NSTrackingArea?
+    private var hideTask: Task<Void, Never>?
+
+    /// Never takes a click — the transport, queue and drag gestures underneath do.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        hideTask?.cancel()
+        hideTask = nil
+        onHoverChange?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hideTask?.cancel()
+        let delay = hideDelay
+        hideTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.onHoverChange?(false)
         }
     }
 }
