@@ -44,7 +44,8 @@ struct SongsViewMac: View {
                 accent: settings.resolvedAccentColor,
                 currentlyPlayingTrackId: player.currentTrack?.id,
                 isPlaying: player.isPlaying,
-                rowHeight: DetailPageMetrics.trackRowHeight
+                rowHeight: DetailPageMetrics.trackRowHeight,
+                claimsKeyboardFocus: true
             )
             }
         }

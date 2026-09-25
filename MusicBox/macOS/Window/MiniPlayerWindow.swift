@@ -742,17 +742,13 @@ private struct InlineQueue: View {
                 // rows need smaller artwork to keep an even gap above and below.
                 horizontalInset: 12,
                 artworkSize: 28,
-                allowsEditing: scope == .upNext
+                allowsEditing: scope == .upNext,
+                emptyState: QueueEmptyState(
+                    message: scope == .upNext
+                        ? String(localized: "Nothing up next")
+                        : String(localized: "Nothing played yet")
+                )
             )
-            // Overlaid rather than swapped in, so an empty queue is still a drop target.
-            .overlay {
-                if entries.isEmpty {
-                    Text(scope == .upNext ? "Nothing up next" : "Nothing played yet")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .allowsHitTesting(false)
-                }
-            }
         }
         // Its own surface, so the queue reads as a separate region rather than more
         // of the transport block.

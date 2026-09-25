@@ -55,7 +55,8 @@ struct PlaylistDetailMac: View {
                 usesPlaylistPosition: true,
                 onReorder: reorderRows(_:to:),
                 onDelete: removeRows(_:),
-                rowHeight: DetailPageMetrics.trackRowHeight
+                rowHeight: DetailPageMetrics.trackRowHeight,
+                claimsKeyboardFocus: true
             )
             }
         }

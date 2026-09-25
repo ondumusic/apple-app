@@ -80,9 +80,20 @@ Playlists shipped on `feat/playlists`. Folders are `Playlist`s with `isFolder ==
 # Build for iPhone simulator
 xcodebuild -scheme MusicBox -destination 'platform=iOS Simulator,name=iPhone 17' -quiet build
 
-# Run unit tests
-xcodebuild -scheme MusicBox -destination 'platform=iOS Simulator,name=iPhone 17' test
+# Run unit tests (~1 min)
+xcodebuild -scheme MusicBox -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -parallel-testing-enabled NO test
 ```
+
+Parallel testing is off deliberately. The iOS 27 simulator runtime clones unreliably —
+runs failed with "Failed to install or launch the test runner", whole clones reporting
+every test as failed in 0.000s, and a 600s "collecting diagnostics from simulator"
+stall. Serially the same 377 tests pass in under a minute.
+
+Judge a build or test run by its **exit code**, not by grepping for `error:`. The first
+build after an Xcode upgrade prints `error: the following command failed with exit code 0
+but produced no further output` while succeeding — that's the SDK stat-cache and explicit
+module rebuild, and it clears once the caches are warm.
 
 ### SourceKit indexing noise
 

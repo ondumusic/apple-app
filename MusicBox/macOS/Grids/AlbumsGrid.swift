@@ -26,6 +26,8 @@ struct AlbumsGrid: NSViewControllerRepresentable {
     /// Embedded in a taller scrolling page rather than owning the scroll. Drops the
     /// scroller and the elastic bounce so the wheel reaches the page behind it.
     var embedded: Bool = false
+    /// See TracksTable.claimsKeyboardFocus.
+    var claimsKeyboardFocus: Bool = false
 
     func makeNSViewController(context: Context) -> AlbumsGridViewController {
         let vc = AlbumsGridViewController()
@@ -40,6 +42,7 @@ struct AlbumsGrid: NSViewControllerRepresentable {
     private func apply(to vc: AlbumsGridViewController) {
         vc.titleLines = titleLines
         vc.onMetricsChange = onMetricsChange
+        vc.claimsKeyboardFocus = claimsKeyboardFocus
         vc.applyEmbedded(embedded)
         vc.accentNSColor = NSColor(accent)
         vc.actions = actions
@@ -130,6 +133,8 @@ final class AlbumsGridViewController: NSViewController {
     /// Re-applied on every update rather than only when the flag changes: the view can
     /// load either side of the first assignment, and a scroller created before it does
     /// isn't removed by setting the flag afterwards.
+    var claimsKeyboardFocus = false
+
     func applyEmbedded(_ embedded: Bool) {
         isEmbedded = embedded
         guard isViewLoaded else { return }
@@ -157,6 +162,12 @@ final class AlbumsGridViewController: NSViewController {
         let vertical = isEmbedded ? 0 : Self.sectionInset
         layout.sectionInset = NSEdgeInsets(top: vertical, left: Self.sectionInset,
                                            bottom: vertical, right: Self.sectionInset)
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        guard claimsKeyboardFocus else { return }
+        collectionView.claimKeyboardFocus()
     }
 
     override func loadView() {

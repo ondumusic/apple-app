@@ -27,6 +27,13 @@ struct QueueTable: NSViewControllerRepresentable {
     /// Off for History, which is a record of what happened rather than a list you
     /// arrange: no reorder, no drops in, no remove button, no Delete key.
     var allowsEditing: Bool = true
+    /// Shown centred over the table when there are no rows.
+    ///
+    /// AppKit rather than a SwiftUI overlay: the panel slides in with a SwiftUI
+    /// transition, and a SwiftUI overlay layered on this hosted view didn't ride that
+    /// transition — the text arrived at its final position while everything around it
+    /// was still moving. Inside the table it can't do anything but move with it.
+    var emptyState: QueueEmptyState? = nil
 
     func makeNSViewController(context: Context) -> QueueTableViewController {
         let vc = QueueTableViewController()
@@ -45,12 +52,38 @@ struct QueueTable: NSViewControllerRepresentable {
         vc.rowHeightValue = rowHeight
         vc.metrics = QueueCellMetrics(horizontalInset: horizontalInset, artworkSize: artworkSize)
         vc.allowsEditing = allowsEditing
+        vc.emptyState = emptyState
         vc.apply(items: items)
     }
 }
 
+nonisolated struct QueueEmptyState: Equatable, Sendable {
+    var title: String?
+    var symbol: String?
+    var message: String?
+}
+
 final class QueueTableViewController: NSViewController {
     fileprivate var items: [QueueItem] = []
+    var emptyState: QueueEmptyState? {
+        didSet {
+            guard emptyState != oldValue, isViewLoaded else { return }
+            refreshEmptyState()
+        }
+    }
+    private let emptySymbol = NSImageView()
+    private let emptyTitle = NSTextField(labelWithString: "")
+    private let emptyMessage = NSTextField(labelWithString: "")
+    private lazy var emptyStack: NSStackView = {
+        let stack = NSStackView(views: [emptySymbol, emptyTitle, emptyMessage])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 6
+        // Never a drop target and never a click target: the table underneath owns both,
+        // and an empty queue is exactly when you want to drag something into it.
+        stack.isHidden = true
+        return stack
+    }()
     var actions = QueueActions()
     var allowsEditing: Bool = true {
         didSet {
@@ -133,7 +166,32 @@ final class QueueTableViewController: NSViewController {
         scrollView.drawsBackground = false
         scrollView.addBottomContentPadding()
         scrollView.contentView.postsBoundsChangedNotifications = true
-        view = scrollView
+        emptySymbol.symbolConfiguration = .init(pointSize: 28, weight: .regular)
+        emptySymbol.contentTintColor = .tertiaryLabelColor
+        emptyTitle.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        emptyTitle.textColor = .secondaryLabelColor
+        emptyMessage.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        emptyMessage.textColor = .tertiaryLabelColor
+        emptyMessage.alignment = .center
+        emptyMessage.lineBreakMode = .byWordWrapping
+        emptyMessage.maximumNumberOfLines = 3
+
+        let container = NonInteractiveContainer()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        emptyStack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(scrollView)
+        container.addSubview(emptyStack)
+        NSLayoutConstraint.activate([
+            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: container.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            emptyStack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            emptyStack.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            emptyStack.widthAnchor.constraint(lessThanOrEqualTo: container.widthAnchor, constant: -32),
+        ])
+        view = container
+        refreshEmptyState()
 
         let menu = NSMenu()
         menu.delegate = self
@@ -213,6 +271,24 @@ final class QueueTableViewController: NSViewController {
             tableView.reloadData()
             refreshEmphasis()
         }
+        refreshEmptyState()
+    }
+
+    private func refreshEmptyState() {
+        guard isViewLoaded else { return }
+        guard let state = emptyState, items.isEmpty else {
+            emptyStack.isHidden = true
+            return
+        }
+        emptySymbol.image = state.symbol.flatMap {
+            NSImage(systemSymbolName: $0, accessibilityDescription: nil)
+        }
+        emptySymbol.isHidden = emptySymbol.image == nil
+        emptyTitle.stringValue = state.title ?? ""
+        emptyTitle.isHidden = state.title == nil
+        emptyMessage.stringValue = state.message ?? ""
+        emptyMessage.isHidden = state.message == nil
+        emptyStack.isHidden = false
     }
 
     @objc private func handleDoubleClick() {
@@ -664,5 +740,13 @@ final class QueueCell: NSTableCellView {
 struct QueueCellMetrics: Equatable {
     var horizontalInset: CGFloat
     var artworkSize: CGFloat
+}
+
+/// Lets every click and drag through to the table beneath the empty-state text.
+private final class NonInteractiveContainer: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let hit = super.hitTest(point)
+        return hit === self ? nil : hit
+    }
 }
 #endif

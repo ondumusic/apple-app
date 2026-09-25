@@ -48,6 +48,11 @@ final class ArtistsTableViewController: NSViewController {
     /// callback doesn't echo the same value back up and fight the binding.
     private var isApplyingExternalSelection = false
 
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        tableView.claimKeyboardFocus()
+    }
+
     override func loadView() {
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("artist"))
         column.resizingMask = .autoresizingMask

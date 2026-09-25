@@ -95,6 +95,10 @@ struct TracksTable: NSViewControllerRepresentable {
     /// table scroll inside itself. Only search does this; a detail page owns its scroll
     /// and wants the room, or a selected last row sits flush against the window edge.
     var fitsContentHeight: Bool = false
+    /// Whether this is the section's primary list, and so should take keyboard focus
+    /// from the sidebar. Off for a list that shares a page with one — an artist's tracks
+    /// beside the artist list — where whichever mounted first would otherwise win.
+    var claimsKeyboardFocus: Bool = false
     /// Reports the table's laid-out content height. An embedded caller has to reserve
     /// the height itself, and rows × rowHeight isn't it — the inset style pads the top
     /// and bottom, which left the last of a fixed-height list scrollable inside itself.
@@ -161,6 +165,7 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.applySort(sort)
         vc.onContentHeightChange = onContentHeightChange
         vc.fitsContentHeight = fitsContentHeight
+        vc.claimsKeyboardFocus = claimsKeyboardFocus
         vc.update(
             tracks: tracks,
             sections: sections,
@@ -416,6 +421,7 @@ final class TracksTableViewController: NSViewController {
 
     private var suppressSelectionCallback = false
     var onContentHeightChange: ((CGFloat) -> Void)?
+    var claimsKeyboardFocus = false
     var fitsContentHeight = false {
         didSet {
             guard fitsContentHeight != oldValue, isViewLoaded else { return }
@@ -435,6 +441,12 @@ final class TracksTableViewController: NSViewController {
     private var lastReportedContentHeight: CGFloat = 0
     private var hoveredRow: Int?
     private var trackingArea: NSTrackingArea?
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        guard claimsKeyboardFocus else { return }
+        tableView.claimKeyboardFocus()
+    }
 
     override func loadView() {
         view = NSView()

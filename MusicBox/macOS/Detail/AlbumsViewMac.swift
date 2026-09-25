@@ -38,7 +38,8 @@ struct AlbumsViewMac: View {
                     downloadService: downloadService
                 ),
                 accent: settings.resolvedAccentColor,
-                onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) }
+                onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) },
+                claimsKeyboardFocus: true
             )
             .background(Color(NSColor.controlBackgroundColor))
             }

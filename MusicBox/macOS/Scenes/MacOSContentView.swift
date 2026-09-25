@@ -540,6 +540,7 @@ private struct DetailPlaceholder: View {
                 .id(id)
         case .none:
             ContentUnavailableView("Select an Item", systemImage: "sidebar.left")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
@@ -588,23 +589,17 @@ struct QueuePanel: View {
                 actions: scope == .upNext
                     ? .standard(player: player, musicLibrary: musicLibrary, network: network)
                     : .history(player: player, musicLibrary: musicLibrary),
-                allowsEditing: scope == .upNext
+                allowsEditing: scope == .upNext,
+                emptyState: QueueEmptyState(
+                    title: scope == .upNext
+                        ? String(localized: "Nothing Up Next")
+                        : String(localized: "Nothing Played Yet"),
+                    symbol: scope == .upNext ? "list.bullet" : "clock.arrow.circlepath",
+                    message: scope == .upNext
+                        ? String(localized: "Add tracks to the queue to see them here.")
+                        : String(localized: "Tracks you've played will appear here.")
+                )
             )
-            // Overlaid rather than swapped in: an empty queue is exactly when you want
-            // to drag something into it, and a table that isn't mounted can't take a
-            // drop. Hit testing off so the drag reaches the table underneath.
-            .overlay {
-                if entries.isEmpty {
-                    ContentUnavailableView(
-                        scope == .upNext ? "Nothing Up Next" : "Nothing Played Yet",
-                        systemImage: scope == .upNext ? "list.bullet" : "clock.arrow.circlepath",
-                        description: Text(scope == .upNext
-                                          ? "Add tracks to the queue to see them here."
-                                          : "Tracks you've played will appear here.")
-                    )
-                    .allowsHitTesting(false)
-                }
-            }
         }
         // The close button went, but Escape shouldn't have to go with it.
         .onExitCommand { isPresented = false }

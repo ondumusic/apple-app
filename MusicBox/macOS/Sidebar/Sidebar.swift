@@ -221,6 +221,8 @@ final class SidebarViewController: NSViewController {
         outlineView.dataSource = self
         outlineView.delegate = self
         outlineView.onDelete = { [weak self] in self?.deleteSelectedPlaylist() }
+        outlineView.target = self
+        outlineView.doubleAction = #selector(handleDoubleClick)
 
         let menu = NSMenu()
         menu.delegate = self
@@ -437,6 +439,24 @@ final class SidebarViewController: NSViewController {
             #endif
             if !window.isKeyWindow { window.makeKey() }
             cell.beginInlineRename()
+        }
+    }
+
+    /// Double-click plays a playlist, matching what a double-click does everywhere else
+    /// in the app. Setting `doubleAction` replaces AppKit's own expand/collapse on
+    /// double-click, so anything with children has to keep doing that here.
+    @objc private func handleDoubleClick() {
+        let row = outlineView.clickedRow
+        guard row >= 0, let node = outlineView.item(atRow: row) as? SidebarNode else { return }
+        if case .playlist(let playlist) = node.kind, !playlist.isFolder {
+            actions.playPlaylist(playlist)
+            return
+        }
+        guard outlineView.isExpandable(node) else { return }
+        if outlineView.isItemExpanded(node) {
+            outlineView.animator().collapseItem(node)
+        } else {
+            outlineView.animator().expandItem(node)
         }
     }
 
