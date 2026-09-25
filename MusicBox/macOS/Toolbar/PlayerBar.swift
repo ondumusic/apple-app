@@ -101,6 +101,8 @@ struct PlayerBar: View {
 struct AirPlayControl: View {
     var glyphSize: CGFloat = 20
     var controlSize: CGFloat = playerControlSize
+    /// Set on a tinted surface, where the system accent doesn't belong.
+    var tint: Color? = nil
 
     @State private var isHovering = false
 
@@ -108,6 +110,8 @@ struct AirPlayControl: View {
         AirPlayPicker(
             size: glyphSize,
             controlSize: controlSize,
+            normalColor: tint.map { NSColor($0).withAlphaComponent(0.85) } ?? .secondaryLabelColor,
+            activeColor: tint.map { NSColor($0) } ?? .controlAccentColor,
             onHoverChange: { isHovering = $0 }
         )
         .frame(width: controlSize, height: controlSize)

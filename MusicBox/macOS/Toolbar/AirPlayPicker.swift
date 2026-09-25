@@ -10,6 +10,10 @@ struct AirPlayPicker: NSViewRepresentable {
     /// wants; the player row passes the shared control size so its highlight matches the
     /// buttons beside it.
     var controlSize: CGFloat?
+    /// The active colour is the system accent by default, which is a fixed blue that
+    /// ignores both the app accent and whatever the surface underneath happens to be.
+    var normalColor: NSColor = .secondaryLabelColor
+    var activeColor: NSColor = .controlAccentColor
     /// AVRoutePickerView has its own tracking, which swallows SwiftUI's `.onHover` — a
     /// hover background on the wrapper never lit up. Reporting it from inside is the way
     /// to have this one control behave like the rest of the row.
@@ -20,8 +24,8 @@ struct AirPlayPicker: NSViewRepresentable {
     func makeNSView(context: Context) -> HoverReportingView {
         let picker = AVRoutePickerView()
         picker.isRoutePickerButtonBordered = false
-        picker.setRoutePickerButtonColor(.secondaryLabelColor, for: .normal)
-        picker.setRoutePickerButtonColor(.controlAccentColor, for: .active)
+        picker.setRoutePickerButtonColor(normalColor, for: .normal)
+        picker.setRoutePickerButtonColor(activeColor, for: .active)
         picker.setAccessibilityLabel("AirPlay")
         picker.translatesAutoresizingMaskIntoConstraints = false
 
@@ -39,6 +43,9 @@ struct AirPlayPicker: NSViewRepresentable {
 
     func updateNSView(_ nsView: HoverReportingView, context: Context) {
         nsView.onHoverChange = onHoverChange
+        guard let picker = nsView.subviews.first as? AVRoutePickerView else { return }
+        picker.setRoutePickerButtonColor(normalColor, for: .normal)
+        picker.setRoutePickerButtonColor(activeColor, for: .active)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: HoverReportingView, context: Context) -> CGSize {

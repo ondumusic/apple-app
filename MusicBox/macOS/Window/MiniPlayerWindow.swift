@@ -394,6 +394,14 @@ private struct MiniPlayerContent: View {
         return player.queue[player.effectiveIndex].artworkURL
     }
 
+    /// The mini player is the one Mac surface where an artwork tint reads as intended
+    /// rather than as a rendering fault: a small window that becomes the record's colour.
+    /// The main window's player bar is a thin strip inside full app chrome, and is left
+    /// alone deliberately.
+    @State private var artworkColor: Color?
+
+    private var tint: Color? { settings.artworkTintedPlayer ? artworkColor : nil }
+
     /// Height reserved for the transport row's content area (title + controls +
     /// scrubber + padding). Used to compute the snap point and transport position.
     /// Must fit title, artist, the transport row, the elapsed/remaining labels and the
@@ -415,6 +423,7 @@ private struct MiniPlayerContent: View {
                     artworkURL: artworkURL,
                     width: w,
                     height: h,
+                    isTinted: tint != nil,
                     onQueueToggleRequest: onQueueToggleRequest
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -425,8 +434,55 @@ private struct MiniPlayerContent: View {
         // our artwork down by the title-bar height; bypassing it lets the artwork
         // genuinely fill the top of the window.
         .ignoresSafeArea()
-        .background(Color(NSColor.windowBackgroundColor))
-        .accentColor(settings.resolvedAccentColor)
+        .background {
+            Group {
+                if let tint {
+                    // Strongest at the top, where the artwork it was taken from sits,
+                    // fading down so the transport and queue keep their own materials
+                    // readable.
+                    LinearGradient(
+                        stops: [
+                            .init(color: tint, location: 0),
+                            .init(color: tint.opacity(0.75), location: 0.55),
+                            .init(color: tint.opacity(0.45), location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                } else {
+                    Color(NSColor.windowBackgroundColor)
+                }
+            }
+            // The background needs the same safe-area bypass the content above has, or it
+            // stops at the title-bar inset and the window's own colour shows as a band
+            // across the top. Full-bleed artwork used to hide that.
+            .ignoresSafeArea()
+        }
+        // The chosen accent was picked against neutral chrome and clashes on top of an
+        // arbitrary artwork colour; white sits on any of them.
+        .accentColor(settings.artworkTintedPlayer ? .white : settings.resolvedAccentColor)
+        // Keyed on the setting, not on the extracted colour: waiting for the async
+        // extraction meant the window opened light, snapped to dark, then faded the
+        // colour in. Tinting on means this is a dark surface from the first frame.
+        .background(WindowAppearance(isDark: settings.artworkTintedPlayer))
+        // Keyed on the setting too, so switching it off clears the tint without waiting
+        // for the next track.
+        .task(id: "\(artworkURL?.absoluteString ?? ""):\(settings.artworkTintedPlayer)") {
+            guard settings.artworkTintedPlayer else {
+                withAnimation(.easeInOut(duration: 0.4)) { artworkColor = nil }
+                return
+            }
+            // Darker than the full player's ceiling: this window is mostly chrome over
+            // the tint rather than artwork, so a bright one leaves nothing legible.
+            let color = await ArtworkColorExtractor.extractColor(from: artworkURL, maxBrightness: 0.4)
+            // Only cross-fade between tracks. Fading up from nothing is what made opening
+            // the window look like a three-stage flicker.
+            if artworkColor == nil {
+                artworkColor = color
+            } else {
+                withAnimation(.easeInOut(duration: 0.4)) { artworkColor = color }
+            }
+        }
     }
 }
 
@@ -450,6 +506,9 @@ private struct UnifiedLayout: View {
     let artworkURL: URL?
     let width: CGFloat
     let height: CGFloat
+    /// Whether the window is showing an artwork tint, in which case the chrome below the
+    /// artwork gets out of the way and lets the gradient behind it through.
+    let isTinted: Bool
     let onQueueToggleRequest: () -> Void
 
     @State private var isHovering = false
@@ -489,7 +548,8 @@ private struct UnifiedLayout: View {
                 TransportRow(
                     track: track,
                     isQueueVisible: isQueueVisible,
-                    onQueueToggleRequest: onQueueToggleRequest
+                    onQueueToggleRequest: onQueueToggleRequest,
+                    tintForeground: isTinted ? .white : nil
                 )
                 .padding(.vertical, 10)
                 .padding(.horizontal, 14)
@@ -503,7 +563,12 @@ private struct UnifiedLayout: View {
                     Divider()
                     InlineQueue()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(NSColor.windowBackgroundColor))
+                        // Clear would leave the queue and the transport on one
+                        // undifferentiated wash; this darkens the band the way the opaque
+                        // window background used to separate them.
+                        .background(isTinted
+                                    ? AnyShapeStyle(Color.black.opacity(0.22))
+                                    : AnyShapeStyle(Color(NSColor.windowBackgroundColor)))
                 }
             }
         }
@@ -530,6 +595,8 @@ private struct UnifiedLayout: View {
             // image too aggressively. Black-on-material reads in both modes so the
             // controls don't visually flicker color when the snap happens.
             Rectangle().fill(.regularMaterial).gesture(WindowDragGesture())
+        } else if isTinted {
+            Color.clear.contentShape(Rectangle()).gesture(WindowDragGesture())
         } else {
             Color(NSColor.windowBackgroundColor).gesture(WindowDragGesture())
         }
@@ -664,7 +731,7 @@ private struct TransportRow: View {
                 HStack(spacing: 2) {
                     VolumeControl(iconSize: 12, controlSize: Self.controlSize)
                         .foregroundStyle(tintForeground.map { $0.opacity(0.85) } ?? Color.secondary)
-                    AirPlayControl(controlSize: Self.controlSize)
+                    AirPlayControl(controlSize: Self.controlSize, tint: tintForeground)
                     Spacer()
                 }
                 HStack(spacing: 0) {
@@ -734,7 +801,12 @@ private struct InlineQueue: View {
                 items: entries.map(\.item),
                 rowHeight: 44,
                 showsDuration: false,
-                accent: settings.resolvedAccentColor,
+                // Translucent rather than solid white: the row keeps AppKit's emphasized
+                // (white) text, which a solid white pill made invisible. A light wash
+                // over the tint reads as selection and leaves the text legible.
+                accent: settings.artworkTintedPlayer
+                    ? Color.white.opacity(0.28)
+                    : settings.resolvedAccentColor,
                 actions: scope == .upNext
                     ? .standard(player: player, musicLibrary: musicLibrary, network: network)
                     : .history(player: player, musicLibrary: musicLibrary),
@@ -811,6 +883,33 @@ private struct MiniScrubber: View {
         guard time.isFinite, time >= 0 else { return "0:00" }
         let total = Int(time.rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+/// Forces the window dark while an artwork tint is showing.
+///
+/// The inline queue is an NSTableView, and AppKit resolves `labelColor` against the
+/// window's appearance rather than SwiftUI's environment — so without this its rows stay
+/// black text on a dark tint. The extractor caps brightness low enough that dark is
+/// always the right answer here.
+private struct WindowAppearance: NSViewRepresentable {
+    let isDark: Bool
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        let appearance: NSAppearance? = isDark ? NSAppearance(named: .darkAqua) : nil
+        // Synchronously when the window is already there, so the first frame is already
+        // the right appearance. The hop is only for the initial mount, where this view
+        // has no window yet.
+        if let window = nsView.window {
+            if window.appearance != appearance { window.appearance = appearance }
+            return
+        }
+        Task { @MainActor in
+            guard nsView.window?.appearance != appearance else { return }
+            nsView.window?.appearance = appearance
+        }
     }
 }
 #endif

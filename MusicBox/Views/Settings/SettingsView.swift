@@ -148,7 +148,11 @@ struct SettingsView: View {
         } header: {
             Text("Appearance")
         } footer: {
+            #if os(macOS)
+            Text("Colors the mini player background based on the current track's album artwork.")
+            #else
             Text("Colors the player background based on the current track's album artwork.")
+            #endif
         }
     }
 
