@@ -63,6 +63,7 @@ nonisolated struct SyncAlbum: Sendable {
     var slug: String
     var releaseYear: Int?
     var artworkUrl: URL?
+    var artwork: [ArtworkVariant] = []
     var isUnknown: Bool
     var trackCount: Int
     var insertedAt: Date
@@ -70,7 +71,8 @@ nonisolated struct SyncAlbum: Sendable {
 
 extension SyncAlbum: Decodable {
     nonisolated enum CodingKeys: String, CodingKey {
-        case id, artistId, name, sortName, slug, releaseYear, artworkUrl, isUnknown, trackCount, insertedAt
+        case id, artistId, name, sortName, slug, releaseYear, artworkUrl, artwork,
+             isUnknown, trackCount, insertedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -81,7 +83,11 @@ extension SyncAlbum: Decodable {
         sortName = try container.decodeIfPresent(String.self, forKey: .sortName) ?? name
         slug = try container.decode(String.self, forKey: .slug)
         releaseYear = try container.decodeIfPresent(Int.self, forKey: .releaseYear)
-        artworkUrl = try container.decodeIfPresent(URL.self, forKey: .artworkUrl)
+        artwork = try container.decodeIfPresent([ArtworkVariant].self, forKey: .artwork) ?? []
+        // `artworkUrl` is deprecated and documented as the largest variant. Derive it
+        // from the variants when they're there, so its eventual removal is a no-op.
+        let deprecatedArtworkUrl = try container.decodeIfPresent(URL.self, forKey: .artworkUrl)
+        artworkUrl = artwork.largest?.url ?? deprecatedArtworkUrl
         isUnknown = try container.decode(Bool.self, forKey: .isUnknown)
         trackCount = try container.decode(Int.self, forKey: .trackCount)
         insertedAt = try container.decode(Date.self, forKey: .insertedAt)

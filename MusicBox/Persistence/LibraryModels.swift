@@ -29,12 +29,14 @@ nonisolated class LibraryAlbum {
     var slug: String
     var releaseYear: Int?
     var artworkUrl: URL?
+    var artwork: [ArtworkVariant] = []
     var isUnknown: Bool
     var trackCount: Int
     var insertedAt: Date
 
     init(serverId: UUID, artistId: UUID, name: String, sortName: String, slug: String,
-         releaseYear: Int?, artworkUrl: URL?, isUnknown: Bool, trackCount: Int, insertedAt: Date) {
+         releaseYear: Int?, artworkUrl: URL?, artwork: [ArtworkVariant] = [],
+         isUnknown: Bool, trackCount: Int, insertedAt: Date) {
         self.serverId = serverId
         self.artistId = artistId
         self.name = name
@@ -42,6 +44,7 @@ nonisolated class LibraryAlbum {
         self.slug = slug
         self.releaseYear = releaseYear
         self.artworkUrl = artworkUrl
+        self.artwork = artwork
         self.isUnknown = isUnknown
         self.trackCount = trackCount
         self.insertedAt = insertedAt

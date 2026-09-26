@@ -52,6 +52,7 @@ extension MusicLibrary {
                 la.slug = sa.slug
                 la.releaseYear = sa.releaseYear
                 la.artworkUrl = sa.artworkUrl
+                la.artwork = sa.artwork
                 la.isUnknown = sa.isUnknown
                 la.trackCount = sa.trackCount
                 la.insertedAt = sa.insertedAt
@@ -60,7 +61,7 @@ extension MusicLibrary {
                     serverId: sa.id, artistId: sa.artistId, name: sa.name,
                     sortName: sa.sortName, slug: sa.slug,
                     releaseYear: sa.releaseYear, artworkUrl: sa.artworkUrl,
-                    isUnknown: sa.isUnknown, trackCount: sa.trackCount,
+                    artwork: sa.artwork, isUnknown: sa.isUnknown, trackCount: sa.trackCount,
                     insertedAt: sa.insertedAt))
                 inserted.insert(sa.id)
             }

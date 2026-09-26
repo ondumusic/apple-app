@@ -217,7 +217,7 @@ final class MusicLibrary {
         let tracks = tracksForAlbum(id)
         return Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
                      slug: la.slug, releaseYear: la.releaseYear, tracks: tracks,
-                     isUnknown: la.isUnknown, artworkUrl: la.artworkUrl)
+                     isUnknown: la.isUnknown, artworkUrl: la.artworkUrl, artwork: la.artwork)
     }
 
     func albumsWithTracksForArtist(_ artistId: UUID) -> [Album] {
@@ -238,7 +238,7 @@ final class MusicLibrary {
                 .sorted { ($0.disc, $0.number ?? Int.max) < ($1.disc, $1.number ?? Int.max) }
             return Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
                          slug: la.slug, releaseYear: la.releaseYear, tracks: albumTracks,
-                         isUnknown: la.isUnknown, artworkUrl: la.artworkUrl)
+                         isUnknown: la.isUnknown, artworkUrl: la.artworkUrl, artwork: la.artwork)
         }
     }
 
@@ -661,7 +661,7 @@ final class MusicLibrary {
         let artist = artistMap?[la.artistId]
         return Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
               slug: la.slug, releaseYear: la.releaseYear, isUnknown: la.isUnknown,
-              artworkUrl: la.artworkUrl, insertedAt: la.insertedAt,
+              artworkUrl: la.artworkUrl, artwork: la.artwork, insertedAt: la.insertedAt,
               artistName: artist?.name, artistSortName: artist?.sortName)
     }
 
