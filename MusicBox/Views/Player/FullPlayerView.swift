@@ -26,7 +26,7 @@ struct FullPlayerView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Artwork — centered in available space
-                ArtworkView(url: artworkURL, cornerRadius: 12)
+                ArtworkView(url: artworkURL, cornerRadius: 12, size: .large)
                     .frame(maxWidth: 300, maxHeight: 300)
                     .aspectRatio(1, contentMode: .fit)
                     .shadow(radius: player.isPlaying ? 16 : 6, y: player.isPlaying ? 8 : 4)

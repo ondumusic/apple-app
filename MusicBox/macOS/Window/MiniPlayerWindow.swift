@@ -646,7 +646,10 @@ private struct UnifiedLayout: View {
     @ViewBuilder
     private var artwork: some View {
         if track != nil, let url = artworkURL {
-            ArtworkView(url: url, cornerRadius: 0)
+            // Sized to the window, not left to ArtworkView's 300px default: this is the
+            // largest the artwork is shown anywhere in the app — up to 540pt, so 1080
+            // pixels on a Retina display — and 300 was being upscaled more than 3x.
+            ArtworkView(url: url, cornerRadius: 0, size: .large)
         } else {
             ArtworkPlaceholder()
         }
@@ -666,7 +669,9 @@ private struct CompactLayout: View {
         HStack(spacing: 10) {
             ZStack {
                 if let url = artworkURL {
-                    ArtworkView(url: url)
+                    // The same default was wrong the other way here: 300px decoded for a
+                    // 40pt thumbnail.
+                    ArtworkView(url: url, size: .thumbnail)
                 } else {
                     Rectangle().fill(Color.gray.opacity(0.4))
                 }

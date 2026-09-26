@@ -32,7 +32,7 @@ struct TrackRow: View {
     var body: some View {
         HStack(spacing: 12) {
             if showArtwork {
-                ArtworkView(url: artworkUrl, cornerRadius: 4, thumbnailSize: 40)
+                ArtworkView(url: artworkUrl, cornerRadius: 4, size: .thumbnail)
                     .frame(width: 40, height: 40)
                     .opacity(isAvailable ? 1 : 0.4)
             }

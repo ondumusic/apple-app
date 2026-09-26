@@ -161,7 +161,7 @@ struct NowPlayingLabel: View {
     private var artwork: some View {
         Group {
             if track != nil {
-                ArtworkView(url: artworkURL, cornerRadius: 0)
+                ArtworkView(url: artworkURL, cornerRadius: 0, size: .thumbnail)
                     .frame(width: 44, height: 44)
             } else {
                 Rectangle()

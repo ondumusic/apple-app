@@ -177,7 +177,7 @@ struct SearchView: View {
             path.append(album)
         } label: {
             HStack(spacing: 12) {
-                ArtworkView(url: album.artworkUrl)
+                ArtworkView(url: album.artworkUrl, size: .thumbnail)
                     .frame(width: 44, height: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(album.name)

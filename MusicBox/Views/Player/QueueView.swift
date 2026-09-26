@@ -142,7 +142,7 @@ struct QueueView: View {
     @ViewBuilder
     private func queueRow(track: Track, artworkURL: URL?, isActive: Bool) -> some View {
         HStack(spacing: 12) {
-            ArtworkView(url: artworkURL, cornerRadius: 4)
+            ArtworkView(url: artworkURL, cornerRadius: 4, size: .thumbnail)
                 .frame(width: 40, height: 40)
 
             VStack(alignment: .leading, spacing: 2) {

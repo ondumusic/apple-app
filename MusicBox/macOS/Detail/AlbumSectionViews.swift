@@ -33,7 +33,7 @@ struct AlbumSectionHeader: View {
         HStack(alignment: .top, spacing: Spacing.element) {
             if inlineArtwork {
                 NavigationLink(value: album) {
-                    ArtworkView(url: album.artworkUrl)
+                    ArtworkView(url: album.artworkUrl, size: .thumbnail)
                         .frame(width: 64, height: 64)
                 }
                 .buttonStyle(.plain)

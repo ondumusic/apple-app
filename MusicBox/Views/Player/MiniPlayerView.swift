@@ -32,7 +32,7 @@ struct MiniPlayerView: View {
                 .background(tinted ? AnyShapeStyle(.white.opacity(0.2)) : AnyShapeStyle(.quaternary))
 
                 HStack(spacing: 10) {
-                    ArtworkView(url: artworkURL, cornerRadius: 4, thumbnailSize: 36)
+                    ArtworkView(url: artworkURL, cornerRadius: 4, size: .thumbnail)
                         .frame(width: 40, height: 40)
 
                     VStack(alignment: .leading, spacing: 2) {
