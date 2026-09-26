@@ -111,6 +111,13 @@ final class SettingsStore {
         didSet { defaults.set(artworkTintedPlayer, forKey: "artworkTintedPlayer") }
     }
 
+    /// Whether the mini player floats above other apps' windows. Off by default, which is
+    /// what the window already did — a window that outranks everything on screen is a
+    /// thing to opt into, not to discover.
+    var miniPlayerAlwaysOnTop: Bool {
+        didSet { defaults.set(miniPlayerAlwaysOnTop, forKey: "miniPlayerAlwaysOnTop") }
+    }
+
     var accentColor: AccentColor {
         didSet { defaults.set(accentColor.rawValue, forKey: "accentColor") }
     }
@@ -161,6 +168,7 @@ final class SettingsStore {
         self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original
         self.streamingQuality = StreamingQuality(rawValue: defaults.string(forKey: "streamingQuality") ?? "") ?? .original
         self.artworkTintedPlayer = defaults.object(forKey: "artworkTintedPlayer") as? Bool ?? true
+        self.miniPlayerAlwaysOnTop = defaults.object(forKey: "miniPlayerAlwaysOnTop") as? Bool ?? false
         self.accentColor = AccentColor(rawValue: defaults.string(forKey: "accentColor") ?? "") ?? .blue
         self.customAccentRed = defaults.object(forKey: "customAccentRed") as? Double ?? 1.0
         self.customAccentGreen = defaults.object(forKey: "customAccentGreen") as? Double ?? 0.4

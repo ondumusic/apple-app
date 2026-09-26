@@ -393,6 +393,10 @@ struct MusicBoxApp: App {
                     NotificationCenter.default.post(name: .switchToMiniPlayer, object: nil)
                 }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
+                Toggle("Keep Mini Player on Top", isOn: Binding(
+                    get: { settings.miniPlayerAlwaysOnTop },
+                    set: { settings.miniPlayerAlwaysOnTop = $0 }
+                ))
                 Button("Activity") {
                     NotificationCenter.default.post(name: .showDownloadActivity, object: nil)
                 }

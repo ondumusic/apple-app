@@ -3,8 +3,12 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
-/// NSPanel-backed mini player. Floating HUD-style window so it can stay above the main
-/// window across spaces. Content is SwiftUI via NSHostingView.
+// The mini player: current artwork, transport and, at taller sizes, the queue.
+//
+// A plain NSWindow, not an NSPanel — it has to take key status for its own controls and
+// text. It joins all spaces, but it sits at the normal window level and only rises above
+// other apps when "Keep Mini Player on Top" is on. Content is SwiftUI via NSHostingView.
+
 /// SwiftUI-observable window state — surfaces facts the layout needs to know
 /// (whether the user is currently resizing) without the SwiftUI side polling.
 @Observable @MainActor
@@ -501,6 +505,7 @@ private struct MiniPlayerContent: View {
         // extraction meant the window opened light, snapped to dark, then faded the
         // colour in. Tinting on means this is a dark surface from the first frame.
         .background(WindowAppearance(isDark: settings.artworkTintedPlayer))
+        .background(MiniPlayerWindowLevel(isFloating: settings.miniPlayerAlwaysOnTop))
         // Keyed on the setting too, so switching it off clears the tint without waiting
         // for the next track.
         .task(id: "\(artworkURL?.absoluteString ?? ""):\(settings.artworkTintedPlayer)") {
@@ -993,6 +998,28 @@ private final class WindowHoverProbe: NSView {
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             self?.onHoverChange?(false)
+        }
+    }
+}
+
+/// Raises the mini player above other applications' windows while the setting is on.
+///
+/// Applied from the content rather than once at construction, so it takes effect the
+/// moment the menu item is toggled and again whenever the window is reopened.
+private struct MiniPlayerWindowLevel: NSViewRepresentable {
+    let isFloating: Bool
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        let level: NSWindow.Level = isFloating ? .floating : .normal
+        if let window = nsView.window {
+            if window.level != level { window.level = level }
+            return
+        }
+        Task { @MainActor in
+            guard let window = nsView.window, window.level != level else { return }
+            window.level = level
         }
     }
 }
