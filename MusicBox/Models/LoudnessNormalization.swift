@@ -13,13 +13,21 @@ import Foundation
 /// quieter is left where it is.
 nonisolated enum LoudnessNormalization {
 
-    /// ReplayGain 2.0's reference level.
+    /// The level playback is scaled toward — the streaming convention, and what this
+    /// library's own distribution asks for.
     ///
-    /// Apple Music targets -16 and the streaming services -14. Lower is better for us
-    /// precisely because we can't boost: the further down the target sits, the fewer
-    /// tracks fall below it and get left uncorrected. The cost is that everything plays
-    /// a couple of dB quieter, which is one adjustment of the system volume.
-    static let targetLUFS: Double = -18
+    /// Started at -18 (ReplayGain 2.0's reference) on the theory that a lower target
+    /// leaves fewer tracks below it and so uncorrected. Measured against a real 4,500
+    /// track library that turned out to be paying for almost nothing: its 10th percentile
+    /// sat at -16.5 LUFS, so -18 bought about half a dB of extra evenness and charged
+    /// 3.4 dB of level for it, running a typical track at 45% of full scale.
+    ///
+    /// Because we can only attenuate, target level and evenness are the same dial: every
+    /// dB the target rises is a dB of residual spread against the tracks already below
+    /// it, which can't be lifted. -14 leaves roughly the quietest tenth uncorrected by at
+    /// most a couple of dB, which is the better end of that trade on a phone at full
+    /// volume. Boosting is what removes the trade rather than repositioning it.
+    static let targetLUFS: Double = -14
 
     /// A linear multiplier for `AVPlayer.volume`.
     ///

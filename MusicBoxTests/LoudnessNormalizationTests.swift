@@ -9,8 +9,8 @@ private func dB(_ gain: Float) -> Double { 20 * log10(Double(gain)) }
 struct LoudnessGainTests {
 
     @Test func bringsALoudMasterDownToTheTarget() {
-        // -9 LUFS is a typical modern master: 9 dB above the -18 target.
-        #expect(dB(LoudnessNormalization.gain(forLUFS: -9)).isApproximately(-9))
+        // -9 LUFS is a typical modern master: 5 dB above the -14 target.
+        #expect(dB(LoudnessNormalization.gain(forLUFS: -9)).isApproximately(-5))
     }
 
     @Test func leavesATrackAtTheTargetAlone() {
@@ -72,10 +72,11 @@ struct AlbumLoudnessTests {
         let loudUnderAlbumGain = dB(albumGain) + (-8)
         #expect((loudUnderAlbumGain - quietUnderAlbumGain).isApproximately(12))
 
-        // Track gain would have closed that gap to the 2 dB the clamp leaves behind.
+        // Track gain would have closed that gap to the 6 dB the clamp leaves behind:
+        // -20 is under the target, so it can't be lifted to meet the other.
         let quietUnderTrackGain = dB(LoudnessNormalization.gain(forLUFS: -20)) + (-20)
         let loudUnderTrackGain = dB(LoudnessNormalization.gain(forLUFS: -8)) + (-8)
-        #expect((loudUnderTrackGain - quietUnderTrackGain).isApproximately(2))
+        #expect((loudUnderTrackGain - quietUnderTrackGain).isApproximately(6))
     }
 }
 

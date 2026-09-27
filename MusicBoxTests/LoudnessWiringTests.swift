@@ -64,7 +64,7 @@ struct LoudnessWiringTests {
         let player = await makePlayer(lib, queue: [ids[0]], settings: settings)
 
         settings.normalizeVolume = true
-        #expect(dB(player.primaryGain) < -13)
+        #expect(dB(player.primaryGain) < -9)
 
         settings.normalizeVolume = false
         #expect(player.primaryGain == 1)
@@ -77,10 +77,11 @@ struct LoudnessWiringTests {
         let player = await makePlayer(lib, queue: ids, settings: settings)
 
         settings.normalizeVolume = true
-        // The album sits near -7 LUFS, far above the -4 the loud track alone would give.
+        // The album sits near -7 LUFS, so its gain is shallower than the -10 the loud
+        // track would get on its own.
         let albumGain = dB(player.primaryGain)
-        #expect(albumGain > -13)
-        #expect(albumGain < -8)
+        #expect(albumGain > -9)
+        #expect(albumGain < -5)
     }
 
     @Test func aMixedQueueTakesTheTrackGain() async throws {
@@ -91,7 +92,7 @@ struct LoudnessWiringTests {
         let player = await makePlayer(lib, queue: [loud[0], quiet[0]], settings: settings)
 
         settings.normalizeVolume = true
-        #expect(dB(player.primaryGain) < -13)
+        #expect(dB(player.primaryGain) < -9)
     }
 
     @Test func anUnmeasuredTrackIsLeftAlone() async throws {
@@ -116,7 +117,7 @@ extension LoudnessWiringTests {
         let player = await makePlayer(lib, queue: [ids[0]], settings: settings)
 
         settings.normalizeVolume = true
-        #expect(dB(player.primaryGain) < -13)
+        #expect(dB(player.primaryGain) < -9)
     }
 }
 
