@@ -29,15 +29,13 @@ struct FullPlayerView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Artwork — centered in available space
-                ArtworkView(url: artworkURL, cornerRadius: 12, size: .large)
+                CrossfadingArtwork(url: artworkURL, size: .large)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .frame(maxWidth: 300, maxHeight: 300)
                     .aspectRatio(1, contentMode: .fit)
                     .shadow(radius: player.isPlaying ? 16 : 6, y: player.isPlaying ? 8 : 4)
                     .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                     .animation(.spring(duration: 0.5, bounce: 0.3), value: player.isPlaying)
-                    .id(player.currentTrack?.id)
-                    .transition(.blurReplace)
-                    .animation(.easeInOut(duration: 0.4), value: player.currentTrack?.id)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // Controls pinned to bottom
@@ -65,7 +63,7 @@ struct FullPlayerView: View {
                         #if os(iOS)
                         HStack(spacing: 4) {
                             AirPlayButton(
-                                activeTintColor: UIColor(settings.resolvedAccentColor),
+                                activeTintColor: UIColor(isTinted ? .white : settings.resolvedAccentColor),
                                 routeActive: audioRouteName != nil
                             )
                             .frame(width: 48, height: 48)
@@ -73,7 +71,9 @@ struct FullPlayerView: View {
                                 Text(audioRouteName)
                                     .font(.footnote)
                                     .fontWeight(.medium)
-                                    .foregroundStyle(settings.resolvedAccentColor)
+                                    // Matches the glyph beside it: the accent was picked
+                                    // against neutral chrome, not an arbitrary cover.
+                                    .foregroundStyle(isTinted ? .white : settings.resolvedAccentColor)
                                     .lineLimit(1)
                                     .overlay {
                                         AirPlayTapArea()

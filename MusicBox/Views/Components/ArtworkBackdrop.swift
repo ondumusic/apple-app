@@ -21,21 +21,12 @@ struct ArtworkBackdrop: View {
     var dimming: Double = 0.45
 
     var body: some View {
-        LazyImage(url: url) { state in
-            if let image = state.image {
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    // Overscaled before blurring: a blur samples past the edges, and
-                    // without slack it pulls in transparency and vignettes the corners.
-                    .scaleEffect(1.4)
-                    .blur(radius: blurRadius, opaque: true)
-            } else {
-                Color.clear
-            }
-        }
-        .processors([.resize(width: CGFloat(ArtworkSize.medium.pixels))])
-        .overlay(Color.black.opacity(dimming))
+        CrossfadingArtwork(url: url, size: .medium)
+            // Overscaled before blurring: a blur samples past the edges, and without
+            // slack it pulls in transparency and vignettes the corners.
+            .scaleEffect(1.4)
+            .blur(radius: blurRadius, opaque: true)
+            .overlay(Color.black.opacity(dimming))
         .clipped()
         .allowsHitTesting(false)
     }
