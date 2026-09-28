@@ -293,6 +293,10 @@ struct MusicBoxApp: App {
                         player = PlayerService(api: api, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache)
                     }
                 } else {
+                    player?.stopForSignOut()
+                    #if os(macOS)
+                    MiniPlayerWindowController.closeForSignOut()
+                    #endif
                     SyncService.clearSyncState()
                     musicLibrary.clearAll(includingDownloads: true)
                     downloadService.clearAuth()

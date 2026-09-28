@@ -454,6 +454,30 @@ final class PlayerService {
         togglePlayPause()
     }
 
+    /// Stops everything, because the account this queue came from is gone.
+    ///
+    /// Not left to deinit: on macOS the mini player window holds the player after the
+    /// app has dropped its own reference, so without this it plays on against a library
+    /// and a token that no longer exist — the buffered track and the one queued behind
+    /// it for gapless still play, and everything after them fails.
+    func stopForSignOut() {
+        primaryPlayer.pause()
+        primaryPlayer.removeAllItems()
+        tearDownCrossfade()
+        invalidateGaplessState()
+        queue = []
+        shuffledIndices = nil
+        currentIndex = 0
+        currentTrack = nil
+        isPlaying = false
+        isQueueUserModified = false
+        progress = 0
+        duration = 0
+        playbackError = nil
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        MPNowPlayingInfoCenter.default().playbackState = .stopped
+    }
+
     func seek(to time: Double) {
         isSeeking = true
         progress = time

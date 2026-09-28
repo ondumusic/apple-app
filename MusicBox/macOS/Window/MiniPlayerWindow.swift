@@ -45,6 +45,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     /// last working in. Relaunch restores key to whichever it was.
     static let lastKeyDefaultsKey = "MiniPlayerWasLastKeyWindow"
     private static var isTerminating = false
+    private static var isClosingForSignOut = false
     private static var didClearInitialFocus = false
     /// Default frame — square (width × width), which puts the user in overlay mode
     /// where the artwork dominates and transport overlays at the bottom.
@@ -354,8 +355,24 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     nonisolated func windowWillClose(_ notification: Notification) {
         Task { @MainActor in
             guard !Self.isTerminating else { return }
+            // Same reasoning as terminating: signing out isn't the user putting the
+            // window away, so it shouldn't decide what comes back on the next launch.
+            if Self.isClosingForSignOut {
+                Self.isClosingForSignOut = false
+                return
+            }
             UserDefaults.standard.set(false, forKey: Self.visibleDefaultsKey)
         }
+    }
+
+    /// Signing out empties the library, so the mini player has nothing left to show.
+    /// Static because the window outlives the view that owns the controller: the main
+    /// window's content is torn down at sign-out and can't close this itself.
+    static func closeForSignOut() {
+        guard let window = NSApp.windows.first(where: { $0.identifier == windowIdentifier })
+        else { return }
+        isClosingForSignOut = true
+        window.close()
     }
 
     nonisolated func windowWillStartLiveResize(_ notification: Notification) {
