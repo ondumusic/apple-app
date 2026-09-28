@@ -111,9 +111,9 @@ final class SettingsStore {
         didSet { defaults.set(artworkTintedPlayer, forKey: "artworkTintedPlayer") }
     }
 
-    /// Whether the mini player floats above other apps' windows. Off by default, which is
-    /// what the window already did — a window that outranks everything on screen is a
-    /// thing to opt into, not to discover.
+    /// Whether the mini player floats above *other apps'* windows while MusicBox is in
+    /// the background. Off by default, which is what the window already did — a window
+    /// that outranks everything on screen is a thing to opt into, not to discover.
     var miniPlayerAlwaysOnTop: Bool {
         didSet { defaults.set(miniPlayerAlwaysOnTop, forKey: "miniPlayerAlwaysOnTop") }
     }

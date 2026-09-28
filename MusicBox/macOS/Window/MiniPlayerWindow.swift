@@ -439,6 +439,8 @@ private struct MiniPlayerContent: View {
     /// The main window's player bar is a thin strip inside full app chrome, and is left
     /// alone deliberately.
     @State private var artworkColor: Color?
+    /// Floating is scoped to the app being in the background — see MiniPlayerWindowLevel.
+    @State private var isAppActive = NSApp.isActive
 
     private var tint: Color? { settings.artworkTintedPlayer ? artworkColor : nil }
 
@@ -505,7 +507,14 @@ private struct MiniPlayerContent: View {
         // extraction meant the window opened light, snapped to dark, then faded the
         // colour in. Tinting on means this is a dark surface from the first frame.
         .background(WindowAppearance(isDark: settings.artworkTintedPlayer))
-        .background(MiniPlayerWindowLevel(isFloating: settings.miniPlayerAlwaysOnTop))
+        .background(MiniPlayerWindowLevel(
+            isFloating: settings.miniPlayerAlwaysOnTop && !isAppActive))
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            isAppActive = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            isAppActive = false
+        }
         // Keyed on the setting too, so switching it off clears the tint without waiting
         // for the next track.
         .task(id: "\(artworkURL?.absoluteString ?? ""):\(settings.artworkTintedPlayer)") {
@@ -1008,6 +1017,13 @@ private final class WindowHoverProbe: NSView {
 }
 
 /// Raises the mini player above other applications' windows while the setting is on.
+///
+/// Only while MusicBox itself is in the background, which is what "on top" is for.
+/// AppKit's Cmd+` cycle won't step to a window it can't bring to the front, so a
+/// permanently floating mini player silently killed window switching inside the app —
+/// clicking the main window still worked, the shortcut didn't. Dropping back to the
+/// normal level while the app is active costs nothing: both windows are ours, and
+/// whichever you picked is the one in front.
 ///
 /// Applied from the content rather than once at construction, so it takes effect the
 /// moment the menu item is toggled and again whenever the window is reopened.
