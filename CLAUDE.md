@@ -85,6 +85,12 @@ xcodebuild -scheme MusicBox -destination 'platform=iOS Simulator,name=iPhone 17'
   -parallel-testing-enabled NO test
 ```
 
+A test run that hangs with no output usually means the test host crashed: the bundle
+aborts mid-run and leaves `/usr/libexec/testmanagerd` orphaned, which then wedges the
+*next* run too. Killing `xcodebuild` doesn't clear it — `killall -9 testmanagerd` does.
+Look for a crash report in `~/Library/Logs/DiagnosticReports/MusicBox-*.ips` and for a
+failing test in the same area before blaming the simulator.
+
 Parallel testing is off deliberately. The iOS 27 simulator runtime clones unreliably —
 runs failed with "Failed to install or launch the test runner", whole clones reporting
 every test as failed in 0.000s, and a 600s "collecting diagnostics from simulator"

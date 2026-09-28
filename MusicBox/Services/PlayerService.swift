@@ -718,16 +718,26 @@ final class PlayerService {
     }
 
     private func resolvePlaybackURL(for track: Track, queueIndex: Int) throws -> URL {
+        // The index is resolved before this runs and the queue can be replaced in
+        // between — a crash report caught exactly that, coming in via playShuffled.
+        // Writing the resolved URL back only memoises it for the next play of the same
+        // row, so a stale index means skip the memo, never trap.
+        func rememberURL(_ url: URL) {
+            guard queue.indices.contains(queueIndex) else { return }
+            queue[queueIndex].playbackURL = url
+        }
+
         if let offlineURL = musicLibrary?.localURL(for: track.id) {
-            queue[queueIndex].playbackURL = offlineURL
+            rememberURL(offlineURL)
             return offlineURL
         }
-        if let cached = queue[queueIndex].playbackURL,
+        if queue.indices.contains(queueIndex),
+           let cached = queue[queueIndex].playbackURL,
            !cached.isFileURL || FileManager.default.fileExists(atPath: cached.path) {
             return cached
         }
         if let cachedURL = playbackCache?.cachedURL(for: track.id) {
-            queue[queueIndex].playbackURL = cachedURL
+            rememberURL(cachedURL)
             return cachedURL
         }
         guard var streamURL = URL(string: track.streamUrl) else {
