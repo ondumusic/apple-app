@@ -5,11 +5,12 @@ struct MiniPlayerView: View {
     @Environment(SettingsStore.self) private var settings
     var onTap: () -> Void
 
-    @State private var artworkColor: Color?
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
 
     private let swipeThreshold: CGFloat = 50
+
+    private var isTinted: Bool { settings.artworkTintedPlayer && artworkURL != nil }
 
     private var artworkURL: URL? {
         player.queue.indices.contains(player.effectiveIndex)
@@ -20,7 +21,7 @@ struct MiniPlayerView: View {
         if let track = player.currentTrack {
             VStack(spacing: 0) {
                 // Progress bar
-                let tinted = settings.artworkTintedPlayer && artworkColor != nil
+                let tinted = isTinted
                 GeometryReader { geo in
                     let fraction = player.duration > 0 ? player.progress / player.duration : 0
                     Rectangle()
@@ -135,11 +136,13 @@ struct MiniPlayerView: View {
                         }
                 )
             }
-            .foregroundStyle(settings.artworkTintedPlayer && artworkColor != nil ? .white : .primary)
+            .foregroundStyle(isTinted ? .white : .primary)
             .background {
                 Group {
-                    if settings.artworkTintedPlayer, let artworkColor {
-                        artworkColor
+                    if isTinted {
+                        // PROTOTYPE: matches the full player. A flat average colour is
+                        // the thing that reads as muddy on a busy cover.
+                        ArtworkBackdrop(url: artworkURL, blurRadius: 16, dimming: 0.5)
                     } else {
                         #if os(iOS)
                         Color(.secondarySystemBackground)
@@ -148,20 +151,12 @@ struct MiniPlayerView: View {
                         #endif
                     }
                 }
-                .animation(.easeInOut(duration: 0.5), value: artworkColor != nil)
+                .animation(.easeInOut(duration: 0.5), value: isTinted)
             }
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
             .padding(.horizontal, 12)
             .padding(.bottom, 6)
-            .task(id: "\(artworkURL?.absoluteString ?? ""):\(settings.artworkTintedPlayer)") {
-                guard settings.artworkTintedPlayer else {
-                    withAnimation(.easeInOut(duration: 0.5)) { artworkColor = nil }
-                    return
-                }
-                let color = await ArtworkColorExtractor.extractColor(from: artworkURL, maxBrightness: 0.4)
-                withAnimation(.easeInOut(duration: 0.5)) { artworkColor = color }
-            }
         }
     }
 }

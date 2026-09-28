@@ -14,8 +14,11 @@ struct FullPlayerView: View {
         return musicLibrary.playlist(id)
     }
     @State private var showQueue = false
-    @State private var artworkColor: Color?
     @State private var audioRouteName: String?
+
+    /// The blurred cover is the tint now, so "do we have artwork" is the only question
+    /// — no need to decode one to find out.
+    private var isTinted: Bool { settings.artworkTintedPlayer && artworkURL != nil }
 
     private var artworkURL: URL? {
         player.queue.indices.contains(player.effectiveIndex)
@@ -101,16 +104,8 @@ struct FullPlayerView: View {
             }
             .background {
                 ZStack {
-                    if settings.artworkTintedPlayer, let artworkColor {
-                        LinearGradient(
-                            stops: [
-                                .init(color: artworkColor, location: 0),
-                                .init(color: artworkColor.opacity(0.6), location: 0.6),
-                                .init(color: artworkColor.opacity(0.3), location: 1),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+                    if isTinted {
+                        ArtworkBackdrop(url: artworkURL)
                     } else {
                         #if os(iOS)
                         Color(.systemBackground)
@@ -121,19 +116,8 @@ struct FullPlayerView: View {
                 }
                 .ignoresSafeArea()
             }
-            .foregroundStyle(settings.artworkTintedPlayer && artworkColor != nil ? .white : .primary)
-            .tint(settings.artworkTintedPlayer && artworkColor != nil ? .white : .accentColor)
-            .task(id: settings.artworkTintedPlayer) {
-                guard settings.artworkTintedPlayer else {
-                    withAnimation(.easeInOut(duration: 0.5)) { artworkColor = nil }
-                    return
-                }
-                await updateArtworkColor()
-            }
-            .onChange(of: player.currentTrack?.id) {
-                guard settings.artworkTintedPlayer else { return }
-                Task { await updateArtworkColor() }
-            }
+            .foregroundStyle(isTinted ? .white : .primary)
+            .tint(isTinted ? .white : .accentColor)
             #if os(iOS)
             .onAppear { updateAudioRoute() }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { _ in
@@ -150,14 +134,10 @@ struct FullPlayerView: View {
                         }
                 }
             }
-            .preferredColorScheme(settings.artworkTintedPlayer && artworkColor != nil ? .dark : nil)
+            .preferredColorScheme(isTinted ? .dark : nil)
         }
     }
 
-    private func updateArtworkColor() async {
-        let color = await ArtworkColorExtractor.extractColor(from: artworkURL)
-        withAnimation(.easeInOut(duration: 0.5)) { artworkColor = color }
-    }
 
     private func updateAudioRoute() {
         #if os(iOS)

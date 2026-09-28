@@ -438,11 +438,12 @@ private struct MiniPlayerContent: View {
     /// rather than as a rendering fault: a small window that becomes the record's colour.
     /// The main window's player bar is a thin strip inside full app chrome, and is left
     /// alone deliberately.
-    @State private var artworkColor: Color?
+    /// The blurred cover is the tint now, so "do we have artwork" is the only question —
+    /// no need to decode one to find out.
+    private var isTinted: Bool { settings.artworkTintedPlayer && artworkURL != nil }
+
     /// Floating is scoped to the app being in the background — see MiniPlayerWindowLevel.
     @State private var isAppActive = NSApp.isActive
-
-    private var tint: Color? { settings.artworkTintedPlayer ? artworkColor : nil }
 
     /// Height reserved for the transport row's content area (title + controls +
     /// scrubber + padding). Used to compute the snap point and transport position.
@@ -465,7 +466,7 @@ private struct MiniPlayerContent: View {
                     artworkURL: artworkURL,
                     width: w,
                     height: h,
-                    isTinted: tint != nil,
+                    isTinted: isTinted,
                     onQueueToggleRequest: onQueueToggleRequest
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -478,19 +479,25 @@ private struct MiniPlayerContent: View {
         .ignoresSafeArea()
         .background {
             Group {
-                if let tint {
-                    // Strongest at the top, where the artwork it was taken from sits,
-                    // fading down so the transport and queue keep their own materials
-                    // readable.
-                    LinearGradient(
-                        stops: [
-                            .init(color: tint, location: 0),
-                            .init(color: tint.opacity(0.75), location: 0.55),
-                            .init(color: tint.opacity(0.45), location: 1),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                if isTinted {
+                    // PROTOTYPE: the cover itself, blurred, instead of a gradient built
+                    // from its average colour.
+                    GeometryReader { g in
+                        if g.size.height <= Self.compactMaxHeight {
+                            // A radius suited to an 80pt strip; the full-size one washes
+                            // it out to a single colour.
+                            ArtworkBackdrop(url: artworkURL, blurRadius: 16, dimming: 0.5)
+                        } else {
+                            VStack(spacing: 0) {
+                                // Skip the band the real artwork already fills. Covering
+                                // it achieved nothing visible and forced a square cover
+                                // to fill a tall narrow window, so the only part on show
+                                // was a thin vertical slice out of the middle.
+                                Color.clear.frame(height: g.size.width)
+                                ArtworkBackdrop(url: artworkURL)
+                            }
+                        }
+                    }
                 } else {
                     Color(NSColor.windowBackgroundColor)
                 }
@@ -514,24 +521,6 @@ private struct MiniPlayerContent: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
             isAppActive = false
-        }
-        // Keyed on the setting too, so switching it off clears the tint without waiting
-        // for the next track.
-        .task(id: "\(artworkURL?.absoluteString ?? ""):\(settings.artworkTintedPlayer)") {
-            guard settings.artworkTintedPlayer else {
-                withAnimation(.easeInOut(duration: 0.4)) { artworkColor = nil }
-                return
-            }
-            // Darker than the full player's ceiling: this window is mostly chrome over
-            // the tint rather than artwork, so a bright one leaves nothing legible.
-            let color = await ArtworkColorExtractor.extractColor(from: artworkURL, maxBrightness: 0.4)
-            // Only cross-fade between tracks. Fading up from nothing is what made opening
-            // the window look like a three-stage flicker.
-            if artworkColor == nil {
-                artworkColor = color
-            } else {
-                withAnimation(.easeInOut(duration: 0.4)) { artworkColor = color }
-            }
         }
     }
 }
