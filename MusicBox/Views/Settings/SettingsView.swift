@@ -2,7 +2,10 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(SettingsStore.self) private var settings
-    @Environment(SyncService.self) private var syncService
+    /// Optional because Settings outlives being signed in: Sign Out is in this window,
+    /// and Cmd+, opens it again afterwards. There's no sync service either side of that,
+    /// and a non-optional read of an absent environment object traps.
+    @Environment(SyncService.self) private var syncService: SyncService?
     @Environment(AuthService.self) private var auth
     @Environment(PlaybackCache.self) private var playbackCache
 
@@ -265,45 +268,47 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var librarySection: some View {
-        Section {
-            HStack {
-                Text("Last Synced")
-                Spacer()
-                if syncService.isSyncing {
-                    ProgressView().controlSize(.small)
-                } else if let date = syncService.lastSyncDate {
-                    Text(date, style: .relative).foregroundStyle(.secondary)
-                } else {
-                    Text("Never").foregroundStyle(.secondary)
-                }
-            }
-            Button {
-                Task { await syncService.sync() }
-            } label: {
+        if let syncService {
+            Section {
                 HStack {
-                    Text("Sync Now")
+                    Text("Last Synced")
+                    Spacer()
                     if syncService.isSyncing {
-                        Spacer()
                         ProgressView().controlSize(.small)
+                    } else if let date = syncService.lastSyncDate {
+                        Text(date, style: .relative).foregroundStyle(.secondary)
+                    } else {
+                        Text("Never").foregroundStyle(.secondary)
                     }
                 }
-            }
-            .disabled(syncService.isSyncing)
-            Button("Rebuild Library") { showRebuildConfirmation = true }
-                .disabled(syncService.isSyncing)
-                .confirmationDialog("Rebuild Library?", isPresented: $showRebuildConfirmation) {
-                    Button("Rebuild") { Task { await syncService.rebuildLibrary() } }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("Downloads your whole library again from the server. Downloaded music and playlists are kept.")
+                Button {
+                    Task { await syncService.sync() }
+                } label: {
+                    HStack {
+                        Text("Sync Now")
+                        if syncService.isSyncing {
+                            Spacer()
+                            ProgressView().controlSize(.small)
+                        }
+                    }
                 }
-            if let error = syncService.syncError {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                    .font(.footnote)
+                .disabled(syncService.isSyncing)
+                Button("Rebuild Library") { showRebuildConfirmation = true }
+                    .disabled(syncService.isSyncing)
+                    .confirmationDialog("Rebuild Library?", isPresented: $showRebuildConfirmation) {
+                        Button("Rebuild") { Task { await syncService.rebuildLibrary() } }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("Downloads your whole library again from the server. Downloaded music and playlists are kept.")
+                    }
+                if let error = syncService.syncError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.footnote)
+                }
+            } header: {
+                Text("Library")
             }
-        } header: {
-            Text("Library")
         }
     }
 
@@ -324,15 +329,19 @@ struct SettingsView: View {
                     Text(host).foregroundStyle(.secondary)
                 }
             }
-            Button("Sign Out", role: .destructive) { showLogoutConfirmation = true }
-                .confirmationDialog("Sign Out?", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
-                    Button("Sign Out", role: .destructive) {
-                        playbackCache.clearCache()
-                        auth.logout()
+            if auth.isLoggedIn {
+                Button("Sign Out", role: .destructive) { showLogoutConfirmation = true }
+                    .confirmationDialog("Sign Out?", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
+                        Button("Sign Out", role: .destructive) {
+                            playbackCache.clearCache()
+                            auth.logout()
+                        }
+                    } message: {
+                        Text("This will remove all offline data including downloads, cached artwork, and your synced library from this device.")
                     }
-                } message: {
-                    Text("This will remove all offline data including downloads, cached artwork, and your synced library from this device.")
-                }
+            } else {
+                Text("Not signed in").foregroundStyle(.secondary)
+            }
         } header: {
             Text("Account")
         }
