@@ -79,9 +79,7 @@ struct LoginView: View {
                     .frame(height: 60)
 
                 // App branding
-                Image(systemName: "music.note.house.fill")
-                    .font(.system(size: 52))
-                    .foregroundStyle(Color.accentColor)
+                AppIconImage(size: 52)
                     .padding(.bottom, 8)
 
                 Text("MusicBox")

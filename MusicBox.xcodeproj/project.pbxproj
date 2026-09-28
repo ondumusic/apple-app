@@ -404,7 +404,6 @@
 		50AFC7EA2F58594300056DCC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = MusicBox/MusicBox.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -446,7 +445,6 @@
 		50AFC7EB2F58594300056DCC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = MusicBox/MusicBox.entitlements;
 				CODE_SIGN_STYLE = Automatic;

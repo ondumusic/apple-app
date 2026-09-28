@@ -31,9 +31,22 @@ nonisolated enum StreamingQuality: String, CaseIterable, Sendable {
 nonisolated enum AccentColor: String, CaseIterable, Sendable {
     case blue, indigo, purple, pink, red, orange, yellow, green, teal, custom
 
+    /// The app icon's own blue. The system blue is lighter and greener than anything in
+    /// the icon, so the default accent didn't look like it belonged to the app it was
+    /// accenting.
+    ///
+    /// Both ends come out of the icon's background gradient, which runs #4C84FF at the
+    /// top to #214AE3 at the bottom: light mode takes the middle of it, dark mode the
+    /// top, because the middle goes muddy against a dark ground. The other presets are
+    /// system colours and adapt on their own; this one has to say how.
+    static let iconBlue = Color(
+        light: .srgb(0.219, 0.406, 0.946),
+        dark: .srgb(0.300, 0.519, 1.000)
+    )
+
     var color: Color {
         switch self {
-        case .blue: .blue
+        case .blue: Self.iconBlue
         case .indigo: .indigo
         case .purple: .purple
         case .pink: .pink
