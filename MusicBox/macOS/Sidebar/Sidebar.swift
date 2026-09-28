@@ -860,6 +860,9 @@ extension SidebarViewController: NSOutlineViewDelegate {
             onSelectionChange?(nil)
             return
         }
+        // A folder holds playlists, it isn't one. Routing it to the content area showed
+        // an empty playlist — the folder's own tracks, of which there are none.
+        if case .playlist(let playlist) = node.kind, playlist.isFolder { return }
         onSelectionChange?(node.selectionId)
     }
 }
