@@ -1123,6 +1123,14 @@ extension TracksTableViewController: NSTableViewDataSource {
         }
     }
 
+    /// Without this AppKit has nothing to match a keystroke against and beeps — which is
+    /// what you get after clicking a track in the artist split, where focus moves off the
+    /// artist list onto this table.
+    func tableView(_ tableView: NSTableView, typeSelectStringFor tableColumn: NSTableColumn?, row: Int) -> String? {
+        guard let index = flatTrackIndex(forRow: row) else { return nil }
+        return tracks[index].name
+    }
+
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
         // Only track rows are draggable; section headers are not.
         guard let trackIdx = flatTrackIndex(forRow: row) else { return nil }
