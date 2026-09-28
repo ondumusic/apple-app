@@ -8,10 +8,10 @@
 	<array>
 		<string>audio</string>
 	</array>
-	<!-- A self-hosted server is usually on the LAN, and login accepts a plain http://
-	     address. ATS blocks cleartext by default, so without this those users simply
-	     can't connect. Scoped to local addresses rather than NSAllowsArbitraryLoads,
-	     which would need justifying at review. -->
+	<!-- For Debug only in practice: release builds refuse an http:// server outright
+	     (see LoginView.allowsInsecureServers), so nothing cleartext is ever requested.
+	     This keeps a local server reachable without setting up TLS first, and is scoped
+	     to local addresses rather than NSAllowsArbitraryLoads. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

@@ -18,9 +18,26 @@ struct LoginView: View {
         Self.resolveServerURL(serverURL)
     }
 
+    /// Whether a typed `http://` address is usable.
+    ///
+    /// Release builds refuse it: sign-in credentials and the whole library would cross
+    /// the network in the clear, and a self-hosted server can be given a certificate.
+    /// Debug keeps it so a server can be run locally without setting up TLS first.
+    static var allowsInsecureServers: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
     /// Resolves user input into a full server URL.
     /// Defaults to https scheme and /api path when not specified.
-    static func resolveServerURL(_ input: String) -> URL? {
+    /// `allowingInsecure` is a parameter rather than only a build flag so both policies
+    /// are testable; tests build as Debug and would otherwise never exercise the release
+    /// behaviour.
+    static func resolveServerURL(_ input: String,
+                                 allowingInsecure: Bool = allowsInsecureServers) -> URL? {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
 
@@ -30,6 +47,7 @@ struct LoginView: View {
         }
 
         guard let url = URL(string: text) else { return nil }
+        guard allowingInsecure || url.scheme?.lowercased() != "http" else { return nil }
 
         // Default to /api path if user only entered a hostname (no path)
         if url.path.isEmpty || url.path == "/" {
@@ -37,6 +55,17 @@ struct LoginView: View {
         }
 
         return url
+    }
+
+    /// Explains a rejected address, rather than leaving Sign In greyed out with no
+    /// indication of why.
+    private var serverURLProblem: String? {
+        let text = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, resolvedURL == nil else { return nil }
+        if text.lowercased().hasPrefix("http://") {
+            return String(localized: "Your server must use https. Sign-in details and your music would otherwise travel unencrypted.")
+        }
+        return nil
     }
 
     private var canSubmit: Bool {
@@ -102,6 +131,14 @@ struct LoginView: View {
                 }
                 .autocorrectionDisabled()
                 .padding(.horizontal, 24)
+
+                if let problem = serverURLProblem {
+                    Text(problem)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                }
 
                 // Error
                 if let error = auth.errorMessage {

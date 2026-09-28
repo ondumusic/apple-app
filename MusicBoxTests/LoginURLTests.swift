@@ -62,3 +62,40 @@ struct LoginURLResolutionTests {
         #expect(url?.absoluteString == "https://localhost:4000/api")
     }
 }
+
+/// Release builds refuse a cleartext server; Debug keeps it so a local server can be
+/// run without TLS. Both are asserted explicitly because tests build as Debug and would
+/// otherwise only ever see the permissive half.
+@Suite
+struct LoginURLSchemePolicyTests {
+
+    @Test func rejectsHttpWhenInsecureServersAreNotAllowed() {
+        #expect(LoginView.resolveServerURL("http://192.168.1.10:4000", allowingInsecure: false) == nil)
+        #expect(LoginView.resolveServerURL("http://localhost:4000", allowingInsecure: false) == nil)
+    }
+
+    @Test func allowsHttpWhenInsecureServersAreAllowed() {
+        let url = LoginView.resolveServerURL("http://localhost:4000", allowingInsecure: true)
+        #expect(url?.absoluteString == "http://localhost:4000/api")
+    }
+
+    /// A bare hostname still becomes https, so the common case never trips the rule.
+    @Test func bareHostnameBecomesHttpsAndIsAccepted() {
+        #expect(LoginView.resolveServerURL("music.example.com", allowingInsecure: false)?
+            .absoluteString == "https://music.example.com/api")
+    }
+
+    @Test func httpsIsAcceptedEitherWay() {
+        #expect(LoginView.resolveServerURL("https://music.example.com", allowingInsecure: false) != nil)
+        #expect(LoginView.resolveServerURL("https://music.example.com", allowingInsecure: true) != nil)
+    }
+
+    /// Release is the configuration that ships, so it must be the strict one.
+    @Test func releaseBuildsDisallowInsecureServers() {
+        #if DEBUG
+        #expect(LoginView.allowsInsecureServers)
+        #else
+        #expect(!LoginView.allowsInsecureServers)
+        #endif
+    }
+}
