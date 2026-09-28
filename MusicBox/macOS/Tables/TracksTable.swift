@@ -148,11 +148,13 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.onDelete = onDelete
         vc.applyEmbeddedStyle(embeddedStyle)
         vc.applyHeaderVisibility(hidden: hidesColumnHeaders)
-        vc.accentNSColor = NSColor(accent)
         vc.applyRowHeight(rowHeight)
         vc.sectionHeaderHeight = sectionHeaderHeight
         vc.sectionHeaderIgnoresCellInset = sectionHeaderIgnoresCellInset
         vc.sectionHeaderBuilder = sectionHeader
+        // After the header builder, not before: changing the accent rebuilds the hosted
+        // headers, and it has to rebuild them from the closure that carries the new one.
+        vc.accentNSColor = NSColor(accent)
         vc.artworkBuilder = artwork
         vc.artworkSize = artworkSize
         vc.artworkInset = artworkInset
@@ -654,6 +656,15 @@ final class TracksTableViewController: NSViewController {
                     case let cell as NumberOrSpeakerCell: cell.accentColor = accentNSColor
                     default: break
                     }
+                }
+                // A section header is hosted SwiftUI built by a closure that captured
+                // the accent when the row was last hosted, so repainting the cell isn't
+                // enough — it has to be built again.
+                if displayRows.indices.contains(row),
+                   case .header(let album) = displayRows[row],
+                   let builder = sectionHeaderBuilder,
+                   let cell = rowView.view(atColumn: 0) as? SectionHeaderCell {
+                    cell.host(view: builder(album))
                 }
                 rowView.needsDisplay = true
             }
