@@ -6,6 +6,15 @@ nonisolated enum AlbumSortOption: String, CaseIterable {
     case name = "Name"
     case releaseYear = "Release Year"
 
+    /// What this ordering means by default. Nobody picks "Date Added" wanting the oldest
+    /// record they own first, and nobody picks "Name" wanting Z.
+    var defaultAscending: Bool {
+        switch self {
+        case .artist, .name: true
+        case .dateAdded, .releaseYear: false
+        }
+    }
+
     var ascendingLabel: String {
         switch self {
         case .artist, .name: "A–Z"
@@ -92,6 +101,9 @@ struct AlbumListView: View {
             reloadAlbums()
         }
         .onChange(of: sortOption) {
+            // Matches macOS: the ordering carries its own direction, and both platforms
+            // share the persisted setting.
+            sortAscending = sortOption.defaultAscending
             reloadAlbums()
         }
         .onChange(of: sortAscending) {

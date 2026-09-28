@@ -48,6 +48,9 @@ struct AlbumsViewMac: View {
         .onChange(of: libraryFilter) { reload() }
         .onChange(of: sortOption) { reload() }
         .onChange(of: sortAscending) { reload() }
+        // Switching the ordering resets the direction to what that ordering means, which
+        // is the only reason anyone picks it. Flipping it afterwards still sticks.
+        .onChange(of: sortOption) { sortAscending = sortOption.defaultAscending }
     }
 
     private func reload() {
