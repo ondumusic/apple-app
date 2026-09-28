@@ -2,15 +2,26 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Only audio. `fetch` and `processing` were declared but nothing uses
+	     BGTaskScheduler, and an unused background mode is something review asks about. -->
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
-		<string>processing</string>
 		<string>audio</string>
 	</array>
+	<!-- A self-hosted server is usually on the LAN, and login accepts a plain http://
+	     address. ATS blocks cleartext by default, so without this those users simply
+	     can't connect. Scoped to local addresses rather than NSAllowsArbitraryLoads,
+	     which would need justifying at review. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<!-- iOS prompts before an app may reach LAN addresses. Without a string the prompt
+	     gives the user nothing to decide on. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>MusicBox connects to your music server, which is usually on your local network.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
-	<key>CFBundleDisplayName</key>
-	<string>MusicBox</string>
 </dict>
 </plist>

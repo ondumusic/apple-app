@@ -1,0 +1,16 @@
+// Copy to Local.xcconfig and edit. That file is gitignored.
+//
+//     cp Config/Local.example.xcconfig Config/Local.xcconfig
+//
+// Everything here overrides a default in Base.xcconfig. Delete any line you don't need.
+
+// Xcode ▸ Settings ▸ Accounts, or developer.apple.com/account ▸ Membership.
+// Leave empty to build unsigned for the simulator.
+LOCAL_DEVELOPMENT_TEAM =
+
+// Keep a Debug build in the same container as before instead of getting its own.
+// Changing a bundle identifier resets the container — new database, no downloads, signed
+// out — so this is how you avoid that until you're ready to pay it once.
+//
+// MUSICBOX_DEBUG_BUNDLE_ID = com.example.MusicBox
+// MUSICBOX_DEBUG_APP_NAME = MusicBox

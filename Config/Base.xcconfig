@@ -1,0 +1,56 @@
+// Shared build settings. Committed.
+//
+// The block below is the set of things a developer may want to change. Override any of
+// them in Local.xcconfig, which is gitignored and included further down — anything set
+// there wins, because a later assignment replaces an earlier one.
+
+// ---------------------------------------------------------------------------
+// Defaults
+// ---------------------------------------------------------------------------
+
+MUSICBOX_BUNDLE_ID = com.example.MusicBox
+MUSICBOX_APP_NAME = MusicBox
+MUSICBOX_APPICON = AppIcon
+
+// Debug installs alongside release by default, so a build that's mid-migration can't
+// touch the library you actually listen to. Separate identifier means a separate
+// container: its own database, downloads and keychain login.
+MUSICBOX_DEBUG_BUNDLE_ID = com.example.MusicBox.dev
+MUSICBOX_DEBUG_APP_NAME = MusicBox Dev
+// Point at a second icon set once one exists, so the two are distinguishable on a home
+// screen rather than only by name.
+MUSICBOX_DEBUG_APPICON = AppIcon
+
+// Empty means "Sign to Run Locally", so a fresh clone builds and runs with no setup.
+LOCAL_DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"
+
+// ---------------------------------------------------------------------------
+// Derived — nothing below here should need editing
+// ---------------------------------------------------------------------------
+
+EFFECTIVE_BUNDLE_ID = $(MUSICBOX_BUNDLE_ID)
+EFFECTIVE_BUNDLE_ID[config=Debug] = $(MUSICBOX_DEBUG_BUNDLE_ID)
+
+EFFECTIVE_APP_NAME = $(MUSICBOX_APP_NAME)
+EFFECTIVE_APP_NAME[config=Debug] = $(MUSICBOX_DEBUG_APP_NAME)
+
+EFFECTIVE_APPICON = $(MUSICBOX_APPICON)
+EFFECTIVE_APPICON[config=Debug] = $(MUSICBOX_DEBUG_APPICON)
+
+// Lives here rather than on the target: it was deleted from the target by accident
+// while clearing the other overrides, and every target wants the same value anyway.
+PRODUCT_NAME = $(TARGET_NAME)
+
+PRODUCT_BUNDLE_IDENTIFIER = $(EFFECTIVE_BUNDLE_ID)
+INFOPLIST_KEY_CFBundleDisplayName = $(EFFECTIVE_APP_NAME)
+ASSETCATALOG_COMPILER_APPICON_NAME = $(EFFECTIVE_APPICON)
+
+// Only HTTPS to the user's own server, so no encryption beyond what the OS provides and
+// the app is exempt. Without this, every App Store upload asks the question again.
+INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
+
+// Shown on the store listing and used by the OS to group the app.
+INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.music
+DEVELOPMENT_TEAM = $(LOCAL_DEVELOPMENT_TEAM)

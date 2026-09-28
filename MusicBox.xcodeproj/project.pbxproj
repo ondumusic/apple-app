@@ -21,8 +21,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		5061F796306AC72300049EA1 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		5061F798306AC72300049EA1 /* Local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.example.xcconfig; sourceTree = "<group>"; };
+		5061F799306AC72300049EA1 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		50634C052F69C3D600A9BA4E /* MusicBoxTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MusicBoxTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		50AFC7DE2F58594300056DCC /* MusicBox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MusicBox.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		50AFC7DE2F58594300056DCC /* .app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = .app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -70,9 +73,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		5061F79A306AC72300049EA1 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				5061F796306AC72300049EA1 /* Base.xcconfig */,
+				5061F798306AC72300049EA1 /* Local.example.xcconfig */,
+				5061F799306AC72300049EA1 /* README.md */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
 		50AFC7D52F58594300056DCC = {
 			isa = PBXGroup;
 			children = (
+				5061F79A306AC72300049EA1 /* Config */,
 				50AFC7E02F58594300056DCC /* MusicBox */,
 				50634C062F69C3D600A9BA4E /* MusicBoxTests */,
 				50AFC7DF2F58594300056DCC /* Products */,
@@ -82,7 +96,7 @@
 		50AFC7DF2F58594300056DCC /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				50AFC7DE2F58594300056DCC /* MusicBox.app */,
+				50AFC7DE2F58594300056DCC /* .app */,
 				50634C052F69C3D600A9BA4E /* MusicBoxTests.xctest */,
 			);
 			name = Products;
@@ -134,7 +148,7 @@
 				AA000001AAAA000000000001 /* NukeUI */,
 			);
 			productName = MusicBox;
-			productReference = 50AFC7DE2F58594300056DCC /* MusicBox.app */;
+			productReference = 50AFC7DE2F58594300056DCC /* .app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -277,6 +291,7 @@
 		};
 		50AFC7E72F58594300056DCC /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5061F796306AC72300049EA1 /* Base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -338,6 +353,7 @@
 		};
 		50AFC7E82F58594300056DCC /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5061F796306AC72300049EA1 /* Base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -419,8 +435,6 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.7;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.MusicBox;
-				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -430,7 +444,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = 1;
 				XROS_DEPLOYMENT_TARGET = 26.2;
 			};
 			name = Debug;
@@ -465,8 +479,6 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.7;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.MusicBox;
-				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -476,7 +488,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = 1;
 				XROS_DEPLOYMENT_TARGET = 26.2;
 			};
 			name = Release;
