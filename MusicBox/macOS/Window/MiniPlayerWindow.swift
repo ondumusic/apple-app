@@ -9,6 +9,26 @@ import SwiftUI
 // text. It joins all spaces, but it sits at the normal window level and only rises above
 // other apps when "Keep Mini Player on Top" is on. Content is SwiftUI via NSHostingView.
 
+/// Carries Cmd+W, which nothing else will.
+///
+/// File ▸ Close belongs to SwiftUI here, and it only validates against SwiftUI's own
+/// scenes. This window isn't one, so with it in front the menu item is disabled, the
+/// key equivalent goes unclaimed and AppKit beeps.
+private final class MiniPlayerWindow: NSWindow {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+           event.charactersIgnoringModifiers == "w" {
+            // close() rather than performClose(), which works by highlighting the close
+            // button and silently declines when it can't: this window keeps that button
+            // at zero alpha until the pointer is inside, so Cmd+W worked or didn't
+            // depending on where the mouse happened to be.
+            close()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 /// SwiftUI-observable window state — surfaces facts the layout needs to know
 /// (whether the user is currently resizing) without the SwiftUI side polling.
 @Observable @MainActor
@@ -56,7 +76,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         // Restore the user's last frame, or fall back to the square overlay default.
         let savedFrame = Self.loadSavedFrame()
         let initialFrame = savedFrame ?? Self.defaultFrame
-        let panel = NSWindow(
+        let panel = MiniPlayerWindow(
             contentRect: initialFrame,
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
