@@ -8,6 +8,10 @@
 // Leave empty to build unsigned for the simulator.
 LOCAL_DEVELOPMENT_TEAM =
 
+// Defaults to "-" (ad-hoc), which needs no team. Set this on a machine that has one if
+// you want a properly signed macOS build.
+// LOCAL_MACOS_CODE_SIGN_IDENTITY = Apple Development
+
 // Keep a Debug build in the same container as before instead of getting its own.
 // Changing a bundle identifier resets the container — new database, no downloads, signed
 // out — so this is how you avoid that until you're ready to pay it once.

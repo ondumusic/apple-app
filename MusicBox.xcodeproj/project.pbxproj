@@ -25,7 +25,7 @@
 		5061F798306AC72300049EA1 /* Local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.example.xcconfig; sourceTree = "<group>"; };
 		5061F799306AC72300049EA1 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		50634C052F69C3D600A9BA4E /* MusicBoxTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MusicBoxTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		50AFC7DE2F58594300056DCC /* .app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = .app; sourceTree = BUILT_PRODUCTS_DIR; };
+		50AFC7DE2F58594300056DCC /* MusicBox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MusicBox.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -96,7 +96,7 @@
 		50AFC7DF2F58594300056DCC /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				50AFC7DE2F58594300056DCC /* .app */,
+				50AFC7DE2F58594300056DCC /* MusicBox.app */,
 				50634C052F69C3D600A9BA4E /* MusicBoxTests.xctest */,
 			);
 			name = Products;
@@ -148,7 +148,7 @@
 				AA000001AAAA000000000001 /* NukeUI */,
 			);
 			productName = MusicBox;
-			productReference = 50AFC7DE2F58594300056DCC /* .app */;
+			productReference = 50AFC7DE2F58594300056DCC /* MusicBox.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -252,8 +252,6 @@
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -276,8 +274,6 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -411,7 +407,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = MusicBox/MusicBox.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
@@ -438,7 +433,6 @@
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -455,7 +449,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = MusicBox/MusicBox.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
@@ -482,7 +475,6 @@
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;

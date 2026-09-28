@@ -24,6 +24,10 @@ MUSICBOX_DEBUG_APPICON = AppIcon
 // Empty means "Sign to Run Locally", so a fresh clone builds and runs with no setup.
 LOCAL_DEVELOPMENT_TEAM =
 
+// Ad-hoc, which is what builds without a signing team. A machine with one can set
+// "Apple Development" to get a signed macOS build instead.
+LOCAL_MACOS_CODE_SIGN_IDENTITY = -
+
 #include? "Local.xcconfig"
 
 // ---------------------------------------------------------------------------
@@ -54,3 +58,10 @@ INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
 // Shown on the store listing and used by the OS to group the app.
 INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.music
 DEVELOPMENT_TEAM = $(LOCAL_DEVELOPMENT_TEAM)
+CODE_SIGN_IDENTITY[sdk=macosx*] = $(LOCAL_MACOS_CODE_SIGN_IDENTITY)
+
+// iPhone and the Mac we develop against. visionOS was still listed on the app target
+// after the move to an iPhone-only device family, advertising a platform nobody has
+// built or tested. Catalyst is off because the Mac build is native, not a port.
+SUPPORTED_PLATFORMS = iphoneos iphonesimulator macosx
+SUPPORTS_MACCATALYST = NO
