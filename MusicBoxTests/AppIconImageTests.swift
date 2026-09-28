@@ -2,17 +2,20 @@ import Foundation
 import Testing
 #if os(iOS)
 import UIKit
+#else
+import AppKit
 #endif
 @testable import MusicBox
 
-/// The login screen's branding hangs off a name read out of Info.plist, so a build that
-/// renames or drops the icon breaks it silently — nothing fails to compile.
+/// The login screen's branding is an asset looked up by name, so renaming or dropping it
+/// breaks the screen silently — nothing fails to compile.
 struct AppIconImageTests {
 
-    #if os(iOS)
-    @Test func bundledIconResolves() throws {
-        let name = try #require(AppIconImage.bundledIconName)
-        #expect(UIImage(named: name) != nil)
+    @Test func artworkIsInTheBundle() {
+        #if os(iOS)
+        #expect(UIImage(named: "AppIconArtwork") != nil)
+        #else
+        #expect(NSImage(named: "AppIconArtwork") != nil)
+        #endif
     }
-    #endif
 }

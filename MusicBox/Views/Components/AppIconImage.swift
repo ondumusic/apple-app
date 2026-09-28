@@ -3,46 +3,23 @@ import SwiftUI
 /// The app's own icon, for chrome that has to say what the app is — the login screen
 /// has nothing else to identify itself with.
 ///
-/// Neither platform looks an app icon up by name. It's compiled as the bundle's icon
-/// rather than as an ordinary image asset, so `Image("AppIcon")` finds nothing. macOS
-/// has an API that hands it over; iOS doesn't, so the filename has to come from
-/// Info.plist. Reading it there rather than hardcoding it is also what keeps this
-/// working when the icon is renamed, which the debug build's is meant to be.
+/// Its own copy of the artwork rather than the installed icon, because neither platform
+/// will hand that over at a useful size: it's compiled as the bundle's icon rather than
+/// as an ordinary image asset, so `Image("AppIcon")` finds nothing, and what iOS does
+/// leave reachable is a 120px file that upscales visibly at any size worth showing.
+///
+/// Only the light appearance is exported. The icon's dark and tinted variants are for
+/// the home screen, where it sits on the user's wallpaper; here it sits on our own
+/// background, where it doesn't need to adapt. Exported at 512px — several times what
+/// anything draws it at, and a tenth of the weight of the 1024 master. Re-export from
+/// Icon Composer when the icon changes.
 struct AppIconImage: View {
     var size: CGFloat = 52
 
     var body: some View {
-        #if os(macOS)
-        // Not NSApplication.applicationIconImage: that answers with a single flattened
-        // 128px representation, where the named lookup returns the icon with all of its
-        // sizes and stays sharp at whatever this is drawn at. Either way it already
-        // carries the icon's shape and shadow, so it must not be clipped again.
-        if let icon = NSImage(named: NSImage.applicationIconName) {
-            Image(nsImage: icon)
-                .resizable()
-                .frame(width: size, height: size)
-        }
-        #else
-        if let name = Self.bundledIconName, let icon = UIImage(named: name) {
-            Image(uiImage: icon)
-                .resizable()
-                .frame(width: size, height: size)
-                // What ships in the bundle is the unmasked square: the home screen
-                // applies the shape, and nothing does it for us here. 0.2237 of the
-                // width is the ratio Apple's own icon grid uses.
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.2237, style: .continuous))
-        }
-        #endif
+        // Already carries the icon's shape, so it isn't clipped again.
+        Image("AppIconArtwork")
+            .resizable()
+            .frame(width: size, height: size)
     }
-
-    #if os(iOS)
-    /// The largest icon this build actually shipped, whatever it ended up called.
-    static var bundledIconName: String? {
-        guard let icons = Bundle.main.infoDictionary?["CFBundleIcons"] as? [String: Any],
-              let primary = icons["CFBundlePrimaryIcon"] as? [String: Any],
-              let files = primary["CFBundleIconFiles"] as? [String]
-        else { return nil }
-        return files.last
-    }
-    #endif
 }
