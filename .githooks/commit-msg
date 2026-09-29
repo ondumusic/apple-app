@@ -8,6 +8,15 @@
 # or symlink it in the same way.
 
 msg_file="$1"
+
+# Claude Code appends a link to the session that wrote the commit. It's an internal
+# identifier and this repo is meant to go public, so drop it here rather than relying
+# on anyone remembering not to add it.
+if grep -q '^Claude-Session:' "$msg_file"; then
+    stripped=$(mktemp)
+    grep -v '^Claude-Session:' "$msg_file" > "$stripped"
+    mv "$stripped" "$msg_file"
+fi
 subject=$(sed -n '1p' "$msg_file" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 
 case "$subject" in

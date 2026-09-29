@@ -1,6 +1,6 @@
 # MusicBox
 
-SwiftUI multiplatform music streaming app (iOS 18+ / macOS 15+) connecting to a self-hosted Elixir/Phoenix server backed by SQLite. iOS is the v1.0 target — the macOS build compiles but its UI is unfinished and **excluded from the first release**. See `TODO.md` for what remains.
+SwiftUI multiplatform music streaming app (iOS 26.2+ / macOS 15.7+) connecting to a self-hosted Elixir/Phoenix server backed by SQLite. iOS is the v1.0 target — the macOS build compiles but its UI is unfinished and **excluded from the first release**. See `TODO.md` for what remains.
 
 ## Architecture
 
@@ -70,9 +70,9 @@ Playlists shipped on `feat/playlists`. Folders are `Playlist`s with `isFolder ==
 ## Commit messages
 
 - Subject: `area: what changed`, imperative, terse, no trailing period (e.g. `downloads: fix foreground-migration concurrency bug`). No generic messages (`fix`, `wip`, `updates`, `more tests`, `attempt 2`) — say what actually changed.
-- Body: same bar as code comments — only WHY, never WHAT (the diff already shows what). Worth a few bullet points when there's a non-obvious reason, a trade-off, or a false start that's worth knowing didn't work. Skip it when the subject already says everything there is to say — a body that just restates the diff in prose is padding, not documentation.
+- Body: usually unnecessary — most commits are their subject. Add one when a non-obvious reason or constraint sits behind the change, and keep it to a sentence or two of that reason. Not a narrative of what was tried and abandoned, not what might be done later, not the diff restated in prose.
 - When a commit is authored or co-authored by Claude Code, add `Co-Authored-By: <model name> <noreply@anthropic.com>` as the last line, naming the model actually in use at commit time.
-- A `commit-msg` hook (`.githooks/commit-msg`) rejects generic/junk subjects at commit time. It's installed at `.git/hooks/commit-msg` in this clone; a fresh clone needs to copy or symlink it in (see the hook's header comment) since git doesn't version hooks.
+- A `commit-msg` hook (`.githooks/commit-msg`) rejects generic/junk subjects at commit time, and strips the `Claude-Session:` trailer Claude Code appends. It's installed at `.git/hooks/commit-msg` in this clone; a fresh clone needs to copy or symlink it in (see the hook's header comment) since git doesn't version hooks.
 
 ## Build & test
 
