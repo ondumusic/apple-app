@@ -1,6 +1,6 @@
 # MusicBox
 
-SwiftUI multiplatform music streaming app (iOS 26.2+ / macOS 15.7+) connecting to a self-hosted Elixir/Phoenix server backed by SQLite. iOS is the v1.0 target — the macOS build compiles but its UI is unfinished and **excluded from the first release**. See `TODO.md` for what remains.
+SwiftUI multiplatform music streaming app (iOS 26.2+ / macOS 15.7+) connecting to a self-hosted Elixir/Phoenix server backed by SQLite. Both platforms ship in v1.0; the macOS UI is a native AppKit/SwiftUI hybrid rather than a port of the iOS one. See `TODO.md` for what remains.
 
 ## Architecture
 
