@@ -10,7 +10,7 @@ struct MiniPlayerView: View {
 
     private let swipeThreshold: CGFloat = 50
 
-    private var isTinted: Bool { settings.artworkTintedPlayer && artworkURL != nil }
+    private var isTinted: Bool { player.tintsFromArtwork }
 
     private var artworkURL: URL? {
         player.queue.indices.contains(player.effectiveIndex)

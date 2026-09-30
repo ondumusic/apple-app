@@ -18,7 +18,7 @@ struct FullPlayerView: View {
 
     /// The blurred cover is the tint now, so "do we have artwork" is the only question
     /// — no need to decode one to find out.
-    private var isTinted: Bool { settings.artworkTintedPlayer && artworkURL != nil }
+    private var isTinted: Bool { player.tintsFromArtwork }
 
     private var artworkURL: URL? {
         player.queue.indices.contains(player.effectiveIndex)

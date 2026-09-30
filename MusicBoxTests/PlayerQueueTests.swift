@@ -780,3 +780,55 @@ struct PlayerSignOutTests {
         #expect(player.shuffledIndices == nil)
     }
 }
+
+// MARK: - Artwork tinting
+
+/// The players wear the current cover; with nothing playing there's nothing to wear, and
+/// dressing for a tint that isn't there leaves white controls on a plain background.
+struct PlayerTintTests {
+
+    private func makePlayer(_ settings: SettingsStore) -> PlayerService {
+        let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
+        let stateURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("player-tint-tests/\(UUID().uuidString).json")
+        return PlayerService(api: api, settings: settings,
+                             stateStore: PlaybackStateStore(fileURL: stateURL))
+    }
+
+    private func tintedSettings() -> SettingsStore {
+        let settings = makeTestSettings()
+        settings.artworkTintedPlayer = true
+        return settings
+    }
+
+    private func itemWithArtwork() -> QueueItem {
+        var item = makeQueueItem(name: "A")
+        item.artworkURL = URL(string: "https://example.com/cover.jpg")
+        return item
+    }
+
+    @Test func doesNotTintWithAnEmptyQueue() {
+        #expect(!makePlayer(tintedSettings()).tintsFromArtwork)
+    }
+
+    @Test func doesNotTintATrackWithNoArtwork() {
+        let player = makePlayer(tintedSettings())
+        player.playNow(queue: [makeQueueItem(name: "A")])
+        #expect(player.currentArtworkURL == nil)
+        #expect(!player.tintsFromArtwork)
+    }
+
+    @Test func tintsWhenTheTrackHasArtwork() {
+        let player = makePlayer(tintedSettings())
+        player.playNow(queue: [itemWithArtwork()])
+        #expect(player.tintsFromArtwork)
+    }
+
+    @Test func doesNotTintWhenTheSettingIsOff() {
+        let settings = tintedSettings()
+        let player = makePlayer(settings)
+        player.playNow(queue: [itemWithArtwork()])
+        settings.artworkTintedPlayer = false
+        #expect(!player.tintsFromArtwork)
+    }
+}

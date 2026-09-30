@@ -181,6 +181,20 @@ final class PlayerService {
 
     // MARK: - Computed
 
+    /// The cover the players should dress themselves in, if there is one.
+    var currentArtworkURL: URL? {
+        guard queue.indices.contains(effectiveIndex) else { return nil }
+        return queue[effectiveIndex].artworkURL
+    }
+
+    /// Whether the players wear the artwork. Both halves matter: the setting is the
+    /// user's choice, and a cover has to exist for there to be anything to wear. With
+    /// nothing playing the players dress as if the setting were off — white-on-nothing
+    /// is the alternative.
+    var tintsFromArtwork: Bool {
+        settings.artworkTintedPlayer && currentArtworkURL != nil
+    }
+
     var effectiveIndex: Int {
         if let shuffled = shuffledIndices {
             guard currentIndex >= 0 && currentIndex < shuffled.count else { return 0 }

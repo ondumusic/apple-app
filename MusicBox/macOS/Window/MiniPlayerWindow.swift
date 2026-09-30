@@ -466,10 +466,7 @@ private struct MiniPlayerContent: View {
     let onQueueToggleRequest: () -> Void
 
     private var track: Track? { player.currentTrack }
-    private var artworkURL: URL? {
-        guard player.queue.indices.contains(player.effectiveIndex) else { return nil }
-        return player.queue[player.effectiveIndex].artworkURL
-    }
+    private var artworkURL: URL? { player.currentArtworkURL }
 
     /// The mini player is the one Mac surface where an artwork tint reads as intended
     /// rather than as a rendering fault: a small window that becomes the record's colour.
@@ -477,7 +474,7 @@ private struct MiniPlayerContent: View {
     /// alone deliberately.
     /// The blurred cover is the tint now, so "do we have artwork" is the only question —
     /// no need to decode one to find out.
-    private var isTinted: Bool { settings.artworkTintedPlayer && artworkURL != nil }
+    private var isTinted: Bool { player.tintsFromArtwork }
 
     /// Floating is scoped to the app being in the background — see MiniPlayerWindowLevel.
     @State private var isAppActive = NSApp.isActive
@@ -546,11 +543,11 @@ private struct MiniPlayerContent: View {
         }
         // The chosen accent was picked against neutral chrome and clashes on top of an
         // arbitrary artwork colour; white sits on any of them.
-        .accentColor(settings.artworkTintedPlayer ? .white : settings.resolvedAccentColor)
-        // Keyed on the setting, not on the extracted colour: waiting for the async
-        // extraction meant the window opened light, snapped to dark, then faded the
-        // colour in. Tinting on means this is a dark surface from the first frame.
-        .background(WindowAppearance(isDark: settings.artworkTintedPlayer))
+        .accentColor(isTinted ? .white : settings.resolvedAccentColor)
+        // Keyed on the same answer the background uses, so a window with no cover to
+        // show doesn't go dark around white controls. Known synchronously — nothing here
+        // waits on decoding a colour out of the artwork, so there's no flash to avoid.
+        .background(WindowAppearance(isDark: isTinted))
         .background(MiniPlayerWindowLevel(
             isFloating: settings.miniPlayerAlwaysOnTop && !isAppActive))
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -885,7 +882,7 @@ private struct InlineQueue: View {
                 // Translucent rather than solid white: the row keeps AppKit's emphasized
                 // (white) text, which a solid white pill made invisible. A light wash
                 // over the tint reads as selection and leaves the text legible.
-                accent: settings.artworkTintedPlayer
+                accent: player.tintsFromArtwork
                     ? Color.white.opacity(0.28)
                     : settings.resolvedAccentColor,
                 actions: scope == .upNext
