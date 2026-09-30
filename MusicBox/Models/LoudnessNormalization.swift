@@ -38,26 +38,4 @@ nonisolated enum LoudnessNormalization {
         guard let lufs else { return 1 }
         return Float(pow(10, min(0, targetLUFS - lufs) / 20))
     }
-
-    /// One album's loudness, derived from its tracks.
-    ///
-    /// The server measures per track, so this is the duration-weighted mean of their
-    /// energy rather than a true whole-programme measurement. It lands within a few
-    /// tenths of a dB; the difference is R128's gating, which can't be reproduced from
-    /// per-track summaries. If the server ever reports album loudness itself, this goes.
-    ///
-    /// Unmeasured tracks sit out of the mean but still take the album's gain, so a
-    /// partly-measured album keeps its internal dynamics intact.
-    static func albumLUFS<S: Sequence>(_ tracks: S) -> Double?
-    where S.Element == (lufs: Double?, duration: Double) {
-        var energy = 0.0
-        var seconds = 0.0
-        for track in tracks {
-            guard let lufs = track.lufs, track.duration > 0 else { continue }
-            energy += track.duration * pow(10, lufs / 10)
-            seconds += track.duration
-        }
-        guard seconds > 0, energy > 0 else { return nil }
-        return 10 * log10(energy / seconds)
-    }
 }

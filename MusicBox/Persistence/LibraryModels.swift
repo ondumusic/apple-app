@@ -33,10 +33,13 @@ nonisolated class LibraryAlbum {
     var isUnknown: Bool
     var trackCount: Int
     var insertedAt: Date
+    /// Integrated loudness in LUFS for the album as a whole. Nil until the server has
+    /// measured it.
+    var lufs: Double?
 
     init(serverId: UUID, artistId: UUID, name: String, sortName: String, slug: String,
          releaseYear: Int?, artworkUrl: URL?, artwork: [ArtworkVariant] = [],
-         isUnknown: Bool, trackCount: Int, insertedAt: Date) {
+         isUnknown: Bool, trackCount: Int, insertedAt: Date, lufs: Double? = nil) {
         self.serverId = serverId
         self.artistId = artistId
         self.name = name
@@ -48,6 +51,7 @@ nonisolated class LibraryAlbum {
         self.isUnknown = isUnknown
         self.trackCount = trackCount
         self.insertedAt = insertedAt
+        self.lufs = lufs
     }
 }
 

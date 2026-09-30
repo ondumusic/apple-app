@@ -19,13 +19,14 @@ struct LoudnessWiringTests {
     }
 
     /// One album, one track per entry in `lufs`, returning the track ids in order.
-    func seed(_ lib: MusicLibrary, lufs: [Double?]) -> [UUID] {
+    /// `albumLUFS` is what the server measured for the album as a whole.
+    func seed(_ lib: MusicLibrary, lufs: [Double?], albumLUFS: Double? = nil) -> [UUID] {
         let artistId = UUID(), albumId = UUID(), now = Date()
         lib.upsertArtists([SyncArtist(id: artistId, name: "Artist", sortName: "Artist",
                                       slug: "artist", albumCount: 1, insertedAt: now)])
         lib.upsertAlbums([SyncAlbum(id: albumId, artistId: artistId, name: "Album", sortName: "Album",
                                     slug: "album", releaseYear: nil, artworkUrl: nil, isUnknown: false,
-                                    trackCount: lufs.count, insertedAt: now)])
+                                    trackCount: lufs.count, insertedAt: now, lufs: albumLUFS)])
         let tracks = lufs.enumerated().map { index, value in
             SyncTrack(id: UUID(), artistId: artistId, albumArtistId: artistId, albumId: albumId,
                       name: "Track \(index)", disc: 1, number: index + 1, duration: 200,
@@ -72,13 +73,13 @@ struct LoudnessWiringTests {
 
     @Test func aQueueOfOneAlbumTakesTheAlbumGain() async throws {
         let lib = try makeLibrary()
-        let ids = seed(lib, lufs: [-4, -23])
+        let ids = seed(lib, lufs: [-4, -23], albumLUFS: -7)
         let settings = makeTestSettings()
         let player = await makePlayer(lib, queue: ids, settings: settings)
 
         settings.normalizeVolume = true
-        // The album sits near -7 LUFS, so its gain is shallower than the -10 the loud
-        // track would get on its own.
+        // The server put the album at -7 LUFS, so its gain is shallower than the -10 the
+        // loud track would get on its own.
         let albumGain = dB(player.primaryGain)
         #expect(albumGain > -9)
         #expect(albumGain < -5)
@@ -112,7 +113,7 @@ extension LoudnessWiringTests {
     /// track in the queue shares an album".
     @Test func oneTrackOnItsOwnTakesTheTrackGain() async throws {
         let lib = try makeLibrary()
-        let ids = seed(lib, lufs: [-4, -23])
+        let ids = seed(lib, lufs: [-4, -23], albumLUFS: -7)
         let settings = makeTestSettings()
         let player = await makePlayer(lib, queue: [ids[0]], settings: settings)
 

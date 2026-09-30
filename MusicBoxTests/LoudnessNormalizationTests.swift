@@ -26,47 +26,12 @@ struct LoudnessGainTests {
     @Test func leavesAnUnmeasuredTrackAlone() {
         #expect(LoudnessNormalization.gain(forLUFS: nil) == 1)
     }
-}
-
-@Suite
-struct AlbumLoudnessTests {
-
-    @Test func matchesTheTrackValueWhenEveryTrackIsTheSame() {
-        let tracks: [(lufs: Double?, duration: Double)] = [(-10, 200), (-10, 300), (-10, 150)]
-        #expect(LoudnessNormalization.albumLUFS(tracks)!.isApproximately(-10))
-    }
-
-    /// A mean of energy, not of decibels: a long loud track should pull the album further
-    /// than a short quiet one. The dB average of -6 and -20 is -13; the energy average is
-    /// dominated by the louder, longer track.
-    @Test func weightsByEnergyAndDuration() {
-        let tracks: [(lufs: Double?, duration: Double)] = [(-6, 400), (-20, 100)]
-        let album = LoudnessNormalization.albumLUFS(tracks)!
-        #expect(album > -8)
-        #expect(album < -6)
-    }
-
-    @Test func ignoresUnmeasuredTracks() {
-        let measured: [(lufs: Double?, duration: Double)] = [(-12, 200), (-12, 200)]
-        let mixed: [(lufs: Double?, duration: Double)] = [(-12, 200), (nil, 200), (-12, 200)]
-        #expect(LoudnessNormalization.albumLUFS(mixed)! == LoudnessNormalization.albumLUFS(measured)!)
-    }
-
-    @Test func isNilWhenNothingIsMeasured() {
-        let tracks: [(lufs: Double?, duration: Double)] = [(nil, 200), (nil, 300)]
-        #expect(LoudnessNormalization.albumLUFS(tracks) == nil)
-    }
-
-    @Test func isNilForAnEmptyAlbum() {
-        #expect(LoudnessNormalization.albumLUFS([]) == nil)
-    }
 
     /// Album gain is one offset for the whole record, so the gap between a quiet track
     /// and a loud one survives it — that's the difference from track gain, and the reason
     /// album mode exists.
-    @Test func preservesTheGapBetweenTracksOnAnAlbum() {
-        let tracks: [(lufs: Double?, duration: Double)] = [(-20, 120), (-8, 240)]
-        let albumGain = LoudnessNormalization.gain(forLUFS: LoudnessNormalization.albumLUFS(tracks))
+    @Test func albumGainPreservesTheGapBetweenTracks() {
+        let albumGain = LoudnessNormalization.gain(forLUFS: -10)
 
         let quietUnderAlbumGain = dB(albumGain) + (-20)
         let loudUnderAlbumGain = dB(albumGain) + (-8)
@@ -86,7 +51,7 @@ private extension Double {
     }
 }
 
-// MARK: - Derivation through the library
+// MARK: - Album loudness through the library
 
 @Suite
 struct MusicLibraryAlbumLoudnessTests {
@@ -100,9 +65,9 @@ struct MusicLibraryAlbumLoudnessTests {
         return MusicLibrary(container: container)
     }
 
-    /// Seeds one album whose tracks carry the given loudness values.
+    /// Seeds one album, with the loudness the server would have sent for it.
     @discardableResult
-    private func seed(_ lib: MusicLibrary, lufs: [Double?], duration: Double = 200) -> UUID {
+    private func seed(_ lib: MusicLibrary, albumLUFS: Double?) -> UUID {
         let artistId = UUID()
         let albumId = UUID()
         let now = Date()
@@ -110,27 +75,22 @@ struct MusicLibraryAlbumLoudnessTests {
                                       slug: "artist", albumCount: 1, insertedAt: now)])
         lib.upsertAlbums([SyncAlbum(id: albumId, artistId: artistId, name: "Album", sortName: "Album",
                                     slug: "album", releaseYear: nil, artworkUrl: nil,
-                                    isUnknown: false, trackCount: lufs.count, insertedAt: now)])
-        lib.upsertTracks(lufs.enumerated().map { index, value in
-            SyncTrack(id: UUID(), artistId: artistId, albumArtistId: artistId, albumId: albumId,
-                      name: "Track \(index)", disc: 1, number: index + 1, duration: duration,
-                      mimetype: "audio/mp4", streamUrl: "/stream/\(index)",
-                      downloadUrl: "/download/\(index)", insertedAt: now, lufs: value)
-        })
+                                    isUnknown: false, trackCount: 2, insertedAt: now,
+                                    lufs: albumLUFS)])
         lib.bumpRevision()
         return albumId
     }
 
-    @Test func derivesTheAlbumLevelFromItsTracks() throws {
+    @Test func takesTheLevelTheServerMeasured() throws {
         let lib = try makeLibrary()
-        let albumId = seed(lib, lufs: [-10, -10, -10])
+        let albumId = seed(lib, albumLUFS: -10)
 
-        #expect(abs(try #require(lib.albumLUFS(for: albumId)) - (-10)) < 0.01)
+        #expect(try #require(lib.albumLUFS(for: albumId)).isApproximately(-10))
     }
 
-    @Test func isNilForAnAlbumNothingHasMeasured() throws {
+    @Test func isNilUntilTheServerHasMeasuredIt() throws {
         let lib = try makeLibrary()
-        let albumId = seed(lib, lufs: [nil, nil])
+        let albumId = seed(lib, albumLUFS: nil)
 
         #expect(lib.albumLUFS(for: albumId) == nil)
     }
@@ -139,23 +99,21 @@ struct MusicLibraryAlbumLoudnessTests {
         #expect(try makeLibrary().albumLUFS(for: UUID()) == nil)
     }
 
-    /// The cache is keyed by album and cleared on the revision bump every mutation makes;
-    /// without that a re-scan's new values would never reach playback.
+    /// Queries read the revision counter every mutation bumps; without that a re-scan's
+    /// new values would never reach playback.
     @Test func picksUpNewValuesAfterASync() throws {
         let lib = try makeLibrary()
-        let albumId = seed(lib, lufs: [nil, nil])
+        let albumId = seed(lib, albumLUFS: nil)
         #expect(lib.albumLUFS(for: albumId) == nil)
 
-        let tracks = lib.tracksForAlbum(albumId)
-        lib.upsertTracks(tracks.map { track in
-            SyncTrack(id: track.id, artistId: track.artistId, albumArtistId: track.albumArtistId,
-                      albumId: track.albumId, name: track.name, disc: track.disc,
-                      number: track.number, duration: track.duration, mimetype: track.mimetype,
-                      streamUrl: track.streamUrl, downloadUrl: track.downloadUrl,
-                      insertedAt: Date(), lufs: -12)
-        })
+        let album = try #require(lib.album(albumId))
+        lib.upsertAlbums([SyncAlbum(id: album.id, artistId: album.artistId, name: album.name,
+                                    sortName: album.sortName, slug: album.slug,
+                                    releaseYear: album.releaseYear, artworkUrl: album.artworkUrl,
+                                    isUnknown: album.isUnknown, trackCount: 2,
+                                    insertedAt: Date(), lufs: -12)])
         lib.bumpRevision()
 
-        #expect(abs(try #require(lib.albumLUFS(for: albumId)) - (-12)) < 0.01)
+        #expect(try #require(lib.albumLUFS(for: albumId)).isApproximately(-12))
     }
 }

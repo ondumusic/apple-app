@@ -55,6 +55,12 @@ extension SyncArtist: Decodable {
     }
 }
 
+/// The server sends loudness as `{ lufs, peak }` on both tracks and albums. Only `lufs`
+/// is read: `peak` guards against clipping when boosting, and we can't boost.
+nonisolated enum LoudnessKeys: String, CodingKey {
+    case lufs
+}
+
 nonisolated struct SyncAlbum: Sendable {
     var id: UUID
     var artistId: UUID
@@ -67,12 +73,13 @@ nonisolated struct SyncAlbum: Sendable {
     var isUnknown: Bool
     var trackCount: Int
     var insertedAt: Date
+    var lufs: Double?
 }
 
 extension SyncAlbum: Decodable {
     nonisolated enum CodingKeys: String, CodingKey {
         case id, artistId, name, sortName, slug, releaseYear, artworkUrl, artwork,
-             isUnknown, trackCount, insertedAt
+             isUnknown, trackCount, insertedAt, loudness
     }
 
     init(from decoder: Decoder) throws {
@@ -91,6 +98,8 @@ extension SyncAlbum: Decodable {
         isUnknown = try container.decode(Bool.self, forKey: .isUnknown)
         trackCount = try container.decode(Int.self, forKey: .trackCount)
         insertedAt = try container.decode(Date.self, forKey: .insertedAt)
+        let loudness = try? container.nestedContainer(keyedBy: LoudnessKeys.self, forKey: .loudness)
+        lufs = try loudness?.decodeIfPresent(Double.self, forKey: .lufs)
     }
 }
 
@@ -115,12 +124,6 @@ extension SyncTrack: Decodable {
     nonisolated enum CodingKeys: String, CodingKey {
         case id, artistId, albumArtistId, albumId, name, disc, number,
              duration, mimetype, streamUrl, downloadUrl, insertedAt, loudness
-    }
-
-    /// The server sends loudness as `{ lufs, peak }`. Only `lufs` is read: `peak` guards
-    /// against clipping when boosting, and we can't boost.
-    nonisolated enum LoudnessKeys: String, CodingKey {
-        case lufs
     }
 
     init(from decoder: Decoder) throws {

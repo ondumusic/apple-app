@@ -9,7 +9,6 @@ extension MusicLibrary {
         cachedArtistMap = nil
         cachedAlbumMap = nil
         cachedAllTracks = nil
-        cachedAlbumLoudness = [:]
         revision += 1
     }
 
@@ -56,13 +55,14 @@ extension MusicLibrary {
                 la.isUnknown = sa.isUnknown
                 la.trackCount = sa.trackCount
                 la.insertedAt = sa.insertedAt
+                la.lufs = sa.lufs
             } else {
                 modelContext.insert(LibraryAlbum(
                     serverId: sa.id, artistId: sa.artistId, name: sa.name,
                     sortName: sa.sortName, slug: sa.slug,
                     releaseYear: sa.releaseYear, artworkUrl: sa.artworkUrl,
                     artwork: sa.artwork, isUnknown: sa.isUnknown, trackCount: sa.trackCount,
-                    insertedAt: sa.insertedAt))
+                    insertedAt: sa.insertedAt, lufs: sa.lufs))
                 inserted.insert(sa.id)
             }
         }
@@ -216,7 +216,6 @@ extension MusicLibrary {
         cachedArtistMap = nil
         cachedAlbumMap = nil
         cachedAllTracks = nil
-        cachedAlbumLoudness = [:]
         revision += 1
     }
 

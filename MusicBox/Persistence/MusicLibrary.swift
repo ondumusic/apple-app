@@ -24,7 +24,6 @@ final class MusicLibrary {
 
     /// Derived album loudness, per album. The arithmetic is trivial but the fetch feeding
     /// it isn't, and the player asks on every track change.
-    @ObservationIgnored var cachedAlbumLoudness: [UUID: Double?] = [:]
 
     /// Track IDs whose download state changed, mapped to the new `isDownloaded` value.
     /// Views observe this to update in-place without re-querying SwiftData.
@@ -665,15 +664,12 @@ final class MusicLibrary {
               artistName: artist?.name, artistSortName: artist?.sortName)
     }
 
-    /// The album's loudness, derived from its tracks — see `LoudnessNormalization`.
+    /// The album's loudness as the server measured it. Nil until it has.
     func albumLUFS(for albumId: UUID) -> Double? {
         _ = revision
-        if let cached = cachedAlbumLoudness[albumId] { return cached }
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId })
-        let tracks = fetch(descriptor) ?? []
-        let value = LoudnessNormalization.albumLUFS(tracks.lazy.map { ($0.lufs, $0.duration) })
-        cachedAlbumLoudness[albumId] = value
-        return value
+        var descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.serverId == albumId })
+        descriptor.fetchLimit = 1
+        return fetch(descriptor)?.first?.lufs
     }
 
     func buildTrack(_ lt: LibraryTrack, artistMap: [UUID: LibraryArtist], album: LibraryAlbum?) -> Track {
