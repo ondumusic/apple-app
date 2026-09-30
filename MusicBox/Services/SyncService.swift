@@ -118,12 +118,16 @@ nonisolated struct SyncTrack: Sendable {
     var insertedAt: Date
     /// Integrated loudness in LUFS. Nil until the server has measured the file.
     var lufs: Double?
+    var playCount: Int = 0
+    /// Nil until it has been played once.
+    var lastPlayedAt: Date?
 }
 
 extension SyncTrack: Decodable {
     nonisolated enum CodingKeys: String, CodingKey {
         case id, artistId, albumArtistId, albumId, name, disc, number,
-             duration, mimetype, streamUrl, downloadUrl, insertedAt, loudness
+             duration, mimetype, streamUrl, downloadUrl, insertedAt, loudness,
+             playCount, lastPlayedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -142,6 +146,8 @@ extension SyncTrack: Decodable {
         insertedAt = try container.decode(Date.self, forKey: .insertedAt)
         let loudness = try? container.nestedContainer(keyedBy: LoudnessKeys.self, forKey: .loudness)
         lufs = try loudness?.decodeIfPresent(Double.self, forKey: .lufs)
+        playCount = try container.decodeIfPresent(Int.self, forKey: .playCount) ?? 0
+        lastPlayedAt = try container.decodeIfPresent(Date.self, forKey: .lastPlayedAt)
     }
 }
 

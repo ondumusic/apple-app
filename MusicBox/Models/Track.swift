@@ -19,6 +19,9 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
     var isDownloaded: Bool
     /// Integrated loudness in LUFS. Nil until the server has measured the file.
     var lufs: Double?
+    var playCount: Int
+    /// Nil until it has been played once.
+    var lastPlayedAt: Date?
 
     nonisolated struct TrackAlbum: Codable, Sendable, Hashable {
         var id: UUID
@@ -38,7 +41,8 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
          album: TrackAlbum? = nil,
          name: String, disc: Int, number: Int?, duration: Double,
          mimetype: String, streamUrl: String, downloadUrl: String = "",
-         isDownloaded: Bool = false, lufs: Double? = nil) {
+         isDownloaded: Bool = false, lufs: Double? = nil,
+         playCount: Int = 0, lastPlayedAt: Date? = nil) {
         self.id = id
         self.artistId = artistId
         self.albumArtistId = albumArtistId
@@ -56,6 +60,8 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         self.downloadUrl = downloadUrl
         self.isDownloaded = isDownloaded
         self.lufs = lufs
+        self.playCount = playCount
+        self.lastPlayedAt = lastPlayedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -77,5 +83,7 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         downloadUrl = try container.decodeIfPresent(String.self, forKey: .downloadUrl) ?? streamUrl
         isDownloaded = false
         lufs = try container.decodeIfPresent(Double.self, forKey: .lufs)
+        playCount = try container.decodeIfPresent(Int.self, forKey: .playCount) ?? 0
+        lastPlayedAt = try container.decodeIfPresent(Date.self, forKey: .lastPlayedAt)
     }
 }

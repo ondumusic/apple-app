@@ -85,6 +85,33 @@ final class APIService: Sendable {
         return try await fetch("/sync", queryItems: queryItems)
     }
 
+    // MARK: - Plays
+
+    nonisolated struct PlayBody: Encodable, Sendable {
+        let id: String
+        let trackId: String
+        let playedAt: Date
+
+        init(id: UUID, trackId: UUID, playedAt: Date) {
+            self.id = id.uuidString.lowercased()
+            self.trackId = trackId.uuidString.lowercased()
+            self.playedAt = playedAt
+        }
+    }
+
+    nonisolated struct RecordPlaysBody: Encodable, Sendable {
+        let plays: [PlayBody]
+    }
+
+    func recordPlays(_ plays: [PlayBody]) async throws {
+        let body = try JSONEncoder.api.encode(RecordPlaysBody(plays: plays))
+        let _: RecordPlaysResponse = try await perform("/plays", method: "POST", body: body)
+    }
+
+    nonisolated struct RecordPlaysResponse: Decodable, Sendable {
+        let ok: Bool
+    }
+
     // MARK: - Playlists
 
     /// Server stores UUIDs lowercase; Swift's default `UUID` encoding emits uppercase. These body

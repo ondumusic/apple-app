@@ -8,6 +8,15 @@ nonisolated enum OutboxKind: String, Sendable {
     case addItems       = "add_items"
     case moveItems      = "move_items"
     case removeItems    = "remove_items"
+    case recordPlays    = "record_plays"
+}
+
+/// One finished listen. `id` is ours and stable across retries, which is how the server
+/// ignores a play it has already stored when the queue replays it.
+nonisolated struct RecordPlayPayload: Codable, Sendable {
+    var id: UUID
+    var trackId: UUID
+    var playedAt: Date
 }
 
 nonisolated struct CreatePlaylistPayload: Codable, Sendable {

@@ -93,12 +93,17 @@ extension MusicLibrary {
                 lt.downloadUrl = st.downloadUrl
                 lt.insertedAt = st.insertedAt
                 lt.lufs = st.lufs
+                // The server is authoritative: it has counted plays from every device,
+                // where this one has only seen its own.
+                lt.playCount = st.playCount
+                lt.lastPlayedAt = st.lastPlayedAt
             } else {
                 modelContext.insert(LibraryTrack(
                     serverId: st.id, artistId: st.artistId, albumArtistId: st.albumArtistId,
                     albumId: st.albumId, name: st.name, disc: st.disc, number: st.number,
                     duration: st.duration, mimetype: st.mimetype, streamUrl: st.streamUrl,
-                    downloadUrl: st.downloadUrl, insertedAt: st.insertedAt, lufs: st.lufs))
+                    downloadUrl: st.downloadUrl, insertedAt: st.insertedAt, lufs: st.lufs,
+                    playCount: st.playCount, lastPlayedAt: st.lastPlayedAt))
                 inserted.insert(st.id)
             }
         }
@@ -249,6 +254,20 @@ extension MusicLibrary {
         if let album = fetchAlbumRecord(albumId) {
             modelContext.delete(album)
         }
+    }
+
+    // MARK: - Local Play Recording (optimistic writes)
+
+    /// Counts a play locally so the UI doesn't wait for the round trip. The next sync
+    /// replaces both fields with the server's totals, which include other devices.
+    func recordLocalPlay(trackId: UUID, at date: Date) {
+        var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == trackId })
+        descriptor.fetchLimit = 1
+        guard let track = fetch(descriptor)?.first else { return }
+        track.playCount += 1
+        track.lastPlayedAt = date
+        persistChanges()
+        revision += 1
     }
 
     // MARK: - Local Playlist Mutations (optimistic writes)
@@ -501,6 +520,9 @@ extension MusicLibrary {
         let encoder = JSONEncoder()
 
         switch kind {
+        case .recordPlays:
+            // Nothing in a play refers to a playlist, so nothing in it can need remapping.
+            return nil
         case .createPlaylist:
             // The temp playlist id can't change here, but a child folder/playlist may carry
             // the temp parent id — rewrite parentId.
@@ -570,6 +592,8 @@ extension MusicLibrary {
             guard let kind = OutboxKind(rawValue: mutation.kind) else { continue }
             let matches: Bool
             switch kind {
+            case .recordPlays:
+                matches = false
             case .createPlaylist:
                 let m = (try? decoder.decode(CreatePlaylistPayload.self, from: mutation.payload))?.tempPlaylistId == playlistId
                 if m { foundPendingCreate = true }

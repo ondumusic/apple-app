@@ -76,11 +76,15 @@ nonisolated class LibraryTrack {
     var localFilePath: String?
     /// Integrated loudness in LUFS. Nil until the server has measured the file.
     var lufs: Double?
+    var playCount: Int = 0
+    /// Nil until it has been played once.
+    var lastPlayedAt: Date?
 
     init(serverId: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
          name: String, disc: Int, number: Int?, duration: Double,
          mimetype: String, streamUrl: String, downloadUrl: String = "", insertedAt: Date,
-         isDownloaded: Bool = false, localFilePath: String? = nil, lufs: Double? = nil) {
+         isDownloaded: Bool = false, localFilePath: String? = nil, lufs: Double? = nil,
+         playCount: Int = 0, lastPlayedAt: Date? = nil) {
         self.serverId = serverId
         self.artistId = artistId
         self.albumArtistId = albumArtistId
@@ -96,6 +100,8 @@ nonisolated class LibraryTrack {
         self.isDownloaded = isDownloaded
         self.localFilePath = localFilePath
         self.lufs = lufs
+        self.playCount = playCount
+        self.lastPlayedAt = lastPlayedAt
     }
 
     /// Resolves the absolute file URL from the stored relative path.

@@ -29,6 +29,9 @@ final class OutboxService {
     @ObservationIgnored private let maxRetryAttempts = 20
     /// Server accepts up to 250 operations per PATCH /items request.
     @ObservationIgnored private let maxOperationsPerBatch = 250
+    /// The spec sets no cap on a plays request; this one just keeps a backlog from
+    /// becoming a single enormous POST.
+    @ObservationIgnored private let maxPlaysPerRequest = 250
     /// Bound on the filter-and-retry recursion for `unknown_tracks` / `unknown_items`.
     @ObservationIgnored private let maxFilterRetries = 3
 
@@ -81,6 +84,12 @@ final class OutboxService {
         enqueue(.removeItems, payload: RemoveItemsPayload(playlistId: playlistId, itemIds: itemIds))
     }
 
+    /// One finished listen. The id is generated here and never changes, so a replay the
+    /// server has already stored is ignored rather than counted twice.
+    func enqueuePlay(trackId: UUID, playedAt: Date) {
+        enqueue(.recordPlays, payload: RecordPlayPayload(id: UUID(), trackId: trackId, playedAt: playedAt))
+    }
+
     private func enqueue<P: Encodable>(_ kind: OutboxKind, payload: P) {
         guard let data = try? JSONEncoder().encode(payload) else {
             #if DEBUG
@@ -119,7 +128,10 @@ final class OutboxService {
             let consumed: [PendingMutation]
             let outcome: Outcome
 
-            if let batch = collectBatch(from: musicLibrary.pendingMutations()) {
+            if let plays = collectPlays(from: musicLibrary.pendingMutations()) {
+                consumed = plays.consumed
+                outcome = await sendPlays(plays.payloads)
+            } else if let batch = collectBatch(from: musicLibrary.pendingMutations()) {
                 #if DEBUG
                 if batch.consumed.count > 1 {
                     print("OutboxService: batched \(batch.summary) — \(batch.consumed.count) mutations, \(batch.operationCount) ops")
@@ -250,6 +262,9 @@ final class OutboxService {
                 playlistId = p.playlistId
                 moveEntries.append(contentsOf: p.items)
                 opCount += p.items.count
+
+            case .recordPlays:
+                break loop
 
             case .removeItems:
                 guard let p = try? decoder.decode(RemoveItemsPayload.self, from: mutation.payload) else { break loop }
@@ -570,6 +585,12 @@ final class OutboxService {
                                          addEntries: [], moveEntries: p.items, removeIds: [],
                                          depth: 0)
 
+        case .recordPlays:
+            guard let p = try? decoder.decode(RecordPlayPayload.self, from: mutation.payload) else {
+                return .discard("Malformed record_plays payload")
+            }
+            return await sendPlays([p])
+
         case .removeItems:
             guard let p = try? decoder.decode(RemoveItemsPayload.self, from: mutation.payload) else {
                 return .discard("Malformed remove_items payload")
@@ -578,6 +599,37 @@ final class OutboxService {
             return await executeItemOps(playlistId: p.playlistId,
                                          addEntries: [], moveEntries: [], removeIds: p.itemIds,
                                          depth: 0)
+        }
+    }
+
+    /// Every play waiting at the head of the queue, in one request. Plays carry no
+    /// ordering or conflict rules — unlike playlist ops, nothing here can reference
+    /// something a later call creates — so the only cap is request size.
+    private func collectPlays(from pending: [PendingMutation]) -> (consumed: [PendingMutation], payloads: [RecordPlayPayload])? {
+        guard pending.first?.kind == OutboxKind.recordPlays.rawValue else { return nil }
+        let decoder = JSONDecoder()
+        var consumed: [PendingMutation] = []
+        var payloads: [RecordPlayPayload] = []
+        for mutation in pending {
+            guard mutation.kind == OutboxKind.recordPlays.rawValue, payloads.count < maxPlaysPerRequest else { break }
+            consumed.append(mutation)
+            if let payload = try? decoder.decode(RecordPlayPayload.self, from: mutation.payload) {
+                payloads.append(payload)
+            }
+            // A payload that won't decode is dropped with its mutation: there's nothing
+            // to recover and nothing downstream depends on it.
+        }
+        return (consumed, payloads)
+    }
+
+    private func sendPlays(_ payloads: [RecordPlayPayload]) async -> Outcome {
+        guard !payloads.isEmpty else { return .success }
+        let bodies = payloads.map { APIService.PlayBody(id: $0.id, trackId: $0.trackId, playedAt: $0.playedAt) }
+        do {
+            try await api.recordPlays(bodies)
+            return .success
+        } catch {
+            return classify(error)
         }
     }
 

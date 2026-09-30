@@ -22,7 +22,15 @@ final class PlayerService {
     var shuffledIndices: [Int]? = nil
     var repeatMode: RepeatMode = .off
     var isPlaying: Bool = false
-    var currentTrack: Track? = nil
+    var currentTrack: Track? = nil {
+        didSet {
+            guard currentTrack?.id != oldValue?.id else { return }
+            listenedSeconds = 0
+            lastProgressSample = nil
+            hasReportedCurrentPlay = false
+            playStartedAt = currentTrack == nil ? nil : Date()
+        }
+    }
     var progress: Double = 0
     var duration: Double = 0
     var queueConfirmation: QueueConfirmation? = nil
@@ -133,6 +141,29 @@ final class PlayerService {
     @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
     @ObservationIgnored private var nowPlayingArtworkURL: URL?
     @ObservationIgnored private var isSeeking: Bool = false
+
+    // MARK: - Play reporting
+
+    /// Where finished listens go. Set by the app whenever there's a session to report to.
+    @ObservationIgnored var outbox: OutboxService?
+    /// Real listening, accumulated from playback deltas rather than position, so seeking
+    /// to the end doesn't count as having heard it.
+    @ObservationIgnored private var listenedSeconds: Double = 0
+    @ObservationIgnored private var lastProgressSample: Double?
+    @ObservationIgnored private var playStartedAt: Date?
+    @ObservationIgnored private var hasReportedCurrentPlay = false
+    /// How much of a track has to be heard before it counts as played.
+    nonisolated enum PlayThreshold {
+        /// However long the track runs, four minutes of it is enough.
+        static let cap: Double = 240
+
+        /// Half the track or the cap, whichever comes first — the scrobbling convention.
+        /// Skipping through an album reports nothing.
+        static func seconds(forDuration duration: Double) -> Double {
+            guard duration > 0 else { return cap }
+            return min(duration / 2, cap)
+        }
+    }
     @ObservationIgnored private var isLoadingTrack: Bool = false
     @ObservationIgnored private var itemStatusObservation: NSKeyValueObservation?
     @ObservationIgnored private var stallWatchdog: Task<Void, Never>?
@@ -934,8 +965,32 @@ final class PlayerService {
                     self.duration = dur
                 }
             }
+            self.accumulateListening(to: seconds)
             self.savePositionIfDue()
         }
+    }
+
+    private var playThreshold: Double {
+        let trackLength = currentTrack?.duration ?? 0
+        return PlayThreshold.seconds(forDuration: trackLength > 0 ? trackLength : duration)
+    }
+
+    private func accumulateListening(to seconds: Double) {
+        guard let track = currentTrack, seconds.isFinite else { return }
+        defer { lastProgressSample = seconds }
+        guard let previous = lastProgressSample else { return }
+
+        // Only forward movement at about real time counts. A seek jumps, and a jump
+        // backwards is a repeat rather than listening to count twice.
+        let delta = seconds - previous
+        guard delta > 0, delta < 2 else { return }
+        listenedSeconds += delta
+
+        guard !hasReportedCurrentPlay, listenedSeconds >= playThreshold else { return }
+        hasReportedCurrentPlay = true
+        let playedAt = playStartedAt ?? Date()
+        musicLibrary?.recordLocalPlay(trackId: track.id, at: playedAt)
+        outbox?.enqueuePlay(trackId: track.id, playedAt: playedAt)
     }
 
     // MARK: - End Observer

@@ -305,6 +305,7 @@ struct MusicBoxApp: App {
                 }
                 let newOutbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
                 outboxService = newOutbox
+                player?.outbox = newOutbox
                 syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService, outbox: newOutbox) }
                 playlistController = newOutbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0, downloadService: downloadService) }
                 if newOutbox != nil {
