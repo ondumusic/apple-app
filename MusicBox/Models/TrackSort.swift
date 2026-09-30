@@ -14,6 +14,7 @@ nonisolated enum TrackSortColumn: String, CaseIterable, Sendable {
     case album
     case year
     case duration
+    case plays
 
     /// What this column sorts by, in order. Only the first is reversed when the sort is
     /// descending — the rest are the grouping beneath it, and reversing those would put
@@ -27,6 +28,17 @@ nonisolated enum TrackSortColumn: String, CaseIterable, Sendable {
         case .album: return [.album, .disc, .number]
         case .year: return [.year, .albumArtist, .album, .disc, .number]
         case .duration: return [.duration, .albumArtist, .album, .disc, .number]
+        case .plays: return [.plays, .albumArtist, .album, .disc, .number]
+        }
+    }
+
+    /// Which way the first click sorts. Alphabetical and numeric columns read forwards;
+    /// play counts are asked about from the top, so the first click puts the most played
+    /// first rather than the pile of never-played ones.
+    var defaultAscending: Bool {
+        switch self {
+        case .plays: return false
+        default: return true
         }
     }
 }
@@ -39,6 +51,7 @@ nonisolated enum TrackSortKey: Sendable {
     case album
     case year
     case duration
+    case plays
 
     func compare(_ lhs: Track, _ rhs: Track) -> ComparisonResult {
         switch self {
@@ -52,6 +65,7 @@ nonisolated enum TrackSortKey: Sendable {
         case .album: return (lhs.album?.name ?? "").localizedStandardCompare(rhs.album?.name ?? "")
         case .year: return Self.compare(lhs.album?.releaseYear ?? 0, rhs.album?.releaseYear ?? 0)
         case .duration: return Self.compare(lhs.duration, rhs.duration)
+        case .plays: return Self.compare(lhs.playCount, rhs.playCount)
         }
     }
 

@@ -262,7 +262,7 @@ final class TracksTableViewController: NSViewController {
         for column in tableView.tableColumns {
             guard let sortColumn = TrackSortColumn(rawValue: column.identifier.rawValue) else { continue }
             column.sortDescriptorPrototype = sortable
-                ? NSSortDescriptor(key: sortColumn.rawValue, ascending: true)
+                ? NSSortDescriptor(key: sortColumn.rawValue, ascending: sortColumn.defaultAscending)
                 : nil
         }
     }
@@ -290,7 +290,7 @@ final class TracksTableViewController: NSViewController {
     }
 
     /// Columns that exist but aren't worth the width until someone asks for them.
-    private static let defaultHiddenColumns: Set<String> = ["disc", "year"]
+    private static let defaultHiddenColumns: Set<String> = ["disc", "year", "plays"]
 
     private static func loadHiddenColumns(key: String?) -> Set<String> {
         guard let key,
@@ -322,6 +322,7 @@ final class TracksTableViewController: NSViewController {
         let customisable = columnPreferenceKey != nil
         discColumn.isHidden = !customisable || userHiddenColumns.contains("disc")
         yearColumn.isHidden = !customisable || userHiddenColumns.contains("year")
+        playsColumn.isHidden = !customisable || userHiddenColumns.contains("plays")
         numberColumn.isHidden = !callerOffers(numberColumn) || userHiddenColumns.contains("number")
         artistColumn.isHidden = !callerOffers(artistColumn) || userHiddenColumns.contains("artist")
         albumColumn.isHidden = !callerOffers(albumColumn) || userHiddenColumns.contains("album")
@@ -340,7 +341,8 @@ final class TracksTableViewController: NSViewController {
             return
         }
         let menu = NSMenu()
-        for column in [numberColumn, discColumn, artistColumn, albumColumn, yearColumn, durationColumn]
+        for column in [numberColumn, discColumn, artistColumn, albumColumn, yearColumn,
+                       durationColumn, playsColumn]
         where callerOffers(column) {
             let item = NSMenuItem(title: column.title, action: #selector(toggleColumn(_:)), keyEquivalent: "")
             item.target = self
@@ -420,6 +422,7 @@ final class TracksTableViewController: NSViewController {
     private let artistColumn = NSTableColumn(identifier: .init("artist"))
     private let albumColumn  = NSTableColumn(identifier: .init("album"))
     private let durationColumn = NSTableColumn(identifier: .init("duration"))
+    private let playsColumn = NSTableColumn(identifier: .init("plays"))
 
     private var suppressSelectionCallback = false
     var onContentHeightChange: ((CGFloat) -> Void)?
@@ -480,9 +483,10 @@ final class TracksTableViewController: NSViewController {
         // multi-disc set, or sorting a library by year — and noise the rest of the time.
         configureColumn(discColumn,     title: "Disc",     width: 44,  alignment: .right,  resizable: false)
         configureColumn(yearColumn,     title: "Year",     width: 54,  alignment: .right,  resizable: false)
+        configureColumn(playsColumn,    title: "Plays",    width: 54,  alignment: .right,  resizable: false)
 
         for column in [artworkColumn, numberColumn, discColumn, titleColumn, artistColumn,
-                       albumColumn, yearColumn, durationColumn] {
+                       albumColumn, yearColumn, durationColumn, playsColumn] {
             tableView.addTableColumn(column)
         }
 
@@ -1372,6 +1376,15 @@ extension TracksTableViewController: NSTableViewDelegate {
         case "year":
             let c = textCell(for: column.identifier, in: tableView)
             c.label.stringValue = track.album?.releaseYear.map(String.init) ?? ""
+            c.label.alignment = .right
+            c.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            c.unselectedColor = .secondaryLabelColor
+            cell = c
+        case "plays":
+            let c = textCell(for: column.identifier, in: tableView)
+            // Blank rather than 0: a column of zeros for everything nobody has played
+            // yet reads as broken, where an empty cell reads as "not yet".
+            c.label.stringValue = track.playCount > 0 ? String(track.playCount) : ""
             c.label.alignment = .right
             c.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
             c.unselectedColor = .secondaryLabelColor

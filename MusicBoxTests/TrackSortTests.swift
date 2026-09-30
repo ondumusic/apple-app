@@ -4,7 +4,8 @@ import Testing
 
 private func track(_ name: String, artist artistName: String, albumArtist: String? = nil,
                    album albumName: String = "Album", year: Int? = nil,
-                   disc: Int = 1, number: Int = 1, duration: Double = 100) -> Track {
+                   disc: Int = 1, number: Int = 1, duration: Double = 100,
+                   plays: Int = 0) -> Track {
     let artist = Artist(id: UUID(), name: artistName, sortName: artistName, slug: "a")
     let albumArtistName = albumArtist ?? artistName
     return Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
@@ -13,7 +14,7 @@ private func track(_ name: String, artist artistName: String, albumArtist: Strin
                  album: Track.TrackAlbum(id: UUID(), name: albumName, artworkUrl: nil,
                                          releaseYear: year),
                  name: name, disc: disc, number: number, duration: duration,
-                 mimetype: "audio/mp4", streamUrl: "/s")
+                 mimetype: "audio/mp4", streamUrl: "/s", playCount: plays)
 }
 
 struct TrackSortTests {
@@ -90,5 +91,27 @@ struct TrackSortTests {
         let sort = TrackSort(column: .album, ascending: false)
         #expect(TrackSort(rawValue: sort.rawValue) == sort)
         #expect(TrackSort(rawValue: "") == nil)
+    }
+}
+
+// MARK: - Plays
+
+extension TrackSortTests {
+
+    @Test func sortsByPlayCount() {
+        let tracks = [track("Rarely", artist: "A", plays: 2),
+                      track("Often", artist: "A", plays: 40),
+                      track("Never", artist: "A", plays: 0)]
+        let sorted = TrackSort(column: .plays, ascending: false).sorted(tracks)
+        #expect(sorted.map(\.name) == ["Often", "Rarely", "Never"])
+    }
+
+    /// Asking "what do I play most" and getting the never-played first is the wrong way
+    /// round, so this column is the one that starts descending.
+    @Test func playsStartsDescendingWhereTheOthersStartAscending() {
+        #expect(TrackSortColumn.plays.defaultAscending == false)
+        for column in TrackSortColumn.allCases where column != .plays {
+            #expect(column.defaultAscending)
+        }
     }
 }
