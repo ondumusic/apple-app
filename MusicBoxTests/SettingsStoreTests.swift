@@ -6,6 +6,18 @@ struct SettingsStoreTests {
 
     // MARK: - Default values
 
+    /// On by default: a music app that counts what you play is the expectation, and the
+    /// server has nothing to show without it.
+    @Test func recordsPlaysByDefault() {
+        #expect(SettingsStore(defaults: isolatedDefaults()).recordPlays)
+    }
+
+    @Test func remembersRecordPlaysBeingTurnedOff() {
+        let defaults = isolatedDefaults()
+        SettingsStore(defaults: defaults).recordPlays = false
+        #expect(SettingsStore(defaults: defaults).recordPlays == false)
+    }
+
     @Test func defaultCrossfadeDuration() {
         let defaults = isolatedDefaults()
         let store = SettingsStore(defaults: defaults)

@@ -36,6 +36,7 @@ struct SettingsView: View {
             playbackSection
             spreadShuffleSection
             normalizeVolumeSection
+            recordPlaysSection
             appearanceSection
             accentColorSection
             cacheSection
@@ -56,6 +57,7 @@ struct SettingsView: View {
                 playbackSection
                 spreadShuffleSection
                 normalizeVolumeSection
+                recordPlaysSection
                 qualitySection
             }
             .formStyle(.grouped)
@@ -129,6 +131,16 @@ struct SettingsView: View {
             #endif
         } footer: {
             Text("Plays every track at a similar loudness, so quiet albums and loud ones don't jump. Albums keep their own quiet and loud moments. Turns the volume down, never up.")
+        }
+    }
+
+    @ViewBuilder
+    private var recordPlaysSection: some View {
+        @Bindable var settings = settings
+        Section {
+            Toggle("Record Plays", isOn: $settings.recordPlays)
+        } footer: {
+            Text("Counts a track as played once you've heard most of it, and tells your server. Turning this off stops this device counting; plays already recorded are kept, and your other devices carry on.")
         }
     }
 

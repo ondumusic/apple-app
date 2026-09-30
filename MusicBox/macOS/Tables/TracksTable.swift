@@ -290,19 +290,33 @@ final class TracksTableViewController: NSViewController {
     }
 
     /// Columns that exist but aren't worth the width until someone asks for them.
-    private static let defaultHiddenColumns: Set<String> = ["disc", "year", "plays"]
+    private static let defaultHiddenColumns: Set<String> = ["disc", "year", "plays", "lastPlayed"]
+
+    private static func knownColumnsDefaultsKey(_ key: String) -> String {
+        "tracksTable.\(key).knownColumns"
+    }
+
+    /// Every column this table can offer, so a stored preference records which ones it
+    /// was making a statement about.
+    private static let allColumnIdentifiers: Set<String> = [
+        "number", "disc", "title", "artist", "album", "year", "duration", "plays", "lastPlayed",
+    ]
 
     private static func loadHiddenColumns(key: String?) -> Set<String> {
-        guard let key,
-              let stored = UserDefaults.standard.stringArray(forKey: hiddenColumnsDefaultsKey(key))
-        else { return defaultHiddenColumns }
-        return Set(stored)
+        guard let key else { return defaultHiddenColumns }
+        return ColumnVisibility.hidden(
+            stored: UserDefaults.standard.stringArray(forKey: hiddenColumnsDefaultsKey(key)),
+            known: UserDefaults.standard.stringArray(forKey: knownColumnsDefaultsKey(key)),
+            defaults: defaultHiddenColumns
+        )
     }
 
     private func persistHiddenColumns() {
         guard let columnPreferenceKey else { return }
         UserDefaults.standard.set(userHiddenColumns.sorted(),
                                   forKey: Self.hiddenColumnsDefaultsKey(columnPreferenceKey))
+        UserDefaults.standard.set(Self.allColumnIdentifiers.sorted(),
+                                  forKey: Self.knownColumnsDefaultsKey(columnPreferenceKey))
     }
 
     /// Whether this table offers the column at all, before the user's choice.
@@ -323,6 +337,7 @@ final class TracksTableViewController: NSViewController {
         discColumn.isHidden = !customisable || userHiddenColumns.contains("disc")
         yearColumn.isHidden = !customisable || userHiddenColumns.contains("year")
         playsColumn.isHidden = !customisable || userHiddenColumns.contains("plays")
+        lastPlayedColumn.isHidden = !customisable || userHiddenColumns.contains("lastPlayed")
         numberColumn.isHidden = !callerOffers(numberColumn) || userHiddenColumns.contains("number")
         artistColumn.isHidden = !callerOffers(artistColumn) || userHiddenColumns.contains("artist")
         albumColumn.isHidden = !callerOffers(albumColumn) || userHiddenColumns.contains("album")
@@ -342,7 +357,7 @@ final class TracksTableViewController: NSViewController {
         }
         let menu = NSMenu()
         for column in [numberColumn, discColumn, artistColumn, albumColumn, yearColumn,
-                       durationColumn, playsColumn]
+                       durationColumn, playsColumn, lastPlayedColumn]
         where callerOffers(column) {
             let item = NSMenuItem(title: column.title, action: #selector(toggleColumn(_:)), keyEquivalent: "")
             item.target = self
@@ -423,6 +438,13 @@ final class TracksTableViewController: NSViewController {
     private let albumColumn  = NSTableColumn(identifier: .init("album"))
     private let durationColumn = NSTableColumn(identifier: .init("duration"))
     private let playsColumn = NSTableColumn(identifier: .init("plays"))
+    private let lastPlayedColumn = NSTableColumn(identifier: .init("lastPlayed"))
+    /// Built once: a formatter per cell is expensive enough to show up while scrolling.
+    private static let lastPlayedFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
 
     private var suppressSelectionCallback = false
     var onContentHeightChange: ((CGFloat) -> Void)?
@@ -484,9 +506,10 @@ final class TracksTableViewController: NSViewController {
         configureColumn(discColumn,     title: "Disc",     width: 44,  alignment: .right,  resizable: false)
         configureColumn(yearColumn,     title: "Year",     width: 54,  alignment: .right,  resizable: false)
         configureColumn(playsColumn,    title: "Plays",    width: 54,  alignment: .right,  resizable: false)
+        configureColumn(lastPlayedColumn, title: "Last Played", width: 96, alignment: .right, resizable: false)
 
         for column in [artworkColumn, numberColumn, discColumn, titleColumn, artistColumn,
-                       albumColumn, yearColumn, durationColumn, playsColumn] {
+                       albumColumn, yearColumn, durationColumn, playsColumn, lastPlayedColumn] {
             tableView.addTableColumn(column)
         }
 
@@ -1387,6 +1410,15 @@ extension TracksTableViewController: NSTableViewDelegate {
             c.label.stringValue = track.playCount > 0 ? String(track.playCount) : ""
             c.label.alignment = .right
             c.label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            c.unselectedColor = .secondaryLabelColor
+            cell = c
+        case "lastPlayed":
+            let c = textCell(for: column.identifier, in: tableView)
+            c.label.stringValue = track.lastPlayedAt.map {
+                Self.lastPlayedFormatter.localizedString(for: $0, relativeTo: Date())
+            } ?? ""
+            c.label.alignment = .right
+            c.label.font = .systemFont(ofSize: NSFont.systemFontSize)
             c.unselectedColor = .secondaryLabelColor
             cell = c
         case "duration":

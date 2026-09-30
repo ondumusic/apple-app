@@ -90,6 +90,13 @@ final class SettingsStore {
         didSet { defaults.set(spreadShuffle, forKey: "spreadShuffle") }
     }
 
+    /// Report finished listens to the server, which counts them across every device.
+    /// Off stops this device reporting; it doesn't hide what's already counted, and
+    /// other clients keep counting.
+    var recordPlays: Bool {
+        didSet { defaults.set(recordPlays, forKey: "recordPlays") }
+    }
+
     /// Scale playback so every track lands near the same loudness. See
     /// `LoudnessNormalization` for why this can only ever make things quieter.
     var normalizeVolume: Bool {
@@ -176,6 +183,7 @@ final class SettingsStore {
         self.isShuffled = defaults.bool(forKey: "isShuffled")
         self.spreadShuffle = defaults.object(forKey: "spreadShuffle") as? Bool ?? true
         self.normalizeVolume = defaults.object(forKey: "normalizeVolume") as? Bool ?? true
+        self.recordPlays = defaults.object(forKey: "recordPlays") as? Bool ?? true
         self.repeatMode = RepeatMode(rawValue: defaults.string(forKey: "repeatMode") ?? "") ?? .off
         self.playbackCacheLimit = defaults.object(forKey: "playbackCacheLimit") as? Int64 ?? (2 * 1024 * 1024 * 1024) // 2 GB default
         self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original

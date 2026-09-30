@@ -12,6 +12,8 @@ final class MusicLibrary {
 
     /// Incremented on content mutations (sync, clear) so views that read it re-evaluate.
     var revision: UInt = 0
+    @ObservationIgnored private var cachedAlbumPlayStats: [UUID: AlbumPlayStats]?
+    @ObservationIgnored private var cachedAlbumPlayStatsRevision: UInt?
 
     /// Cached maps — invalidated on revision bump to avoid repeated full table scans.
     @ObservationIgnored var cachedArtistMap: [UUID: LibraryArtist]?
@@ -171,6 +173,35 @@ final class MusicLibrary {
     }
 
     // MARK: - Query: Albums
+
+    /// What an album's tracks add up to, for the play-based sorts. The server measures
+    /// plays per track, so an album's figures are the sum and the latest of its own.
+    nonisolated struct AlbumPlayStats: Sendable {
+        var playCount: Int = 0
+        var lastPlayedAt: Date?
+    }
+
+    /// Keyed by album id. One pass over the played tracks rather than a query per album,
+    /// and held until the next mutation — the albums grid asks for this on every reorder.
+    func albumPlayStats() -> [UUID: AlbumPlayStats] {
+        _ = revision
+        if cachedAlbumPlayStatsRevision == revision, let cached = cachedAlbumPlayStats {
+            return cached
+        }
+        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.playCount > 0 })
+        var stats: [UUID: AlbumPlayStats] = [:]
+        for track in fetch(descriptor) ?? [] {
+            var entry = stats[track.albumId] ?? AlbumPlayStats()
+            entry.playCount += track.playCount
+            if let played = track.lastPlayedAt, played > (entry.lastPlayedAt ?? .distantPast) {
+                entry.lastPlayedAt = played
+            }
+            stats[track.albumId] = entry
+        }
+        cachedAlbumPlayStats = stats
+        cachedAlbumPlayStatsRevision = revision
+        return stats
+    }
 
     func allAlbums() -> [Album] {
         _ = revision

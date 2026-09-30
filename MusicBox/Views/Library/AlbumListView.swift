@@ -5,13 +5,15 @@ nonisolated enum AlbumSortOption: String, CaseIterable {
     case dateAdded = "Date Added"
     case name = "Name"
     case releaseYear = "Release Year"
+    case plays = "Plays"
+    case lastPlayed = "Last Played"
 
     /// What this ordering means by default. Nobody picks "Date Added" wanting the oldest
     /// record they own first, and nobody picks "Name" wanting Z.
     var defaultAscending: Bool {
         switch self {
         case .artist, .name: true
-        case .dateAdded, .releaseYear: false
+        case .dateAdded, .releaseYear, .plays, .lastPlayed: false
         }
     }
 
@@ -20,6 +22,8 @@ nonisolated enum AlbumSortOption: String, CaseIterable {
         case .artist, .name: "A–Z"
         case .dateAdded: "Oldest First"
         case .releaseYear: "Oldest First"
+        case .plays: "Least Played"
+        case .lastPlayed: "Longest Ago"
         }
     }
 
@@ -28,6 +32,16 @@ nonisolated enum AlbumSortOption: String, CaseIterable {
         case .artist, .name: "Z–A"
         case .dateAdded: "Newest First"
         case .releaseYear: "Newest First"
+        case .plays: "Most Played"
+        case .lastPlayed: "Most Recent"
+        }
+    }
+
+    /// Only these two need the aggregate, which costs a pass over every played track.
+    var needsPlayStats: Bool {
+        switch self {
+        case .plays, .lastPlayed: true
+        default: false
         }
     }
 }
@@ -115,7 +129,12 @@ struct AlbumListView: View {
         let source = filterOption == .downloaded
             ? musicLibrary.downloadedAlbums()
             : musicLibrary.allAlbums()
-        albums = sortOption.sorted(source, ascending: sortAscending)
+        albums = sortOption.sorted(source, ascending: sortAscending, playStats: playStats())
+    }
+
+    /// Skipped unless the chosen sort needs it: it's a pass over every played track.
+    private func playStats() -> [UUID: MusicLibrary.AlbumPlayStats] {
+        sortOption.needsPlayStats ? musicLibrary.albumPlayStats() : [:]
     }
 
     // MARK: - Toolbar Menu
@@ -159,7 +178,8 @@ struct AlbumListView: View {
 
 extension AlbumSortOption {
     /// Shared with the macOS grid so both platforms order albums identically.
-    func sorted(_ albums: [Album], ascending: Bool) -> [Album] {
+    func sorted(_ albums: [Album], ascending: Bool,
+                playStats: [UUID: MusicLibrary.AlbumPlayStats] = [:]) -> [Album] {
         albums.sorted { a, b in
             let result: Bool
             switch self {
@@ -192,6 +212,24 @@ extension AlbumSortOption {
                 let bYear = b.releaseYear ?? 0
                 if aYear != bYear {
                     result = aYear < bYear
+                } else {
+                    result = a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
+                }
+            case .plays:
+                let aPlays = playStats[a.id]?.playCount ?? 0
+                let bPlays = playStats[b.id]?.playCount ?? 0
+                if aPlays != bPlays {
+                    result = aPlays < bPlays
+                } else {
+                    result = a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
+                }
+            case .lastPlayed:
+                // Never played is longest ago, so descending leaves it at the bottom
+                // rather than on top of everything that has been played.
+                let aPlayed = playStats[a.id]?.lastPlayedAt ?? .distantPast
+                let bPlayed = playStats[b.id]?.lastPlayedAt ?? .distantPast
+                if aPlayed != bPlayed {
+                    result = aPlayed < bPlayed
                 } else {
                     result = a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
                 }

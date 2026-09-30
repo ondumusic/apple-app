@@ -988,6 +988,9 @@ final class PlayerService {
 
         guard !hasReportedCurrentPlay, listenedSeconds >= playThreshold else { return }
         hasReportedCurrentPlay = true
+        // Checked at the moment it qualifies rather than when it started, so turning the
+        // setting off mid-track stops that track being counted.
+        guard settings.recordPlays else { return }
         let playedAt = playStartedAt ?? Date()
         musicLibrary?.recordLocalPlay(trackId: track.id, at: playedAt)
         outbox?.enqueuePlay(trackId: track.id, playedAt: playedAt)

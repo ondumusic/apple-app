@@ -55,9 +55,14 @@ struct AlbumsViewMac: View {
 
     private func reload() {
         let source = libraryFilter == .downloaded ? musicLibrary.downloadedAlbums() : musicLibrary.allAlbums()
-        albums = sortOption.sorted(source, ascending: sortAscending)
+        albums = sortOption.sorted(source, ascending: sortAscending, playStats: playStats())
         let present = Set(albums.map(\.id))
         selection = selection.filter(present.contains)
+    }
+
+    /// Skipped unless the chosen sort needs it: it's a pass over every played track.
+    private func playStats() -> [UUID: MusicLibrary.AlbumPlayStats] {
+        sortOption.needsPlayStats ? musicLibrary.albumPlayStats() : [:]
     }
 }
 #endif

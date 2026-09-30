@@ -5,7 +5,7 @@ import Testing
 private func track(_ name: String, artist artistName: String, albumArtist: String? = nil,
                    album albumName: String = "Album", year: Int? = nil,
                    disc: Int = 1, number: Int = 1, duration: Double = 100,
-                   plays: Int = 0) -> Track {
+                   plays: Int = 0, lastPlayed: Date? = nil) -> Track {
     let artist = Artist(id: UUID(), name: artistName, sortName: artistName, slug: "a")
     let albumArtistName = albumArtist ?? artistName
     return Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
@@ -14,7 +14,7 @@ private func track(_ name: String, artist artistName: String, albumArtist: Strin
                  album: Track.TrackAlbum(id: UUID(), name: albumName, artworkUrl: nil,
                                          releaseYear: year),
                  name: name, disc: disc, number: number, duration: duration,
-                 mimetype: "audio/mp4", streamUrl: "/s", playCount: plays)
+                 mimetype: "audio/mp4", streamUrl: "/s", playCount: plays, lastPlayedAt: lastPlayed)
 }
 
 struct TrackSortTests {
@@ -106,12 +106,36 @@ extension TrackSortTests {
         #expect(sorted.map(\.name) == ["Often", "Rarely", "Never"])
     }
 
-    /// Asking "what do I play most" and getting the never-played first is the wrong way
-    /// round, so this column is the one that starts descending.
-    @Test func playsStartsDescendingWhereTheOthersStartAscending() {
-        #expect(TrackSortColumn.plays.defaultAscending == false)
-        for column in TrackSortColumn.allCases where column != .plays {
-            #expect(column.defaultAscending)
+    /// Asking "what do I play most", or "what did I play recently", and getting the
+    /// never-played first is the wrong way round — so those two start descending where
+    /// every other column starts ascending.
+    @Test func thePlayColumnsStartDescending() {
+        let descendingFirst: Set<TrackSortColumn> = [.plays, .lastPlayed]
+        for column in TrackSortColumn.allCases {
+            #expect(column.defaultAscending == !descendingFirst.contains(column))
         }
+    }
+}
+
+// MARK: - Last played
+
+extension TrackSortTests {
+
+    @Test func sortsByWhenItWasLastPlayed() {
+        let now = Date()
+        let tracks = [track("Old", artist: "A", lastPlayed: now.addingTimeInterval(-86_400)),
+                      track("Recent", artist: "A", lastPlayed: now),
+                      track("Never", artist: "A", lastPlayed: nil)]
+        let sorted = TrackSort(column: .lastPlayed, ascending: false).sorted(tracks)
+        #expect(sorted.map(\.name) == ["Recent", "Old", "Never"])
+    }
+
+    /// Never played is longest-ago rather than newest, so it sits at the bottom of a
+    /// recently-played list instead of on top of it.
+    @Test func neverPlayedSortsAsLongestAgo() {
+        let tracks = [track("Never", artist: "A", lastPlayed: nil),
+                      track("Played", artist: "A", lastPlayed: Date())]
+        let ascending = TrackSort(column: .lastPlayed, ascending: true).sorted(tracks)
+        #expect(ascending.map(\.name) == ["Never", "Played"])
     }
 }
