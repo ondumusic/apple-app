@@ -752,31 +752,32 @@ struct PlayerHistoryTests {
 
 // MARK: - Sign Out
 
-/// The mini player window keeps the player alive past sign-out, so nothing else stops it.
-struct PlayerSignOutTests {
+/// Used by sign-out, where nothing else stops the player because the mini player window
+/// keeps it alive, and by Controls ▸ Stop.
+struct PlayerStopTests {
 
-    @Test func stopForSignOutEmptiesTheQueue() {
+    @Test func emptiesTheQueue() {
         let player = makePlayer()
         player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B")])
-        player.stopForSignOut()
+        player.stopAndClear()
         #expect(player.queue.isEmpty)
         #expect(player.currentTrack == nil)
         #expect(player.currentIndex == 0)
     }
 
-    @Test func stopForSignOutStopsPlayback() {
+    @Test func stopsPlayback() {
         let player = makePlayer()
         player.playNow(queue: [makeQueueItem(name: "A")])
-        player.stopForSignOut()
+        player.stopAndClear()
         #expect(!player.isPlaying)
         #expect(player.progress == 0)
     }
 
-    @Test func stopForSignOutDropsShuffle() {
+    @Test func dropsShuffle() {
         let player = makePlayer()
         player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B")])
         player.shuffledIndices = [1, 0]
-        player.stopForSignOut()
+        player.stopAndClear()
         #expect(player.shuffledIndices == nil)
     }
 }

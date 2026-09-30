@@ -973,21 +973,35 @@ private struct MiniScrubber: View {
 private struct WindowAppearance: NSViewRepresentable {
     let isDark: Bool
 
-    func makeNSView(context: Context) -> NSView { NSView() }
+    func makeNSView(context: Context) -> AppearanceApplyingView { AppearanceApplyingView() }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        let appearance: NSAppearance? = isDark ? NSAppearance(named: .darkAqua) : nil
-        // Synchronously when the window is already there, so the first frame is already
-        // the right appearance. The hop is only for the initial mount, where this view
-        // has no window yet.
-        if let window = nsView.window {
-            if window.appearance != appearance { window.appearance = appearance }
-            return
-        }
-        Task { @MainActor in
-            guard nsView.window?.appearance != appearance else { return }
-            nsView.window?.appearance = appearance
-        }
+    func updateNSView(_ nsView: AppearanceApplyingView, context: Context) {
+        nsView.desiredAppearance = isDark ? NSAppearance(named: .darkAqua) : nil
+    }
+}
+
+/// Puts the window into the appearance the content is drawn for.
+///
+/// Applied again when the view lands in a window, not only when the value changes: at
+/// mount it has no window yet, and deferring the set to the next runloop turn is a race
+/// it can lose. Losing it leaves the window on the system appearance while the content
+/// draws as a dark surface — which is black label text on a blurred cover.
+private final class AppearanceApplyingView: NSView {
+    var desiredAppearance: NSAppearance? {
+        didSet { applyToWindow() }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        applyToWindow()
+    }
+
+    private func applyToWindow() {
+        guard let window else { return }
+        // By name: NSAppearance(named:) hands back a fresh instance each time, so
+        // comparing the objects themselves would always differ and reassign.
+        guard window.appearance?.name != desiredAppearance?.name else { return }
+        window.appearance = desiredAppearance
     }
 }
 

@@ -499,13 +499,15 @@ final class PlayerService {
         togglePlayPause()
     }
 
-    /// Stops everything, because the account this queue came from is gone.
+    /// Stops playback and empties the player, leaving it as it was before anything was
+    /// asked for.
     ///
-    /// Not left to deinit: on macOS the mini player window holds the player after the
-    /// app has dropped its own reference, so without this it plays on against a library
-    /// and a token that no longer exist — the buffered track and the one queued behind
-    /// it for gapless still play, and everything after them fails.
-    func stopForSignOut() {
+    /// Sign-out needs it because dropping the app's reference doesn't stop anything — on
+    /// macOS the mini player window holds the player after the app has let go, so without
+    /// this it plays on against a library and a token that no longer exist. Controls ▸
+    /// Stop needs it because there is otherwise no way back to an empty player: Clear
+    /// deliberately spares the current track, and pausing leaves it loaded.
+    func stopAndClear() {
         primaryPlayer.pause()
         primaryPlayer.removeAllItems()
         tearDownCrossfade()

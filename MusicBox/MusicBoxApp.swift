@@ -293,7 +293,7 @@ struct MusicBoxApp: App {
                         player = PlayerService(api: api, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache)
                     }
                 } else {
-                    player?.stopForSignOut()
+                    player?.stopAndClear()
                     #if os(macOS)
                     MiniPlayerWindowController.closeForSignOut()
                     #endif
@@ -444,6 +444,12 @@ struct MusicBoxApp: App {
                     player?.togglePlayPause()
                 }
                 .disabled(player?.currentTrack == nil)
+
+                // Music.app's shortcut, and the only way back to an empty player: Clear
+                // spares the current track by design, and pausing leaves it loaded.
+                Button("Stop") { player?.stopAndClear() }
+                    .keyboardShortcut(".", modifiers: .command)
+                    .disabled(player?.currentTrack == nil)
 
                 Button("Next Track") { player?.skip() }
                     .keyboardShortcut(.rightArrow, modifiers: .command)
