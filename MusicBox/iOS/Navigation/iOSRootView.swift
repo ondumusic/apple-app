@@ -8,6 +8,7 @@ nonisolated enum iOSTab: String, Hashable, Sendable {
 
 struct iOSRootView: View {
     @Environment(AuthService.self) private var authService
+    @Environment(SyncService.self) private var syncService
     @Environment(DownloadService.self) private var downloadService
     @State private var showSettings = false
     @State private var showDownloads = false
@@ -19,6 +20,7 @@ struct iOSRootView: View {
     @State private var searchPath = NavigationPath()
     @State private var playlistsPath = NavigationPath()
     @State private var searchText = ""
+    @AppStorage("dismissedServerVersionNotice") private var dismissedServerVersion = ""
 
     private var selectedTab: iOSTab {
         // Migrate the retired `.downloads` value to `.artists`.
@@ -35,6 +37,7 @@ struct iOSRootView: View {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.caption)
+                    .foregroundStyle(.orange)
                 Text("Session expired")
                     .font(.caption)
                 Spacer()
@@ -43,11 +46,18 @@ struct iOSRootView: View {
                 }
                 .font(.caption.bold())
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(.primary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .padding(.horizontal, 12)
-            .background(.orange)
+            .background(Color.orange.opacity(0.16))
+            .overlay(alignment: .bottom) { Divider() }
+        }
+
+        if syncService.compatibility.shouldShow(dismissedVersion: dismissedServerVersion) {
+            ServerVersionNotice(compatibility: syncService.compatibility) {
+                dismissedServerVersion = syncService.compatibility.serverVersion ?? ""
+            }
         }
 
         TabView(selection: tabSelection) {

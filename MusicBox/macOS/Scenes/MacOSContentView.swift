@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 /// project_macos_rebuild_plan.md for the per-surface plan.
 struct MacOSContentView: View {
     @Environment(MusicLibrary.self) private var musicLibrary
+    @Environment(SyncService.self) private var syncService
     @Environment(SettingsStore.self) private var settings
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
@@ -25,6 +26,7 @@ struct MacOSContentView: View {
     @State private var addToPlaylistTrackIds: [UUID] = []
     @Environment(\.openWindow) private var openWindow
     @State private var searchText: String = ""
+    @AppStorage("dismissedServerVersionNotice") private var dismissedServerVersion = ""
     /// Restored when a search is cleared — searching deselects the sidebar so it stops
     /// claiming you're still in whatever section you left.
     @State private var selectionBeforeSearch: SidebarSelection?
@@ -70,6 +72,11 @@ struct MacOSContentView: View {
             // reserved insets, no scroller to lift clear.
             VStack(spacing: 0) {
                 PlayerBar(showQueue: $showQueue)
+                if syncService.compatibility.shouldShow(dismissedVersion: dismissedServerVersion) {
+                    ServerVersionNotice(compatibility: syncService.compatibility) {
+                        dismissedServerVersion = syncService.compatibility.serverVersion ?? ""
+                    }
+                }
                 GeometryReader { geo in
                     // Music pushes Up Next aside only while enough content survives, and
                     // floats it over the content when it wouldn't — measured by toggling

@@ -213,6 +213,12 @@ final class SyncService {
     var lastSyncDate: Date?
     var syncProgress: SyncProgress?
     var syncError: String?
+    /// Whether this build and the server agree about the API. Checked once per launch,
+    /// off the back of a sync — it changes when one side is updated, which can't happen
+    /// while the app is running.
+    var compatibility: ServerCompatibility = .ok
+    /// What the server calls itself, for Settings to show.
+    var serverVersion: String?
 
     nonisolated struct SyncProgress: Sendable {
         var artistIds: Set<UUID> = []
@@ -230,6 +236,7 @@ final class SyncService {
     @ObservationIgnored private weak var outbox: OutboxService?
     @ObservationIgnored private var artworkPrefetcher: ImagePrefetcher?
     @ObservationIgnored private var isSessionExpired = false
+    @ObservationIgnored private var hasCheckedCompatibility = false
 
     private var syncCursor: String? {
         get { UserDefaults.standard.string(forKey: "syncCursor") }
@@ -256,6 +263,8 @@ final class SyncService {
             NotificationCenter.default.post(name: .sessionExpired, object: nil)
             return
         }
+
+        await checkCompatibilityIfNeeded()
 
         // Drain any queued playlist mutations first so the server's view reflects them before
         // we pull its state back down.
@@ -388,6 +397,20 @@ final class SyncService {
                 downloadService.downloadTracks(ids: playlistAutoIds, library: musicLibrary)
             }
         }
+    }
+
+    /// A failure here is left alone: /info needs a session, and a server that can't
+    /// answer it has bigger problems that the sync itself will report.
+    private func checkCompatibilityIfNeeded() async {
+        guard !hasCheckedCompatibility else { return }
+        guard let info = try? await api.fetchServerInfo() else { return }
+        hasCheckedCompatibility = true
+        compatibility = ServerCompatibility.compare(
+            serverAPIVersion: info.apiVersion,
+            serverVersion: info.version,
+            supported: APIService.supportedAPIVersion
+        )
+        serverVersion = info.version
     }
 
     func syncIfNeeded() async {

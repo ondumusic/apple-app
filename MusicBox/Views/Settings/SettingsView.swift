@@ -341,6 +341,13 @@ struct SettingsView: View {
                     Text(host).foregroundStyle(.secondary)
                 }
             }
+            if let serverVersion = syncService?.serverVersion {
+                HStack {
+                    Text("Server Version")
+                    Spacer()
+                    Text(serverVersion).foregroundStyle(.secondary)
+                }
+            }
             if auth.isLoggedIn {
                 Button("Sign Out", role: .destructive) { showLogoutConfirmation = true }
                     .confirmationDialog("Sign Out?", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
