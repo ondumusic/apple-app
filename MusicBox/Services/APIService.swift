@@ -170,7 +170,7 @@ final class APIService: Sendable {
     /// conflict cases, `tooManyOperations`, and `playlistIsFolder` are surfaced as errors.
     nonisolated enum PlaylistItemsError: Error, Sendable {
         case tooManyOperations
-        case addMoveConflict(positions: [String])
+        case duplicateItems(itemIds: [UUID])
         case moveRemoveConflict(itemIds: [UUID])
         case unknownItems(itemIds: [UUID])
         case unknownTracks(trackIds: [UUID])
@@ -188,7 +188,7 @@ final class APIService: Sendable {
             guard let body = try? JSONDecoder.api.decode(DecodedBody.self, from: data) else { return nil }
             switch body.error {
             case "too_many_operations":    return .tooManyOperations
-            case "add_move_conflict":      return .addMoveConflict(positions: body.positions ?? [])
+            case "duplicate_items":        return .duplicateItems(itemIds: body.itemIds ?? [])
             case "move_remove_conflict":   return .moveRemoveConflict(itemIds: body.itemIds ?? [])
             case "unknown_items":          return .unknownItems(itemIds: body.itemIds ?? [])
             case "unknown_tracks":         return .unknownTracks(trackIds: body.trackIds ?? [])

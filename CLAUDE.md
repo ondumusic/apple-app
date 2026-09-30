@@ -37,7 +37,7 @@ Base URL ends in `/api` (set during login). All bodies send lowercase UUID strin
 
 ### Playlists
 
-Playlists shipped on `feat/playlists`. Folders are `Playlist`s with `isFolder == true`; `parentId == nil` is root. Item positions use lowercase a–z fractional index strings (`Services/FractionalIndex.swift`). `OutboxService` remaps temp UUIDs to server UUIDs across all queued mutations on `create_playlist` / `add_items` resolves. Local state is never rolled back on outbox discard — the next sync reconciles authoritatively.
+Playlists shipped on `feat/playlists`. Folders are `Playlist`s with `isFolder == true`; `parentId == nil` is root. Item positions are base-62 fractional index strings (`Services/FractionalIndex.swift`), byte-compatible with rocicorp/fractional-indexing and with the server's. `OutboxService` remaps temp UUIDs to server UUIDs across all queued mutations on `create_playlist` / `add_items` resolves. Local state is never rolled back on outbox discard — the next sync reconciles authoritatively.
 
 ## Code conventions
 

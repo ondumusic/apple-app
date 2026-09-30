@@ -323,6 +323,12 @@ final class OutboxService {
             return .discard("Gave up after \(depth) filter retries.")
         }
 
+        // Two drags of the same track batch into two moves of one item, which the server
+        // rejects outright as duplicate_items. The later op is the newer intent, so it
+        // wins and the earlier one goes.
+        let moveEntries = Self.lastPerItem(moveEntries)
+        let removeIds = Self.deduplicated(removeIds)
+
         let adds = addEntries.map { APIService.PositionedTrackBody(trackId: $0.trackId, position: $0.position) }
         let moves = moveEntries.map { APIService.PositionedItemBody(itemId: $0.itemId, position: $0.position) }
 
@@ -399,33 +405,11 @@ final class OutboxService {
                 depth: depth + 1
             )
 
-        case .addMoveConflict:
-            // Positions are algorithm-computed, so a collision means our local view of the
-            // playlist's tail was stale (multi-device concurrency). Regenerate fresh positions
-            // appended past the current local tail for everything in the request, reflect the
-            // new move positions locally so the UI stays in sync, and retry.
-            var cursor = musicLibrary.lastPlaylistItemPosition(playlistId)
-            let newAdds: [AddItemsPayload.Entry] = addEntries.map { entry in
-                let newPosition = FractionalIndex.after(cursor)
-                cursor = newPosition
-                return AddItemsPayload.Entry(tempItemId: entry.tempItemId, trackId: entry.trackId, position: newPosition)
-            }
-            let newMoves: [MoveItemsPayload.Entry] = moveEntries.map { entry in
-                let newPosition = FractionalIndex.after(cursor)
-                cursor = newPosition
-                return MoveItemsPayload.Entry(itemId: entry.itemId, position: newPosition)
-            }
-            for entry in newMoves {
-                musicLibrary.moveLocalPlaylistItem(itemId: entry.itemId, newPosition: entry.position)
-            }
-            #if DEBUG
-            print("OutboxService: add_move_conflict — repositioned \(newAdds.count) add(s) + \(newMoves.count) move(s) past current tail; retrying")
-            #endif
-            return await executeItemOps(
-                playlistId: playlistId,
-                addEntries: newAdds, moveEntries: newMoves, removeIds: removeIds,
-                depth: depth + 1
-            )
+        case .duplicateItems(let duplicated):
+            // We de-duplicate every request before sending, so the server seeing the same
+            // item twice means our idea of an item's identity disagrees with the server's
+            // — retrying the same ops would just fail again.
+            return .discard("The same playlist item was changed twice in one request (\(duplicated.count)).")
 
         case .moveRemoveConflict(let conflictIds):
             // The same item was both moved and removed. Remove wins — drop the move.
@@ -631,6 +615,21 @@ final class OutboxService {
         } catch {
             return classify(error)
         }
+    }
+
+    /// The last move of each item, in the order the survivors were queued.
+    nonisolated static func lastPerItem(_ entries: [MoveItemsPayload.Entry]) -> [MoveItemsPayload.Entry] {
+        var seen: Set<UUID> = []
+        var kept: [MoveItemsPayload.Entry] = []
+        for entry in entries.reversed() where seen.insert(entry.itemId).inserted {
+            kept.append(entry)
+        }
+        return kept.reversed()
+    }
+
+    nonisolated static func deduplicated(_ ids: [UUID]) -> [UUID] {
+        var seen: Set<UUID> = []
+        return ids.filter { seen.insert($0).inserted }
     }
 
     private func classify(_ error: Error) -> Outcome {
