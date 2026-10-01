@@ -13,7 +13,6 @@ struct SearchViewMac: View {
     @State private var results: (artists: [Artist], albums: [Album], tracks: [Track]) = ([], [], [])
     /// Artists carry no artwork of their own, so each one borrows its first album's.
     /// Resolved once per query rather than per row.
-    @State private var artistArtwork: [UUID: URL] = [:]
     @State private var displayedQuery: String = ""
     @State private var trackSelection: Set<UUID> = []
     @State private var albumSelection: Set<Album.ID> = []
@@ -85,7 +84,6 @@ struct SearchViewMac: View {
             // changes, so a stale closure can't overwrite results with an older match.
             guard !query.isEmpty else {
                 results = ([], [], [])
-                artistArtwork = [:]
                 displayedQuery = ""
                 return
             }
@@ -93,7 +91,6 @@ struct SearchViewMac: View {
             guard !Task.isCancelled else { return }
             let found = musicLibrary.search(query)
             results = found
-            artistArtwork = musicLibrary.artistArtwork(for: found.artists)
             displayedQuery = query
         }
     }
@@ -153,7 +150,7 @@ struct SearchViewMac: View {
                           showAll: shownArtists.count < results.artists.count ? .artists : nil)
             LazyVGrid(columns: artistColumns, alignment: .leading, spacing: Spacing.block) {
                 ForEach(shownArtists) { artist in
-                    SearchArtistCell(artist: artist, artworkURL: artistArtwork[artist.id])
+                    SearchArtistCell(artist: artist)
                 }
             }
         }

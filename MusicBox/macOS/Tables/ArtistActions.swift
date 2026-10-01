@@ -14,6 +14,11 @@ struct ArtistActions {
     var removeDownload: (Artist) -> Void = { _ in }
     var isFullyDownloaded: (Artist) -> Bool = { _ in false }
     var supportsDownload: Bool = false
+    var chooseArtwork: (Artist) -> Void = { _ in }
+    var removeArtwork: (Artist) -> Void = { _ in }
+    /// Only offered where artwork is on show: actions for pictures you can't see would be
+    /// a strange thing to find in a list of names.
+    var supportsArtwork: Bool = false
 
     static func standard(
         player: PlayerService,

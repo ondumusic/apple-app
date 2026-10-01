@@ -104,7 +104,13 @@ final class ArtistsTableViewController: NSViewController {
     func apply(artists newArtists: [Artist], selection: Artist.ID?) {
         let changed = artists.map(\.id) != newArtists.map(\.id)
         artists = newArtists
-        if changed { tableView.reloadData() }
+        if changed {
+            tableView.reloadData()
+        } else {
+            // The set is the same but a row's contents may not be — artwork arrives
+            // without the list changing shape, and a reload here would fight scrolling.
+            refreshVisibleCells()
+        }
 
         let targetRow = selection.flatMap { id in artists.firstIndex(where: { $0.id == id }) }
         let currentRow = tableView.selectedRow >= 0 ? tableView.selectedRow : nil
@@ -144,6 +150,8 @@ final class ArtistsTableViewController: NSViewController {
     @objc private func menuAddToPlaylist() { withContextArtist { actions.addToPlaylist($0) } }
     @objc private func menuDownload() { withContextArtist { actions.download($0) } }
     @objc private func menuRemoveDownload() { withContextArtist { actions.removeDownload($0) } }
+    @objc private func menuChooseArtwork() { withContextArtist { actions.chooseArtwork($0) } }
+    @objc private func menuRemoveArtwork() { withContextArtist { actions.removeArtwork($0) } }
 
     private func withContextArtist(_ body: (Artist) -> Void) {
         guard let artist = artistForContextAction() else { return }
@@ -194,6 +202,15 @@ extension ArtistsTableViewController: NSTableViewDelegate {
     /// Reloading would rebuild every cell and cut straight to the new height. Telling the
     /// table its rows changed height animates it, and the cells it already has can be
     /// reconfigured where they stand — they know how to draw either density.
+    private func refreshVisibleCells() {
+        guard isViewLoaded else { return }
+        tableView.enumerateAvailableRowViews { rowView, row in
+            guard artists.indices.contains(row),
+                  let cell = rowView.view(atColumn: 0) as? ArtistCell else { return }
+            cell.show(artists[row], showsArtwork: showsArtwork)
+        }
+    }
+
     private func applyDensity() {
         tableView.rowHeight = rowHeightForDensity
         NSAnimationContext.runAnimationGroup { context in
@@ -232,7 +249,7 @@ private final class ArtistCell: NSTableCellView {
     private static let diameter: CGFloat = 28
 
     private let thumbnail = ArtistThumbnailView()
-    private var artistId: UUID?
+    private var shownIdentity: String?
     private var loadTask: Task<Void, Never>?
     private var textLeadingWithArtwork: NSLayoutConstraint!
     private var textLeadingPlain: NSLayoutConstraint!
@@ -276,21 +293,25 @@ private final class ArtistCell: NSTableCellView {
         textLeadingPlain.isActive = !showsArtwork
         guard showsArtwork else {
             loadTask?.cancel()
-            artistId = nil
+            shownIdentity = nil
             return
         }
-        guard artistId != artist.id else { return }
-        artistId = artist.id
+        // Keyed on the artwork as well as the artist: an upload replaces the URL under
+        // the same id, and keying on the id alone left the old picture in place until
+        // the app restarted.
+        let identity = "\(artist.id)|\(artist.artwork.first?.url.absoluteString ?? "")"
+        guard shownIdentity != identity else { return }
+        shownIdentity = identity
         loadTask?.cancel()
         showGlyph()
 
         guard let variant = artist.artwork.covering(pixelWidth: Int(Self.diameter * 3)) else { return }
-        let wanted = artist.id
+        let wanted = identity
         loadTask = Task { [weak self] in
             let request = ImageRequest(url: variant.url,
                                        processors: [.resize(width: Self.diameter * 3)])
             guard let image = try? await ImagePipeline.shared.image(for: request),
-                  !Task.isCancelled, let self, self.artistId == wanted
+                  !Task.isCancelled, let self, self.shownIdentity == wanted
             else { return }
             self.thumbnail.image = image
         }
@@ -393,6 +414,15 @@ extension ArtistsTableViewController: NSMenuDelegate {
                 addItem(to: menu, title: "Remove Download", action: #selector(menuRemoveDownload))
             } else {
                 addItem(to: menu, title: "Download", action: #selector(menuDownload))
+            }
+        }
+        if actions.supportsArtwork, showsArtwork {
+            menu.addItem(.separator())
+            addItem(to: menu,
+                    title: artist.artwork.isEmpty ? "Choose Artwork…" : "Replace Artwork…",
+                    action: #selector(menuChooseArtwork))
+            if !artist.artwork.isEmpty {
+                addItem(to: menu, title: "Remove Artwork", action: #selector(menuRemoveArtwork))
             }
         }
     }

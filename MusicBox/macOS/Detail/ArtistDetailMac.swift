@@ -23,6 +23,7 @@ struct ArtistDetailMac: View {
     @State private var paneWidth: CGFloat = 0
     @State private var isUpdatingArtwork = false
     @State private var artworkError: ArtistArtworkEditor.Failure?
+    @State private var isDropTargeted = false
 
     private var totalSongs: Int {
         albums.reduce(0) { $0 + ($1.tracks?.count ?? 0) }
@@ -109,9 +110,14 @@ struct ArtistDetailMac: View {
     private var header: some View {
         HStack(alignment: .center) {
             // Only when there is artwork — see ArtistDetailView for why.
-            if !artist.artwork.isEmpty {
+            // Also while uploading: on an artist with no artwork the circle would
+            // otherwise vanish the moment the file lands and reappear when the server
+            // answers, which reads as the drop having been refused.
+            if !artist.artwork.isEmpty || isDropTargeted || isUpdatingArtwork {
                 ArtistArtworkView(artist: artist, size: 96)
                     .overlay { if isUpdatingArtwork { uploadingOverlay } }
+                    .overlay { if isDropTargeted { dropTarget } }
+                    .contextMenu { artworkActions }
                     .padding(.trailing, Spacing.related)
             }
             VStack(alignment: .leading, spacing: Spacing.tight) {
@@ -130,7 +136,7 @@ struct ArtistDetailMac: View {
         }
         // Dropping a picture on the header is the gesture people try first, and it saves
         // the panel entirely.
-        .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
+        .onDrop(of: [.image, .fileURL], isTargeted: $isDropTargeted) { providers in
             guard let provider = providers.first else { return false }
             _ = provider.loadDataRepresentation(for: .image) { data, _ in
                 guard let data else { return }
@@ -149,6 +155,20 @@ struct ArtistDetailMac: View {
         }
     }
 
+    /// Says where the picture is going. The header takes the drop — a 96pt circle is a
+    /// small target to hit — but the circle is what lights up, so it's clear what will
+    /// change rather than that something, somewhere, accepted it.
+    private var dropTarget: some View {
+        ZStack {
+            Circle().fill(.thinMaterial)
+            Circle()
+                .strokeBorder(settings.resolvedAccentColor, style: StrokeStyle(lineWidth: 2, dash: [5, 4]))
+            Image(systemName: "photo")
+                .font(.title2)
+                .foregroundStyle(settings.resolvedAccentColor)
+        }
+    }
+
     private var uploadingOverlay: some View {
         ZStack {
             Circle().fill(.black.opacity(0.45))
@@ -156,19 +176,25 @@ struct ArtistDetailMac: View {
         }
     }
 
+    @ViewBuilder
+    private var artworkActions: some View {
+        Button(artist.artwork.isEmpty ? "Choose Artwork…" : "Replace Artwork…") { chooseArtwork() }
+        Button("Remove Artwork") {
+            Task { await upload { try await editor.remove(artistId: artist.id) } }
+        }
+        .disabled(artist.artwork.isEmpty)
+    }
+
     private var artworkMenu: some View {
         Menu {
-            Button("Choose Artwork…") { chooseArtwork() }
-            Button("Remove Artwork") {
-                Task { await upload { try await editor.remove(artistId: artist.id) } }
-            }
-            .disabled(artist.artwork.isEmpty)
+            artworkActions
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(systemName: "ellipsis")
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
+        .buttonStyle(AccentActionButtonStyle(accent: settings.resolvedAccentColor, isCircular: true))
         .menuIndicator(.hidden)
-        .frame(width: 28)
+        .fixedSize()
         .disabled(isUpdatingArtwork)
         .help("Artist artwork")
     }

@@ -28,7 +28,6 @@ struct SearchAllViewMac: View {
     @State private var tracks: [Track] = []
     @State private var trackSelection: Set<UUID> = []
     @State private var albumSelection: Set<Album.ID> = []
-    @State private var artistArtwork: [UUID: URL] = [:]
 
     private let artistColumns = [GridItem(.adaptive(minimum: 108), spacing: Spacing.element)]
 
@@ -68,7 +67,7 @@ struct SearchAllViewMac: View {
                 ScrollView {
                     LazyVGrid(columns: artistColumns, alignment: .leading, spacing: Spacing.block) {
                         ForEach(artists) { artist in
-                            SearchArtistCell(artist: artist, artworkURL: artistArtwork[artist.id])
+                            SearchArtistCell(artist: artist)
                         }
                     }
                     .padding(Spacing.page)
@@ -119,7 +118,6 @@ struct SearchAllViewMac: View {
         artists = results.artists
         albums = results.albums
         tracks = results.tracks
-        artistArtwork = musicLibrary.artistArtwork(for: results.artists)
     }
 
     private func playTrack(at index: Int) {
@@ -131,10 +129,13 @@ struct SearchAllViewMac: View {
 }
 
 /// Circular artwork cell used for artist results in both the search page and its
-/// "show all" list. Artists have no artwork of their own — this is their first album's.
+/// "show all" list.
+///
+/// This used to borrow the artist's first album cover, from before artists could have a
+/// picture of their own. At 72pt that reads as a photograph of the artist rather than as
+/// one of their records, so it now shows the real thing or the glyph, as everywhere else.
 struct SearchArtistCell: View {
     let artist: Artist
-    let artworkURL: URL?
 
     fileprivate static let artworkSize: CGFloat = 72
     /// Wider than the artwork, so the name gets two lines before it truncates. It is also
@@ -143,19 +144,7 @@ struct SearchArtistCell: View {
 
     var body: some View {
         VStack(spacing: Spacing.tight) {
-            Group {
-                if let artworkURL {
-                    ArtworkView(url: artworkURL)
-                } else {
-                    Image(systemName: "music.mic")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(.quaternary)
-                }
-            }
-            .frame(width: Self.artworkSize, height: Self.artworkSize)
-            .clipShape(Circle())
+            ArtistArtworkView(artist: artist, size: Self.artworkSize)
             Text(artist.name)
                 .font(.caption)
                 .lineLimit(2)

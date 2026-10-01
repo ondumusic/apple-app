@@ -531,17 +531,6 @@ final class MusicLibrary {
 
     // MARK: - Search
 
-    /// Artists carry no artwork of their own, so each borrows its first album's. Resolved
-    /// in one pass for a set of search results rather than per row.
-    func artistArtwork(for artists: [Artist]) -> [UUID: URL] {
-        _ = revision
-        return Dictionary(uniqueKeysWithValues: artists.compactMap { artist in
-            albumsForArtist(artist.id)
-                .first(where: { $0.artworkUrl != nil })
-                .flatMap(\.artworkUrl)
-                .map { (artist.id, $0) }
-        })
-    }
 
     func search(_ query: String) -> (artists: [Artist], albums: [Album], tracks: [Track]) {
         _ = revision

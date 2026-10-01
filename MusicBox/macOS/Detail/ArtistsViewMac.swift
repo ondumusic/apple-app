@@ -1,5 +1,6 @@
 #if os(macOS)
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ArtistsViewMac: View {
     /// When non-nil, the master list selects this artist on first load instead of
@@ -13,11 +14,13 @@ struct ArtistsViewMac: View {
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
     @Environment(DownloadService.self) private var downloadService
+    @Environment(AuthService.self) private var auth
 
     @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
     /// Persisted like the sidebar's, so the split survives a relaunch.
     @AppStorage("macArtistListWidth") private var artistListWidth: Double = 240
     @State private var artists: [Artist] = []
+    @State private var artworkError: ArtistArtworkEditor.Failure?
     @State private var selectedArtistId: Artist.ID?
 
     var body: some View {
@@ -39,12 +42,7 @@ struct ArtistsViewMac: View {
                 ArtistsTable(
                     artists: artists,
                     selection: $selectedArtistId,
-                    actions: .standard(
-                        player: player,
-                        musicLibrary: musicLibrary,
-                        network: network,
-                        downloadService: downloadService
-                    ),
+                    actions: artistActions,
                     accent: settings.resolvedAccentColor,
                     showsArtwork: settings.showArtistArtwork
                 )
@@ -65,6 +63,15 @@ struct ArtistsViewMac: View {
             }
             }
         }
+        .alert(
+            "Artwork",
+            isPresented: Binding(get: { artworkError != nil }, set: { if !$0 { artworkError = nil } }),
+            presenting: artworkError
+        ) { _ in
+            Button("OK", role: .cancel) { artworkError = nil }
+        } message: { failure in
+            Text(failure.message)
+        }
         .onChange(of: musicLibrary.revision, initial: true) { reloadArtists() }
         .onChange(of: libraryFilter) { reloadArtists() }
         .onChange(of: pendingArtistSelection) { _, newValue in
@@ -73,6 +80,41 @@ struct ArtistsViewMac: View {
                 selectedArtistId = id
                 pendingArtistSelection = nil
             }
+        }
+    }
+
+    private var artistActions: ArtistActions {
+        var actions = ArtistActions.standard(
+            player: player, musicLibrary: musicLibrary,
+            network: network, downloadService: downloadService)
+        actions.supportsArtwork = true
+        actions.chooseArtwork = { artist in chooseArtwork(for: artist) }
+        actions.removeArtwork = { artist in
+            Task { await runArtworkChange { try await artworkEditor.remove(artistId: artist.id) } }
+        }
+        return actions
+    }
+
+    private var artworkEditor: ArtistArtworkEditor {
+        ArtistArtworkEditor(api: auth.apiService, musicLibrary: musicLibrary)
+    }
+
+    private func chooseArtwork(for artist: Artist) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await runArtworkChange { try await artworkEditor.upload(artistId: artist.id, from: url) } }
+    }
+
+    private func runArtworkChange(_ work: () async throws -> Void) async {
+        do {
+            try await work()
+        } catch let failure as ArtistArtworkEditor.Failure {
+            artworkError = failure
+        } catch {
+            artworkError = .failed(error.localizedDescription)
         }
     }
 
