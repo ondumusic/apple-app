@@ -6,13 +6,16 @@ nonisolated struct Artist: Codable, Identifiable, Sendable, Hashable {
     var sortName: String
     var slug: String
     var albumCount: Int?
+    var artwork: [ArtworkVariant] = []
 
-    init(id: UUID, name: String, sortName: String, slug: String, albumCount: Int? = nil) {
+    init(id: UUID, name: String, sortName: String, slug: String, albumCount: Int? = nil,
+         artwork: [ArtworkVariant] = []) {
         self.id = id
         self.name = name
         self.sortName = sortName
         self.slug = slug
         self.albumCount = albumCount
+        self.artwork = artwork
     }
 
     init(from decoder: Decoder) throws {
@@ -22,5 +25,6 @@ nonisolated struct Artist: Codable, Identifiable, Sendable, Hashable {
         sortName = try container.decodeIfPresent(String.self, forKey: .sortName) ?? name
         slug = try container.decode(String.self, forKey: .slug)
         albumCount = try container.decodeIfPresent(Int.self, forKey: .albumCount)
+        artwork = try container.decodeIfPresent([ArtworkVariant].self, forKey: .artwork) ?? []
     }
 }

@@ -104,6 +104,11 @@ struct ArtistDetailMac: View {
 
     private var header: some View {
         HStack(alignment: .center) {
+            // Only when there is artwork — see ArtistDetailView for why.
+            if !artist.artwork.isEmpty {
+                ArtistArtworkView(artist: artist, size: 96)
+                    .padding(.trailing, Spacing.related)
+            }
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 Text(artist.name)
                     .font(.largeTitle.bold())

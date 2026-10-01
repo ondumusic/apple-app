@@ -9,14 +9,17 @@ nonisolated class LibraryArtist {
     var slug: String
     var albumCount: Int
     var insertedAt: Date
+    var artwork: [ArtworkVariant] = []
 
-    init(serverId: UUID, name: String, sortName: String, slug: String, albumCount: Int, insertedAt: Date) {
+    init(serverId: UUID, name: String, sortName: String, slug: String, albumCount: Int,
+         insertedAt: Date, artwork: [ArtworkVariant] = []) {
         self.serverId = serverId
         self.name = name
         self.sortName = sortName
         self.slug = slug
         self.albumCount = albumCount
         self.insertedAt = insertedAt
+        self.artwork = artwork
     }
 }
 

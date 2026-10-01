@@ -24,11 +24,13 @@ extension MusicLibrary {
                 la.sortName = sa.sortName
                 la.slug = sa.slug
                 la.albumCount = sa.albumCount
+                la.artwork = sa.artwork
                 la.insertedAt = sa.insertedAt
             } else {
                 modelContext.insert(LibraryArtist(
                     serverId: sa.id, name: sa.name, sortName: sa.sortName,
-                    slug: sa.slug, albumCount: sa.albumCount, insertedAt: sa.insertedAt))
+                    slug: sa.slug, albumCount: sa.albumCount, insertedAt: sa.insertedAt,
+                                              artwork: sa.artwork))
             }
         }
         persistChanges()

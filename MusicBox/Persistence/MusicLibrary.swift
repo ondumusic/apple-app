@@ -160,7 +160,7 @@ final class MusicLibrary {
         let libArtists = fetch(descriptor) ?? []
         return libArtists.map {
             Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName,
-                   slug: $0.slug, albumCount: $0.albumCount)
+                   slug: $0.slug, albumCount: $0.albumCount, artwork: $0.artwork)
         }
     }
 
@@ -169,7 +169,8 @@ final class MusicLibrary {
         var descriptor = FetchDescriptor<LibraryArtist>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
         guard let la = fetch(descriptor)?.first else { return nil }
-        return Artist(id: la.serverId, name: la.name, sortName: la.sortName, slug: la.slug, albumCount: la.albumCount)
+        return Artist(id: la.serverId, name: la.name, sortName: la.sortName, slug: la.slug,
+                      albumCount: la.albumCount, artwork: la.artwork)
     }
 
     // MARK: - Query: Albums
@@ -557,7 +558,8 @@ final class MusicLibrary {
         )
         let matchedArtists = fetch(artistDescriptor) ?? []
         let filteredArtists = matchedArtists.map {
-            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount)
+            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug,
+                   albumCount: $0.albumCount, artwork: $0.artwork)
         }
 
         // An album matches on its own name or by belonging to a matched artist, so
@@ -711,7 +713,8 @@ final class MusicLibrary {
     /// through whichever context fetched them, and nothing here touches the main one.
     nonisolated static func buildTrackValue(_ lt: LibraryTrack, artistMap: [UUID: LibraryArtist], album: LibraryAlbum?) -> Track {
         let artist = artistMap[lt.artistId].map {
-            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount)
+            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug,
+                   albumCount: $0.albumCount, artwork: $0.artwork)
         } ?? Artist(id: lt.artistId, name: "Unknown", sortName: "Unknown", slug: "unknown")
 
         let trackAlbum = album.map {
@@ -737,7 +740,8 @@ final class MusicLibrary {
     /// Build a Track from individually-fetched entities (for single-track lookups).
     func buildTrack(_ lt: LibraryTrack, artist: LibraryArtist?, albumArtist: LibraryArtist?, album: Album?) -> Track {
         let artistModel = artist.map {
-            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug, albumCount: $0.albumCount)
+            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug,
+                   albumCount: $0.albumCount, artwork: $0.artwork)
         } ?? Artist(id: lt.artistId, name: "Unknown", sortName: "Unknown", slug: "unknown")
 
         let trackAlbum = album.map {

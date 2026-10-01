@@ -17,6 +17,14 @@ struct ArtistDetailView: View {
 
     var body: some View {
         ScrollView {
+            // Only when there is artwork. A monogram here says nothing the name beside
+            // it doesn't already say, and at this size it's decoration — uploading lives
+            // in the menu instead, which costs no space at all.
+            if !artist.artwork.isEmpty {
+                ArtistArtworkView(artist: artist, size: 120)
+                    .padding(.top, 8)
+            }
+
             HStack(spacing: 12) {
                 Button {
                     playAll(shuffle: false)

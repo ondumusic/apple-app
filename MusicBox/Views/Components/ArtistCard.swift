@@ -5,15 +5,7 @@ struct ArtistCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(.quaternary)
-
-                Image(systemName: "music.mic")
-                    .font(.title3)
-                    .foregroundStyle(.tint)
-            }
-            .frame(width: 44, height: 44)
+            ArtistArtworkView(artist: artist)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(artist.name)

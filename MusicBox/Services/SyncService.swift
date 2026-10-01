@@ -37,11 +37,14 @@ nonisolated struct SyncArtist: Sendable {
     var slug: String
     var albumCount: Int
     var insertedAt: Date
+    /// Empty unless someone has uploaded one. Unlike album covers these aren't square —
+    /// the server keeps the source aspect ratio and leaves the crop to us.
+    var artwork: [ArtworkVariant] = []
 }
 
 extension SyncArtist: Decodable {
     nonisolated enum CodingKeys: String, CodingKey {
-        case id, name, sortName, slug, albumCount, insertedAt
+        case id, name, sortName, slug, albumCount, insertedAt, artwork
     }
 
     init(from decoder: Decoder) throws {
@@ -52,6 +55,7 @@ extension SyncArtist: Decodable {
         slug = try container.decode(String.self, forKey: .slug)
         albumCount = try container.decode(Int.self, forKey: .albumCount)
         insertedAt = try container.decode(Date.self, forKey: .insertedAt)
+        artwork = try container.decodeIfPresent([ArtworkVariant].self, forKey: .artwork) ?? []
     }
 }
 
