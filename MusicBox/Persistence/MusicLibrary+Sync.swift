@@ -258,6 +258,17 @@ extension MusicLibrary {
         }
     }
 
+    /// Applies what the upload or delete returned, so the circle changes as soon as the
+    /// server confirms rather than at the next sync.
+    func setArtistArtwork(_ artwork: [ArtworkVariant], for artistId: UUID) {
+        var descriptor = FetchDescriptor<LibraryArtist>(predicate: #Predicate { $0.serverId == artistId })
+        descriptor.fetchLimit = 1
+        guard let artist = fetch(descriptor)?.first else { return }
+        artist.artwork = artwork
+        persistChanges()
+        revision += 1
+    }
+
     // MARK: - Local Play Recording (optimistic writes)
 
     /// Counts a play locally so the UI doesn't wait for the round trip. The next sync

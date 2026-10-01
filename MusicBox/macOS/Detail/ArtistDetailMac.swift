@@ -1,5 +1,6 @@
 #if os(macOS)
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ArtistDetailMac: View {
     let artist: Artist
@@ -12,6 +13,7 @@ struct ArtistDetailMac: View {
     @Environment(PlayerService.self) private var player
     @Environment(NetworkMonitor.self) private var network
     @Environment(DownloadService.self) private var downloadService
+    @Environment(AuthService.self) private var auth
 
     @State private var albums: [Album] = []
     /// Selection is hoisted up to the artist level so the single TracksTable can carry
@@ -19,6 +21,8 @@ struct ArtistDetailMac: View {
     @State private var selection: Set<UUID> = []
     @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
     @State private var paneWidth: CGFloat = 0
+    @State private var isUpdatingArtwork = false
+    @State private var artworkError: ArtistArtworkEditor.Failure?
 
     private var totalSongs: Int {
         albums.reduce(0) { $0 + ($1.tracks?.count ?? 0) }
@@ -107,6 +111,7 @@ struct ArtistDetailMac: View {
             // Only when there is artwork — see ArtistDetailView for why.
             if !artist.artwork.isEmpty {
                 ArtistArtworkView(artist: artist, size: 96)
+                    .overlay { if isUpdatingArtwork { uploadingOverlay } }
                     .padding(.trailing, Spacing.related)
             }
             VStack(alignment: .leading, spacing: Spacing.tight) {
@@ -121,6 +126,76 @@ struct ArtistDetailMac: View {
                 onShuffle: { playAll(shuffle: true) },
                 isEnabled: !albums.isEmpty
             )
+            artworkMenu
+        }
+        // Dropping a picture on the header is the gesture people try first, and it saves
+        // the panel entirely.
+        .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadDataRepresentation(for: .image) { data, _ in
+                guard let data else { return }
+                Task { @MainActor in await upload { try await editor.upload(artistId: artist.id, data: data) } }
+            }
+            return true
+        }
+        .alert(
+            "Artwork",
+            isPresented: Binding(get: { artworkError != nil }, set: { if !$0 { artworkError = nil } }),
+            presenting: artworkError
+        ) { _ in
+            Button("OK", role: .cancel) { artworkError = nil }
+        } message: { failure in
+            Text(failure.message)
+        }
+    }
+
+    private var uploadingOverlay: some View {
+        ZStack {
+            Circle().fill(.black.opacity(0.45))
+            ProgressView().controlSize(.small).tint(.white)
+        }
+    }
+
+    private var artworkMenu: some View {
+        Menu {
+            Button("Choose Artwork…") { chooseArtwork() }
+            Button("Remove Artwork") {
+                Task { await upload { try await editor.remove(artistId: artist.id) } }
+            }
+            .disabled(artist.artwork.isEmpty)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 28)
+        .disabled(isUpdatingArtwork)
+        .help("Artist artwork")
+    }
+
+    private var editor: ArtistArtworkEditor {
+        ArtistArtworkEditor(api: auth.apiService, musicLibrary: musicLibrary)
+    }
+
+    private func chooseArtwork() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await upload { try await editor.upload(artistId: artist.id, from: url) } }
+    }
+
+    private func upload(_ work: () async throws -> Void) async {
+        isUpdatingArtwork = true
+        defer { isUpdatingArtwork = false }
+        do {
+            try await work()
+            reload()
+        } catch let failure as ArtistArtworkEditor.Failure {
+            artworkError = failure
+        } catch {
+            artworkError = .failed(error.localizedDescription)
         }
     }
 

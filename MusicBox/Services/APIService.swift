@@ -85,6 +85,62 @@ final class APIService: Sendable {
         return try await fetch("/sync", queryItems: queryItems)
     }
 
+    // MARK: - Artist Artwork
+
+    /// Why the server rejected an image, when it says.
+    nonisolated enum ArtworkError: Error, Sendable {
+        case notAnImage
+        case tooLarge
+
+        nonisolated struct DecodedBody: Decodable {
+            let error: String
+        }
+
+        static func decode(_ data: Data) -> ArtworkError? {
+            guard let body = try? JSONDecoder.api.decode(DecodedBody.self, from: data) else { return nil }
+            switch body.error {
+            case "invalid_image": return .notAnImage
+            case "too_large":     return .tooLarge
+            default:              return nil
+            }
+        }
+    }
+
+    /// Replaces the artist's artwork, returning the artist as the server now has it.
+    ///
+    /// Not through the outbox: that queue exists to replay small ordered mutations after
+    /// being offline, and neither half fits an upload of several megabytes.
+    func uploadArtistArtwork(artistId: UUID, imageData: Data, filename: String,
+                             mimeType: String) async throws -> Artist {
+        let boundary = "musicbox.\(UUID().uuidString)"
+        var body = Data()
+        body.append("--\(boundary)\r\n")
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
+        body.append("Content-Type: \(mimeType)\r\n\r\n")
+        body.append(imageData)
+        body.append("\r\n--\(boundary)--\r\n")
+
+        var req = try request(for: "/artists/\(artistId.uuidString.lowercased())/artwork")
+        req.httpMethod = "PUT"
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await URLSession.shared.upload(for: req, from: body)
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        if http.statusCode == 422, let error = ArtworkError.decode(data) { throw error }
+        guard (200...299).contains(http.statusCode) else { throw APIError.httpError(http.statusCode) }
+        do {
+            return try JSONDecoder.api.decode(Artist.self, from: data)
+        } catch {
+            throw APIError.decoding(error.localizedDescription)
+        }
+    }
+
+    func deleteArtistArtwork(artistId: UUID) async throws -> Artist {
+        try await perform("/artists/\(artistId.uuidString.lowercased())/artwork",
+                          method: "DELETE", body: nil)
+    }
+
     // MARK: - Server Info
 
     /// The API generation this build is written against. The server bumps its own only
@@ -412,5 +468,11 @@ nonisolated enum APIError: LocalizedError, Sendable {
         case .httpError(let code): "Server error (\(code))"
         case .decoding(let detail): "Decoding error: \(detail)"
         }
+    }
+}
+
+private extension Data {
+    mutating func append(_ string: String) {
+        append(Data(string.utf8))
     }
 }
