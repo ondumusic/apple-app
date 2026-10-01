@@ -45,7 +45,8 @@ struct ArtistsViewMac: View {
                         network: network,
                         downloadService: downloadService
                     ),
-                    accent: settings.resolvedAccentColor
+                    accent: settings.resolvedAccentColor,
+                    showsArtwork: settings.showArtistArtwork
                 )
                 .background(.background)
                 .frame(width: artistListWidth)

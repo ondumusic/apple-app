@@ -90,6 +90,12 @@ final class SettingsStore {
         didSet { defaults.set(spreadShuffle, forKey: "spreadShuffle") }
     }
 
+    /// Artwork in the macOS artists list. Really a density switch: with it off the rows
+    /// lose the circle and shrink back, which fits about a quarter more artists on screen.
+    var showArtistArtwork: Bool {
+        didSet { defaults.set(showArtistArtwork, forKey: "showArtistArtwork") }
+    }
+
     /// Report finished listens to the server, which counts them across every device.
     /// Off stops this device reporting; it doesn't hide what's already counted, and
     /// other clients keep counting.
@@ -184,6 +190,7 @@ final class SettingsStore {
         self.spreadShuffle = defaults.object(forKey: "spreadShuffle") as? Bool ?? true
         self.normalizeVolume = defaults.object(forKey: "normalizeVolume") as? Bool ?? true
         self.recordPlays = defaults.object(forKey: "recordPlays") as? Bool ?? true
+        self.showArtistArtwork = defaults.object(forKey: "showArtistArtwork") as? Bool ?? true
         self.repeatMode = RepeatMode(rawValue: defaults.string(forKey: "repeatMode") ?? "") ?? .off
         self.playbackCacheLimit = defaults.object(forKey: "playbackCacheLimit") as? Int64 ?? (2 * 1024 * 1024 * 1024) // 2 GB default
         self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original

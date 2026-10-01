@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import Nuke
 import SwiftUI
 
 /// AppKit-backed artist list. A SwiftUI `List` consumes the double-click that means
@@ -10,12 +11,14 @@ struct ArtistsTable: NSViewControllerRepresentable {
     @Binding var selection: Artist.ID?
     let actions: ArtistActions
     let accent: Color
+    var showsArtwork: Bool = true
 
     func makeNSViewController(context: Context) -> ArtistsTableViewController {
         let vc = ArtistsTableViewController()
         vc.accentNSColor = NSColor(accent)
         vc.actions = actions
         vc.onSelectionChange = { selection = $0 }
+        vc.showsArtwork = showsArtwork
         vc.apply(artists: artists, selection: selection)
         return vc
     }
@@ -24,6 +27,7 @@ struct ArtistsTable: NSViewControllerRepresentable {
         vc.accentNSColor = NSColor(accent)
         vc.actions = actions
         vc.onSelectionChange = { selection = $0 }
+        vc.showsArtwork = showsArtwork
         vc.apply(artists: artists, selection: selection)
     }
 }
@@ -32,6 +36,12 @@ final class ArtistsTableViewController: NSViewController {
     fileprivate var artists: [Artist] = []
     var actions = ArtistActions()
     var onSelectionChange: ((Artist.ID?) -> Void)?
+    var showsArtwork: Bool = true {
+        didSet {
+            guard showsArtwork != oldValue, isViewLoaded else { return }
+            applyDensity()
+        }
+    }
     var accentNSColor: NSColor = .controlAccentColor {
         didSet {
             guard accentNSColor != oldValue, isViewLoaded else { return }
@@ -63,7 +73,7 @@ final class ArtistsTableViewController: NSViewController {
         // draw the system accent over it, leaving this the one blue list in the app.
         tableView.selectionHighlightStyle = .none
         // 28 was tight for a single line of 13pt text; the list read as dense.
-        tableView.rowHeight = 34
+        applyRowHeight()
         tableView.allowsMultipleSelection = false
         tableView.allowsEmptySelection = true
         tableView.backgroundColor = .clear
@@ -156,9 +166,9 @@ extension ArtistsTableViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard artists.indices.contains(row) else { return nil }
         let identifier = NSUserInterfaceItemIdentifier("ArtistCell")
-        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView
-            ?? Self.makeCell(identifier: identifier)
-        cell.textField?.stringValue = artists[row].name
+        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? ArtistCell
+            ?? ArtistCell(identifier: identifier)
+        cell.show(artists[row], showsArtwork: showsArtwork)
         return cell
     }
 
@@ -171,6 +181,35 @@ extension ArtistsTableViewController: NSTableViewDelegate {
         view.customSelectionRightInset = 10
         view.suppressDivider = false
         return view
+    }
+
+    private var rowHeightForDensity: CGFloat { showsArtwork ? 44 : 34 }
+
+    private func applyRowHeight() {
+        // Taller only when there's a circle to fit: without one this is the compact list
+        // it has always been.
+        tableView.rowHeight = rowHeightForDensity
+    }
+
+    /// Reloading would rebuild every cell and cut straight to the new height. Telling the
+    /// table its rows changed height animates it, and the cells it already has can be
+    /// reconfigured where they stand — they know how to draw either density.
+    private func applyDensity() {
+        tableView.rowHeight = rowHeightForDensity
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.allowsImplicitAnimation = true
+            tableView.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<max(artists.count, 0)))
+        }
+        tableView.enumerateAvailableRowViews { rowView, row in
+            guard artists.indices.contains(row),
+                  let cell = rowView.view(atColumn: 0) as? ArtistCell else { return }
+            cell.show(artists[row], showsArtwork: showsArtwork)
+        }
+    }
+
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        rowHeightForDensity
     }
 
     /// Gives NSTableView's built-in type-to-select something to match against.
@@ -186,20 +225,153 @@ extension ArtistsTableViewController: NSTableViewDelegate {
         onSelectionChange?(artists.indices.contains(row) ? artists[row].id : nil)
     }
 
-    private static func makeCell(identifier: NSUserInterfaceItemIdentifier) -> NSTableCellView {
-        let cell = NSTableCellView()
-        cell.identifier = identifier
+}
+
+/// TEMPORARY: a thumbnail in the artists list, to see whether it belongs there.
+private final class ArtistCell: NSTableCellView {
+    private static let diameter: CGFloat = 28
+
+    private let thumbnail = ArtistThumbnailView()
+    private var artistId: UUID?
+    private var loadTask: Task<Void, Never>?
+    private var textLeadingWithArtwork: NSLayoutConstraint!
+    private var textLeadingPlain: NSLayoutConstraint!
+
+    init(identifier: NSUserInterfaceItemIdentifier) {
+        super.init(frame: .zero)
+        self.identifier = identifier
+
+        thumbnail.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(thumbnail)
+
         let field = NSTextField(labelWithString: "")
         field.lineBreakMode = .byTruncatingTail
         field.translatesAutoresizingMaskIntoConstraints = false
-        cell.addSubview(field)
-        cell.textField = field
+        addSubview(field)
+        textField = field
+
+        textLeadingWithArtwork = field.leadingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: 8)
+        textLeadingPlain = field.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6)
         NSLayoutConstraint.activate([
-            field.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 6),
-            field.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6),
-            field.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            thumbnail.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            thumbnail.centerYAnchor.constraint(equalTo: centerYAnchor),
+            thumbnail.widthAnchor.constraint(equalToConstant: Self.diameter),
+            thumbnail.heightAnchor.constraint(equalTo: thumbnail.widthAnchor),
+            textLeadingWithArtwork,
+            field.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            field.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
-        return cell
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { thumbnail.isEmphasized = backgroundStyle == .emphasized }
+    }
+
+    func show(_ artist: Artist, showsArtwork: Bool) {
+        textField?.stringValue = artist.name
+        thumbnail.isHidden = !showsArtwork
+        textLeadingWithArtwork.isActive = showsArtwork
+        textLeadingPlain.isActive = !showsArtwork
+        guard showsArtwork else {
+            loadTask?.cancel()
+            artistId = nil
+            return
+        }
+        guard artistId != artist.id else { return }
+        artistId = artist.id
+        loadTask?.cancel()
+        showGlyph()
+
+        guard let variant = artist.artwork.covering(pixelWidth: Int(Self.diameter * 3)) else { return }
+        let wanted = artist.id
+        loadTask = Task { [weak self] in
+            let request = ImageRequest(url: variant.url,
+                                       processors: [.resize(width: Self.diameter * 3)])
+            guard let image = try? await ImagePipeline.shared.image(for: request),
+                  !Task.isCancelled, let self, self.artistId == wanted
+            else { return }
+            self.thumbnail.image = image
+        }
+    }
+
+    private func showGlyph() {
+        thumbnail.image = nil
+    }
+}
+
+/// Draws its own circle rather than relying on a layer radius over a view's bounds.
+///
+/// Two attempts at the latter produced eggs and rounded squares: an NSImageView in a
+/// table cell doesn't necessarily end up the size its constraints ask for, and a radius
+/// of half the height on a view that isn't square is a pill. Inscribing the circle in the
+/// largest square the bounds allow can't be wrong whatever the view's shape turns out to
+/// be.
+private final class ArtistThumbnailView: NSView {
+    var image: NSImage? {
+        didSet { needsDisplay = true }
+    }
+    /// On a selected row the fill is the accent colour, so an accent glyph on a grey disc
+    /// reads as a hole punched in it. White on a wash of white is what the text beside it
+    /// does.
+    var isEmphasized = false {
+        didSet { needsDisplay = true }
+    }
+
+    override var intrinsicContentSize: NSSize { NSSize(width: 28, height: 28) }
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let side = min(bounds.width, bounds.height)
+        let circle = NSRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2,
+                            width: side, height: side)
+        let path = NSBezierPath(ovalIn: circle)
+
+        guard let image else {
+            (isEmphasized ? NSColor.white.withAlphaComponent(0.22) : .quaternaryLabelColor).setFill()
+            path.fill()
+            drawGlyph(in: circle)
+            return
+        }
+
+        NSGraphicsContext.saveGraphicsState()
+        path.addClip()
+        image.draw(in: aspectFill(image.size, in: circle))
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawGlyph(in circle: NSRect) {
+        let configuration = NSImage.SymbolConfiguration(pointSize: circle.height * 0.38, weight: .regular)
+        guard let glyph = NSImage(systemSymbolName: "music.mic", accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration)?
+            .tinted(isEmphasized ? .white : .controlAccentColor)
+        else { return }
+        let size = glyph.size
+        glyph.draw(in: NSRect(x: circle.midX - size.width / 2, y: circle.midY - size.height / 2,
+                              width: size.width, height: size.height))
+    }
+
+    /// Fills the circle and centres the overflow, rather than letterboxing a photo that
+    /// isn't square — which artist artwork never is.
+    private func aspectFill(_ size: NSSize, in rect: NSRect) -> NSRect {
+        guard size.width > 0, size.height > 0 else { return rect }
+        let scale = max(rect.width / size.width, rect.height / size.height)
+        let scaled = NSSize(width: size.width * scale, height: size.height * scale)
+        return NSRect(x: rect.midX - scaled.width / 2, y: rect.midY - scaled.height / 2,
+                      width: scaled.width, height: scaled.height)
+    }
+}
+
+private extension NSImage {
+    func tinted(_ color: NSColor) -> NSImage {
+        let copy = NSImage(size: size)
+        copy.lockFocus()
+        color.set()
+        NSRect(origin: .zero, size: size).fill(using: .sourceOver)
+        draw(at: .zero, from: NSRect(origin: .zero, size: size), operation: .destinationIn, fraction: 1)
+        copy.unlockFocus()
+        return copy
     }
 }
 

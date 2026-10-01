@@ -419,6 +419,16 @@ struct MusicBoxApp: App {
                     set: { libraryFilter = $0 ? .downloaded : .all }
                 ))
                 .keyboardShortcut("d", modifiers: [.command, .shift])
+                // A submenu rather than a checkbox: "Show Artist Artwork" promised the
+                // whole app, where this is the artist list's density. Two named options
+                // say what each one is without the title having to.
+                Picker("Artist List", selection: Binding(
+                    get: { settings.showArtistArtwork },
+                    set: { settings.showArtistArtwork = $0 }
+                )) {
+                    Text("Names Only").tag(false)
+                    Text("With Artwork").tag(true)
+                }
                 Button("Up Next") {
                     NotificationCenter.default.post(name: .toggleUpNext, object: nil)
                 }

@@ -18,6 +18,18 @@ struct SettingsStoreTests {
         #expect(SettingsStore(defaults: defaults).recordPlays == false)
     }
 
+    /// On by default — the feature exists to be seen; the toggle is for people who want
+    /// the denser list back.
+    @Test func showsArtistArtworkByDefault() {
+        #expect(SettingsStore(defaults: isolatedDefaults()).showArtistArtwork)
+    }
+
+    @Test func remembersArtistArtworkBeingTurnedOff() {
+        let defaults = isolatedDefaults()
+        SettingsStore(defaults: defaults).showArtistArtwork = false
+        #expect(SettingsStore(defaults: defaults).showArtistArtwork == false)
+    }
+
     @Test func defaultCrossfadeDuration() {
         let defaults = isolatedDefaults()
         let store = SettingsStore(defaults: defaults)
