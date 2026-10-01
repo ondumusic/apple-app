@@ -432,9 +432,17 @@ private struct VolumeSlider: View {
             onEnded: { isDragging = false }
         )
         .onChange(of: volume) {
-            if isDragging {
-                setSystemVolume(Float(volume))
-            }
+            // Not gated on `isDragging`. That's a binding to the parent, and a tap sets
+            // it in the same gesture callback that sets the value — so it still reads
+            // false by the time this runs, and the tap did nothing. A drag only worked
+            // from its second sample onwards, by which point the binding had caught up.
+            //
+            // What actually needs distinguishing is who moved the slider: comparing
+            // against the system's own level leaves the observer's updates alone, since
+            // those arrive already equal to it.
+            let systemVolume = AVAudioSession.sharedInstance().outputVolume
+            guard abs(Float(volume) - systemVolume) > 0.001 else { return }
+            setSystemVolume(Float(volume))
         }
         .onAppear {
             let session = AVAudioSession.sharedInstance()
