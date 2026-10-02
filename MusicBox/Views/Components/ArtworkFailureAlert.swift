@@ -1,4 +1,3 @@
-#if os(macOS)
 import SwiftUI
 
 /// Reports a failed artwork change with something to do about it.
@@ -42,4 +41,3 @@ extension View {
         modifier(ArtworkFailureAlert(failure: failure, retry: retry, chooseAnother: chooseAnother))
     }
 }
-#endif

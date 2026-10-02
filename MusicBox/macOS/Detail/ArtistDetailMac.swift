@@ -7,6 +7,12 @@ struct ArtistDetailMac: View {
     /// True inside ArtistsViewMac's detail pane, false when pushed as its own page.
     var isEmbedded = false
 
+    /// Re-read from the library on every revision. Embedded, the list hands this page a
+    /// fresh artist each time it reloads; pushed on its own, the value it was given is a
+    /// snapshot and an uploaded photo would never appear.
+    @State private var liveArtist: Artist?
+    private var shownArtist: Artist { liveArtist ?? artist }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(MusicLibrary.self) private var musicLibrary
     @Environment(SettingsStore.self) private var settings
@@ -114,7 +120,7 @@ struct ArtistDetailMac: View {
             // Also while uploading: on an artist with no artwork the circle would
             // otherwise vanish the moment the file lands and reappear when the server
             // answers, which reads as the drop having been refused.
-            if !artist.artwork.isEmpty || isDropTargeted || isUpdatingArtwork {
+            if !shownArtist.artwork.isEmpty || isDropTargeted || isUpdatingArtwork {
                 headerArtwork
                     .contextMenu { artworkActions }
                     .padding(.trailing, Spacing.related)
@@ -157,14 +163,14 @@ struct ArtistDetailMac: View {
     private var headerArtwork: some View {
         if isDropTargeted {
             dropTarget.frame(width: Self.headerArtworkSize, height: Self.headerArtworkSize)
-        } else if artist.artwork.isEmpty, isUpdatingArtwork {
+        } else if shownArtist.artwork.isEmpty, isUpdatingArtwork {
             ZStack {
                 Circle().fill(.quaternary)
                 ProgressView().controlSize(.small)
             }
             .frame(width: Self.headerArtworkSize, height: Self.headerArtworkSize)
         } else {
-            ArtistArtworkView(artist: artist, size: Self.headerArtworkSize)
+            ArtistArtworkView(artist: shownArtist, size: Self.headerArtworkSize)
                 .overlay { if isUpdatingArtwork { uploadingOverlay } }
         }
     }
@@ -194,11 +200,11 @@ struct ArtistDetailMac: View {
 
     @ViewBuilder
     private var artworkActions: some View {
-        Button(artist.artwork.isEmpty ? "Choose Artwork…" : "Replace Artwork…") { chooseArtwork() }
+        Button(shownArtist.artwork.isEmpty ? "Choose Artwork…" : "Replace Artwork…") { chooseArtwork() }
         Button("Remove Artwork") {
             Task { await upload { try await editor.remove(artistId: artist.id) } }
         }
-        .disabled(artist.artwork.isEmpty)
+        .disabled(shownArtist.artwork.isEmpty)
     }
 
     private var artworkMenu: some View {
@@ -256,6 +262,7 @@ struct ArtistDetailMac: View {
     }
 
     private func reload() {
+        liveArtist = musicLibrary.artist(artist.id)
         let all = musicLibrary.albumsWithTracksForArtist(artist.id)
         guard libraryFilter == .downloaded else {
             albums = all
