@@ -21,6 +21,8 @@ struct ArtistsViewMac: View {
     @AppStorage("macArtistListWidth") private var artistListWidth: Double = 240
     @State private var artists: [Artist] = []
     @State private var artworkError: ArtistArtworkEditor.Failure?
+    @State private var lastArtworkChange: (() async throws -> Void)?
+    @State private var lastArtworkArtist: Artist?
     @State private var selectedArtistId: Artist.ID?
 
     var body: some View {
@@ -63,15 +65,11 @@ struct ArtistsViewMac: View {
             }
             }
         }
-        .alert(
-            "Artwork",
-            isPresented: Binding(get: { artworkError != nil }, set: { if !$0 { artworkError = nil } }),
-            presenting: artworkError
-        ) { _ in
-            Button("OK", role: .cancel) { artworkError = nil }
-        } message: { failure in
-            Text(failure.message)
-        }
+        .artworkFailureAlert(
+            $artworkError,
+            retry: { if let work = lastArtworkChange { Task { await runArtworkChange(work) } } },
+            chooseAnother: { if let artist = lastArtworkArtist { chooseArtwork(for: artist) } }
+        )
         .onChange(of: musicLibrary.revision, initial: true) { reloadArtists() }
         .onChange(of: libraryFilter) { reloadArtists() }
         .onChange(of: pendingArtistSelection) { _, newValue in
@@ -90,6 +88,7 @@ struct ArtistsViewMac: View {
         actions.supportsArtwork = true
         actions.chooseArtwork = { artist in chooseArtwork(for: artist) }
         actions.removeArtwork = { artist in
+            lastArtworkArtist = artist
             Task { await runArtworkChange { try await artworkEditor.remove(artistId: artist.id) } }
         }
         return actions
@@ -100,6 +99,7 @@ struct ArtistsViewMac: View {
     }
 
     private func chooseArtwork(for artist: Artist) {
+        lastArtworkArtist = artist
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
@@ -108,7 +108,8 @@ struct ArtistsViewMac: View {
         Task { await runArtworkChange { try await artworkEditor.upload(artistId: artist.id, from: url) } }
     }
 
-    private func runArtworkChange(_ work: () async throws -> Void) async {
+    private func runArtworkChange(_ work: @escaping () async throws -> Void) async {
+        lastArtworkChange = work
         do {
             try await work()
         } catch let failure as ArtistArtworkEditor.Failure {

@@ -15,19 +15,30 @@ struct ArtistArtworkView: View {
     let artist: Artist
     var size: CGFloat = 44
 
+    /// One rendition for every size, resized locally, as albums do. Picking a variant per
+    /// size would be fewer bytes for someone who only ever scrolls the list, but two
+    /// downloads for anyone who opens the artist — which is most of the reason to click
+    /// an artist at all.
     private var variant: ArtworkVariant? {
-        artist.artwork.covering(pixelWidth: Int(size * 3))
+        artist.artwork.covering(pixelWidth: ArtworkSize.medium.pixels)
     }
 
     var body: some View {
         Group {
             if let variant {
-                CrossfadingArtwork(url: variant.url, size: .thumbnail)
+                // ArtworkView, not CrossfadingArtwork: that one exists for the players,
+                // where a track change should dissolve. Here it meant every artist began
+                // as a glyph and faded in, which looks like nothing is cached — and
+                // nowhere else in the app does artwork fade.
+                ArtworkView(url: variant.url, cornerRadius: 0,
+                            size: size > 64 ? .medium : .thumbnail)
             } else {
                 ZStack {
                     Circle().fill(.quaternary)
                     Image(systemName: "music.mic")
-                        .font(.system(size: size * 0.38))
+                        // Capped rather than purely proportional: a mic scaled to 38% of
+                        // a 96pt circle is a badge, where in a 28pt row it's a hint.
+                        .font(.system(size: min(size * 0.38, 26)))
                         .foregroundStyle(.tint)
                 }
             }

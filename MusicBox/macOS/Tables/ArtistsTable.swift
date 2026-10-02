@@ -305,11 +305,14 @@ private final class ArtistCell: NSTableCellView {
         loadTask?.cancel()
         showGlyph()
 
-        guard let variant = artist.artwork.covering(pixelWidth: Int(Self.diameter * 3)) else { return }
+        guard let variant = artist.artwork.covering(pixelWidth: ArtworkSize.medium.pixels) else { return }
         let wanted = identity
         loadTask = Task { [weak self] in
+            // The shared bucket rather than this cell's own size: a resize of its own
+            // would be a second cache entry and a second decode of the same picture the
+            // rest of the app already has.
             let request = ImageRequest(url: variant.url,
-                                       processors: [.resize(width: Self.diameter * 3)])
+                                       processors: [.resize(width: CGFloat(ArtworkSize.thumbnail.pixels))])
             guard let image = try? await ImagePipeline.shared.image(for: request),
                   !Task.isCancelled, let self, self.shownIdentity == wanted
             else { return }

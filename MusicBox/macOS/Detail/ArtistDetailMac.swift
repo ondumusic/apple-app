@@ -23,6 +23,7 @@ struct ArtistDetailMac: View {
     @State private var paneWidth: CGFloat = 0
     @State private var isUpdatingArtwork = false
     @State private var artworkError: ArtistArtworkEditor.Failure?
+    @State private var lastArtworkChange: (() async throws -> Void)?
     @State private var isDropTargeted = false
 
     private var totalSongs: Int {
@@ -114,9 +115,7 @@ struct ArtistDetailMac: View {
             // otherwise vanish the moment the file lands and reappear when the server
             // answers, which reads as the drop having been refused.
             if !artist.artwork.isEmpty || isDropTargeted || isUpdatingArtwork {
-                ArtistArtworkView(artist: artist, size: 96)
-                    .overlay { if isUpdatingArtwork { uploadingOverlay } }
-                    .overlay { if isDropTargeted { dropTarget } }
+                headerArtwork
                     .contextMenu { artworkActions }
                     .padding(.trailing, Spacing.related)
             }
@@ -144,16 +143,33 @@ struct ArtistDetailMac: View {
             }
             return true
         }
-        .alert(
-            "Artwork",
-            isPresented: Binding(get: { artworkError != nil }, set: { if !$0 { artworkError = nil } }),
-            presenting: artworkError
-        ) { _ in
-            Button("OK", role: .cancel) { artworkError = nil }
-        } message: { failure in
-            Text(failure.message)
+        .artworkFailureAlert(
+            $artworkError,
+            retry: { if let work = lastArtworkChange { Task { await upload(work) } } },
+            chooseAnother: { chooseArtwork() }
+        )
+    }
+
+    /// One thing at a time. Overlaying these drew the placeholder mic behind the drop
+    /// target's photo glyph — two different symbols at two different sizes, swapping as
+    /// fast as the drag.
+    @ViewBuilder
+    private var headerArtwork: some View {
+        if isDropTargeted {
+            dropTarget.frame(width: Self.headerArtworkSize, height: Self.headerArtworkSize)
+        } else if artist.artwork.isEmpty, isUpdatingArtwork {
+            ZStack {
+                Circle().fill(.quaternary)
+                ProgressView().controlSize(.small)
+            }
+            .frame(width: Self.headerArtworkSize, height: Self.headerArtworkSize)
+        } else {
+            ArtistArtworkView(artist: artist, size: Self.headerArtworkSize)
+                .overlay { if isUpdatingArtwork { uploadingOverlay } }
         }
     }
+
+    private static let headerArtworkSize: CGFloat = 96
 
     /// Says where the picture is going. The header takes the drop — a 96pt circle is a
     /// small target to hit — but the circle is what lights up, so it's clear what will
@@ -212,7 +228,8 @@ struct ArtistDetailMac: View {
         Task { await upload { try await editor.upload(artistId: artist.id, from: url) } }
     }
 
-    private func upload(_ work: () async throws -> Void) async {
+    private func upload(_ work: @escaping () async throws -> Void) async {
+        lastArtworkChange = work
         isUpdatingArtwork = true
         defer { isUpdatingArtwork = false }
         do {

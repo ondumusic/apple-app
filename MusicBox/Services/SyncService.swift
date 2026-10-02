@@ -311,6 +311,10 @@ final class SyncService {
                     changedAnything = true
                 }
                 musicLibrary.upsertArtists(response.artists)
+                // The one rendition every artist view draws from — see ArtistArtworkView.
+                artworkURLs += response.artists.compactMap {
+                    $0.artwork.covering(pixelWidth: ArtworkSize.medium.pixels)?.url
+                }
                 let newAlbumIds = musicLibrary.upsertAlbums(response.albums)
                 newTrackIds.formUnion(musicLibrary.upsertTracks(response.tracks))
                 musicLibrary.upsertPlaylists(response.playlists)
