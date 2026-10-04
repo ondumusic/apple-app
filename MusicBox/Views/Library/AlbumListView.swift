@@ -221,7 +221,16 @@ extension AlbumSortOption {
                 if aPlays != bPlays {
                     result = aPlays < bPlays
                 } else {
-                    result = a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
+                    // Same count, so the one played more recently is the better answer —
+                    // reversed here because the caller flips the whole comparison for a
+                    // descending sort, and this tiebreak means newest-first either way.
+                    let aPlayed = playStats[a.id]?.lastPlayedAt ?? .distantPast
+                    let bPlayed = playStats[b.id]?.lastPlayedAt ?? .distantPast
+                    if aPlayed != bPlayed {
+                        result = aPlayed < bPlayed
+                    } else {
+                        result = a.sortName.localizedStandardCompare(b.sortName) == .orderedAscending
+                    }
                 }
             case .lastPlayed:
                 // Never played is longest ago, so descending leaves it at the bottom

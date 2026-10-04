@@ -98,6 +98,17 @@ struct TrackSortTests {
 
 extension TrackSortTests {
 
+    /// Most libraries have a lot of tracks played exactly once, where alphabetical is a
+    /// worse answer than "which of these did I hear recently".
+    @Test func breaksPlayCountTiesByMostRecent() {
+        let now = Date()
+        let tracks = [track("Older", artist: "A", plays: 1, lastPlayed: now.addingTimeInterval(-86_400)),
+                      track("Newer", artist: "A", plays: 1, lastPlayed: now),
+                      track("Most", artist: "A", plays: 9, lastPlayed: now.addingTimeInterval(-99_999))]
+        let sorted = TrackSort(column: .plays, ascending: false).sorted(tracks)
+        #expect(sorted.map(\.name) == ["Most", "Newer", "Older"])
+    }
+
     @Test func sortsByPlayCount() {
         let tracks = [track("Rarely", artist: "A", plays: 2),
                       track("Often", artist: "A", plays: 40),

@@ -29,7 +29,9 @@ nonisolated enum TrackSortColumn: String, CaseIterable, Sendable {
         case .album: return [.album, .disc, .number]
         case .year: return [.year, .albumArtist, .album, .disc, .number]
         case .duration: return [.duration, .albumArtist, .album, .disc, .number]
-        case .plays: return [.plays, .albumArtist, .album, .disc, .number]
+        // Most libraries have a lot of tracks played exactly once, and "which of these
+        // did I hear recently" is a better answer there than alphabetical.
+        case .plays: return [.plays, .recentlyPlayed, .albumArtist, .album, .disc, .number]
         case .lastPlayed: return [.lastPlayed, .albumArtist, .album, .disc, .number]
         }
     }
@@ -56,6 +58,10 @@ nonisolated enum TrackSortKey: Sendable {
     case duration
     case plays
     case lastPlayed
+    /// Last played, newest first, for use as a tiebreak. Keys after the first always sort
+    /// ascending — that's what keeps an artist's albums in order under a reversed primary
+    /// — so a newest-first tiebreak has to be its own key rather than a direction.
+    case recentlyPlayed
 
     func compare(_ lhs: Track, _ rhs: Track) -> ComparisonResult {
         switch self {
@@ -74,6 +80,8 @@ nonisolated enum TrackSortKey: Sendable {
         // rather than above everything that has been played.
         case .lastPlayed:
             return Self.compare(lhs.lastPlayedAt ?? .distantPast, rhs.lastPlayedAt ?? .distantPast)
+        case .recentlyPlayed:
+            return Self.compare(rhs.lastPlayedAt ?? .distantPast, lhs.lastPlayedAt ?? .distantPast)
         }
     }
 
