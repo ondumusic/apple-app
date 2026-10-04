@@ -12,9 +12,12 @@ nonisolated struct SyncResponse: Decodable, Sendable {
     var deletions: [SyncDeletion]
     var cursor: String
     var complete: Bool
+    /// Everything currently raised, not what changed — so a response with none means
+    /// there are none.
+    var notices: [ServerNotice] = []
 
     nonisolated enum CodingKeys: String, CodingKey {
-        case artists, albums, tracks, playlists, playlistItems, deletions, cursor, complete
+        case artists, albums, tracks, playlists, playlistItems, deletions, cursor, complete, notices
     }
 
     init(from decoder: Decoder) throws {
@@ -27,6 +30,7 @@ nonisolated struct SyncResponse: Decodable, Sendable {
         deletions = try container.decode([SyncDeletion].self, forKey: .deletions)
         cursor = try container.decode(String.self, forKey: .cursor)
         complete = try container.decode(Bool.self, forKey: .complete)
+        notices = try container.decodeIfPresent([ServerNotice].self, forKey: .notices) ?? []
     }
 }
 
@@ -221,6 +225,9 @@ final class SyncService {
     /// off the back of a sync — it changes when one side is updated, which can't happen
     /// while the app is running.
     var compatibility: ServerCompatibility = .ok
+    /// What the server is currently reporting. Replaced by every sync, so one the server
+    /// has cleared disappears without the client doing anything.
+    var notices: [ServerNotice] = []
     /// What the server calls itself, for Settings to show.
     var serverVersion: String?
 
@@ -326,6 +333,8 @@ final class SyncService {
                     .filter { newAlbumIds.contains($0.id) }
                     .compactMap(\.artworkUrl)
 
+                notices = response.notices
+
                 syncProgress?.artistIds.formUnion(response.artists.map(\.id))
                 syncProgress?.albumIds.formUnion(response.albums.map(\.id))
                 syncProgress?.trackIds.formUnion(response.tracks.map(\.id))
@@ -405,6 +414,13 @@ final class SyncService {
                 downloadService.downloadTracks(ids: playlistAutoIds, library: musicLibrary)
             }
         }
+    }
+
+    /// Gone for everyone once this returns, which is what the server does with it. A
+    /// failure leaves the notice on screen rather than pretending it worked.
+    func dismiss(_ notice: ServerNotice) async {
+        guard let remaining = try? await api.dismissNotice(id: notice.id) else { return }
+        notices = remaining
     }
 
     /// A failure here is left alone: /info needs a session, and a server that can't

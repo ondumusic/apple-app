@@ -72,6 +72,7 @@ struct MacOSContentView: View {
             // reserved insets, no scroller to lift clear.
             VStack(spacing: 0) {
                 PlayerBar(showQueue: $showQueue)
+                ServerNoticesView()
                 if syncService.compatibility.shouldShow(dismissedVersion: dismissedServerVersion) {
                     ServerVersionNotice(compatibility: syncService.compatibility) {
                         dismissedServerVersion = syncService.compatibility.serverVersion ?? ""

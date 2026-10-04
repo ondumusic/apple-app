@@ -54,6 +54,8 @@ struct iOSRootView: View {
             .overlay(alignment: .bottom) { Divider() }
         }
 
+        ServerNoticesView()
+
         if syncService.compatibility.shouldShow(dismissedVersion: dismissedServerVersion) {
             ServerVersionNotice(compatibility: syncService.compatibility) {
                 dismissedServerVersion = syncService.compatibility.serverVersion ?? ""

@@ -141,6 +141,20 @@ final class APIService: Sendable {
                           method: "DELETE", body: nil)
     }
 
+    // MARK: - Notices
+
+    nonisolated struct NoticesResponse: Decodable, Sendable {
+        let notices: [ServerNotice]
+    }
+
+    /// Dismisses for everyone, not just this device — the server clears it outright and
+    /// hands back what's left.
+    func dismissNotice(id: UUID) async throws -> [ServerNotice] {
+        let response: NoticesResponse = try await perform(
+            "/notices/\(id.uuidString.lowercased())/dismiss", method: "POST", body: nil)
+        return response.notices
+    }
+
     // MARK: - Server Info
 
     /// The API generation this build is written against. The server bumps its own only
