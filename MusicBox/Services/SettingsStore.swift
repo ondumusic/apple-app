@@ -86,10 +86,6 @@ final class SettingsStore {
         didSet { defaults.set(isShuffled, forKey: "isShuffled") }
     }
 
-    var spreadShuffle: Bool {
-        didSet { defaults.set(spreadShuffle, forKey: "spreadShuffle") }
-    }
-
     /// Artwork in the macOS artists list. Really a density switch: with it off the rows
     /// lose the circle and shrink back, which fits about a quarter more artists on screen.
     var showArtistArtwork: Bool {
@@ -187,7 +183,6 @@ final class SettingsStore {
         self.crossfadeDuration = defaults.object(forKey: "crossfadeDuration") as? Double ?? 1.0
         self.maxConcurrentDownloads = defaults.object(forKey: "maxConcurrentDownloads") as? Int ?? 3
         self.isShuffled = defaults.bool(forKey: "isShuffled")
-        self.spreadShuffle = defaults.object(forKey: "spreadShuffle") as? Bool ?? true
         self.normalizeVolume = defaults.object(forKey: "normalizeVolume") as? Bool ?? true
         self.recordPlays = defaults.object(forKey: "recordPlays") as? Bool ?? true
         self.showArtistArtwork = defaults.object(forKey: "showArtistArtwork") as? Bool ?? true

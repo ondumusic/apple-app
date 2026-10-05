@@ -34,7 +34,6 @@ struct SettingsView: View {
         #else
         Form {
             playbackSection
-            spreadShuffleSection
             normalizeVolumeSection
             recordPlaysSection
             appearanceSection
@@ -55,7 +54,6 @@ struct SettingsView: View {
         TabView {
             Form {
                 playbackSection
-                spreadShuffleSection
                 normalizeVolumeSection
                 recordPlaysSection
                 qualitySection
@@ -106,16 +104,6 @@ struct SettingsView: View {
             Text("Playback")
         } footer: {
             Text("Smoothly transition between tracks by overlapping the end of one with the start of the next.")
-        }
-    }
-
-    @ViewBuilder
-    private var spreadShuffleSection: some View {
-        @Bindable var settings = settings
-        Section {
-            Toggle("Spread Shuffle", isOn: $settings.spreadShuffle)
-        } footer: {
-            Text("Avoids playing tracks from the same album or artist back-to-back when shuffling.")
         }
     }
 

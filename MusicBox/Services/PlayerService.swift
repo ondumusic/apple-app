@@ -323,7 +323,7 @@ final class PlayerService {
     func playShuffled(queue items: [QueueItem]) {
         guard !items.isEmpty else { return }
         queue = items
-        shuffledIndices = SmartShuffle.shuffledIndices(for: items, spread: settings.spreadShuffle)
+        shuffledIndices = SmartShuffle.shuffledIndices(for: items)
         currentIndex = 0
         isQueueUserModified = false
         savePlaybackState()
@@ -643,7 +643,7 @@ final class PlayerService {
             currentIndex = realIndex
         } else {
             let realIndex = effectiveIndex
-            var indices = SmartShuffle.shuffledIndices(for: queue, spread: settings.spreadShuffle)
+            var indices = SmartShuffle.shuffledIndices(for: queue)
             if let pos = indices.firstIndex(of: realIndex), pos != 0 {
                 indices.swapAt(0, pos)
             }
