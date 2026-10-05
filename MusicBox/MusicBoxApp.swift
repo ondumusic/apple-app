@@ -407,6 +407,15 @@ struct MusicBoxApp: App {
                 }
                 .keyboardShortcut("l", modifiers: [.command, .option])
             }
+            // Beside About rather than in File: this is the app catching up with the
+            // server, which is the same kind of thing as Check for Updates.
+            CommandGroup(after: .appInfo) {
+                Button("Sync Now") {
+                    Task { await syncService?.sync() }
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(syncService == nil || syncService?.isSyncing == true)
+            }
             CommandGroup(replacing: .newItem) {
                 Button("New Playlist") {
                     NotificationCenter.default.post(name: .newPlaylistRequested, object: nil)

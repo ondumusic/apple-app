@@ -216,7 +216,12 @@ nonisolated struct SyncDeletion: Decodable, Sendable {
 
 @Observable
 final class SyncService {
+    /// A sync is actually running.
     var isSyncing = false
+    /// Whether to show one. Held past the end of a quick sync — a delta with nothing to
+    /// fetch is over before a spinner registers, which reads as ⌘R having done nothing —
+    /// so this is the one the UI watches, and `isSyncing` keeps meaning what it says.
+    private(set) var isShowingSyncActivity = false
     var hasCompletedInitialSync: Bool
     var lastSyncDate: Date?
     var syncProgress: SyncProgress?
@@ -248,6 +253,9 @@ final class SyncService {
     @ObservationIgnored private var artworkPrefetcher: ImagePrefetcher?
     @ObservationIgnored private var isSessionExpired = false
     @ObservationIgnored private var hasCheckedCompatibility = false
+    @ObservationIgnored private var syncRun = 0
+    /// Long enough to register as "it synced" rather than as a flicker.
+    @ObservationIgnored static let minimumVisibleDuration: TimeInterval = 0.6
 
     private var syncCursor: String? {
         get { UserDefaults.standard.string(forKey: "syncCursor") }
@@ -281,12 +289,30 @@ final class SyncService {
         // we pull its state back down.
         await outbox?.flush()
 
+        syncRun += 1
+        let run = syncRun
+        let startedAt = Date()
         isSyncing = true
+        isShowingSyncActivity = true
         syncProgress = SyncProgress()
         syncError = nil
         defer {
             isSyncing = false
             syncProgress = nil
+            // A delta sync with nothing to fetch finishes in well under the time it takes
+            // to notice a spinner, which reads as ⌘R having done nothing at all. Held to
+            // a floor so there's something to see — and tied to this run, so a sync
+            // starting during the hold doesn't have its own indicator cleared by it.
+            let remaining = Self.minimumVisibleDuration - Date().timeIntervalSince(startedAt)
+            if remaining <= 0 {
+                isShowingSyncActivity = false
+            } else {
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(remaining))
+                    guard let self, self.syncRun == run else { return }
+                    self.isShowingSyncActivity = false
+                }
+            }
         }
 
         let isInitialSync = syncCursor == nil
@@ -360,6 +386,13 @@ final class SyncService {
             print("SyncService: sync failed with auth error")
             #endif
             NotificationCenter.default.post(name: .sessionExpired, object: nil)
+        } catch where Self.isCancellation(error) {
+            // Not a failure to report: the view that started this went away, which at
+            // launch is just the progress screen handing over to the library. The next
+            // sync picks up from the same cursor.
+            #if DEBUG
+            print("SyncService: sync cancelled")
+            #endif
         } catch {
             syncError = error.localizedDescription
             #if DEBUG
@@ -435,6 +468,13 @@ final class SyncService {
             supported: APIService.supportedAPIVersion
         )
         serverVersion = info.version
+    }
+
+    /// Whether a thrown error means "someone stopped this", rather than that it failed.
+    nonisolated static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        return false
     }
 
     func syncIfNeeded() async {

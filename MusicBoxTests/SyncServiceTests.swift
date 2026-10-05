@@ -335,3 +335,33 @@ private func makeInMemoryLibrary() throws -> MusicLibrary {
     )
     return MusicLibrary(container: container)
 }
+
+// MARK: - Cancellation
+
+/// A sync cancelled by the view that started it isn't a failure worth showing. At launch
+/// the progress screen hands over to the library, which tears down the task that kicked
+/// off the first sync — and Settings was reporting that as an error until the next manual
+/// sync cleared it.
+struct SyncCancellationTests {
+
+    @Test func treatsACancelledRequestAsNotAnError() {
+        #expect(SyncService.isCancellation(URLError(.cancelled)))
+        #expect(SyncService.isCancellation(CancellationError()))
+    }
+
+    @Test func treatsEverythingElseAsAnError() {
+        #expect(!SyncService.isCancellation(URLError(.timedOut)))
+        #expect(!SyncService.isCancellation(APIError.httpError(500)))
+    }
+}
+
+// MARK: - Sync indicator
+
+/// The indicator outlives a quick sync so ⌘R shows something; `isSyncing` must not,
+/// because everything else — menu items, buttons, tests — reads it as "running".
+struct SyncIndicatorTests {
+
+    @Test func theFloorIsLongEnoughToSee() {
+        #expect(SyncService.minimumVisibleDuration >= 0.4)
+    }
+}

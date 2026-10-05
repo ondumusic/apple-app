@@ -63,6 +63,23 @@ struct MacOSContentView: View {
                 libraryFilter: libraryFilter
             )
             .frame(width: sidebarWidth)
+            // Along the bottom of the sidebar, which is where a Mac reports background
+            // activity — and unlike the player row, there's room here. The row is tuned
+            // to Music's proportions and has no slack: a control added to it draws on
+            // top of the volume slider rather than beside it.
+            .overlay(alignment: .bottomTrailing) {
+                if syncService.isShowingSyncActivity {
+                    // No label: a spinner on its own is what a Mac uses for "working on
+                    // something", and the words were what made it read as a floating
+                    // badge rather than part of the row the + button sits in.
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .controlSize(.small)
+                        .help("Syncing with your server")
+                        .padding(.trailing, 12)
+                        .padding(.bottom, 10)
+                }
+            }
 
             SidebarDivider(width: $sidebarWidth, range: 200...360)
 
