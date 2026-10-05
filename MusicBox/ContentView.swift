@@ -75,6 +75,7 @@ struct ContentView: View {
 
 private struct SyncProgressView: View {
     @Environment(SyncService.self) private var syncService
+    @Environment(AuthService.self) private var auth
 
     var body: some View {
         VStack(spacing: 16) {
@@ -90,30 +91,68 @@ private struct SyncProgressView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
 
-                Button("Retry") {
-                    Task { await syncService.sync() }
+                HStack(spacing: 12) {
+                    // No confirmation: nothing has synced yet, so there's nothing to lose.
+                    Button("Sign Out") { auth.logout() }
+                        .buttonStyle(.bordered)
+                    Button("Retry") {
+                        Task { await syncService.sync() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                 }
-                .buttonStyle(.bordered)
+                .padding(.top, 4)
             } else {
                 ProgressView()
                     .controlSize(.large)
-                Text("Syncing Library...")
-                    .font(.headline)
-                if let progress = syncService.syncProgress {
-                    Group {
-                        if progress.trackCount > 0 {
-                            Text("\(progress.artistCount) artists, \(progress.albumCount) albums, \(progress.trackCount) tracks")
-                        } else if progress.albumCount > 0 {
-                            Text("\(progress.artistCount) artists, \(progress.albumCount) albums")
-                        } else if progress.artistCount > 0 {
-                            Text("\(progress.artistCount) artists")
-                        }
-                    }
-                    .foregroundStyle(.secondary)
-                    .font(.subheadline)
-                    .monospacedDigit()
+                VStack(spacing: 4) {
+                    Text("Getting your library ready")
+                        .font(.headline)
+                    Text("The first sync can take a few minutes.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let progress = syncService.syncProgress, progress.artistCount > 0 {
+                    SyncCounts(artists: Double(progress.artistCount),
+                               albums: Double(progress.albumCount),
+                               tracks: Double(progress.trackCount))
+                        .animation(.easeOut(duration: 0.8), value: progress.trackCount)
+                        .animation(.easeOut(duration: 0.8), value: progress.albumCount)
+                        .animation(.easeOut(duration: 0.8), value: progress.artistCount)
+                        .foregroundStyle(.tertiary)
+                        .font(.footnote)
+                        .monospacedDigit()
+                        .padding(.top, 8)
                 }
             }
+        }
+    }
+}
+
+/// Sync pages land a few hundred rows at a time; animating the counts through every
+/// value in between makes them tick up instead of jumping by the page size.
+private struct SyncCounts: View, Animatable {
+    var artists: Double
+    var albums: Double
+    var tracks: Double
+
+    var animatableData: AnimatablePair<Double, AnimatablePair<Double, Double>> {
+        get { AnimatablePair(artists, AnimatablePair(albums, tracks)) }
+        set {
+            artists = newValue.first
+            albums = newValue.second.first
+            tracks = newValue.second.second
+        }
+    }
+
+    var body: some View {
+        let artistCount = Int(artists), albumCount = Int(albums), trackCount = Int(tracks)
+        if trackCount > 0 {
+            Text("\(artistCount) artists, \(albumCount) albums, \(trackCount) tracks")
+        } else if albumCount > 0 {
+            Text("\(artistCount) artists, \(albumCount) albums")
+        } else {
+            Text("\(artistCount) artists")
         }
     }
 }

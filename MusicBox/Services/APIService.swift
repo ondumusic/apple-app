@@ -442,7 +442,14 @@ final class APIService: Sendable {
             throw APIError.invalidResponse
         }
 
-        guard (200...401).contains(http.statusCode) else {
+        switch http.statusCode {
+        case 200..<300:
+            break
+        case 401, 422:
+            throw LoginRejection.invalidCredentials
+        case 429:
+            throw LoginRejection.tooManyAttempts
+        default:
             throw APIError.httpError(http.statusCode)
         }
 
@@ -481,6 +488,20 @@ nonisolated enum APIError: LocalizedError, Sendable {
         case .unauthorized: "Session expired. Please log in again."
         case .httpError(let code): "Server error (\(code))"
         case .decoding(let detail): "Decoding error: \(detail)"
+        }
+    }
+}
+
+/// The server's own field messages aren't used: which field it blames would tell someone
+/// guessing at accounts whether the username exists.
+nonisolated enum LoginRejection: LocalizedError, Sendable {
+    case invalidCredentials
+    case tooManyAttempts
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidCredentials: String(localized: "Wrong username or password.")
+        case .tooManyAttempts: String(localized: "Too many failed attempts. Wait a few minutes and try again.")
         }
     }
 }

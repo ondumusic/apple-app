@@ -394,7 +394,7 @@ final class SyncService {
             print("SyncService: sync cancelled")
             #endif
         } catch {
-            syncError = error.localizedDescription
+            syncError = ErrorMessages.sync(for: error)
             #if DEBUG
             print("SyncService: sync failed: \(error)")
             #endif

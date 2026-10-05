@@ -14,6 +14,8 @@ struct LoginView: View {
 
     @FocusState private var focusedField: Field?
 
+    static let serverSetupURL = URL(string: "https://example.com/musicbox/setup")!
+
     private var resolvedURL: URL? {
         Self.resolveServerURL(serverURL)
     }
@@ -86,7 +88,7 @@ struct LoginView: View {
                     .font(.title.bold())
                     .padding(.bottom, 4)
 
-                Text("Sign in to your server")
+                Text("Sign in to your MusicBox server")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 36)
@@ -99,6 +101,7 @@ struct LoginView: View {
                         text: $serverURL,
                         field: .server
                     )
+                    .textContentType(.URL)
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
@@ -110,6 +113,7 @@ struct LoginView: View {
                         text: $username,
                         field: .username
                     )
+                    .textContentType(.username)
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     #endif
@@ -120,6 +124,7 @@ struct LoginView: View {
                             .frame(width: 20)
 
                         SecureField("Password", text: $password)
+                            .textContentType(.password)
                             .focused($focusedField, equals: .password)
                             .onSubmit { submit() }
                     }
@@ -182,6 +187,10 @@ struct LoginView: View {
                 .disabled(!canSubmit)
                 .padding(.horizontal, 24)
                 .padding(.top, 24)
+
+                Link("Don’t have a server?", destination: Self.serverSetupURL)
+                    .font(.footnote)
+                    .padding(.top, 20)
 
                 Spacer()
             }

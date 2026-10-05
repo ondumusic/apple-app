@@ -132,7 +132,7 @@ final class AuthService {
                 errorMessage = response.fields?.password?.message ?? "Login failed"
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorMessages.login(for: error)
         }
 
         isLoading = false
@@ -174,7 +174,7 @@ final class AuthService {
                 errorMessage = response.fields?.password?.message ?? "Re-authentication failed"
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorMessages.login(for: error)
         }
 
         isLoading = false

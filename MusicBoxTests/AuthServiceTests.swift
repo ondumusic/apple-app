@@ -186,3 +186,73 @@ import Testing
         #expect(response.fields == nil)
     }
 }
+
+// MARK: - Login Failure Messages
+
+struct LoginFailureMessageTests {
+    private func message(_ error: Error) -> String { ErrorMessages.login(for: error) }
+
+    @Test func wrongAddressesShareOneMessage() {
+        #expect(message(URLError(.cannotFindHost)) == message(URLError(.dnsLookupFailed)))
+        #expect(message(URLError(.cannotFindHost)) != URLError(.cannotFindHost).localizedDescription)
+    }
+
+    @Test func unreachableServersShareOneMessage() {
+        let refused = message(URLError(.cannotConnectToHost))
+        #expect(message(URLError(.timedOut)) == refused)
+        #expect(message(URLError(.networkConnectionLost)) == refused)
+        #expect(refused != message(URLError(.cannotFindHost)))
+    }
+
+    @Test func certificateProblemsShareOneMessage() {
+        let untrusted = message(URLError(.serverCertificateUntrusted))
+        #expect(message(URLError(.secureConnectionFailed)) == untrusted)
+        #expect(message(URLError(.serverCertificateHasBadDate)) == untrusted)
+    }
+
+    @Test func somethingOtherThanMusicBoxIsNamedAsSuch() throws {
+        let notMusicBox = message(APIError.httpError(404))
+        #expect(message(APIError.invalidResponse) == notMusicBox)
+        // e.g. an HTML page or another app's JSON at /api/auth/login
+        let decoding = try #require(throws: DecodingError.self) {
+            try JSONDecoder().decode(APIService.LoginResponse.self, from: Data("<html>".utf8))
+        }
+        #expect(message(decoding) == notMusicBox)
+    }
+
+    @Test func serverErrorsAreNotBlamedOnTheAddress() {
+        #expect(message(APIError.httpError(503)) != message(APIError.httpError(404)))
+    }
+
+    @Test func unmappedErrorsKeepTheSystemDescription() {
+        let error = URLError(.cancelled)
+        #expect(message(error) == error.localizedDescription)
+    }
+}
+
+extension LoginFailureMessageTests {
+    @Test func rejectedCredentialsSayWhatToFix() {
+        #expect(message(LoginRejection.invalidCredentials) == "Wrong username or password.")
+        #expect(message(LoginRejection.tooManyAttempts) != message(LoginRejection.invalidCredentials))
+    }
+}
+
+// MARK: - Sync Failure Messages
+
+struct SyncFailureMessageTests {
+    @Test func connectionProblemsMatchSignIn() {
+        let lost = URLError(.networkConnectionLost)
+        #expect(ErrorMessages.sync(for: lost) == ErrorMessages.login(for: lost))
+        #expect(ErrorMessages.sync(for: lost) != lost.localizedDescription)
+    }
+
+    @Test func unreadableResponsesPointAtVersions() {
+        let decoding = ErrorMessages.sync(for: APIError.decoding("Missing key 'cursor'"))
+        #expect(decoding.contains("up to date"))
+        #expect(ErrorMessages.sync(for: APIError.httpError(404)) == decoding)
+    }
+
+    @Test func serverErrorsAreNotBlamedOnVersions() {
+        #expect(ErrorMessages.sync(for: APIError.httpError(500)) != ErrorMessages.sync(for: APIError.httpError(404)))
+    }
+}
