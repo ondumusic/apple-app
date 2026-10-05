@@ -833,3 +833,33 @@ struct PlayerTintTests {
         #expect(!player.tintsFromArtwork)
     }
 }
+
+// MARK: - Stale Indices
+
+struct PlayerStaleIndexTests {
+
+    /// `loadAndPlayCurrent` resolves the current index, awaits the prefetch, then hands
+    /// off to the gapless setup — so the queue can shrink under an index that was in
+    /// range when it was taken. The shuffle order is left behind as the wider one.
+    @Test func gaplessSetupSurvivesAShuffleOrderWiderThanTheQueue() {
+        let player = makePlayer()
+        let album = UUID()
+        player.queue = [makeQueueItem(name: "A", albumId: album, number: 1),
+                        makeQueueItem(name: "B", albumId: album, number: 2)]
+        player.shuffledIndices = [5, 1]
+        player.currentIndex = 0
+
+        player.cycleRepeatMode()
+
+        #expect(player.queue.count == 2)
+    }
+
+    @Test func nowPlayingSurvivesAShuffleOrderWiderThanTheQueue() {
+        let player = makePlayer()
+        player.queue = [makeQueueItem(name: "A")]
+        player.shuffledIndices = [7]
+        player.currentIndex = 0
+
+        #expect(player.currentArtworkURL == nil)
+    }
+}

@@ -183,8 +183,7 @@ final class PlayerService {
 
     /// The cover the players should dress themselves in, if there is one.
     var currentArtworkURL: URL? {
-        guard queue.indices.contains(effectiveIndex) else { return nil }
-        return queue[effectiveIndex].artworkURL
+        currentQueueItem?.artworkURL
     }
 
     /// Whether the players wear the artwork. Both halves matter: the setting is the
@@ -201,6 +200,13 @@ final class PlayerService {
             return shuffled[currentIndex]
         }
         return currentIndex
+    }
+
+    /// The item `effectiveIndex` points at, if the queue still reaches that far. An
+    /// index resolved before an await can outlive the queue it was drawn from, and the
+    /// shuffle order it came from can be the wider one left behind by a shrunken queue.
+    var currentQueueItem: QueueItem? {
+        queue.indices.contains(effectiveIndex) ? queue[effectiveIndex] : nil
     }
 
     var canSkip: Bool {
@@ -432,10 +438,9 @@ final class PlayerService {
             currentPlayerItem = nil
             gaplessPlayerItem = nil
             currentIndex = 0
-            let idx = effectiveIndex
-            if idx < queue.count {
-                currentTrack = queue[idx].track
-                duration = queue[idx].track.duration
+            if let item = currentQueueItem {
+                currentTrack = item.track
+                duration = item.track.duration
             }
             progress = 0
             updateNowPlayingInfo()
@@ -848,11 +853,15 @@ final class PlayerService {
         return AVPlayerItem(asset: asset)
     }
 
+    private func item(at effective: Int) -> QueueItem? {
+        queue.indices.contains(effective) ? queue[effective] : nil
+    }
+
     private func prefetchNextTrackAsync() async {
         guard let next = nextTrackInfo() else { return }
         let nextEffective = next.effectiveIndex
-        guard nextEffective < queue.count, queue[nextEffective].playbackURL == nil else { return }
-        let track = queue[nextEffective].track
+        guard let item = item(at: nextEffective), item.playbackURL == nil else { return }
+        let track = item.track
         do {
             let _ = try resolvePlaybackURL(for: track, queueIndex: nextEffective)
         } catch {}
@@ -883,9 +892,9 @@ final class PlayerService {
     }
 
     private func isNextTrackSequential() -> Bool {
-        guard let next = nextTrackInfo() else { return false }
-        let currentTrackItem = queue[effectiveIndex].track
-        let nextTrack = queue[next.effectiveIndex].track
+        guard let next = nextTrackInfo(),
+              let currentTrackItem = currentQueueItem?.track,
+              let nextTrack = item(at: next.effectiveIndex)?.track else { return false }
         guard currentTrackItem.albumId == nextTrack.albumId else { return false }
 
         if let currentNumber = currentTrackItem.number, let nextNumber = nextTrack.number,
@@ -933,12 +942,12 @@ final class PlayerService {
         guard !hasQueuedGaplessItem else { return }
         guard let next = nextTrackInfo() else { return }
         let nextEffective = next.effectiveIndex
-        guard nextEffective < queue.count else { return }
+        guard let nextItem = item(at: nextEffective) else { return }
 
         // URL should already be resolved by prefetch
-        guard let url = queue[nextEffective].playbackURL else {
+        guard let url = nextItem.playbackURL else {
             // Fallback: resolve async if prefetch somehow missed it
-            let nextTrack = queue[nextEffective].track
+            let nextTrack = nextItem.track
             Task {
                 do {
                     let url = try resolvePlaybackURL(for: nextTrack, queueIndex: nextEffective)
@@ -1353,8 +1362,7 @@ final class PlayerService {
         if let number = track.number {
             info[MPMediaItemPropertyAlbumTrackNumber] = number
         }
-        let idx = effectiveIndex
-        let artworkURL = (idx >= 0 && idx < queue.count) ? queue[idx].artworkURL : nil
+        let artworkURL = currentQueueItem?.artworkURL
 
         if let artworkURL, artworkURL == nowPlayingArtworkURL, let artwork = nowPlayingArtwork {
             info[MPMediaItemPropertyArtwork] = artwork
