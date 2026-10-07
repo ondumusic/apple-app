@@ -15,6 +15,7 @@ struct MacOSContentView: View {
     @Environment(DownloadService.self) private var downloadService
 
     @State private var showQueue = false
+    @State private var chromeHeight = PlayerBar.height
     /// Restored from the last session — reopening on Artists every time loses your place.
     @State private var sidebarSelection: SidebarSelection? = MacOSContentView.restoredSelection()
     /// Set when navigating to a specific artist (e.g. "Go to Artist" on a track).
@@ -88,12 +89,8 @@ struct MacOSContentView: View {
             // sits above the content and the content starts below it — no overlay, no
             // reserved insets, no scroller to lift clear.
             VStack(spacing: 0) {
-                PlayerBar(showQueue: $showQueue)
-                ServerNoticesView()
-                if syncService.compatibility.shouldShow(dismissedVersion: dismissedServerVersion) {
-                    ServerVersionNotice(compatibility: syncService.compatibility) {
-                        dismissedServerVersion = syncService.compatibility.serverVersion ?? ""
-                    }
+                if !Self.floatsChrome {
+                    chrome
                 }
                 GeometryReader { geo in
                     // Music pushes Up Next aside only while enough content survives, and
@@ -107,6 +104,7 @@ struct MacOSContentView: View {
                         detailStack
                         if pushes {
                             Divider()
+                                .padding(.top, floatingChromeHeight)
                             QueuePanel(isPresented: $showQueue)
                                 .frame(width: Self.queueWidth)
                         }
@@ -126,9 +124,45 @@ struct MacOSContentView: View {
                     // On the content, not the window: it anchors to the top of whatever
                     // it's attached to, which at window level is now the player row.
                     .queueConfirmationOverlay()
+                    .environment(\.floatingChromeHeight, floatingChromeHeight)
+                    .overlay(alignment: .top) {
+                        // No surface of its own: each page extends its header's material
+                        // up behind the chrome, so the two blur as one.
+                        if Self.floatsChrome {
+                            chrome
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                                    chromeHeight = $0
+                                }
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// From macOS 26 the player row floats over the content, which scrolls underneath
+    /// and blurs through it. Before 26 there's no glass for it to blur through.
+    private static var floatsChrome: Bool {
+        if #available(macOS 26, *) { return true }
+        return false
+    }
+
+    private var floatingChromeHeight: CGFloat {
+        Self.floatsChrome ? chromeHeight : 0
+    }
+
+    /// The player row and any server notices under it — floating over the content from
+    /// macOS 26, stacked above it before.
+    private var chrome: some View {
+        VStack(spacing: 0) {
+            PlayerBar(showQueue: $showQueue, showsDivider: !Self.floatsChrome)
+            ServerNoticesView()
+            if syncService.compatibility.shouldShow(dismissedVersion: dismissedServerVersion) {
+                ServerVersionNotice(compatibility: syncService.compatibility) {
+                    dismissedServerVersion = syncService.compatibility.serverVersion ?? ""
+                }
+            }
         }
     }
 
@@ -137,7 +171,7 @@ struct MacOSContentView: View {
             NavigationStack(path: $detailPath) {
                 Group {
                     if !searchText.isEmpty {
-                        SearchViewMac(query: searchText)
+                        ChromedPage { _ in SearchViewMac(query: searchText) }
                     } else {
                         DetailPlaceholder(selection: sidebarSelection, pendingArtistNavigation: $pendingArtistNavigation)
                     }
@@ -463,7 +497,7 @@ struct MacOSContentView: View {
                 QueuePanel(isPresented: $showQueue)
                     .frame(width: Self.queueWidth)
                     .frame(maxHeight: .infinity)
-                    .background(Color(NSColor.windowBackgroundColor))
+                    .background(.windowBackground)
                     .overlay(alignment: .leading) {
                         Rectangle()
                             .fill(Color.primary.opacity(0.14))
@@ -561,11 +595,19 @@ private struct DetailPlaceholder: View {
         case .category(.downloads):
             DownloadsViewMac()
         case .playlist(let id):
-            PlaylistDetailMac(playlistId: id)
-                .id(id)
+            // The playlist's own header doesn't scroll, so it starts below the chrome
+            // rather than passing under it.
+            ChromedPage { topInset in
+                PlaylistDetailMac(playlistId: id)
+                    .padding(.top, topInset)
+            }
+            .id(id)
         case .none:
-            ContentUnavailableView("Select an Item", systemImage: "sidebar.left")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ChromedPage { topInset in
+                ContentUnavailableView("Select an Item", systemImage: "sidebar.left")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, topInset)
+            }
         }
     }
 }
@@ -581,6 +623,7 @@ struct QueuePanel: View {
     @Environment(SettingsStore.self) private var settings
     @Binding var isPresented: Bool
     @State private var scope: QueueScope = .upNext
+    @Environment(\.floatingChromeHeight) private var chromeHeight
 
     private var entries: [(originalIndex: Int, item: QueueItem)] {
         scope == .upNext ? player.upNextEntries : player.historyEntries
@@ -625,6 +668,12 @@ struct QueuePanel: View {
                         : String(localized: "Tracks you've played will appear here.")
                 )
             )
+        }
+        // Below the floating chrome, with the chrome's material behind the strip it
+        // covers, since no page reaches across to draw it here.
+        .padding(.top, chromeHeight)
+        .background(alignment: .top) {
+            Rectangle().fill(.bar).frame(height: chromeHeight)
         }
         // The close button went, but Escape shouldn't have to go with it.
         .onExitCommand { isPresented = false }

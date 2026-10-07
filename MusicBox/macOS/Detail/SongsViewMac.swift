@@ -18,15 +18,16 @@ struct SongsViewMac: View {
     @State private var selection: Set<UUID> = []
 
     var body: some View {
-        VStack(spacing: 0) {
+        ChromedPage {
             ContentHeader(backDestination: nil) {
                 LibraryOptionsMenu(filter: $libraryFilter)
             }
-            Divider()
+        } content: { topInset in
             if tracks.isEmpty {
                 LibraryEmptyState(subject: .songs, isFiltered: libraryFilter == .downloaded) {
                     libraryFilter = .all
                 }
+                .padding(.top, topInset)
             } else {
             TracksTable(
                 tracks: tracks,
@@ -45,7 +46,8 @@ struct SongsViewMac: View {
                 currentlyPlayingTrackId: player.currentTrack?.id,
                 isPlaying: player.isPlaying,
                 rowHeight: DetailPageMetrics.trackRowHeight,
-                claimsKeyboardFocus: true
+                claimsKeyboardFocus: true,
+                topContentInset: topInset
             )
             }
         }

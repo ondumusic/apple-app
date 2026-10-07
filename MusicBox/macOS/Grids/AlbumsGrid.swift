@@ -28,6 +28,8 @@ struct AlbumsGrid: NSViewControllerRepresentable {
     var embedded: Bool = false
     /// See TracksTable.claimsKeyboardFocus.
     var claimsKeyboardFocus: Bool = false
+    /// Room for chrome floating over the top of the grid, which content scrolls under.
+    var topContentInset: CGFloat = 0
 
     func makeNSViewController(context: Context) -> AlbumsGridViewController {
         let vc = AlbumsGridViewController()
@@ -43,6 +45,7 @@ struct AlbumsGrid: NSViewControllerRepresentable {
         vc.titleLines = titleLines
         vc.onMetricsChange = onMetricsChange
         vc.claimsKeyboardFocus = claimsKeyboardFocus
+        vc.topContentInset = topContentInset
         vc.applyEmbedded(embedded)
         vc.accentNSColor = NSColor(accent)
         vc.actions = actions
@@ -129,6 +132,7 @@ final class AlbumsGridViewController: NSViewController {
     }
 
     private var isEmbedded: Bool = false
+    var topContentInset: CGFloat = 0
 
     /// Re-applied on every update rather than only when the flag changes: the view can
     /// load either side of the first assignment, and a scroller created before it does
@@ -153,6 +157,7 @@ final class AlbumsGridViewController: NSViewController {
             scrollView.automaticallyAdjustsContentInsets = false
             scrollView.contentInsets = NSEdgeInsets()
         } else {
+            scrollView.setTopContentInset(topContentInset)
             // Same courtesy the tables give their last row: a selected cover in the last
             // line shouldn't sit flush against the window's bottom edge.
             scrollView.addBottomContentPadding()

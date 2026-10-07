@@ -17,9 +17,19 @@ struct ContentHeader<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.contentHeaderFloats) private var floats
     @State private var isHoveringBack = false
 
     var body: some View {
+        // Floating, it's on ChromedPage's translucent surface rather than its own.
+        if floats {
+            strip
+        } else {
+            strip.pageBackground()
+        }
+    }
+
+    private var strip: some View {
         HStack(spacing: Spacing.related) {
             if let backDestination {
                 Button { dismiss() } label: {
@@ -48,9 +58,6 @@ struct ContentHeader<Trailing: View>: View {
         .padding(.horizontal, Spacing.block)
         .frame(height: Self.height)
         .frame(maxWidth: .infinity)
-        // The content's background rather than the window's. Sharing the window
-        // background with the player row above made the two read as one tall bar.
-        .background(Color(nsColor: .textBackgroundColor))
     }
 }
 

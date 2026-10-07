@@ -16,32 +16,34 @@ struct AlbumsViewMac: View {
     @State private var selection: Set<Album.ID> = []
 
     var body: some View {
-        VStack(spacing: 0) {
+        ChromedPage {
             ContentHeader(backDestination: nil) {
                 LibraryOptionsMenu(filter: $libraryFilter) {
                     SortOptionsSection(selection: $sortOption, ascending: $sortAscending)
                 }
             }
-            Divider()
+        } content: { topInset in
             if albums.isEmpty {
                 LibraryEmptyState(subject: .albums, isFiltered: libraryFilter == .downloaded) {
                     libraryFilter = .all
                 }
+                .padding(.top, topInset)
             } else {
-            AlbumsGrid(
-                albums: albums,
-                selection: $selection,
-                actions: .standard(
-                    player: player,
-                    musicLibrary: musicLibrary,
-                    network: network,
-                    downloadService: downloadService
-                ),
-                accent: settings.resolvedAccentColor,
-                onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) },
-                claimsKeyboardFocus: true
-            )
-            .background(Color(NSColor.controlBackgroundColor))
+                AlbumsGrid(
+                    albums: albums,
+                    selection: $selection,
+                    actions: .standard(
+                        player: player,
+                        musicLibrary: musicLibrary,
+                        network: network,
+                        downloadService: downloadService
+                    ),
+                    accent: settings.resolvedAccentColor,
+                    onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) },
+                    claimsKeyboardFocus: true,
+                    topContentInset: topInset
+                )
+                .pageBackground()
             }
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }

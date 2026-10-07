@@ -167,8 +167,7 @@ struct SettingsView: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
                     ForEach(AccentColor.allCases, id: \.self) { accentOption in
                         if accentOption == .custom {
-                            ColorPicker("", selection: customColorBinding(settings: settings), supportsOpacity: false)
-                                .labelsHidden()
+                            customColorSwatch
                                 .frame(width: 32, height: 32)
                                 .overlay {
                                     if settings.accentColor == .custom {
@@ -361,6 +360,34 @@ struct SettingsView: View {
         )
     }
 
+    /// macOS draws ColorPicker as its colour well — a capsule on macOS 26 and later,
+    /// which sat oddly in a row of circles. A circle in the style of iOS's picker
+    /// instead, opening the standard colour panel.
+    @ViewBuilder
+    private var customColorSwatch: some View {
+        #if os(macOS)
+        let binding = customColorBinding(settings: settings)
+        Circle()
+            .fill(AngularGradient(colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red],
+                                  center: .center))
+            .overlay {
+                Circle()
+                    .fill(settings.customAccentColor)
+                    .padding(4)
+            }
+            .contentShape(Circle())
+            .onTapGesture {
+                CustomAccentColorPanel.shared.show(initial: NSColor(binding.wrappedValue)) {
+                    binding.wrappedValue = Color(nsColor: $0)
+                }
+            }
+            .help("Choose a custom color")
+        #else
+        ColorPicker("", selection: customColorBinding(settings: settings), supportsOpacity: false)
+            .labelsHidden()
+        #endif
+    }
+
     private func customColorBinding(settings: SettingsStore) -> Binding<Color> {
         Binding(
             get: { settings.customAccentColor },
@@ -388,3 +415,26 @@ private extension Color {
         #endif
     }
 }
+
+#if os(macOS)
+/// The shared colour panel reports changes by target-action, which a SwiftUI view can't
+/// be the target of.
+private final class CustomAccentColorPanel: NSObject {
+    static let shared = CustomAccentColorPanel()
+    private var onChange: ((NSColor) -> Void)?
+
+    func show(initial: NSColor, onChange: @escaping (NSColor) -> Void) {
+        self.onChange = onChange
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        panel.color = initial
+        panel.setTarget(self)
+        panel.setAction(#selector(colorChanged(_:)))
+        panel.orderFront(nil)
+    }
+
+    @objc private func colorChanged(_ sender: NSColorPanel) {
+        onChange?(sender.color)
+    }
+}
+#endif

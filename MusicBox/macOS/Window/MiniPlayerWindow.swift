@@ -533,7 +533,7 @@ private struct MiniPlayerContent: View {
                         }
                     }
                 } else {
-                    Color(NSColor.windowBackgroundColor)
+                    Rectangle().fill(.windowBackground)
                 }
             }
             // The background needs the same safe-area bypass the content above has, or it
@@ -641,7 +641,7 @@ private struct UnifiedLayout: View {
                         // window background used to separate them.
                         .background(isTinted
                                     ? AnyShapeStyle(Color.black.opacity(0.22))
-                                    : AnyShapeStyle(Color(NSColor.windowBackgroundColor)))
+                                    : AnyShapeStyle(.windowBackground))
                 }
             }
         }
@@ -671,7 +671,7 @@ private struct UnifiedLayout: View {
         } else if isTinted {
             Color.clear.contentShape(Rectangle()).gesture(WindowDragGesture())
         } else {
-            Color(NSColor.windowBackgroundColor).gesture(WindowDragGesture())
+            Rectangle().fill(.windowBackground).gesture(WindowDragGesture())
         }
     }
 

@@ -60,6 +60,13 @@ struct SearchViewMac: View {
 
     private static let shownSongLimit = 6
 
+    @Environment(\.pageTopInset) private var pageTopInset
+
+    private var isShowingResults: Bool {
+        !query.isEmpty && !(displayedQuery == query && results.tracks.isEmpty
+                            && results.artists.isEmpty && results.albums.isEmpty)
+    }
+
     var body: some View {
         Group {
             if query.isEmpty {
@@ -68,17 +75,17 @@ struct SearchViewMac: View {
                     systemImage: "magnifyingglass",
                     description: Text("Type to search artists, albums, and songs.")
                 )
-            } else if displayedQuery == query, results.tracks.isEmpty,
-                      results.artists.isEmpty, results.albums.isEmpty {
-                ContentUnavailableView.search(text: query)
-            } else {
+            } else if isShowingResults {
                 resultsBody
+            } else {
+                ContentUnavailableView.search(text: query)
             }
         }
         // The results body sets these for itself; without them here the empty states sat
         // in whatever space they happened to need, against the window's background.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.controlBackgroundColor))
+        .padding(.top, isShowingResults ? 0 : pageTopInset)
+        .pageBackground()
         .task(id: query) {
             // Debounce so each keystroke doesn't fire a fetch. .task cancels when query
             // changes, so a stale closure can't overwrite results with an older match.
@@ -107,10 +114,12 @@ struct SearchViewMac: View {
             .padding(.vertical, Spacing.block)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .contentMargins(.top, pageTopInset, for: .scrollContent)
+        .contentMargins(.top, pageTopInset, for: .scrollIndicators)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // Same surface the tracks table paints, so the grids above it read as one page
         // rather than a separate panel stuck on top.
-        .background(Color(NSColor.controlBackgroundColor))
+        .pageBackground()
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
     }
 

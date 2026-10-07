@@ -12,6 +12,7 @@ struct PlayerBar: View {
 
     @Environment(PlayerService.self) private var player
     @Binding var showQueue: Bool
+    var showsDivider = true
 
 
     /// Measured from Music.app at four window widths: its LCD is 40% of the content
@@ -47,7 +48,7 @@ struct PlayerBar: View {
         }
         .frame(height: Self.height)
         .frame(maxWidth: .infinity)
-        .overlay(alignment: .bottom) { Divider() }
+        .overlay(alignment: .bottom) { if showsDivider { Divider() } }
         .fadesWhenInactive()
     }
 

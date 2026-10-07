@@ -17,7 +17,9 @@ struct QueueConfirmationOverlay: ViewModifier {
     private let overlayEdge: Edge = .bottom
     private let trailingPadding: CGFloat = 0
     #else
-    private let overlayPadding: CGFloat = 12
+    /// Under the player row, which from macOS 26 floats over the content this anchors to.
+    @Environment(\.floatingChromeHeight) private var chromeHeight
+    private var overlayPadding: CGFloat { chromeHeight + 12 }
     private let overlayAlignment: Alignment = .topTrailing
     private let overlayEdge: Edge = .top
     private let trailingPadding: CGFloat = 16

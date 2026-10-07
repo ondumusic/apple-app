@@ -26,11 +26,11 @@ struct ArtistsViewMac: View {
     @State private var selectedArtistId: Artist.ID?
 
     var body: some View {
-        VStack(spacing: 0) {
+        ChromedPage {
             ContentHeader(backDestination: nil) {
                 LibraryOptionsMenu(filter: $libraryFilter)
             }
-            Divider()
+        } content: { topInset in
             // Plain HStack with a manual divider — HSplitView was rendering above the
             // window toolbar (it doesn't respect the parent's toolbar safe area), and the
             // nested NavigationSplitView had its own grey chrome problem. A regular HStack
@@ -39,6 +39,7 @@ struct ArtistsViewMac: View {
                 LibraryEmptyState(subject: .artists, isFiltered: libraryFilter == .downloaded) {
                     libraryFilter = .all
                 }
+                .padding(.top, topInset)
             } else {
             HStack(spacing: 0) {
                 ArtistsTable(
@@ -46,12 +47,14 @@ struct ArtistsViewMac: View {
                     selection: $selectedArtistId,
                     actions: artistActions,
                     accent: settings.resolvedAccentColor,
-                    showsArtwork: settings.showArtistArtwork
+                    showsArtwork: settings.showArtistArtwork,
+                    topContentInset: topInset
                 )
                 .background(.background)
                 .frame(width: artistListWidth)
 
                 SidebarDivider(width: $artistListWidth, range: 180...420)
+                    .padding(.top, topInset)
 
                 Group {
                     if let id = selectedArtistId, let artist = artists.first(where: { $0.id == id }) {
@@ -59,6 +62,7 @@ struct ArtistsViewMac: View {
                             .id(artist.id)
                     } else {
                         ContentUnavailableView("Select an Artist", systemImage: "music.mic")
+                            .padding(.top, topInset)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

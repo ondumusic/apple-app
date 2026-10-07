@@ -128,6 +128,11 @@ struct TracksTable: NSViewControllerRepresentable {
     var artworkSize: CGFloat = 120
     /// Horizontal padding from the table's left edge to the artwork's left edge.
     var artworkInset: CGFloat = 20
+    /// Room for chrome floating over the top of the table, which rows scroll under.
+    var topContentInset: CGFloat = 0
+    /// A page's own header, as the table's first row: it scrolls away with the tracks
+    /// rather than holding its space above them.
+    var pageHeader: AnyView? = nil
 
     func makeNSViewController(context: Context) -> TracksTableViewController {
         let vc = TracksTableViewController()
@@ -168,6 +173,8 @@ struct TracksTable: NSViewControllerRepresentable {
         vc.onContentHeightChange = onContentHeightChange
         vc.fitsContentHeight = fitsContentHeight
         vc.claimsKeyboardFocus = claimsKeyboardFocus
+        vc.topContentInset = topContentInset
+        vc.pageHeader = pageHeader
         vc.update(
             tracks: tracks,
             sections: sections,
@@ -205,6 +212,7 @@ final class TracksTableViewController: NSViewController {
     /// that hosts a SwiftUI album header; `.track(flatIndex)` references the position in
     /// the flat `tracks` array (the source of truth for selection / onPlay indices).
     fileprivate enum DisplayRow {
+        case pageHeader
         case header(Album)
         case label(String)
         case track(flatIndex: Int)
@@ -214,6 +222,40 @@ final class TracksTableViewController: NSViewController {
     private var rowForTrackIndex: [Int: Int] = [:]
     private var sections: [TracksTableSection]? = nil
     var sectionHeaderBuilder: ((Album) -> AnyView)?
+    var pageHeader: AnyView? {
+        didSet { applyPageHeader(hadHeader: oldValue != nil) }
+    }
+    private var pageHeaderHeight: CGFloat = 0
+
+    private func applyPageHeader(hadHeader: Bool) {
+        guard isViewLoaded else { return }
+        let oldHeight = pageHeaderHeight
+        if let pageHeader { pageHeaderHeight = measuredHeight(of: pageHeader) }
+        if (pageHeader != nil) != hadHeader {
+            rebuildDisplayRows()
+            tableView.reloadData()
+            return
+        }
+        guard let pageHeader, case .pageHeader? = displayRows.first else { return }
+        (tableView.rowView(atRow: 0, makeIfNecessary: false)?.view(atColumn: 0) as? SectionHeaderCell)?
+            .host(view: pageHeader)
+        guard pageHeaderHeight != oldHeight else { return }
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = 0
+        tableView.noteHeightOfRows(withIndexesChanged: [0])
+        NSAnimationContext.endGrouping()
+    }
+
+    /// The header's own height, since what it holds varies — an artist with a photo
+    /// has a taller one than an artist without.
+    private func measuredHeight(of view: AnyView) -> CGFloat {
+        let probe = NSHostingView(rootView: view)
+        probe.safeAreaRegions = []
+        if tableView.bounds.width > 0 {
+            probe.frame.size.width = tableView.bounds.width
+        }
+        return ceil(probe.fittingSize.height)
+    }
     /// Column width = the gap the selection pill needs on its left, the artwork, and
     /// the gap to the title.
     static let artworkSize: CGFloat = 36
@@ -452,15 +494,22 @@ final class TracksTableViewController: NSViewController {
     var fitsContentHeight = false {
         didSet {
             guard fitsContentHeight != oldValue, isViewLoaded else { return }
-            applyBottomContentPadding()
+            applyContentInsets()
+        }
+    }
+    var topContentInset: CGFloat = 0 {
+        didSet {
+            guard topContentInset != oldValue, isViewLoaded else { return }
+            applyContentInsets()
         }
     }
 
-    private func applyBottomContentPadding() {
+    private func applyContentInsets() {
         if fitsContentHeight {
             scrollView.automaticallyAdjustsContentInsets = false
             scrollView.contentInsets = NSEdgeInsets()
         } else {
+            scrollView.setTopContentInset(topContentInset)
             scrollView.addBottomContentPadding()
         }
     }
@@ -757,7 +806,7 @@ final class TracksTableViewController: NSViewController {
             scrollView.hasHorizontalScroller = false
             scrollView.verticalScrollElasticity = .none
             scrollView.horizontalScrollElasticity = .none
-            applyBottomContentPadding()
+            applyContentInsets()
             scrollView.borderType = .noBorder
             scrollView.contentView.drawsBackground = false
             scrollView.contentView.backgroundColor = .clear
@@ -765,12 +814,19 @@ final class TracksTableViewController: NSViewController {
             tableView.usesAlternatingRowBackgroundColors = true
             tableView.style = .inset
             tableView.intercellSpacing = NSSize(width: 3, height: 2)
-            tableView.backgroundColor = .controlBackgroundColor
             // .none so our own pill paints; .regular would draw the system accent over it.
             tableView.selectionHighlightStyle = .none
             tableView.focusRingType = .default
             scrollView.focusRingType = .default
-            scrollView.drawsBackground = true
+            // Matches pageBackground(): the window's material from macOS 26, the content
+            // colour before it.
+            if #available(macOS 26, *) {
+                tableView.backgroundColor = .clear
+                scrollView.drawsBackground = false
+            } else {
+                tableView.backgroundColor = .controlBackgroundColor
+                scrollView.drawsBackground = true
+            }
             scrollView.hasVerticalScroller = true
             scrollView.verticalScrollElasticity = .automatic
         }       
@@ -853,6 +909,10 @@ final class TracksTableViewController: NSViewController {
     private func rebuildDisplayRows() {
         var rows: [DisplayRow] = []
         var rowForTrack: [Int: Int] = [:]
+        if let pageHeader {
+            if pageHeaderHeight == 0 { pageHeaderHeight = measuredHeight(of: pageHeader) }
+            rows.append(.pageHeader)
+        }
         if let sections = self.sections {
             // Use sections to interleave headers with their tracks. Track flat-index is
             // walked across sections in order; sections must reflect the same flat order
@@ -929,6 +989,8 @@ final class TracksTableViewController: NSViewController {
             } else {
                 let host = NSHostingView(rootView: builder(section.album))
                 host.translatesAutoresizingMaskIntoConstraints = true
+                // See SectionHeaderCell: these scroll under the titlebar too.
+                host.safeAreaRegions = []
                 tableView.addSubview(host)
                 artworkOverlays[section.id] = host
             }
@@ -1219,6 +1281,7 @@ extension TracksTableViewController: NSTableViewDataSource {
 extension TracksTableViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
         guard displayRows.indices.contains(row) else { return false }
+        if case .pageHeader = displayRows[row] { return true }
         if case .header = displayRows[row] { return true }
         if case .label = displayRows[row] { return true }
         return false
@@ -1231,6 +1294,7 @@ extension TracksTableViewController: NSTableViewDelegate {
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         guard displayRows.indices.contains(row) else { return tableView.rowHeight }
+        if case .pageHeader = displayRows[row] { return max(pageHeaderHeight, 1) }
         if case .header = displayRows[row] { return sectionHeaderHeight }
         if case .label = displayRows[row] { return Self.labelRowHeight }
         return tableView.rowHeight
@@ -1285,6 +1349,7 @@ extension TracksTableViewController: NSTableViewDelegate {
 
     private func isHeaderRow(_ row: Int) -> Bool {
         guard displayRows.indices.contains(row) else { return false }
+        if case .pageHeader = displayRows[row] { return true }
         if case .header = displayRows[row] { return true }
         if case .label = displayRows[row] { return true }
         return false
@@ -1295,6 +1360,15 @@ extension TracksTableViewController: NSTableViewDelegate {
         // Section header: NSTableView calls viewFor with tableColumn=nil for group
         // rows (when isGroupRow returns true). Return our hosting cell which spans the
         // full row width.
+        if case .pageHeader = displayRows[row], let pageHeader {
+            let cellId = NSUserInterfaceItemIdentifier("trackPageHeader")
+            let cell = tableView.makeView(withIdentifier: cellId, owner: nil) as? SectionHeaderCell
+                ?? SectionHeaderCell(identifier: cellId)
+            // The header sits where the page around the table does, not where rows do.
+            cell.horizontalOutset = cellInset
+            cell.host(view: pageHeader)
+            return cell
+        }
         if case .header(let album) = displayRows[row] {
             let cellId = NSUserInterfaceItemIdentifier("trackSectionHeader")
             let cell = tableView.makeView(withIdentifier: cellId, owner: nil) as? SectionHeaderCell
@@ -1722,6 +1796,10 @@ private final class SectionHeaderCell: NSTableCellView {
         }
         let h = NSHostingView(rootView: view)
         h.translatesAutoresizingMaskIntoConstraints = false
+        // Rows scroll up under the window's titlebar, and a hosting view keeps its
+        // content out of that safe area by default — so a header reaching it was
+        // squeezed down mid-scroll, as if its height had changed.
+        h.safeAreaRegions = []
         addSubview(h)
         NSLayoutConstraint.activate([
             { let c = h.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -horizontalOutset); leading = c; return c }(),

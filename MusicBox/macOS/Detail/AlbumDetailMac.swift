@@ -31,6 +31,8 @@ struct AlbumDetailMac: View {
     }
 
 
+    @Environment(\.pageTopInset) private var pageTopInset
+
     var body: some View {
         VStack(spacing: 0) {
             // One scrolling section, and the table's interaction: the album header is
@@ -65,18 +67,18 @@ struct AlbumDetailMac: View {
                     )
                 },
                 sectionHeaderIgnoresCellInset: true,
-                sectionHeaderHeight: Self.headerHeight
+                sectionHeaderHeight: Self.headerHeight,
+                topContentInset: pageTopInset
             )
-            .background(Color(NSColor.textBackgroundColor))
+            .pageBackground()
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) {
             musicLibrary.applyDownloadChanges(to: &tracks)
         }
-        // The table paints its own background only as far as the cap, so the margin
-        // beside it showed the window's grey. Page supplies the same surface.
+        // The table only spans as far as the cap; the page fills the margin beside it.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(NSColor.controlBackgroundColor))
+        .pageBackground()
     }
 
     /// Artwork and metadata across the top, track list full width beneath — the shape

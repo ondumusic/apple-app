@@ -46,12 +46,10 @@ struct ArtistDetailMac: View {
         albums.map { TracksTableSection(id: $0.id, album: $0, tracks: $0.tracks ?? []) }
     }
 
+    @Environment(\.pageTopInset) private var pageTopInset
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-                .padding(.horizontal, DetailPageMetrics.horizontalInset)
-                .padding(.top, DetailPageMetrics.topInset)
-                .padding(.bottom, DetailPageMetrics.bottomInset)
             TracksTable(
                 tracks: allTracks,
                 selection: $selection,
@@ -89,7 +87,21 @@ struct ArtistDetailMac: View {
                 sectionHeaderHeight: isCompact ? 96 : 80,
                 artwork: artworkOverlay,
                 artworkSize: 160,
-                artworkInset: 20
+                artworkInset: 20,
+                topContentInset: pageTopInset,
+                pageHeader: AnyView(
+                    header
+                        .padding(.horizontal, DetailPageMetrics.horizontalInset)
+                        .padding(.top, DetailPageMetrics.topInset)
+                        .padding(.bottom, DetailPageMetrics.bottomInset)
+                        // Hosted inside the table, out of reach of this view's environment.
+                        .environment(musicLibrary)
+                        .environment(settings)
+                        .environment(player)
+                        .environment(network)
+                        .environment(downloadService)
+                        .environment(auth)
+                )
             )
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { paneWidth = $0 }
         }
@@ -97,7 +109,12 @@ struct ArtistDetailMac: View {
         // inline and the header changes height — so there's nothing to animate between.
         // Inheriting an animation made the track list slide across as it flipped.
         .animation(nil, value: isCompact)
-        .background(Color(NSColor.textBackgroundColor))
+        .artworkFailureAlert(
+            $artworkError,
+            retry: { if let work = lastArtworkChange { Task { await upload(work) } } },
+            chooseAnother: { chooseArtwork() }
+        )
+        .pageBackground()
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: libraryFilter) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }
@@ -149,11 +166,6 @@ struct ArtistDetailMac: View {
             }
             return true
         }
-        .artworkFailureAlert(
-            $artworkError,
-            retry: { if let work = lastArtworkChange { Task { await upload(work) } } },
-            chooseAnother: { chooseArtwork() }
-        )
     }
 
     /// One thing at a time. Overlaying these drew the placeholder mic behind the drop

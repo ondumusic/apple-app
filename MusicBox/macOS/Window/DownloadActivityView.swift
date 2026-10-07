@@ -53,7 +53,7 @@ struct DownloadActivityView: View {
             }
         }
         .frame(minWidth: 460, minHeight: 260)
-        .background(Color(NSColor.controlBackgroundColor))
+        .pageBackground()
         .confirmationDialog("Cancel All Downloads?", isPresented: $showCancelAllConfirmation,
                             titleVisibility: .visible) {
             Button("Cancel All", role: .destructive) { downloadService.cancelAll() }

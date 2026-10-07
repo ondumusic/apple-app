@@ -12,6 +12,8 @@ struct ArtistsTable: NSViewControllerRepresentable {
     let actions: ArtistActions
     let accent: Color
     var showsArtwork: Bool = true
+    /// Room for chrome floating over the top of the list, which rows scroll under.
+    var topContentInset: CGFloat = 0
 
     func makeNSViewController(context: Context) -> ArtistsTableViewController {
         let vc = ArtistsTableViewController()
@@ -19,6 +21,7 @@ struct ArtistsTable: NSViewControllerRepresentable {
         vc.actions = actions
         vc.onSelectionChange = { selection = $0 }
         vc.showsArtwork = showsArtwork
+        vc.topContentInset = topContentInset
         vc.apply(artists: artists, selection: selection)
         return vc
     }
@@ -28,6 +31,7 @@ struct ArtistsTable: NSViewControllerRepresentable {
         vc.actions = actions
         vc.onSelectionChange = { selection = $0 }
         vc.showsArtwork = showsArtwork
+        vc.topContentInset = topContentInset
         vc.apply(artists: artists, selection: selection)
     }
 }
@@ -36,6 +40,12 @@ final class ArtistsTableViewController: NSViewController {
     fileprivate var artists: [Artist] = []
     var actions = ArtistActions()
     var onSelectionChange: ((Artist.ID?) -> Void)?
+    var topContentInset: CGFloat = 0 {
+        didSet {
+            guard topContentInset != oldValue, isViewLoaded else { return }
+            scrollView.setTopContentInset(topContentInset)
+        }
+    }
     var showsArtwork: Bool = true {
         didSet {
             guard showsArtwork != oldValue, isViewLoaded else { return }
@@ -97,6 +107,7 @@ final class ArtistsTableViewController: NSViewController {
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
+        scrollView.setTopContentInset(topContentInset)
         scrollView.addBottomContentPadding()
         view = scrollView
     }
@@ -191,7 +202,7 @@ extension ArtistsTableViewController: NSTableViewDelegate {
         return view
     }
 
-    private var rowHeightForDensity: CGFloat { showsArtwork ? 44 : 34 }
+    private var rowHeightForDensity: CGFloat { showsArtwork ? 50 : 34 }
 
     private func applyRowHeight() {
         // Taller only when there's a circle to fit: without one this is the compact list
@@ -246,7 +257,7 @@ extension ArtistsTableViewController: NSTableViewDelegate {
 
 /// TEMPORARY: a thumbnail in the artists list, to see whether it belongs there.
 private final class ArtistCell: NSTableCellView {
-    private static let diameter: CGFloat = 28
+    private static let diameter: CGFloat = 34
 
     private let thumbnail = ArtistThumbnailView()
     private var shownIdentity: String?

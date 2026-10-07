@@ -6,9 +6,9 @@ private struct PushedContentHeader: ViewModifier {
 
     func body(content: Content) -> some View {
         if let destination {
-            VStack(spacing: 0) {
+            ChromedPage {
                 ContentHeader(backDestination: destination)
-                Divider()
+            } content: { _ in
                 content
             }
             // NavigationStack supplies its own back button once something is pushed,
@@ -17,13 +17,14 @@ private struct PushedContentHeader: ViewModifier {
             // toolbar also removes close, minimise and zoom.
             .navigationBarBackButtonHidden(true)
         } else {
-            content
+            ChromedPage { _ in content }
         }
     }
 }
 
 extension View {
-    /// Puts the back strip above a pushed view, naming where it returns to. The window
+    /// Puts the back strip above a pushed view, naming where it returns to. The view
+    /// reads `pageTopInset` from its environment to clear the strip and the chrome. The window
     /// has no toolbar to hang a back button on, and Music.app keeps its own in this same
     /// position — top-left of the content column, under the player row.
     func contentHeader(_ backDestination: String?) -> some View {

@@ -20,8 +20,10 @@ struct DownloadsViewMac: View {
             || !downloadService.failedDownloads.isEmpty
     }
 
+    @State private var isShowingPausedNotice = false
+
     var body: some View {
-        VStack(spacing: 0) {
+        ChromedPage {
             ContentHeader(backDestination: nil) {
                 Menu {
                     Button("Download All") { showDownloadAllConfirmation = true }
@@ -37,9 +39,12 @@ struct DownloadsViewMac: View {
                 .fixedSize()
                 .help("Download options")
             }
-            Divider()
+        } content: { topInset in
             VStack(spacing: 0) {
                 DownloadPausedNotice()
+                    .onGeometryChange(for: Bool.self) { $0.size.height > 0 } action: {
+                        isShowingPausedNotice = $0
+                    }
                 if entries.isEmpty && !isTransferring {
                     ContentUnavailableView(
                         "No Downloads",
@@ -47,6 +52,7 @@ struct DownloadsViewMac: View {
                         description: Text("Albums you download are kept on this Mac and play offline.")
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, isShowingPausedNotice ? 0 : topInset)
                 } else {
                     DownloadsTable(
                         entries: entries,
@@ -54,11 +60,15 @@ struct DownloadsViewMac: View {
                         accent: settings.resolvedAccentColor,
                         onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) },
                         onPlay: playAlbum,
-                        onRemove: requestRemoval
+                        onRemove: requestRemoval,
+                        topContentInset: isShowingPausedNotice ? 0 : topInset
                     )
                 }
             }
-            .background(Color(NSColor.controlBackgroundColor))
+            // The notice doesn't scroll, so with it showing the page starts below the
+            // chrome; without it the table passes underneath.
+            .padding(.top, isShowingPausedNotice ? topInset : 0)
+            .pageBackground()
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
         .onChange(of: musicLibrary.downloadChanged) { reload() }

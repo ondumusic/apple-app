@@ -134,7 +134,10 @@ final class SidebarViewController: NSViewController {
     /// Matches Music.app: its sidebar scroll area starts 52pt below the window top.
     private static let trafficLightClearance: CGFloat = 52
 
-    private let searchField = NSSearchField()
+    private let searchField: NSSearchField = {
+        if #available(macOS 26.0, *) { return GlassSearchField() }
+        return NSSearchField()
+    }()
     private weak var backdrop: NSVisualEffectView?
     private let addButton = NSButton()
     private let bottomBar = NSView()
@@ -175,6 +178,19 @@ final class SidebarViewController: NSViewController {
     /// new playlist hadn't been picked up by the next tree rebuild yet). We trigger as
     /// soon as the row appears in update().
     private var pendingInlineRenameId: UUID?
+
+    /// On the sidebar material the stock field draws as a dark recessed well, darker
+    /// than everything around it. Glass makes it the raised capsule Music's fields are.
+    private static func searchFieldContainer(for field: NSSearchField) -> NSView {
+        guard #available(macOS 26.0, *) else { return field }
+        // The bezel-free cell draws no ring of its own, and the default one is a
+        // rectangle that would cut across the capsule.
+        field.focusRingType = .none
+        let glass = NSGlassEffectView()
+        glass.cornerRadius = 14
+        glass.contentView = field
+        return glass
+    }
 
     override func loadView() {
         view = NSView()
@@ -248,8 +264,9 @@ final class SidebarViewController: NSViewController {
         searchField.action = #selector(searchFieldChanged)
         searchField.sendsSearchStringImmediately = false
         searchField.sendsWholeSearchString = false
-        searchField.translatesAutoresizingMaskIntoConstraints = false
-        backdrop.addSubview(searchField)
+        let searchContainer = Self.searchFieldContainer(for: searchField)
+        searchContainer.translatesAutoresizingMaskIntoConstraints = false
+        backdrop.addSubview(searchContainer)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
@@ -275,11 +292,11 @@ final class SidebarViewController: NSViewController {
             // Music.app's sidebar: traffic lights, then the search field, then the
             // sections. Measured there at 52pt down for the scroll area, with the field
             // inset 11pt on each side.
-            searchField.topAnchor.constraint(equalTo: view.topAnchor, constant: Self.trafficLightClearance),
-            searchField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            searchField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
-            searchField.heightAnchor.constraint(equalToConstant: 28),
-            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 6),
+            searchContainer.topAnchor.constraint(equalTo: view.topAnchor, constant: Self.trafficLightClearance),
+            searchContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
+            searchContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+            searchContainer.heightAnchor.constraint(equalToConstant: 28),
+            scrollView.topAnchor.constraint(equalTo: searchContainer.bottomAnchor, constant: 6),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: activityBar.topAnchor),
@@ -1383,5 +1400,19 @@ private final class SidebarRowView: NSTableRowView {
     }
 }
 
-#endif
+/// Draws everything but the bezel, for a field sitting in a glass capsule that already
+/// provides one. Unbezeling the field instead drops the inset that keeps the text and
+/// cursor clear of the magnifying glass.
+private final class BezelFreeSearchFieldCell: NSSearchFieldCell {
+    override func draw(withFrame cellFrame: NSRect, in controlView: NSView) {
+        drawInterior(withFrame: cellFrame, in: controlView)
+    }
+}
 
+private final class GlassSearchField: NSSearchField {
+    override class var cellClass: AnyClass? {
+        get { BezelFreeSearchFieldCell.self }
+        set {}
+    }
+}
+#endif

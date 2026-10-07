@@ -14,6 +14,8 @@ struct DownloadsTable: NSViewControllerRepresentable {
     let onOpen: (Album) -> Void
     let onPlay: (Album) -> Void
     let onRemove: ([Album]) -> Void
+    /// Room for chrome floating over the top of the table, which rows scroll under.
+    var topContentInset: CGFloat = 0
 
     func makeNSViewController(context: Context) -> DownloadsTableViewController {
         let vc = DownloadsTableViewController()
@@ -31,6 +33,7 @@ struct DownloadsTable: NSViewControllerRepresentable {
         vc.onPlay = onPlay
         vc.onRemove = onRemove
         vc.onSelectionChange = { selection = $0 }
+        vc.topContentInset = topContentInset
         vc.apply(entries: entries, selection: selection)
     }
 }
@@ -41,6 +44,12 @@ final class DownloadsTableViewController: NSViewController {
     var onPlay: ((Album) -> Void)?
     var onRemove: (([Album]) -> Void)?
     var onSelectionChange: ((Set<UUID>) -> Void)?
+    var topContentInset: CGFloat = 0 {
+        didSet {
+            guard topContentInset != oldValue, isViewLoaded else { return }
+            scrollView.setTopContentInset(topContentInset)
+        }
+    }
 
     var accentNSColor: NSColor = .controlAccentColor {
         didSet {
@@ -90,7 +99,15 @@ final class DownloadsTableViewController: NSViewController {
 
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
-        scrollView.drawsBackground = true
+        // Matches pageBackground(): the window's material from macOS 26, the table's own
+        // content colour before it.
+        if #available(macOS 26, *) {
+            tableView.backgroundColor = .clear
+            scrollView.drawsBackground = false
+        } else {
+            scrollView.drawsBackground = true
+        }
+        scrollView.setTopContentInset(topContentInset)
         scrollView.addBottomContentPadding()
         view = scrollView
     }

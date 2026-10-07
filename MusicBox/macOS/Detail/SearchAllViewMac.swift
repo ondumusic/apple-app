@@ -31,6 +31,8 @@ struct SearchAllViewMac: View {
 
     private let artistColumns = [GridItem(.adaptive(minimum: 108), spacing: Spacing.element)]
 
+    @Environment(\.pageTopInset) private var pageTopInset
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -75,7 +77,9 @@ struct SearchAllViewMac: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.controlBackgroundColor))
+        // Its header and section strip don't scroll, so the page starts below the chrome.
+        .padding(.top, pageTopInset)
+        .pageBackground()
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
     }
 
