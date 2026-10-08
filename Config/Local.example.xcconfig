@@ -16,5 +16,5 @@ LOCAL_DEVELOPMENT_TEAM =
 // Changing a bundle identifier resets the container — new database, no downloads, signed
 // out — so this is how you avoid that until you're ready to pay it once.
 //
-// MUSICBOX_DEBUG_BUNDLE_ID = com.example.MusicBox
-// MUSICBOX_DEBUG_APP_NAME = MusicBox
+// ONDU_DEBUG_BUNDLE_ID = com.ondumusic.Player
+// ONDU_DEBUG_APP_NAME = Ondu

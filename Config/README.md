@@ -17,8 +17,8 @@ in Xcode.
 
 |            | Debug                      | Release                |
 | ---------- | -------------------------- | ---------------------- |
-| Identifier | `com.example.MusicBox.dev` | `com.example.MusicBox` |
-| Name       | MusicBox Dev               | MusicBox               |
+| Identifier | `com.ondumusic.Player.dev` | `com.ondumusic.Player` |
+| Name       | Ondu Dev               | Ondu               |
 | Icon       | `AppIcon`                  | `AppIcon`              |
 
 Debug gets its own identifier so a build mid-migration can't damage the library you
@@ -28,7 +28,7 @@ exists; give Debug its own and the two become distinguishable on a home screen.
 
 **Keeping your existing container.** A Debug build with a new identifier starts empty:
 full re-sync, nothing downloaded, signed out. If you'd rather not pay that yet,
-uncomment the two `MUSICBOX_DEBUG_*` lines in `Local.example.xcconfig` to pin Debug to
+uncomment the two `ONDU_DEBUG_*` lines in `Local.example.xcconfig` to pin Debug to
 the release identifier. The natural moment to stop doing that is the rename to the real
 identifier, which resets the container anyway.
 

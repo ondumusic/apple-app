@@ -8,18 +8,18 @@
 // Defaults
 // ---------------------------------------------------------------------------
 
-MUSICBOX_BUNDLE_ID = com.example.MusicBox
-MUSICBOX_APP_NAME = MusicBox
-MUSICBOX_APPICON = AppIcon
+ONDU_BUNDLE_ID = com.ondumusic.Player
+ONDU_APP_NAME = Ondu
+ONDU_APPICON = AppIcon
 
 // Debug installs alongside release by default, so a build that's mid-migration can't
 // touch the library you actually listen to. Separate identifier means a separate
 // container: its own database, downloads and keychain login.
-MUSICBOX_DEBUG_BUNDLE_ID = com.example.MusicBox.dev
-MUSICBOX_DEBUG_APP_NAME = MusicBox Dev
+ONDU_DEBUG_BUNDLE_ID = com.ondumusic.Player.dev
+ONDU_DEBUG_APP_NAME = Ondu Dev
 // Point at a second icon set once one exists, so the two are distinguishable on a home
 // screen rather than only by name.
-MUSICBOX_DEBUG_APPICON = AppIcon
+ONDU_DEBUG_APPICON = AppIcon
 
 // Empty means "Sign to Run Locally", so a fresh clone builds and runs with no setup.
 LOCAL_DEVELOPMENT_TEAM =
@@ -34,14 +34,14 @@ LOCAL_MACOS_CODE_SIGN_IDENTITY = -
 // Derived — nothing below here should need editing
 // ---------------------------------------------------------------------------
 
-EFFECTIVE_BUNDLE_ID = $(MUSICBOX_BUNDLE_ID)
-EFFECTIVE_BUNDLE_ID[config=Debug] = $(MUSICBOX_DEBUG_BUNDLE_ID)
+EFFECTIVE_BUNDLE_ID = $(ONDU_BUNDLE_ID)
+EFFECTIVE_BUNDLE_ID[config=Debug] = $(ONDU_DEBUG_BUNDLE_ID)
 
-EFFECTIVE_APP_NAME = $(MUSICBOX_APP_NAME)
-EFFECTIVE_APP_NAME[config=Debug] = $(MUSICBOX_DEBUG_APP_NAME)
+EFFECTIVE_APP_NAME = $(ONDU_APP_NAME)
+EFFECTIVE_APP_NAME[config=Debug] = $(ONDU_DEBUG_APP_NAME)
 
-EFFECTIVE_APPICON = $(MUSICBOX_APPICON)
-EFFECTIVE_APPICON[config=Debug] = $(MUSICBOX_DEBUG_APPICON)
+EFFECTIVE_APPICON = $(ONDU_APPICON)
+EFFECTIVE_APPICON[config=Debug] = $(ONDU_DEBUG_APPICON)
 
 // Lives here rather than on the target: it was deleted from the target by accident
 // while clearing the other overrides, and every target wants the same value anyway.

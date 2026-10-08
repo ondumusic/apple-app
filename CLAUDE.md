@@ -1,4 +1,4 @@
-# MusicBox
+# Ondu
 
 SwiftUI multiplatform music streaming app (iOS 26.2+ / macOS 15.7+) connecting to a self-hosted Elixir/Phoenix server backed by SQLite. Both platforms ship in v1.0; the macOS UI is a native AppKit/SwiftUI hybrid rather than a port of the iOS one. See `TODO.md` for what remains.
 
@@ -15,7 +15,7 @@ The full library metadata (artists, albums, tracks, playlists) is synced to on-d
 - `Services/OutboxService.swift` — durable replay queue for playlist mutations. Drains on launch, foreground, connectivity restore, at the top of `sync()`, and after every enqueue. Batches adjacent item-level mutations into one PATCH `/items` call (capped at 250 ops). 422 errors decode into `PlaylistItemsError` for typed recovery.
 - `Services/PlaylistController.swift` — synchronous façade. UI → local SwiftData write → outbox enqueue, returns immediately.
 - `Services/PlayerService.swift` — `AVQueuePlayer` wrapper. Owns shuffle, queue, gapless/crossfade, `AVAudioSession`, `MPNowPlayingInfoCenter`, `MPRemoteCommandCenter`. Audio session uses `routeSharingPolicy: .longFormAudio` (Apple's recommended policy for music apps).
-- `Services/DownloadService.swift` — background `URLSession` named `"com.musicbox.downloads"`. Files at `AppSupport/MusicBox/Downloads/{artistId}/{albumId}/{trackId}.ext`. Download state lives on `LibraryTrack.isDownloaded` + `localFilePath` (relative path).
+- `Services/DownloadService.swift` — background `URLSession` named `"<bundle id>.downloads"`, so Debug and release never pick up each other's transfers. Files at `AppSupport/Ondu/Downloads/{artistId}/{albumId}/{trackId}.ext`. Download state lives on `LibraryTrack.isDownloaded` + `localFilePath` (relative path).
 - `Services/SmartShuffle.swift` — Fisher-Yates plus a forward-pass spreader that pushes same-album/artist tracks apart. Gated by `SettingsStore.spreadShuffle`.
 
 ### Sync flow
@@ -64,7 +64,7 @@ Playlists shipped on `feat/playlists`. Folders are `Playlist`s with `isFolder ==
 - Follow existing patterns when in doubt — read the nearest sibling file.
 - Prefer `async` / `await` and `@MainActor` over `DispatchQueue`.
 - Keep responses concise. Terse output is preferred; trailing summaries that restate the diff are not.
-- **Maintain tests with code changes.** Add or update tests as part of the same work, not as a separate task. Test files live in `MusicBoxTests/`.
+- **Maintain tests with code changes.** Add or update tests as part of the same work, not as a separate task. Test files live in `OnduTests/`.
 - **Localize user-facing strings.** SwiftUI's `Text("...")` literal initializer auto-routes through `Localizable.xcstrings`. For dynamic counts, use Apple's inflection markup: `Text("^[\(count) song](inflect: true)")`. Strings stored as `String` and passed to `Text(String)` are **not** localized — use `LocalizedStringResource` instead.
 
 ## Commit messages
@@ -78,17 +78,17 @@ Playlists shipped on `feat/playlists`. Folders are `Playlist`s with `isFolder ==
 
 ```bash
 # Build for iPhone simulator
-xcodebuild -scheme MusicBox -destination 'platform=iOS Simulator,name=iPhone 17' -quiet build
+xcodebuild -scheme Ondu -destination 'platform=iOS Simulator,name=iPhone 17' -quiet build
 
 # Run unit tests (~1 min)
-xcodebuild -scheme MusicBox -destination 'platform=iOS Simulator,name=iPhone 17' \
+xcodebuild -scheme Ondu -destination 'platform=iOS Simulator,name=iPhone 17' \
   -parallel-testing-enabled NO test
 ```
 
 A test run that hangs with no output usually means the test host crashed: the bundle
 aborts mid-run and leaves `/usr/libexec/testmanagerd` orphaned, which then wedges the
 *next* run too. Killing `xcodebuild` doesn't clear it — `killall -9 testmanagerd` does.
-Look for a crash report in `~/Library/Logs/DiagnosticReports/MusicBox-*.ips` and for a
+Look for a crash report in `~/Library/Logs/DiagnosticReports/Ondu-*.ips` and for a
 failing test in the same area before blaming the simulator.
 
 Parallel testing is off deliberately. The iOS 27 simulator runtime clones unreliably —
