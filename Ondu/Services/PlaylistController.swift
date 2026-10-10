@@ -22,6 +22,8 @@ final class PlaylistController {
         }
     }
 
+    @ObservationIgnored private var remapObserver: Any?
+
     init(musicLibrary: MusicLibrary, outbox: OutboxService, downloadService: DownloadService) {
         self.musicLibrary = musicLibrary
         self.outbox = outbox
@@ -30,6 +32,21 @@ final class PlaylistController {
            let id = UUID(uuidString: raw) {
             self.lastUsedPlaylistId = id
         }
+        // A playlist made here is recorded under its temporary id until the server
+        // confirms it. Left alone, the shortcut points at an id that no longer exists
+        // and hides itself.
+        remapObserver = NotificationCenter.default.addObserver(
+            forName: .playlistIdRemapped, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let temp = note.userInfo?["temp"] as? UUID,
+                  let real = note.userInfo?["real"] as? UUID,
+                  self?.lastUsedPlaylistId == temp else { return }
+            self?.lastUsedPlaylistId = real
+        }
+    }
+
+    deinit {
+        if let remapObserver { NotificationCenter.default.removeObserver(remapObserver) }
     }
 
     /// Marks a playlist as auto-downloaded and kicks off downloads for any tracks not yet
