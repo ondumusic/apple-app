@@ -63,6 +63,17 @@ final class PlaylistController {
         }
     }
 
+    /// Stops a playlist downloading, keeping whatever already finished. The flag has to go
+    /// too: sync queues every not-yet-downloaded track of a flagged playlist, so cancelling
+    /// only the transfers had them all back on the next sync.
+    func cancelDownloads(_ playlistId: UUID) {
+        musicLibrary.setPlaylistAutoDownload(id: playlistId, enabled: false)
+        for track in musicLibrary.tracksForPlaylist(playlistId)
+        where downloadService.isDownloading(trackId: track.id) || downloadService.isQueued(trackId: track.id) {
+            downloadService.cancelDownload(trackId: track.id)
+        }
+    }
+
     /// Clears the auto-download flag and removes the playlist's downloaded tracks. Called
     /// from the Remove Download action.
     func disableAutoDownloadAndRemove(_ playlistId: UUID) {

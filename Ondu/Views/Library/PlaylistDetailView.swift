@@ -51,12 +51,6 @@ struct PlaylistDetailView: View {
         tracks.contains { downloadService.isDownloading(trackId: $0.id) || downloadService.isQueued(trackId: $0.id) }
     }
 
-    private func cancelPlaylistDownloads() {
-        for track in tracks where downloadService.isDownloading(trackId: track.id) || downloadService.isQueued(trackId: track.id) {
-            downloadService.cancelDownload(trackId: track.id)
-        }
-    }
-
     /// Queue items built with each playlist item's id as the `QueueItem.id`. This lets us tell
     /// "the third occurrence of track A" apart from "the fifth occurrence" when highlighting
     /// the currently-playing row.
@@ -154,7 +148,7 @@ struct PlaylistDetailView: View {
             }
             .confirmationDialog("Cancel Downloads", isPresented: $showCancelDownloads) {
                 Button("Cancel All Downloads", role: .destructive) {
-                    cancelPlaylistDownloads()
+                    controller.cancelDownloads(playlist.id)
                 }
             } message: {
                 Text("Cancel all pending and active downloads for this playlist?")
