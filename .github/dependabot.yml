@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Nuke, via the Package.resolved inside the Xcode project.
+  - package-ecosystem: swift
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Keeps the actions in .github/workflows current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

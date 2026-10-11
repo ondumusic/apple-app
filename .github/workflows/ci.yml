@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Match what the app is developed against; the macOS 26 glass APIs need a current SDK.
+  # Check github.com/actions/runner-images for the Xcode versions an image ships.
+  XCODE_APP: /Applications/Xcode_27.0.app
+  # Under build/, which is gitignored, so the package checkout can be cached by path.
+  PACKAGES_DIR: build/SourcePackages
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.PACKAGES_DIR }}
+          key: spm-${{ hashFiles('Ondu.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      # Both platforms, because a change made on one routinely breaks the other: an
+      # AppKit type outside its #if os(macOS) only shows up in the iOS build.
+      - name: Build for macOS
+        run: >
+          xcodebuild -scheme Ondu -destination 'platform=macOS'
+          -clonedSourcePackagesDirPath "$PACKAGES_DIR"
+          CODE_SIGNING_ALLOWED=NO -quiet build
+
+      # Serial on purpose, as in CLAUDE.md: parallel simulator clones fail unreliably.
+      # The step timeout turns a crashed test host — which hangs rather than failing —
+      # into a failed run instead of a stuck one.
+      - name: Test on iOS Simulator
+        timeout-minutes: 20
+        run: >
+          xcodebuild -scheme Ondu -destination 'platform=iOS Simulator,name=iPhone 17'
+          -parallel-testing-enabled NO
+          -clonedSourcePackagesDirPath "$PACKAGES_DIR"
+          CODE_SIGNING_ALLOWED=NO test
