@@ -43,9 +43,15 @@ EFFECTIVE_APP_NAME[config=Debug] = $(ONDU_DEBUG_APP_NAME)
 EFFECTIVE_APPICON = $(ONDU_APPICON)
 EFFECTIVE_APPICON[config=Debug] = $(ONDU_DEBUG_APPICON)
 
-// Lives here rather than on the target: it was deleted from the target by accident
-// while clearing the other overrides, and every target wants the same value anyway.
-PRODUCT_NAME = $(TARGET_NAME)
+// The app's user-facing name, not its target name: macOS names an app after its file
+// (Dock, Finder, Spotlight) and CFBundleName (menu bar, About), not CFBundleDisplayName,
+// so this is what makes a Debug build "Ondu Dev" there — and stops it replacing a
+// release copy of the same file name. The test target sets its own. The module keeps the
+// target name, which is what `@testable import Ondu` needs. Lives here rather than on
+// the target: it was deleted from the target by accident while clearing the other
+// overrides.
+PRODUCT_NAME = $(EFFECTIVE_APP_NAME)
+PRODUCT_MODULE_NAME = $(TARGET_NAME)
 
 PRODUCT_BUNDLE_IDENTIFIER = $(EFFECTIVE_BUNDLE_ID)
 INFOPLIST_KEY_CFBundleDisplayName = $(EFFECTIVE_APP_NAME)
