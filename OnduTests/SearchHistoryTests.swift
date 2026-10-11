@@ -1,9 +1,12 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
-private func makeItem(kind: SearchHistoryItem.Kind = .artist, name: String = "Test",
-                      id: UUID = UUID()) -> SearchHistoryItem {
+private func makeItem(
+    kind: SearchHistoryItem.Kind = .artist, name: String = "Test",
+    id: UUID = UUID()
+) -> SearchHistoryItem {
     SearchHistoryItem(id: id, kind: kind, name: name)
 }
 
@@ -59,7 +62,7 @@ struct SearchHistoryTests {
         }
 
         #expect(history.items.count == 20)
-        #expect(history.items[0].name == "Item 24") // Most recent first
+        #expect(history.items[0].name == "Item 24")  // Most recent first
         clearHistory()
     }
 

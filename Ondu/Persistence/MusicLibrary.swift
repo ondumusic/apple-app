@@ -46,7 +46,10 @@ final class MusicLibrary {
     }
 
     init() throws {
-        let schema = Schema([LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self, LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self])
+        let schema = Schema([
+            LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self, LibraryPlaylist.self, LibraryPlaylistItem.self,
+            PendingMutation.self,
+        ])
         do {
             modelContainer = try ModelContainer(for: schema)
         } catch {
@@ -61,9 +64,10 @@ final class MusicLibrary {
             if let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
                 let enumerator = fm.enumerator(at: appSupport, includingPropertiesForKeys: nil)
                 while let fileURL = enumerator?.nextObject() as? URL {
-                    if fileURL.lastPathComponent.hasSuffix(".store") ||
-                       fileURL.lastPathComponent.hasSuffix(".store-wal") ||
-                       fileURL.lastPathComponent.hasSuffix(".store-shm") {
+                    if fileURL.lastPathComponent.hasSuffix(".store")
+                        || fileURL.lastPathComponent.hasSuffix(".store-wal")
+                        || fileURL.lastPathComponent.hasSuffix(".store-shm")
+                    {
                         try? fm.removeItem(at: fileURL)
                     }
                 }
@@ -82,7 +86,8 @@ final class MusicLibrary {
     }
 
     nonisolated static var reconciliationManifestURL: URL? {
-        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        else { return nil }
         return appSupport.appendingPathComponent("Ondu/.reconciliation-manifest.json")
     }
 
@@ -115,7 +120,8 @@ final class MusicLibrary {
             guard values?.isRegularFile == true else { continue }
             let trackIdString = url.deletingPathExtension().lastPathComponent
             guard let trackId = UUID(uuidString: trackIdString),
-                  let relativePath = downloadRelativePath(for: url) else { continue }
+                let relativePath = downloadRelativePath(for: url)
+            else { continue }
             let size = Int64(values?.fileSize ?? 0)
             entries.append(DownloadManifestEntry(trackId: trackId, relativePath: relativePath, fileSize: size))
         }
@@ -159,8 +165,9 @@ final class MusicLibrary {
         )
         let libArtists = fetch(descriptor) ?? []
         return libArtists.map {
-            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName,
-                   slug: $0.slug, albumCount: $0.albumCount, artwork: $0.artwork)
+            Artist(
+                id: $0.serverId, name: $0.name, sortName: $0.sortName,
+                slug: $0.slug, albumCount: $0.albumCount, artwork: $0.artwork)
         }
     }
 
@@ -169,8 +176,9 @@ final class MusicLibrary {
         var descriptor = FetchDescriptor<LibraryArtist>(predicate: #Predicate { $0.serverId == id })
         descriptor.fetchLimit = 1
         guard let la = fetch(descriptor)?.first else { return nil }
-        return Artist(id: la.serverId, name: la.name, sortName: la.sortName, slug: la.slug,
-                      albumCount: la.albumCount, artwork: la.artwork)
+        return Artist(
+            id: la.serverId, name: la.name, sortName: la.sortName, slug: la.slug,
+            albumCount: la.albumCount, artwork: la.artwork)
     }
 
     // MARK: - Query: Albums
@@ -216,7 +224,8 @@ final class MusicLibrary {
         _ = revision
         let descriptor = FetchDescriptor<LibraryAlbum>(predicate: #Predicate { $0.artistId == artistId })
         let libAlbums = fetch(descriptor) ?? []
-        return libAlbums
+        return
+            libAlbums
             .sorted { ($0.releaseYear ?? 0) > ($1.releaseYear ?? 0) }
             .map { toAlbum($0) }
     }
@@ -246,9 +255,10 @@ final class MusicLibrary {
         descriptor.fetchLimit = 1
         guard let la = fetch(descriptor)?.first else { return nil }
         let tracks = tracksForAlbum(id)
-        return Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
-                     slug: la.slug, releaseYear: la.releaseYear, tracks: tracks,
-                     isUnknown: la.isUnknown, artworkUrl: la.artworkUrl, artwork: la.artwork)
+        return Album(
+            id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
+            slug: la.slug, releaseYear: la.releaseYear, tracks: tracks,
+            isUnknown: la.isUnknown, artworkUrl: la.artworkUrl, artwork: la.artwork)
     }
 
     func albumsWithTracksForArtist(_ artistId: UUID) -> [Album] {
@@ -267,9 +277,10 @@ final class MusicLibrary {
             let albumTracks = (tracksByAlbum[la.serverId] ?? [])
                 .map { buildTrack($0, artistMap: artistMap, album: la) }
                 .sorted { ($0.disc, $0.number ?? Int.max) < ($1.disc, $1.number ?? Int.max) }
-            return Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
-                         slug: la.slug, releaseYear: la.releaseYear, tracks: albumTracks,
-                         isUnknown: la.isUnknown, artworkUrl: la.artworkUrl, artwork: la.artwork)
+            return Album(
+                id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
+                slug: la.slug, releaseYear: la.releaseYear, tracks: albumTracks,
+                isUnknown: la.isUnknown, artworkUrl: la.artworkUrl, artwork: la.artwork)
         }
     }
 
@@ -301,7 +312,8 @@ final class MusicLibrary {
         let artistIds = Set(libTracks.map(\.artistId) + libTracks.map(\.albumArtistId))
         let artistMap = buildArtistMapForIds(artistIds)
         let album = fetchAlbumRecord(albumId)
-        return libTracks
+        return
+            libTracks
             .map { buildTrack($0, artistMap: artistMap, album: album) }
             .sorted { ($0.disc, $0.number ?? Int.max) < ($1.disc, $1.number ?? Int.max) }
     }
@@ -310,9 +322,11 @@ final class MusicLibrary {
     /// lookups plus a localized collation on every one of ~n log n comparisons, even
     /// though every track in an album shares both string keys — at library scale that
     /// collation dominated the whole call.
-    nonisolated static func sortedTracks(_ libTracks: [LibraryTrack],
-                                         artistMap: [UUID: LibraryArtist],
-                                         albumMap: [UUID: LibraryAlbum]) -> [Track] {
+    nonisolated static func sortedTracks(
+        _ libTracks: [LibraryTrack],
+        artistMap: [UUID: LibraryArtist],
+        albumMap: [UUID: LibraryAlbum]
+    ) -> [Track] {
         var groups: [TrackGroupKey: [LibraryTrack]] = [:]
         for lt in libTracks {
             groups[TrackGroupKey(albumArtistId: lt.albumArtistId, albumId: lt.albumId), default: []].append(lt)
@@ -350,8 +364,8 @@ final class MusicLibrary {
         let built = await Task.detached {
             let context = ModelContext(container)
             guard let libTracks = try? context.fetch(FetchDescriptor<LibraryTrack>()),
-                  let libArtists = try? context.fetch(FetchDescriptor<LibraryArtist>()),
-                  let libAlbums = try? context.fetch(FetchDescriptor<LibraryAlbum>())
+                let libArtists = try? context.fetch(FetchDescriptor<LibraryArtist>()),
+                let libAlbums = try? context.fetch(FetchDescriptor<LibraryAlbum>())
             else { return [Track]() }
             let artistMap = Dictionary(uniqueKeysWithValues: libArtists.map { ($0.serverId, $0) })
             let albumMap = Dictionary(uniqueKeysWithValues: libAlbums.map { ($0.serverId, $0) })
@@ -422,9 +436,10 @@ final class MusicLibrary {
     }
 
     private func toPlaylist(_ lp: LibraryPlaylist) -> Playlist {
-        Playlist(id: lp.serverId, name: lp.name, trackCount: lp.trackCount,
-                 insertedAt: lp.insertedAt, isFolder: lp.isFolder, parentId: lp.parentId,
-                 autoDownload: lp.autoDownload)
+        Playlist(
+            id: lp.serverId, name: lp.name, trackCount: lp.trackCount,
+            insertedAt: lp.insertedAt, isFolder: lp.isFolder, parentId: lp.parentId,
+            autoDownload: lp.autoDownload)
     }
 
     /// Flips a playlist's `autoDownload` flag. Caller is responsible for triggering any
@@ -486,8 +501,9 @@ final class MusicLibrary {
             sortBy: [SortDescriptor(\.position)]
         )
         return (fetch(descriptor) ?? []).map {
-            PlaylistItem(id: $0.serverId, playlistId: $0.playlistId, trackId: $0.trackId,
-                         position: $0.position, insertedAt: $0.insertedAt)
+            PlaylistItem(
+                id: $0.serverId, playlistId: $0.playlistId, trackId: $0.trackId,
+                position: $0.position, insertedAt: $0.insertedAt)
         }
     }
 
@@ -531,24 +547,22 @@ final class MusicLibrary {
 
     // MARK: - Search
 
-
     func search(_ query: String) -> (artists: [Artist], albums: [Album], tracks: [Track]) {
         _ = revision
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return ([], [], []) }
 
         let artistDescriptor = FetchDescriptor<LibraryArtist>(
             predicate: #Predicate {
-                $0.albumCount > 0 && (
-                    $0.name.localizedStandardContains(query) ||
-                    $0.sortName.localizedStandardContains(query)
-                )
+                $0.albumCount > 0
+                    && ($0.name.localizedStandardContains(query) || $0.sortName.localizedStandardContains(query))
             },
             sortBy: [SortDescriptor(\.sortName)]
         )
         let matchedArtists = fetch(artistDescriptor) ?? []
         let filteredArtists = matchedArtists.map {
-            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug,
-                   albumCount: $0.albumCount, artwork: $0.artwork)
+            Artist(
+                id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug,
+                albumCount: $0.albumCount, artwork: $0.artwork)
         }
 
         // An album matches on its own name or by belonging to a matched artist, so
@@ -557,17 +571,16 @@ final class MusicLibrary {
         let matchedArtistIds = matchedArtists.map(\.serverId)
         let albumDescriptor = FetchDescriptor<LibraryAlbum>(
             predicate: #Predicate {
-                $0.trackCount > 0 && (
-                    $0.name.localizedStandardContains(query) ||
-                    $0.sortName.localizedStandardContains(query) ||
-                    matchedArtistIds.contains($0.artistId)
-                )
+                $0.trackCount > 0
+                    && ($0.name.localizedStandardContains(query) || $0.sortName.localizedStandardContains(query)
+                        || matchedArtistIds.contains($0.artistId))
             }
         )
         let matchedAlbums = fetch(albumDescriptor) ?? []
         let artistIds = Set(matchedAlbums.map(\.artistId))
         let artistMap = buildArtistMapForIds(artistIds)
-        let filteredAlbums = matchedAlbums
+        let filteredAlbums =
+            matchedAlbums
             .sorted { a, b in
                 let aName = a.name.localizedStandardContains(query)
                 let bName = b.name.localizedStandardContains(query)
@@ -588,10 +601,8 @@ final class MusicLibrary {
         let matchedAlbumIds = matchedAlbums.map(\.serverId)
         let trackDescriptor = FetchDescriptor<LibraryTrack>(
             predicate: #Predicate {
-                $0.name.localizedStandardContains(query) ||
-                matchedArtistIds.contains($0.artistId) ||
-                matchedArtistIds.contains($0.albumArtistId) ||
-                matchedAlbumIds.contains($0.albumId)
+                $0.name.localizedStandardContains(query) || matchedArtistIds.contains($0.artistId)
+                    || matchedArtistIds.contains($0.albumArtistId) || matchedAlbumIds.contains($0.albumId)
             }
         )
         let matchedTracks = fetch(trackDescriptor) ?? []
@@ -610,7 +621,8 @@ final class MusicLibrary {
         }
         // Title matches rank above tracks that only matched through their artist or
         // album — typing a song name should not bury it under that artist's discography.
-        let filteredTracks = matchedTracks
+        let filteredTracks =
+            matchedTracks
             .map { buildTrack($0, artistMap: trackArtistMap, album: trackAlbumMap[$0.albumId]) }
             .sorted { a, b in
                 let aTitle = a.name.localizedStandardContains(query)
@@ -680,10 +692,11 @@ final class MusicLibrary {
 
     func toAlbum(_ la: LibraryAlbum, artistMap: [UUID: LibraryArtist]? = nil) -> Album {
         let artist = artistMap?[la.artistId]
-        return Album(id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
-              slug: la.slug, releaseYear: la.releaseYear, isUnknown: la.isUnknown,
-              artworkUrl: la.artworkUrl, artwork: la.artwork, insertedAt: la.insertedAt,
-              artistName: artist?.name, artistSortName: artist?.sortName)
+        return Album(
+            id: la.serverId, artistId: la.artistId, name: la.name, sortName: la.sortName,
+            slug: la.slug, releaseYear: la.releaseYear, isUnknown: la.isUnknown,
+            artworkUrl: la.artworkUrl, artwork: la.artwork, insertedAt: la.insertedAt,
+            artistName: artist?.name, artistSortName: artist?.sortName)
     }
 
     /// The album's loudness as the server measured it. Nil until it has.
@@ -700,15 +713,20 @@ final class MusicLibrary {
 
     /// Same construction, callable from the background rebuild — model objects are read
     /// through whichever context fetched them, and nothing here touches the main one.
-    nonisolated static func buildTrackValue(_ lt: LibraryTrack, artistMap: [UUID: LibraryArtist], album: LibraryAlbum?) -> Track {
-        let artist = artistMap[lt.artistId].map {
-            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug,
-                   albumCount: $0.albumCount, artwork: $0.artwork)
-        } ?? Artist(id: lt.artistId, name: "Unknown", sortName: "Unknown", slug: "unknown")
+    nonisolated static func buildTrackValue(_ lt: LibraryTrack, artistMap: [UUID: LibraryArtist], album: LibraryAlbum?)
+        -> Track
+    {
+        let artist =
+            artistMap[lt.artistId].map {
+                Artist(
+                    id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug,
+                    albumCount: $0.albumCount, artwork: $0.artwork)
+            } ?? Artist(id: lt.artistId, name: "Unknown", sortName: "Unknown", slug: "unknown")
 
         let trackAlbum = album.map {
-            Track.TrackAlbum(id: $0.serverId, name: $0.name, artworkUrl: $0.artworkUrl,
-                             releaseYear: $0.releaseYear)
+            Track.TrackAlbum(
+                id: $0.serverId, name: $0.name, artworkUrl: $0.artworkUrl,
+                releaseYear: $0.releaseYear)
         }
 
         let albumArtistName = artistMap[lt.albumArtistId]?.name ?? artist.name
@@ -728,14 +746,17 @@ final class MusicLibrary {
 
     /// Build a Track from individually-fetched entities (for single-track lookups).
     func buildTrack(_ lt: LibraryTrack, artist: LibraryArtist?, albumArtist: LibraryArtist?, album: Album?) -> Track {
-        let artistModel = artist.map {
-            Artist(id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug,
-                   albumCount: $0.albumCount, artwork: $0.artwork)
-        } ?? Artist(id: lt.artistId, name: "Unknown", sortName: "Unknown", slug: "unknown")
+        let artistModel =
+            artist.map {
+                Artist(
+                    id: $0.serverId, name: $0.name, sortName: $0.sortName, slug: $0.slug,
+                    albumCount: $0.albumCount, artwork: $0.artwork)
+            } ?? Artist(id: lt.artistId, name: "Unknown", sortName: "Unknown", slug: "unknown")
 
         let trackAlbum = album.map {
-            Track.TrackAlbum(id: $0.id, name: $0.name, artworkUrl: $0.artworkUrl,
-                             releaseYear: $0.releaseYear)
+            Track.TrackAlbum(
+                id: $0.id, name: $0.name, artworkUrl: $0.artworkUrl,
+                releaseYear: $0.releaseYear)
         }
 
         let albumArtistName = albumArtist?.name ?? artistModel.name

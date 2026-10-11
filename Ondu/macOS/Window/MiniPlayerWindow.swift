@@ -17,7 +17,8 @@ import SwiftUI
 private final class MiniPlayerWindow: NSWindow {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-           event.charactersIgnoringModifiers == "w" {
+            event.charactersIgnoringModifiers == "w"
+        {
             // close() rather than performClose(), which works by highlighting the close
             // button and silently declines when it can't: this window keeps that button
             // at zero alpha until the pointer is inside, so Cmd+W worked or didn't
@@ -548,8 +549,10 @@ private struct MiniPlayerContent: View {
         // show doesn't go dark around white controls. Known synchronously — nothing here
         // waits on decoding a colour out of the artwork, so there's no flash to avoid.
         .background(WindowAppearance(isDark: isTinted))
-        .background(MiniPlayerWindowLevel(
-            isFloating: settings.miniPlayerAlwaysOnTop && !isAppActive))
+        .background(
+            MiniPlayerWindowLevel(
+                isFloating: settings.miniPlayerAlwaysOnTop && !isAppActive)
+        )
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             isAppActive = true
         }
@@ -626,9 +629,11 @@ private struct UnifiedLayout: View {
                 )
                 .padding(.vertical, 10)
                 .padding(.horizontal, 14)
-                .frame(maxWidth: .infinity,
-                        minHeight: MiniPlayerContent.transportRowHeight,
-                        maxHeight: MiniPlayerContent.transportRowHeight)
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: MiniPlayerContent.transportRowHeight,
+                    maxHeight: MiniPlayerContent.transportRowHeight
+                )
                 .background(transportBackground)
                 .opacity(transportVisible ? 1 : 0)
                 .animation(.easeInOut(duration: 0.18), value: transportVisible)
@@ -639,9 +644,10 @@ private struct UnifiedLayout: View {
                         // Clear would leave the queue and the transport on one
                         // undifferentiated wash; this darkens the band the way the opaque
                         // window background used to separate them.
-                        .background(isTinted
-                                    ? AnyShapeStyle(Color.black.opacity(0.22))
-                                    : AnyShapeStyle(.windowBackground))
+                        .background(
+                            isTinted
+                                ? AnyShapeStyle(Color.black.opacity(0.22))
+                                : AnyShapeStyle(.windowBackground))
                 }
             }
         }
@@ -724,18 +730,24 @@ private struct CompactLayout: View {
             }
             Spacer(minLength: 4)
             HStack(spacing: 4) {
-                Button { player.back() } label: {
+                Button {
+                    player.back()
+                } label: {
                     Image(systemName: "backward.fill")
                         .frame(width: 26, height: 26)
                 }
                 .disabled(track == nil || !player.canGoBack)
-                Button { player.togglePlayPause() } label: {
+                Button {
+                    player.togglePlayPause()
+                } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 14))
                         .frame(width: 26, height: 26)
                 }
                 .disabled(track == nil)
-                Button { player.skip() } label: {
+                Button {
+                    player.skip()
+                } label: {
                     Image(systemName: "forward.fill")
                         .frame(width: 26, height: 26)
                 }
@@ -785,19 +797,25 @@ private struct TransportRow: View {
             // wider than the narrow mini-player window in overlay mode.
             ZStack {
                 HStack(spacing: 0) {
-                    Button { player.back() } label: {
+                    Button {
+                        player.back()
+                    } label: {
                         Image(systemName: "backward.fill")
                             .font(.system(size: 14))
                             .frame(width: Self.controlSize, height: Self.controlSize)
                     }
                     .disabled(track == nil || !player.canGoBack)
-                    Button { player.togglePlayPause() } label: {
+                    Button {
+                        player.togglePlayPause()
+                    } label: {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 19))
                             .frame(width: Self.controlSize, height: Self.controlSize)
                     }
                     .disabled(track == nil)
-                    Button { player.skip() } label: {
+                    Button {
+                        player.skip()
+                    } label: {
                         Image(systemName: "forward.fill")
                             .font(.system(size: 14))
                             .frame(width: Self.controlSize, height: Self.controlSize)
@@ -814,7 +832,9 @@ private struct TransportRow: View {
                 }
                 HStack(spacing: 0) {
                     Spacer()
-                    Button { onQueueToggleRequest() } label: {
+                    Button {
+                        onQueueToggleRequest()
+                    } label: {
                         Image(systemName: "list.bullet")
                             .font(.system(size: 14))
                             .frame(width: Self.controlSize, height: Self.controlSize)
@@ -867,9 +887,10 @@ private struct InlineQueue: View {
                     .buttonStyle(.plain)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .help(scope == .upNext
-                          ? "Remove everything after the current track"
-                          : "Remove everything before the current track")
+                    .help(
+                        scope == .upNext
+                            ? "Remove everything after the current track"
+                            : "Remove everything before the current track")
                 }
             }
             .padding(.horizontal, 12)

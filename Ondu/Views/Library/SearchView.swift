@@ -1,4 +1,5 @@
 import SwiftUI
+
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -21,7 +22,9 @@ struct SearchView: View {
         Group {
             if query.isEmpty {
                 if searchHistory.items.isEmpty {
-                    ContentUnavailableView("Search", systemImage: "magnifyingglass", description: Text("Search for artists, albums, or songs."))
+                    ContentUnavailableView(
+                        "Search", systemImage: "magnifyingglass",
+                        description: Text("Search for artists, albums, or songs."))
                 } else {
                     recentsList
                 }
@@ -80,9 +83,10 @@ struct SearchView: View {
                 .task {
                     if !didAddToHistory, results.artists.contains(where: { $0.id == artist.id }) {
                         didAddToHistory = true
-                        searchHistory.add(SearchHistoryItem(
-                            id: artist.id, kind: .artist, name: artist.name
-                        ))
+                        searchHistory.add(
+                            SearchHistoryItem(
+                                id: artist.id, kind: .artist, name: artist.name
+                            ))
                     }
                 }
         }
@@ -91,11 +95,12 @@ struct SearchView: View {
                 .task {
                     if !didAddToHistory, results.albums.contains(where: { $0.id == album.id }) {
                         didAddToHistory = true
-                        searchHistory.add(SearchHistoryItem(
-                            id: album.id, kind: .album, name: album.name,
-                            subtitle: album.artistName, artworkUrl: album.artworkUrl,
-                            artistId: album.artistId
-                        ))
+                        searchHistory.add(
+                            SearchHistoryItem(
+                                id: album.id, kind: .album, name: album.name,
+                                subtitle: album.artistName, artworkUrl: album.artworkUrl,
+                                artistId: album.artistId
+                            ))
                     }
                 }
         }
@@ -216,14 +221,15 @@ struct SearchView: View {
             if let idx = items.firstIndex(where: { $0.track.id == track.id }) {
                 player.requestPlay { player.playNow(queue: items, startingAt: idx) }
             }
-            searchHistory.add(SearchHistoryItem(
-                id: track.id, kind: .song,
-                name: track.name,
-                subtitle: track.artist.name,
-                artworkUrl: track.album?.artworkUrl,
-                artistId: track.artistId,
-                albumId: track.albumId
-            ))
+            searchHistory.add(
+                SearchHistoryItem(
+                    id: track.id, kind: .song,
+                    name: track.name,
+                    subtitle: track.artist.name,
+                    artworkUrl: track.album?.artworkUrl,
+                    artistId: track.artistId,
+                    albumId: track.albumId
+                ))
         }
     }
 }

@@ -118,7 +118,9 @@ struct SettingsView: View {
             }
             #endif
         } footer: {
-            Text("Plays every track at a similar loudness, so quiet albums and loud ones don't jump. Albums keep their own quiet and loud moments. Turns the volume down, never up.")
+            Text(
+                "Plays every track at a similar loudness, so quiet albums and loud ones don't jump. Albums keep their own quiet and loud moments. Turns the volume down, never up."
+            )
         }
     }
 
@@ -128,7 +130,9 @@ struct SettingsView: View {
         Section {
             Toggle("Record Plays", isOn: $settings.recordPlays)
         } footer: {
-            Text("Counts a track as played once you've heard most of it, and tells your server. Turning this off stops this device counting; plays already recorded are kept, and your other devices carry on.")
+            Text(
+                "Counts a track as played once you've heard most of it, and tells your server. Turning this off stops this device counting; plays already recorded are kept, and your other devices carry on."
+            )
         }
     }
 
@@ -216,7 +220,9 @@ struct SettingsView: View {
                 .confirmationDialog("Clear Playback Cache?", isPresented: $showClearCacheConfirmation) {
                     Button("Clear Cache", role: .destructive) { playbackCache.clearCache() }
                 } message: {
-                    Text("This will remove \(playbackCache.formattedSize) of cached audio. Tracks will be re-streamed on next play.")
+                    Text(
+                        "This will remove \(playbackCache.formattedSize) of cached audio. Tracks will be re-streamed on next play."
+                    )
                 }
         } header: {
             Text("Playback Cache")
@@ -243,7 +249,9 @@ struct SettingsView: View {
             } header: {
                 Text("Quality")
             } footer: {
-                Text("Streaming quality applies when playing from the server. Download quality only affects new downloads.")
+                Text(
+                    "Streaming quality applies when playing from the server. Download quality only affects new downloads."
+                )
             }
         }
     }
@@ -298,7 +306,9 @@ struct SettingsView: View {
                         Button("Rebuild") { Task { await syncService.rebuildLibrary() } }
                         Button("Cancel", role: .cancel) {}
                     } message: {
-                        Text("Downloads your whole library again from the server. Downloaded music and playlists are kept.")
+                        Text(
+                            "Downloads your whole library again from the server. Downloaded music and playlists are kept."
+                        )
                     }
                 if let error = syncService.syncError {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -343,7 +353,9 @@ struct SettingsView: View {
                             auth.logout()
                         }
                     } message: {
-                        Text("This will remove all offline data including downloads, cached artwork, and your synced library from this device.")
+                        Text(
+                            "This will remove all offline data including downloads, cached artwork, and your synced library from this device."
+                        )
                     }
             } else {
                 Text("Not signed in").foregroundStyle(.secondary)
@@ -368,8 +380,11 @@ struct SettingsView: View {
         #if os(macOS)
         let binding = customColorBinding(settings: settings)
         Circle()
-            .fill(AngularGradient(colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red],
-                                  center: .center))
+            .fill(
+                AngularGradient(
+                    colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red],
+                    center: .center)
+            )
             .overlay {
                 Circle()
                     .fill(settings.customAccentColor)
@@ -403,10 +418,12 @@ struct SettingsView: View {
     }
 }
 
-private extension Color {
-    var rgbComponents: (red: Double, green: Double, blue: Double)? {
+extension Color {
+    fileprivate var rgbComponents: (red: Double, green: Double, blue: Double)? {
         #if os(iOS)
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
         guard UIColor(self).getRed(&r, green: &g, blue: &b, alpha: nil) else { return nil }
         return (Double(r), Double(g), Double(b))
         #else

@@ -103,7 +103,11 @@ struct ArtistDetailMac: View {
                         .environment(auth)
                 )
             )
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { paneWidth = $0 }
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.width
+            } action: {
+                paneWidth = $0
+            }
         }
         // The compact switch is a hard breakpoint — the artwork moves from a gutter to
         // inline and the header changes height — so there's nothing to animate between.
@@ -263,7 +267,7 @@ struct ArtistDetailMac: View {
     private var metadataParts: [String] {
         [
             String(AttributedString(localized: "^[\(albums.count) album](inflect: true)").characters),
-            String(AttributedString(localized: "^[\(totalSongs) song](inflect: true)").characters)
+            String(AttributedString(localized: "^[\(totalSongs) song](inflect: true)").characters),
         ]
     }
 
@@ -318,7 +322,8 @@ struct ArtistDetailMac: View {
 
     private func downloadAlbum(_ album: Album) {
         guard let fullAlbum = musicLibrary.albumWithTracks(album.id) else { return }
-        let albumArtist = musicLibrary.artist(album.artistId)
+        let albumArtist =
+            musicLibrary.artist(album.artistId)
             ?? Artist(id: album.artistId, name: artist.name, sortName: artist.sortName, slug: artist.slug)
         downloadService.download(album: fullAlbum, artist: albumArtist)
     }

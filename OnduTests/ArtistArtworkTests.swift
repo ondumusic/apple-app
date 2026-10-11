@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 @MainActor
@@ -9,19 +10,21 @@ struct ArtistArtworkLibraryTests {
     private func makeLibrary() throws -> MusicLibrary {
         let container = try ModelContainer(
             for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-                 LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+            LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         return MusicLibrary(container: container)
     }
 
     private func artist(_ name: String, artwork: [ArtworkVariant] = []) -> SyncArtist {
-        SyncArtist(id: UUID(), name: name, sortName: name, slug: name.lowercased(),
-                   albumCount: 1, insertedAt: Date(), artwork: artwork)
+        SyncArtist(
+            id: UUID(), name: name, sortName: name, slug: name.lowercased(),
+            albumCount: 1, insertedAt: Date(), artwork: artwork)
     }
 
-    private let variant = ArtworkVariant(url: URL(string: "https://example.com/a.jpg")!,
-                                         width: 600, height: 400)
+    private let variant = ArtworkVariant(
+        url: URL(string: "https://example.com/a.jpg")!,
+        width: 600, height: 400)
 
     @Test func keepsTheVariantsOnTheArtistItBuilds() throws {
         let library = try makeLibrary()

@@ -67,7 +67,7 @@ struct TrackActions {
             a.download = { tracks in
                 for track in tracks where !musicLibrary.isDownloaded(trackId: track.id) {
                     guard let album = musicLibrary.album(track.albumId),
-                          let artist = musicLibrary.artist(album.artistId) ?? Optional(track.artist)
+                        let artist = musicLibrary.artist(album.artistId) ?? Optional(track.artist)
                     else { continue }
                     downloadService.download(track: track, album: album, artist: artist)
                 }

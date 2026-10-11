@@ -214,7 +214,8 @@ final class AlbumGridItem: NSCollectionViewItem {
         let on = drawsSelected
         let color = isEmphasized ? accentColor : .tertiaryLabelColor
         artworkContainer.layer?.borderWidth = on ? 3 : 0.5
-        artworkContainer.layer?.borderColor = on
+        artworkContainer.layer?.borderColor =
+            on
             ? color.cgColor
             : NSColor.separatorColor.withAlphaComponent(0.4).cgColor
         titleLabel.textColor = on ? color : .labelColor

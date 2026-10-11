@@ -1,6 +1,6 @@
-import SwiftUI
 import AVKit
 import MediaPlayer
+import SwiftUI
 
 struct FullPlayerView: View {
     @Environment(PlayerService.self) private var player
@@ -87,7 +87,9 @@ struct FullPlayerView: View {
 
                         Spacer()
 
-                        Button { showQueue = true } label: {
+                        Button {
+                            showQueue = true
+                        } label: {
                             Image(systemName: "list.bullet")
                                 .font(.title)
                                 .foregroundStyle(.secondary)
@@ -137,7 +139,6 @@ struct FullPlayerView: View {
             .preferredColorScheme(isTinted ? .dark : nil)
         }
     }
-
 
     private func updateAudioRoute() {
         #if os(iOS)
@@ -311,20 +312,29 @@ private struct TransportControls: View {
 
     var body: some View {
         HStack(spacing: 40) {
-            Button { Haptics.light(); player.back() } label: {
+            Button {
+                Haptics.light()
+                player.back()
+            } label: {
                 Image(systemName: "backward.fill")
                     .font(.title2)
             }
             .buttonStyle(.plain)
             .disabled(!player.canGoBack)
 
-            Button { Haptics.medium(); player.togglePlayPause() } label: {
+            Button {
+                Haptics.medium()
+                player.togglePlayPause()
+            } label: {
                 Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 56))
             }
             .buttonStyle(.plain)
 
-            Button { Haptics.light(); player.skip() } label: {
+            Button {
+                Haptics.light()
+                player.skip()
+            } label: {
                 Image(systemName: "forward.fill")
                     .font(.title2)
             }

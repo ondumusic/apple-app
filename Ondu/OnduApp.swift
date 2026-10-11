@@ -1,6 +1,6 @@
-import SwiftUI
-import SwiftData
 import Nuke
+import SwiftData
+import SwiftUI
 
 #if os(iOS)
 class BackgroundSessionDelegate: NSObject, UIApplicationDelegate {
@@ -87,7 +87,8 @@ final class MacOSAppDelegate: NSObject, NSApplicationDelegate {
             let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             let spaceKeyCode: UInt16 = 49
             guard event.keyCode == spaceKeyCode, modifiers.isEmpty,
-                  !(NSApp.keyWindow?.firstResponder is NSText) else { return event }
+                !(NSApp.keyWindow?.firstResponder is NSText)
+            else { return event }
             MainActor.assumeIsolated { self?.player?.togglePlayPause() }
             return nil
         }
@@ -242,111 +243,118 @@ struct OnduApp: App {
 
     @ViewBuilder
     private var rootView: some View {
-            Group {
-                if auth.isRestoringSession {
-                    LaunchPlaceholder()
-                        .transition(.opacity)
-                } else if auth.isLoggedIn, let syncService, let player {
-                    ContentView()
-                        .environment(musicLibrary)
-                        .environment(settings)
-                        .environment(player)
-                        .environment(playbackCache)
-                        .environment(downloadService)
-                        .environment(syncService)
-                        .environment(networkMonitor)
-                        .environment(searchHistory)
-                        .optionalEnvironment(auth.apiService)
-                        .optionalEnvironment(playlistController)
-                        .optionalEnvironment(outboxService)
-                } else if !auth.isLoggedIn {
-                    NavigationStack {
-                        LoginView()
-                    }
+        Group {
+            if auth.isRestoringSession {
+                LaunchPlaceholder()
+                    .transition(.opacity)
+            } else if auth.isLoggedIn, let syncService, let player {
+                ContentView()
+                    .environment(musicLibrary)
+                    .environment(settings)
+                    .environment(player)
+                    .environment(playbackCache)
+                    .environment(downloadService)
+                    .environment(syncService)
+                    .environment(networkMonitor)
+                    .environment(searchHistory)
+                    .optionalEnvironment(auth.apiService)
+                    .optionalEnvironment(playlistController)
+                    .optionalEnvironment(outboxService)
+            } else if !auth.isLoggedIn {
+                NavigationStack {
+                    LoginView()
+                }
+            } else {
+                // Logged in, services still coming up — same placeholder rather than a
+                // bare spinner, so the window doesn't change shape twice.
+                LaunchPlaceholder()
+            }
+        }
+        .environment(auth)
+        .animation(.easeOut(duration: 0.18), value: auth.isRestoringSession)
+        .task { await auth.beginSessionRestore() }
+        #if os(macOS)
+        .onChange(of: player == nil, initial: true) { _, _ in macAppDelegate.player = player }
+        #endif
+        .accentColor(settings.resolvedAccentColor)
+        .onChange(of: settings.hapticsEnabled, initial: true) { _, enabled in
+            Haptics.isEnabled = enabled
+        }
+        .modelContainer(musicLibrary.modelContainer)
+        .onChange(of: auth.apiService.map(ObjectIdentifier.init)) { _, _ in
+            if let api = auth.apiService {
+                downloadService.configure(baseURL: api.baseURL, sessionToken: api.sessionToken)
+                // If downloads were paused due to a prior 401, let them resume under the new token.
+                if downloadService.isPaused { downloadService.resumeAll() }
+                // Re-auth mints a new APIService — hand it to the running player rather than
+                // rebuilding one, which would drop the queue and stop playback mid-track.
+                if let player {
+                    player.update(api: api)
                 } else {
-                    // Logged in, services still coming up — same placeholder rather than a
-                    // bare spinner, so the window doesn't change shape twice.
-                    LaunchPlaceholder()
+                    player = PlayerService(
+                        api: api, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache)
                 }
+            } else {
+                player?.stopAndClear()
+                #if os(macOS)
+                MiniPlayerWindowController.closeForSignOut()
+                #endif
+                SyncService.clearSyncState()
+                musicLibrary.clearAll(includingDownloads: true)
+                downloadService.clearAuth()
+                PlaybackStateStore.clearPersisted()
+                // Its entries point at the old library's albums and artists.
+                searchHistory.clear()
+                player = nil
             }
-            .environment(auth)
-            .animation(.easeOut(duration: 0.18), value: auth.isRestoringSession)
-            .task { await auth.beginSessionRestore() }
-            #if os(macOS)
-            .onChange(of: player == nil, initial: true) { _, _ in macAppDelegate.player = player }
-            #endif
-            .accentColor(settings.resolvedAccentColor)
-            .onChange(of: settings.hapticsEnabled, initial: true) { _, enabled in
-                Haptics.isEnabled = enabled
+            let newOutbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
+            outboxService = newOutbox
+            player?.outbox = newOutbox
+            syncService = auth.apiService.map {
+                SyncService(
+                    api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService,
+                    outbox: newOutbox)
             }
-            .modelContainer(musicLibrary.modelContainer)
-            .onChange(of: auth.apiService.map(ObjectIdentifier.init)) { _, _ in
-                if let api = auth.apiService {
-                    downloadService.configure(baseURL: api.baseURL, sessionToken: api.sessionToken)
-                    // If downloads were paused due to a prior 401, let them resume under the new token.
-                    if downloadService.isPaused { downloadService.resumeAll() }
-                    // Re-auth mints a new APIService — hand it to the running player rather than
-                    // rebuilding one, which would drop the queue and stop playback mid-track.
-                    if let player {
-                        player.update(api: api)
-                    } else {
-                        player = PlayerService(api: api, settings: settings, musicLibrary: musicLibrary, playbackCache: playbackCache)
-                    }
-                } else {
-                    player?.stopAndClear()
-                    #if os(macOS)
-                    MiniPlayerWindowController.closeForSignOut()
-                    #endif
-                    SyncService.clearSyncState()
-                    musicLibrary.clearAll(includingDownloads: true)
-                    downloadService.clearAuth()
-                    PlaybackStateStore.clearPersisted()
-                    // Its entries point at the old library's albums and artists.
-                    searchHistory.clear()
-                    player = nil
-                }
-                let newOutbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
-                outboxService = newOutbox
-                player?.outbox = newOutbox
-                syncService = auth.apiService.map { SyncService(api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService, outbox: newOutbox) }
-                playlistController = newOutbox.map { PlaylistController(musicLibrary: musicLibrary, outbox: $0, downloadService: downloadService) }
-                if newOutbox != nil {
-                    Task { await newOutbox?.flush() }
-                }
+            playlistController = newOutbox.map {
+                PlaylistController(musicLibrary: musicLibrary, outbox: $0, downloadService: downloadService)
             }
-            .onChange(of: networkMonitor.isOnline) { _, online in
-                if online {
-                    Task { await outboxService?.flush() }
-                }
+            if newOutbox != nil {
+                Task { await newOutbox?.flush() }
             }
-            #if os(iOS)
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-                playbackCache.flushMetadataIfNeeded()
-                player?.savePlaybackState()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-                if !auth.isLoggedIn {
-                    // Retry restore — Keychain may have been inaccessible on prelaunch
-                    Task { await auth.restoreSession() }
-                } else {
-                    Task { await auth.validateSession() }
-                }
+        }
+        .onChange(of: networkMonitor.isOnline) { _, online in
+            if online {
                 Task { await outboxService?.flush() }
-                Task { await syncService?.syncIfNeeded() }
-                downloadService.resumeOnForeground()
             }
-            #endif
-            #if os(macOS)
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
-                playbackCache.flushMetadataIfNeeded()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willBecomeActiveNotification)) { _ in
+        }
+        #if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            playbackCache.flushMetadataIfNeeded()
+            player?.savePlaybackState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            if !auth.isLoggedIn {
+                // Retry restore — Keychain may have been inaccessible on prelaunch
+                Task { await auth.restoreSession() }
+            } else {
                 Task { await auth.validateSession() }
-                Task { await outboxService?.flush() }
-                Task { await syncService?.syncIfNeeded() }
-                downloadService.resumeOnForeground()
             }
-            #endif
+            Task { await outboxService?.flush() }
+            Task { await syncService?.syncIfNeeded() }
+            downloadService.resumeOnForeground()
+        }
+        #endif
+        #if os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            playbackCache.flushMetadataIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willBecomeActiveNotification)) { _ in
+            Task { await auth.validateSession() }
+            Task { await outboxService?.flush() }
+            Task { await syncService?.syncIfNeeded() }
+            downloadService.resumeOnForeground()
+        }
+        #endif
     }
 
     var body: some Scene {
@@ -400,10 +408,12 @@ struct OnduApp: App {
                     NotificationCenter.default.post(name: .switchToMiniPlayer, object: nil)
                 }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
-                Toggle("Keep Mini Player on Top", isOn: Binding(
-                    get: { settings.miniPlayerAlwaysOnTop },
-                    set: { settings.miniPlayerAlwaysOnTop = $0 }
-                ))
+                Toggle(
+                    "Keep Mini Player on Top",
+                    isOn: Binding(
+                        get: { settings.miniPlayerAlwaysOnTop },
+                        set: { settings.miniPlayerAlwaysOnTop = $0 }
+                    ))
                 Button("Activity") {
                     NotificationCenter.default.post(name: .showDownloadActivity, object: nil)
                 }
@@ -425,18 +435,24 @@ struct OnduApp: App {
                 .keyboardShortcut("n", modifiers: .command)
             }
             CommandGroup(after: .toolbar) {
-                Toggle("Downloaded Only", isOn: Binding(
-                    get: { libraryFilter == .downloaded },
-                    set: { libraryFilter = $0 ? .downloaded : .all }
-                ))
+                Toggle(
+                    "Downloaded Only",
+                    isOn: Binding(
+                        get: { libraryFilter == .downloaded },
+                        set: { libraryFilter = $0 ? .downloaded : .all }
+                    )
+                )
                 .keyboardShortcut("d", modifiers: [.command, .shift])
                 // A submenu rather than a checkbox: "Show Artist Artwork" promised the
                 // whole app, where this is the artist list's density. Two named options
                 // say what each one is without the title having to.
-                Picker("Artist List", selection: Binding(
-                    get: { settings.showArtistArtwork },
-                    set: { settings.showArtistArtwork = $0 }
-                )) {
+                Picker(
+                    "Artist List",
+                    selection: Binding(
+                        get: { settings.showArtistArtwork },
+                        set: { settings.showArtistArtwork = $0 }
+                    )
+                ) {
                     Text("Names Only").tag(false)
                     Text("With Artwork").tag(true)
                 }
@@ -508,22 +524,28 @@ struct OnduApp: App {
 
                 Divider()
 
-                Toggle("Shuffle", isOn: Binding(
-                    get: { player?.isShuffled ?? false },
-                    set: { _ in player?.toggleShuffle() }
-                ))
+                Toggle(
+                    "Shuffle",
+                    isOn: Binding(
+                        get: { player?.isShuffled ?? false },
+                        set: { _ in player?.toggleShuffle() }
+                    )
+                )
                 .disabled(player?.queue.isEmpty != false)
 
-                Picker("Repeat", selection: Binding(
-                    get: { player?.repeatMode ?? .off },
-                    set: { mode in
-                        guard let player else { return }
-                        // cycleRepeatMode is the only writer that keeps SettingsStore and
-                        // the gapless state in step, so step to the chosen mode rather
-                        // than assigning it.
-                        while player.repeatMode != mode { player.cycleRepeatMode() }
-                    }
-                )) {
+                Picker(
+                    "Repeat",
+                    selection: Binding(
+                        get: { player?.repeatMode ?? .off },
+                        set: { mode in
+                            guard let player else { return }
+                            // cycleRepeatMode is the only writer that keeps SettingsStore and
+                            // the gapless state in step, so step to the chosen mode rather
+                            // than assigning it.
+                            while player.repeatMode != mode { player.cycleRepeatMode() }
+                        }
+                    )
+                ) {
                     Text("Off").tag(RepeatMode.off)
                     Text("All").tag(RepeatMode.all)
                     Text("One").tag(RepeatMode.one)
@@ -613,7 +635,6 @@ extension View {
         }
     }
 }
-
 
 #if os(macOS)
 /// Brings the single main window back after it's been closed. Lives in a View so it can

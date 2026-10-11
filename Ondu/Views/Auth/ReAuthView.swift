@@ -73,7 +73,9 @@ struct ReAuthView: View {
                     auth.logout()
                 }
             } message: {
-                Text("This will remove all offline data including downloads, cached artwork, and your synced library from this device.")
+                Text(
+                    "This will remove all offline data including downloads, cached artwork, and your synced library from this device."
+                )
             }
         }
         .padding(24)

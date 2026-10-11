@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 @Suite
@@ -32,7 +33,7 @@ struct LocalPlayRecordingTests {
     private func makeLibrary() throws -> MusicLibrary {
         let container = try ModelContainer(
             for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-                 LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+            LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         return MusicLibrary(container: container)
@@ -40,17 +41,29 @@ struct LocalPlayRecordingTests {
 
     @discardableResult
     private func seedTrack(_ lib: MusicLibrary, playCount: Int = 0, lastPlayedAt: Date? = nil) -> UUID {
-        let artistId = UUID(), albumId = UUID(), trackId = UUID(), now = Date()
-        lib.upsertArtists([SyncArtist(id: artistId, name: "Artist", sortName: "Artist",
-                                      slug: "artist", albumCount: 1, insertedAt: now)])
-        lib.upsertAlbums([SyncAlbum(id: albumId, artistId: artistId, name: "Album", sortName: "Album",
-                                    slug: "album", releaseYear: nil, artworkUrl: nil,
-                                    isUnknown: false, trackCount: 1, insertedAt: now)])
-        lib.upsertTracks([SyncTrack(id: trackId, artistId: artistId, albumArtistId: artistId,
-                                    albumId: albumId, name: "Track", disc: 1, number: 1,
-                                    duration: 200, mimetype: "audio/mp4", streamUrl: "/s/1",
-                                    downloadUrl: "/d/1", insertedAt: now, lufs: nil,
-                                    playCount: playCount, lastPlayedAt: lastPlayedAt)])
+        let artistId = UUID()
+        let albumId = UUID()
+        let trackId = UUID()
+        let now = Date()
+        lib.upsertArtists([
+            SyncArtist(
+                id: artistId, name: "Artist", sortName: "Artist",
+                slug: "artist", albumCount: 1, insertedAt: now)
+        ])
+        lib.upsertAlbums([
+            SyncAlbum(
+                id: albumId, artistId: artistId, name: "Album", sortName: "Album",
+                slug: "album", releaseYear: nil, artworkUrl: nil,
+                isUnknown: false, trackCount: 1, insertedAt: now)
+        ])
+        lib.upsertTracks([
+            SyncTrack(
+                id: trackId, artistId: artistId, albumArtistId: artistId,
+                albumId: albumId, name: "Track", disc: 1, number: 1,
+                duration: 200, mimetype: "audio/mp4", streamUrl: "/s/1",
+                downloadUrl: "/d/1", insertedAt: now, lufs: nil,
+                playCount: playCount, lastPlayedAt: lastPlayedAt)
+        ])
         lib.bumpRevision()
         return trackId
     }
@@ -77,13 +90,16 @@ struct LocalPlayRecordingTests {
 
         let serverLastPlayed = Date(timeIntervalSince1970: 1_700_000_500)
         let existing = try #require(lib.track(trackId))
-        lib.upsertTracks([SyncTrack(id: existing.id, artistId: existing.artistId,
-                                    albumArtistId: existing.albumArtistId, albumId: existing.albumId,
-                                    name: existing.name, disc: existing.disc, number: existing.number,
-                                    duration: existing.duration, mimetype: existing.mimetype,
-                                    streamUrl: existing.streamUrl, downloadUrl: existing.downloadUrl,
-                                    insertedAt: Date(), lufs: nil,
-                                    playCount: 9, lastPlayedAt: serverLastPlayed)])
+        lib.upsertTracks([
+            SyncTrack(
+                id: existing.id, artistId: existing.artistId,
+                albumArtistId: existing.albumArtistId, albumId: existing.albumId,
+                name: existing.name, disc: existing.disc, number: existing.number,
+                duration: existing.duration, mimetype: existing.mimetype,
+                streamUrl: existing.streamUrl, downloadUrl: existing.downloadUrl,
+                insertedAt: Date(), lufs: nil,
+                playCount: 9, lastPlayedAt: serverLastPlayed)
+        ])
         lib.bumpRevision()
 
         let track = try #require(lib.track(trackId))

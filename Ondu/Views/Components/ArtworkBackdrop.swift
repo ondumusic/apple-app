@@ -1,6 +1,6 @@
-import SwiftUI
 import Nuke
 import NukeUI
+import SwiftUI
 
 /// PROTOTYPE — the artwork itself, blurred, as a player background.
 ///
@@ -27,7 +27,7 @@ struct ArtworkBackdrop: View {
             .scaleEffect(1.4)
             .blur(radius: blurRadius, opaque: true)
             .overlay(Color.black.opacity(dimming))
-        .clipped()
-        .allowsHitTesting(false)
+            .clipped()
+            .allowsHitTesting(false)
     }
 }

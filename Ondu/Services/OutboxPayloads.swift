@@ -3,12 +3,12 @@ import Foundation
 nonisolated enum OutboxKind: String, Sendable {
     case createPlaylist = "create_playlist"
     case renamePlaylist = "rename_playlist"
-    case movePlaylist   = "move_playlist"
+    case movePlaylist = "move_playlist"
     case deletePlaylist = "delete_playlist"
-    case addItems       = "add_items"
-    case moveItems      = "move_items"
-    case removeItems    = "remove_items"
-    case recordPlays    = "record_plays"
+    case addItems = "add_items"
+    case moveItems = "move_items"
+    case removeItems = "remove_items"
+    case recordPlays = "record_plays"
 }
 
 /// One finished listen. `id` is ours and stable across retries, which is how the server

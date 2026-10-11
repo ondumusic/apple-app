@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 // MARK: - Helpers
@@ -11,7 +12,7 @@ private func makeTestLibrary() throws -> MusicLibrary {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try ModelContainer(
         for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-             LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+        LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
         configurations: config
     )
     return MusicLibrary(container: container)
@@ -21,16 +22,23 @@ private func makeTestLibrary() throws -> MusicLibrary {
 private func seedTracks(_ lib: MusicLibrary, count: Int) -> [UUID] {
     let artistId = UUID()
     let albumId = UUID()
-    lib.upsertArtists([SyncArtist(id: artistId, name: "Artist", sortName: "Artist",
-                                  slug: "artist", albumCount: 1, insertedAt: now)])
-    lib.upsertAlbums([SyncAlbum(id: albumId, artistId: artistId, name: "Album", sortName: "Album",
-                                slug: "album", releaseYear: nil, artworkUrl: nil,
-                                isUnknown: false, trackCount: count, insertedAt: now)])
+    lib.upsertArtists([
+        SyncArtist(
+            id: artistId, name: "Artist", sortName: "Artist",
+            slug: "artist", albumCount: 1, insertedAt: now)
+    ])
+    lib.upsertAlbums([
+        SyncAlbum(
+            id: albumId, artistId: artistId, name: "Album", sortName: "Album",
+            slug: "album", releaseYear: nil, artworkUrl: nil,
+            isUnknown: false, trackCount: count, insertedAt: now)
+    ])
     let tracks = (0..<count).map { i in
-        SyncTrack(id: UUID(), artistId: artistId, albumArtistId: artistId, albumId: albumId,
-                  name: "Track \(i)", disc: 1, number: i + 1, duration: 200,
-                  mimetype: "audio/mp4", streamUrl: "/stream/\(i)",
-                  downloadUrl: "/download/\(i)", insertedAt: now)
+        SyncTrack(
+            id: UUID(), artistId: artistId, albumArtistId: artistId, albumId: albumId,
+            name: "Track \(i)", disc: 1, number: i + 1, duration: 200,
+            mimetype: "audio/mp4", streamUrl: "/stream/\(i)",
+            downloadUrl: "/download/\(i)", insertedAt: now)
     }
     lib.upsertTracks(tracks)
     lib.bumpRevision()
@@ -57,7 +65,8 @@ struct PlaybackStateStoreTests {
 
     @Test func roundTripsTheQueueThroughDisk() async {
         let store = makeStore()
-        let state = PlaybackState(trackIds: [UUID(), UUID()], currentIndex: 1, shuffledIndices: [1, 0], isUserModified: true)
+        let state = PlaybackState(
+            trackIds: [UUID(), UUID()], currentIndex: 1, shuffledIndices: [1, 0], isUserModified: true)
         store.save(state)
         await store.flush()
 

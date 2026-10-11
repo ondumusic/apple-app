@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 private func dB(_ gain: Float) -> Double { 20 * log10(Double(gain)) }
@@ -45,8 +46,8 @@ struct LoudnessGainTests {
     }
 }
 
-private extension Double {
-    func isApproximately(_ other: Double, tolerance: Double = 0.01) -> Bool {
+extension Double {
+    fileprivate func isApproximately(_ other: Double, tolerance: Double = 0.01) -> Bool {
         abs(self - other) < tolerance
     }
 }
@@ -59,7 +60,7 @@ struct MusicLibraryAlbumLoudnessTests {
     private func makeLibrary() throws -> MusicLibrary {
         let container = try ModelContainer(
             for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-                 LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+            LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         return MusicLibrary(container: container)
@@ -71,12 +72,18 @@ struct MusicLibraryAlbumLoudnessTests {
         let artistId = UUID()
         let albumId = UUID()
         let now = Date()
-        lib.upsertArtists([SyncArtist(id: artistId, name: "Artist", sortName: "Artist",
-                                      slug: "artist", albumCount: 1, insertedAt: now)])
-        lib.upsertAlbums([SyncAlbum(id: albumId, artistId: artistId, name: "Album", sortName: "Album",
-                                    slug: "album", releaseYear: nil, artworkUrl: nil,
-                                    isUnknown: false, trackCount: 2, insertedAt: now,
-                                    lufs: albumLUFS)])
+        lib.upsertArtists([
+            SyncArtist(
+                id: artistId, name: "Artist", sortName: "Artist",
+                slug: "artist", albumCount: 1, insertedAt: now)
+        ])
+        lib.upsertAlbums([
+            SyncAlbum(
+                id: albumId, artistId: artistId, name: "Album", sortName: "Album",
+                slug: "album", releaseYear: nil, artworkUrl: nil,
+                isUnknown: false, trackCount: 2, insertedAt: now,
+                lufs: albumLUFS)
+        ])
         lib.bumpRevision()
         return albumId
     }
@@ -107,11 +114,14 @@ struct MusicLibraryAlbumLoudnessTests {
         #expect(lib.albumLUFS(for: albumId) == nil)
 
         let album = try #require(lib.album(albumId))
-        lib.upsertAlbums([SyncAlbum(id: album.id, artistId: album.artistId, name: album.name,
-                                    sortName: album.sortName, slug: album.slug,
-                                    releaseYear: album.releaseYear, artworkUrl: album.artworkUrl,
-                                    isUnknown: album.isUnknown, trackCount: 2,
-                                    insertedAt: Date(), lufs: -12)])
+        lib.upsertAlbums([
+            SyncAlbum(
+                id: album.id, artistId: album.artistId, name: album.name,
+                sortName: album.sortName, slug: album.slug,
+                releaseYear: album.releaseYear, artworkUrl: album.artworkUrl,
+                isUnknown: album.isUnknown, trackCount: 2,
+                insertedAt: Date(), lufs: -12)
+        ])
         lib.bumpRevision()
 
         #expect(try #require(lib.albumLUFS(for: albumId)).isApproximately(-12))

@@ -169,7 +169,8 @@ struct ArtistDetailView: View {
 
     private func reloadAlbums() {
         liveArtist = musicLibrary.artist(artist.id)
-        albums = downloadedOnly
+        albums =
+            downloadedOnly
             ? musicLibrary.downloadedAlbumsForArtist(artist.id)
             : musicLibrary.albumsForArtist(artist.id)
 

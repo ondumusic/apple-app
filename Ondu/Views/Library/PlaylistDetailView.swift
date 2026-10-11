@@ -74,7 +74,7 @@ struct PlaylistDetailView: View {
             .listStyle(.plain)
             .navigationTitle(currentName)
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 #if os(iOS)
@@ -201,8 +201,9 @@ struct PlaylistDetailView: View {
                 player.playNext(queue: items)
                 exitSelection()
             } label: {
-                Label(ids.count == 1 ? "Play Next" : "Play \(ids.count) Next",
-                      systemImage: "text.line.first.and.arrowtriangle.forward")
+                Label(
+                    ids.count == 1 ? "Play Next" : "Play \(ids.count) Next",
+                    systemImage: "text.line.first.and.arrowtriangle.forward")
             }
             Button {
                 let items = queueItems(for: ids)
@@ -404,7 +405,7 @@ struct PlaylistDetailView: View {
         let lastMovedIndex = firstMovedIndex + blockCount - 1
 
         let beforePos = firstMovedIndex > 0 ? reordered[firstMovedIndex - 1].position : nil
-        let afterPos  = lastMovedIndex < reordered.count - 1 ? reordered[lastMovedIndex + 1].position : nil
+        let afterPos = lastMovedIndex < reordered.count - 1 ? reordered[lastMovedIndex + 1].position : nil
 
         guard let newPositions = computePositions(count: blockCount, between: beforePos, and: afterPos) else {
             abortReorderAndResync()
@@ -433,7 +434,8 @@ struct PlaylistDetailView: View {
             return result
         } catch {
             #if DEBUG
-            print("PlaylistDetailView: cannot compute positions between \(left ?? "nil") and \(right ?? "nil"): \(error)")
+            print(
+                "PlaylistDetailView: cannot compute positions between \(left ?? "nil") and \(right ?? "nil"): \(error)")
             #endif
             return nil
         }

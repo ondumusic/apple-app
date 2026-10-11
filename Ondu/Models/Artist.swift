@@ -8,8 +8,10 @@ nonisolated struct Artist: Codable, Identifiable, Sendable, Hashable {
     var albumCount: Int?
     var artwork: [ArtworkVariant] = []
 
-    init(id: UUID, name: String, sortName: String, slug: String, albumCount: Int? = nil,
-         artwork: [ArtworkVariant] = []) {
+    init(
+        id: UUID, name: String, sortName: String, slug: String, albumCount: Int? = nil,
+        artwork: [ArtworkVariant] = []
+    ) {
         self.id = id
         self.name = name
         self.sortName = sortName

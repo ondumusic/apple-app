@@ -69,8 +69,8 @@ struct CrossfadingArtwork: View {
     }
 }
 
-private extension Image {
-    init(platform image: PlatformImage) {
+extension Image {
+    fileprivate init(platform image: PlatformImage) {
         #if os(macOS)
         self.init(nsImage: image)
         #else

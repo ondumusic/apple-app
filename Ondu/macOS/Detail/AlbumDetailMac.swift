@@ -22,14 +22,14 @@ struct AlbumDetailMac: View {
     }
 
     private var trackActions: TrackActions {
-        .standard(player: player, musicLibrary: musicLibrary, network: network,
-                  downloadService: downloadService, artworkURL: album.artworkUrl)
+        .standard(
+            player: player, musicLibrary: musicLibrary, network: network,
+            downloadService: downloadService, artworkURL: album.artworkUrl)
     }
 
     private var hasMultipleArtists: Bool {
         Set(tracks.map(\.artist.id)).count > 1
     }
-
 
     @Environment(\.pageTopInset) private var pageTopInset
 
@@ -180,7 +180,8 @@ struct AlbumDetailMac: View {
 
     private func downloadAlbum() {
         guard let fullAlbum = musicLibrary.albumWithTracks(album.id) else { return }
-        let artist = musicLibrary.artist(album.artistId)
+        let artist =
+            musicLibrary.artist(album.artistId)
             ?? Artist(id: album.artistId, name: album.artistName ?? "", sortName: album.artistName ?? "", slug: "")
         downloadService.download(album: fullAlbum, artist: artist)
     }

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 struct MoovValidationTests {
@@ -19,7 +20,7 @@ struct MoovValidationTests {
     /// Builds an atom with size=0 (meaning "extends to end of file")
     private func atomSizeZero(_ type: String) -> Data {
         var data = Data()
-        data.append(contentsOf: [0, 0, 0, 0]) // size = 0
+        data.append(contentsOf: [0, 0, 0, 0])  // size = 0
         data.append(contentsOf: type.utf8)
         return data
     }
@@ -35,7 +36,8 @@ struct MoovValidationTests {
 
     @Test func validM4AWithMoov() throws {
         // ftyp + mdat + moov
-        let file = atom("ftyp", body: Data(repeating: 0, count: 12))
+        let file =
+            atom("ftyp", body: Data(repeating: 0, count: 12))
             + atom("mdat", body: Data(repeating: 0, count: 100))
             + atom("moov", body: Data(repeating: 0, count: 50))
         let url = try writeTempFile(file)
@@ -46,7 +48,8 @@ struct MoovValidationTests {
 
     @Test func validM4AWithFreeAtom() throws {
         // ftyp + free + mdat + moov
-        let file = atom("ftyp", body: Data(repeating: 0, count: 12))
+        let file =
+            atom("ftyp", body: Data(repeating: 0, count: 12))
             + atom("free")
             + atom("mdat", body: Data(repeating: 0, count: 100))
             + atom("moov", body: Data(repeating: 0, count: 50))
@@ -58,7 +61,8 @@ struct MoovValidationTests {
 
     @Test func moovBeforeMdat() throws {
         // ftyp + moov + mdat (faststart layout)
-        let file = atom("ftyp", body: Data(repeating: 0, count: 12))
+        let file =
+            atom("ftyp", body: Data(repeating: 0, count: 12))
             + atom("moov", body: Data(repeating: 0, count: 50))
             + atom("mdat", body: Data(repeating: 0, count: 100))
         let url = try writeTempFile(file)
@@ -74,7 +78,8 @@ struct MoovValidationTests {
         // This is the common ffmpeg output layout without -movflags +faststart
         let audioData = Data(repeating: 0xAB, count: 1000)
         let moov = atom("moov", body: Data(repeating: 0, count: 50))
-        let file = atom("ftyp", body: Data(repeating: 0, count: 12))
+        let file =
+            atom("ftyp", body: Data(repeating: 0, count: 12))
             + atom("free")
             + atomSizeZero("mdat")
             + audioData
@@ -89,7 +94,8 @@ struct MoovValidationTests {
 
     @Test func truncatedNoMoov() throws {
         // ftyp + mdat only — truncated download
-        let file = atom("ftyp", body: Data(repeating: 0, count: 12))
+        let file =
+            atom("ftyp", body: Data(repeating: 0, count: 12))
             + atom("mdat", body: Data(repeating: 0, count: 100))
         let url = try writeTempFile(file)
         defer { try? FileManager.default.removeItem(at: url) }
@@ -99,7 +105,8 @@ struct MoovValidationTests {
 
     @Test func mdatSizeZeroNoMoov() throws {
         // ftyp + mdat(size=0) + audio data but NO moov — truly truncated
-        let file = atom("ftyp", body: Data(repeating: 0, count: 12))
+        let file =
+            atom("ftyp", body: Data(repeating: 0, count: 12))
             + atomSizeZero("mdat")
             + Data(repeating: 0xAB, count: 1000)
         let url = try writeTempFile(file)

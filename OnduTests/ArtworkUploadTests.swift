@@ -2,6 +2,7 @@ import Foundation
 import ImageIO
 import Testing
 import UniformTypeIdentifiers
+
 @testable import Ondu
 
 struct ArtworkUploadTests {
@@ -9,12 +10,14 @@ struct ArtworkUploadTests {
     /// A JPEG of the given size, standing in for something off a camera.
     private func makeImage(width: Int, height: Int) throws -> Data {
         let data = NSMutableData()
-        let destination = try #require(CGImageDestinationCreateWithData(
-            data, UTType.jpeg.identifier as CFString, 1, nil))
+        let destination = try #require(
+            CGImageDestinationCreateWithData(
+                data, UTType.jpeg.identifier as CFString, 1, nil))
         let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
-        let context = try #require(CGContext(
-            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
-            space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        let context = try #require(
+            CGContext(
+                data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
         context.setFillColor(gray: 0.5, alpha: 1)
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         CGImageDestinationAddImage(destination, try #require(context.makeImage()), nil)
@@ -26,8 +29,10 @@ struct ArtworkUploadTests {
         let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
         let properties = try #require(
             CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
-        return (properties[kCGImagePropertyPixelWidth] as? Int ?? 0,
-                properties[kCGImagePropertyPixelHeight] as? Int ?? 0)
+        return (
+            properties[kCGImagePropertyPixelWidth] as? Int ?? 0,
+            properties[kCGImagePropertyPixelHeight] as? Int ?? 0
+        )
     }
 
     /// The server renders its own variants from whatever it gets, so sending a

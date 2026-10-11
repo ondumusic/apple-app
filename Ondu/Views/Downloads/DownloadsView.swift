@@ -190,7 +190,9 @@ struct DownloadsView: View {
                 }
             }
 
-            if hasLoaded && artists.isEmpty && downloadService.activeDownloads.isEmpty && downloadService.pendingQueue.isEmpty && downloadService.failedDownloads.isEmpty {
+            if hasLoaded && artists.isEmpty && downloadService.activeDownloads.isEmpty
+                && downloadService.pendingQueue.isEmpty && downloadService.failedDownloads.isEmpty
+            {
                 ContentUnavailableView(
                     "No Downloads",
                     systemImage: "arrow.down.circle",
@@ -242,7 +244,9 @@ struct DownloadsView: View {
                                 musicLibrary.markArtistUndownloaded(artistId: artist.id)
                             }
                         } message: {
-                            Text("Remove all downloaded files for \(artist.name)? The artist stays in your library and can be re-downloaded.")
+                            Text(
+                                "Remove all downloaded files for \(artist.name)? The artist stays in your library and can be re-downloaded."
+                            )
                         }
                     }
                 } header: {
@@ -328,7 +332,10 @@ struct DownloadsView: View {
         .onChange(of: musicLibrary.downloadChanged) {
             if isVisible { reloadData() }
         }
-        .onAppear { isVisible = true; reloadData() }
+        .onAppear {
+            isVisible = true
+            reloadData()
+        }
         .onDisappear { isVisible = false }
     }
 

@@ -15,10 +15,14 @@ private struct InactiveFade: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(isActive ? 1 : 0.45)
-            .onReceive(NotificationCenter.default.publisher(
-                for: NSApplication.didBecomeActiveNotification)) { _ in isActive = true }
-            .onReceive(NotificationCenter.default.publisher(
-                for: NSApplication.didResignActiveNotification)) { _ in isActive = false }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: NSApplication.didBecomeActiveNotification)
+            ) { _ in isActive = true }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: NSApplication.didResignActiveNotification)
+            ) { _ in isActive = false }
     }
 }
 

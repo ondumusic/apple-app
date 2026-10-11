@@ -47,11 +47,13 @@ struct QueueConfirmationOverlay: ViewModifier {
 
                 switch confirmation {
                 case .playNext(let count):
-                    message = count == 1
+                    message =
+                        count == 1
                         ? "Playing Next"
                         : "Playing ^[\(count) song](inflect: true) Next"
                 case .addedToQueue(let count):
-                    message = count == 1
+                    message =
+                        count == 1
                         ? "Added to Queue"
                         : "Added ^[\(count) song](inflect: true) to Queue"
                 }

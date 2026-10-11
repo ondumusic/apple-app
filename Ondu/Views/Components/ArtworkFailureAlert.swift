@@ -18,10 +18,16 @@ struct ArtworkFailureAlert: ViewModifier {
         ) { failure in
             switch failure {
             case .notAnImage, .tooLarge:
-                Button("Choose Another…") { self.failure = nil; chooseAnother() }
+                Button("Choose Another…") {
+                    self.failure = nil
+                    chooseAnother()
+                }
                 Button("Cancel", role: .cancel) { self.failure = nil }
             case .failed:
-                Button("Try Again") { self.failure = nil; retry() }
+                Button("Try Again") {
+                    self.failure = nil
+                    retry()
+                }
                 Button("Cancel", role: .cancel) { self.failure = nil }
             case .notSignedIn:
                 Button("OK", role: .cancel) { self.failure = nil }

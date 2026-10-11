@@ -60,7 +60,9 @@ private struct RemoveDownloadConfirmation: ViewModifier {
                 }
                 Button("Cancel", role: .cancel) { pending = nil }
             } message: {
-                Text("The files are deleted from this Mac. Everything stays in your library and can be downloaded again.")
+                Text(
+                    "The files are deleted from this Mac. Everything stays in your library and can be downloaded again."
+                )
             }
     }
 }

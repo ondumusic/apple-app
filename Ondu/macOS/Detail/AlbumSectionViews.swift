@@ -59,10 +59,14 @@ struct AlbumSectionHeader: View {
             }
             Spacer(minLength: 12)
             HStack(spacing: Spacing.related) {
-                Button { onPlay() } label: {
+                Button {
+                    onPlay()
+                } label: {
                     Image(systemName: "play.fill")
                 }
-                Button { onShuffle() } label: {
+                Button {
+                    onShuffle()
+                } label: {
                     Image(systemName: "shuffle")
                 }
             }

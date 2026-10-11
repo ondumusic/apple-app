@@ -113,16 +113,18 @@ private struct SyncProgressView: View {
                         .foregroundStyle(.secondary)
                 }
                 if let progress = syncService.syncProgress, progress.artistCount > 0 {
-                    SyncCounts(artists: Double(progress.artistCount),
-                               albums: Double(progress.albumCount),
-                               tracks: Double(progress.trackCount))
-                        .animation(.easeOut(duration: 0.8), value: progress.trackCount)
-                        .animation(.easeOut(duration: 0.8), value: progress.albumCount)
-                        .animation(.easeOut(duration: 0.8), value: progress.artistCount)
-                        .foregroundStyle(.tertiary)
-                        .font(.footnote)
-                        .monospacedDigit()
-                        .padding(.top, 8)
+                    SyncCounts(
+                        artists: Double(progress.artistCount),
+                        albums: Double(progress.albumCount),
+                        tracks: Double(progress.trackCount)
+                    )
+                    .animation(.easeOut(duration: 0.8), value: progress.trackCount)
+                    .animation(.easeOut(duration: 0.8), value: progress.albumCount)
+                    .animation(.easeOut(duration: 0.8), value: progress.artistCount)
+                    .foregroundStyle(.tertiary)
+                    .font(.footnote)
+                    .monospacedDigit()
+                    .padding(.top, 8)
                 }
             }
         }
@@ -146,7 +148,9 @@ private struct SyncCounts: View, Animatable {
     }
 
     var body: some View {
-        let artistCount = Int(artists), albumCount = Int(albums), trackCount = Int(tracks)
+        let artistCount = Int(artists)
+        let albumCount = Int(albums)
+        let trackCount = Int(tracks)
         if trackCount > 0 {
             Text("\(artistCount) artists, \(albumCount) albums, \(trackCount) tracks")
         } else if albumCount > 0 {

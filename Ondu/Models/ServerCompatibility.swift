@@ -43,8 +43,10 @@ nonisolated enum ServerCompatibility: Sendable, Equatable {
         return serverVersion != dismissedVersion
     }
 
-    static func compare(serverAPIVersion: Int, serverVersion: String,
-                        supported: Int) -> ServerCompatibility {
+    static func compare(
+        serverAPIVersion: Int, serverVersion: String,
+        supported: Int
+    ) -> ServerCompatibility {
         if serverAPIVersion > supported { return .appTooOld(serverVersion: serverVersion) }
         if serverAPIVersion < supported { return .serverTooOld(serverVersion: serverVersion) }
         return .ok

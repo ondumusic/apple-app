@@ -389,7 +389,10 @@ extension QueueTableViewController: NSTableViewDataSource {
         if types.contains(.onduTracks)
             || types.contains(.onduAlbums)
             || types.contains(.onduArtists)
-            || types.contains(.onduSidebarPlaylist) { return .copy }
+            || types.contains(.onduSidebarPlaylist)
+        {
+            return .copy
+        }
         return []
     }
 
@@ -485,7 +488,8 @@ extension QueueTableViewController: NSMenuDelegate {
 extension QueueTableViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard items.indices.contains(row) else { return nil }
-        let cell = tableView.makeView(withIdentifier: QueueCell.identifier, owner: self) as? QueueCell
+        let cell =
+            tableView.makeView(withIdentifier: QueueCell.identifier, owner: self) as? QueueCell
             ?? QueueCell()
         cell.showsDuration = showsDuration
         cell.showsRemoveButton = allowsEditing
@@ -508,7 +512,8 @@ extension QueueTableViewController: NSTableViewDelegate {
         // same. Without the flag the row view resets the cell to unemphasized on every
         // selection and key change, which is what kept defeating this.
         view.keepsEmphasisWhenInactive = true
-        view.unemphasizedSelectionColor = NSColor.unemphasizedSelectedContentBackgroundColor
+        view.unemphasizedSelectionColor =
+            NSColor.unemphasizedSelectedContentBackgroundColor
             .blended(withFraction: 0.35, of: .black) ?? .unemphasizedSelectedContentBackgroundColor
         // Starts where the title does, clear of the artwork — the same treatment
         // Music.app gives its Up Next rows, and what the other tables here already do
@@ -624,8 +629,10 @@ final class QueueCell: NSTableCellView {
         artworkLeading = artwork.leadingAnchor.constraint(equalTo: leadingAnchor, constant: metrics.horizontalInset)
         artworkWidth = artwork.widthAnchor.constraint(equalToConstant: metrics.artworkSize)
         artworkHeight = artwork.heightAnchor.constraint(equalToConstant: metrics.artworkSize)
-        durationTrailing = duration.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -metrics.horizontalInset)
-        removeTrailing = removeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(metrics.horizontalInset - 2))
+        durationTrailing = duration.trailingAnchor.constraint(
+            equalTo: trailingAnchor, constant: -metrics.horizontalInset)
+        removeTrailing = removeButton.trailingAnchor.constraint(
+            equalTo: trailingAnchor, constant: -(metrics.horizontalInset - 2))
 
         NSLayoutConstraint.activate([
             artworkLeading,
@@ -698,7 +705,8 @@ final class QueueCell: NSTableCellView {
     private func applyEmphasis() {
         let emphasized = backgroundStyle == .emphasized
         title.textColor = emphasized ? .alternateSelectedControlTextColor : .labelColor
-        let secondary: NSColor = emphasized
+        let secondary: NSColor =
+            emphasized
             ? .alternateSelectedControlTextColor.withAlphaComponent(0.85)
             : .secondaryLabelColor
         artist.textColor = secondary

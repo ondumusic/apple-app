@@ -81,7 +81,8 @@ struct MovePlaylistSheet: View {
     }
 
     private func loadFolders() {
-        let excluded: Set<UUID> = playlist.isFolder
+        let excluded: Set<UUID> =
+            playlist.isFolder
             ? Set(musicLibrary.descendantIds(of: playlist.id))
             : [playlist.id]
         folders = flattenFolders(parentId: nil, depth: 0, excluded: excluded)

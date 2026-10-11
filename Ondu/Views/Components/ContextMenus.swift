@@ -96,7 +96,8 @@ struct AlbumContextMenuItems: View {
         } else {
             Button {
                 guard let fullAlbum = musicLibrary.albumWithTracks(album.id) else { return }
-                let resolvedArtist = artist ?? musicLibrary.artist(album.artistId)
+                let resolvedArtist =
+                    artist ?? musicLibrary.artist(album.artistId)
                     ?? Artist(id: album.artistId, name: "", sortName: "", slug: "")
                 downloadService.download(album: fullAlbum, artist: resolvedArtist)
             } label: {
@@ -282,8 +283,9 @@ struct ArtistContextMenuItems: View {
             Button(role: .destructive) {
                 #if os(macOS)
                 DownloadRemovalRequest.post(
-                    trackIds: Set(musicLibrary.downloadedTracks()
-                        .filter { $0.albumArtistId == artist.id }.map(\.id)),
+                    trackIds: Set(
+                        musicLibrary.downloadedTracks()
+                            .filter { $0.albumArtistId == artist.id }.map(\.id)),
                     subject: artist.name
                 )
                 #else

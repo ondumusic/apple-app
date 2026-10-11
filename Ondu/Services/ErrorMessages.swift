@@ -18,7 +18,10 @@ nonisolated enum ErrorMessages {
         if let message = connection(for: error) { return message }
         switch error {
         case is DecodingError, APIError.decoding, APIError.invalidResponse, APIError.httpError(404):
-            return String(localized: "The server sent something this version of Ondu can’t read. Make sure the app and the server are both up to date.")
+            return String(
+                localized:
+                    "The server sent something this version of Ondu can’t read. Make sure the app and the server are both up to date."
+            )
         default:
             return error.localizedDescription
         }
@@ -32,9 +35,10 @@ nonisolated enum ErrorMessages {
             case .cannotFindHost, .dnsLookupFailed:
                 return String(localized: "Couldn’t find a server at that address. Check it for typos.")
             case .cannotConnectToHost, .timedOut, .networkConnectionLost:
-                return String(localized: "Couldn’t reach the server. Make sure it’s running and reachable from this device.")
+                return String(
+                    localized: "Couldn’t reach the server. Make sure it’s running and reachable from this device.")
             case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate,
-                 .serverCertificateNotYetValid, .serverCertificateHasUnknownRoot:
+                .serverCertificateNotYetValid, .serverCertificateHasUnknownRoot:
                 return String(localized: "Couldn’t connect securely. Check the server’s HTTPS certificate.")
             default:
                 return nil

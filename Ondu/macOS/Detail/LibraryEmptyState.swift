@@ -65,7 +65,8 @@ struct LibraryEmptyState: View {
 
     private var message: LocalizedStringResource {
         guard !isFiltered else {
-            return "No \(String(localized: subject.noun)) are downloaded to this Mac. Download some to play them offline, or show all music."
+            return
+                "No \(String(localized: subject.noun)) are downloaded to this Mac. Download some to play them offline, or show all music."
         }
         switch subject {
         case .playlist: return "Drag songs here, or add them from anywhere in your library."

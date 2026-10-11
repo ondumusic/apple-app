@@ -27,13 +27,15 @@ nonisolated extension Color {
     /// code that uses it beats one defined in a file nobody opens.
     init(light: PlatformColor, dark: PlatformColor) {
         #if os(macOS)
-        self.init(nsColor: NSColor(name: nil) { appearance in
-            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
-        })
+        self.init(
+            nsColor: NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+            })
         #else
-        self.init(uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark ? dark : light
-        })
+        self.init(
+            uiColor: UIColor { traits in
+                traits.userInterfaceStyle == .dark ? dark : light
+            })
         #endif
     }
 }

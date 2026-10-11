@@ -40,11 +40,13 @@ struct Sidebar: NSViewControllerRepresentable {
         nsViewController.actions = actions
         nsViewController.accentNSColor = NSColor(accent)
         nsViewController.applyDownloadingCount(downloadingCount, progress: downloadProgress)
-        let withDownloads = libraryFilter == .downloaded
+        let withDownloads =
+            libraryFilter == .downloaded
             ? musicLibrary.playlistIdsWithDownloads()
             : nil
-        let nodes = Self.buildPlaylistTree(allPlaylists: musicLibrary.allPlaylists(),
-                                           keeping: withDownloads)
+        let nodes = Self.buildPlaylistTree(
+            allPlaylists: musicLibrary.allPlaylists(),
+            keeping: withDownloads)
         nsViewController.applyPlaylistSectionVisibility(
             hidden: libraryFilter == .downloaded && nodes.isEmpty
         )
@@ -54,8 +56,10 @@ struct Sidebar: NSViewControllerRepresentable {
 
     /// `keeping` non-nil means the downloaded-only filter is on: a playlist survives if
     /// it holds a downloaded track, and a folder survives if anything under it did.
-    private static func buildPlaylistTree(allPlaylists: [Playlist],
-                                          keeping withDownloads: Set<UUID>?) -> [SidebarNode] {
+    private static func buildPlaylistTree(
+        allPlaylists: [Playlist],
+        keeping withDownloads: Set<UUID>?
+    ) -> [SidebarNode] {
         let byParent = Dictionary(grouping: allPlaylists, by: { $0.parentId })
         func makeNodes(parent: UUID?) -> [SidebarNode] {
             let kids = (byParent[parent] ?? []).sorted { a, b in
@@ -270,7 +274,6 @@ final class SidebarViewController: NSViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
-
         addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "New")
         addButton.bezelStyle = .accessoryBar
         addButton.isBordered = false
@@ -375,7 +378,6 @@ final class SidebarViewController: NSViewController {
         }
     }
 
-
     func applyExternalSearchText(_ text: String) {
         guard searchField.stringValue != text else { return }
         searchField.stringValue = text
@@ -392,8 +394,8 @@ final class SidebarViewController: NSViewController {
     private func deleteSelectedPlaylist() {
         let row = outlineView.selectedRow
         guard row >= 0,
-              let node = outlineView.item(atRow: row) as? SidebarNode,
-              case .playlist(let playlist) = node.kind
+            let node = outlineView.item(atRow: row) as? SidebarNode,
+            case .playlist(let playlist) = node.kind
         else { return }
         actions.deletePlaylist(playlist)
     }
@@ -452,7 +454,9 @@ final class SidebarViewController: NSViewController {
                 return
             }
             #if DEBUG
-            print("[rename] window.isKey=\(window.isKeyWindow) firstResponder=\(window.firstResponder.map { String(describing: $0) } ?? "nil")")
+            print(
+                "[rename] window.isKey=\(window.isKeyWindow) firstResponder=\(window.firstResponder.map { String(describing: $0) } ?? "nil")"
+            )
             #endif
             if !window.isKeyWindow { window.makeKey() }
             cell.beginInlineRename()
@@ -485,9 +489,9 @@ final class SidebarViewController: NSViewController {
         let parentId: UUID? = {
             let row = outlineView.selectedRow
             guard row >= 0,
-                  let node = outlineView.item(atRow: row) as? SidebarNode,
-                  case .playlist(let p) = node.kind,
-                  p.isFolder
+                let node = outlineView.item(atRow: row) as? SidebarNode,
+                case .playlist(let p) = node.kind,
+                p.isFolder
             else { return nil }
             return p.id
         }()
@@ -657,13 +661,18 @@ extension SidebarViewController: NSOutlineViewDataSource {
 
     // MARK: - Drag/drop validation + accept
 
-    func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
+    func outlineView(
+        _ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?,
+        proposedChildIndex index: Int
+    ) -> NSDragOperation {
         if let trackOp = validateTrackDrop(info: info, item: item, index: index) { return trackOp }
         if let moveOp = validatePlaylistMoveDrop(info: info, item: item, index: index) { return moveOp }
         return []
     }
 
-    func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
+    func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int)
+        -> Bool
+    {
         if acceptTrackDrop(info: info, item: item) { return true }
         if acceptPlaylistMoveDrop(info: info, item: item) { return true }
         return false
@@ -674,9 +683,9 @@ extension SidebarViewController: NSOutlineViewDataSource {
         else { return nil }
         // Only accept drops directly onto a non-folder playlist row.
         guard let node = item as? SidebarNode,
-              case .playlist(let playlist) = node.kind,
-              !playlist.isFolder,
-              index == NSOutlineViewDropOnItemIndex
+            case .playlist(let playlist) = node.kind,
+            !playlist.isFolder,
+            index == NSOutlineViewDropOnItemIndex
         else { return [] }
         _ = playlist
         return .copy
@@ -684,8 +693,8 @@ extension SidebarViewController: NSOutlineViewDataSource {
 
     private func acceptTrackDrop(info: NSDraggingInfo, item: Any?) -> Bool {
         guard let node = item as? SidebarNode,
-              case .playlist(let playlist) = node.kind,
-              !playlist.isFolder
+            case .playlist(let playlist) = node.kind,
+            !playlist.isFolder
         else { return false }
         let albumIds = info.onduIds(forType: .onduAlbums)
         if !albumIds.isEmpty {
@@ -705,9 +714,9 @@ extension SidebarViewController: NSOutlineViewDataSource {
 
     private func validatePlaylistMoveDrop(info: NSDraggingInfo, item: Any?, index: Int) -> NSDragOperation? {
         guard let pasteboard = info.draggingPasteboard.pasteboardItems,
-              let raw = pasteboard.first(where: { $0.string(forType: .onduSidebarPlaylist) != nil })?
-                  .string(forType: .onduSidebarPlaylist),
-              let draggedId = UUID(uuidString: raw)
+            let raw = pasteboard.first(where: { $0.string(forType: .onduSidebarPlaylist) != nil })?
+                .string(forType: .onduSidebarPlaylist),
+            let draggedId = UUID(uuidString: raw)
         else { return nil }
 
         let destinationParent = resolveDropTarget(item: item, index: index)
@@ -722,9 +731,9 @@ extension SidebarViewController: NSOutlineViewDataSource {
 
     private func acceptPlaylistMoveDrop(info: NSDraggingInfo, item: Any?) -> Bool {
         guard let pasteboard = info.draggingPasteboard.pasteboardItems,
-              let raw = pasteboard.first(where: { $0.string(forType: .onduSidebarPlaylist) != nil })?
-                  .string(forType: .onduSidebarPlaylist),
-              let draggedId = UUID(uuidString: raw)
+            let raw = pasteboard.first(where: { $0.string(forType: .onduSidebarPlaylist) != nil })?
+                .string(forType: .onduSidebarPlaylist),
+            let draggedId = UUID(uuidString: raw)
         else { return false }
         let destinationParent = resolveDropTarget(item: item, index: -1)
         actions.movePlaylist(draggedId, destinationParent)
@@ -784,7 +793,8 @@ extension SidebarViewController: NSOutlineViewDelegate {
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? SidebarNode else { return nil }
 
-        let cell = outlineView.makeView(withIdentifier: SidebarCell.identifier, owner: nil) as? SidebarCell
+        let cell =
+            outlineView.makeView(withIdentifier: SidebarCell.identifier, owner: nil) as? SidebarCell
             ?? SidebarCell()
         cell.accentColor = accentNSColor
         cell.identifier = SidebarCell.identifier
@@ -818,7 +828,7 @@ extension SidebarViewController: NSOutlineViewDelegate {
     private func shouldCompensateIndent(for node: SidebarNode) -> Bool {
         switch parentSection(of: node) {
         case .library:
-            return true   // always 0pt indent
+            return true  // always 0pt indent
         case .playlistsRoot:
             return !playlistsHaveAnyFolder
         case .deeper, .none:
@@ -872,7 +882,7 @@ extension SidebarViewController: NSOutlineViewDelegate {
         if suppressSelectionCallback { return }
         let row = outlineView.selectedRow
         guard row >= 0,
-              let node = outlineView.item(atRow: row) as? SidebarNode
+            let node = outlineView.item(atRow: row) as? SidebarNode
         else {
             onSelectionChange?(nil)
             return
@@ -891,7 +901,7 @@ extension SidebarViewController: SidebarCellRenameDelegate {
         // Resolve the current playlist from the outline tree (may have been updated since
         // the cell was last configured).
         guard let node = findPlaylistNode(id: playlistId, in: playlistsSection.children),
-              case .playlist(let playlist) = node.kind
+            case .playlist(let playlist) = node.kind
         else { return }
         if newName.isEmpty || newName == playlist.name {
             // Revert the field and skip the round-trip.
@@ -905,8 +915,8 @@ extension SidebarViewController: SidebarCellRenameDelegate {
         // Revert and end editing — caller's representedPlaylistId is still valid.
         let row = outlineView.row(for: cell)
         guard row >= 0,
-              let node = outlineView.item(atRow: row) as? SidebarNode,
-              case .playlist(let playlist) = node.kind
+            let node = outlineView.item(atRow: row) as? SidebarNode,
+            case .playlist(let playlist) = node.kind
         else { return }
         cell.textField?.stringValue = playlist.name
         view.window?.makeFirstResponder(outlineView)
@@ -921,8 +931,8 @@ extension SidebarViewController: NSMenuDelegate {
         let row = outlineView.clickedRow
         let clickedPlaylist: Playlist? = {
             guard row >= 0,
-                  let node = outlineView.item(atRow: row) as? SidebarNode,
-                  case .playlist(let p) = node.kind
+                let node = outlineView.item(atRow: row) as? SidebarNode,
+                case .playlist(let p) = node.kind
             else { return nil }
             return p
         }()
@@ -1053,7 +1063,8 @@ private final class SidebarCell: NSTableCellView {
             return
         }
         label.textColor = emphasized ? .alternateSelectedControlTextColor : .labelColor
-        icon.contentTintColor = emphasized
+        icon.contentTintColor =
+            emphasized
             ? .alternateSelectedControlTextColor
             : (usesAccentIcon ? accentColor : .secondaryLabelColor)
         badge.textColor = emphasized ? .alternateSelectedControlTextColor : .secondaryLabelColor
@@ -1096,7 +1107,7 @@ private final class SidebarCell: NSTableCellView {
         label.isBordered = false
         label.drawsBackground = false
         label.isBezeled = false
-        label.isEditable = false   // flipped on per-cell when editing
+        label.isEditable = false  // flipped on per-cell when editing
         label.isSelectable = false
         label.lineBreakMode = .byTruncatingTail
         label.cell?.usesSingleLineMode = true
@@ -1215,7 +1226,9 @@ private final class SidebarCell: NSTableCellView {
         label.selectText(nil)
         let afterResponder = window?.firstResponder
         #if DEBUG
-        print("[rename] beginInlineRename label.isEditable=\(label.isEditable) inWindow=\(window != nil) before=\(beforeResponder.map { String(describing: $0) } ?? "nil") after=\(afterResponder.map { String(describing: $0) } ?? "nil")")
+        print(
+            "[rename] beginInlineRename label.isEditable=\(label.isEditable) inWindow=\(window != nil) before=\(beforeResponder.map { String(describing: $0) } ?? "nil") after=\(afterResponder.map { String(describing: $0) } ?? "nil")"
+        )
         #endif
     }
 }
@@ -1341,15 +1354,16 @@ private final class SidebarRowView: NSTableRowView {
         keyObservers.removeAll()
         guard let window else { return }
         for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
-            keyObservers.append(NotificationCenter.default.addObserver(
-                forName: name, object: window, queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    self.applyCellEmphasis()
-                    self.needsDisplay = true
-                }
-            })
+            keyObservers.append(
+                NotificationCenter.default.addObserver(
+                    forName: name, object: window, queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.applyCellEmphasis()
+                        self.needsDisplay = true
+                    }
+                })
         }
     }
 
@@ -1378,7 +1392,7 @@ private final class SidebarRowView: NSTableRowView {
 
     override var focusRingType: NSFocusRingType {
         get { .none }
-        set { }
+        set {}
     }
 
     // Defers to super first so everything else the row draws — notably the drag

@@ -1,21 +1,24 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 // MARK: - Fixtures
 
 private let testArtist = Artist(id: UUID(), name: "Test Artist", sortName: "Test Artist", slug: "test-artist")
 private let testAlbumId = UUID()
-private let testAlbum = Album(id: testAlbumId, artistId: testArtist.id, name: "Test Album",
-                              sortName: "Test Album", slug: "test-album")
+private let testAlbum = Album(
+    id: testAlbumId, artistId: testArtist.id, name: "Test Album",
+    sortName: "Test Album", slug: "test-album")
 
 private func makeTrack(id: UUID = UUID(), name: String = "Track", mimetype: String = "audio/mp4") -> Track {
-    Track(id: id, artistId: testArtist.id, albumArtistId: testArtist.id,
-          albumId: testAlbumId, artist: testArtist, albumArtistSortName: testArtist.sortName,
-          name: name, disc: 1, number: 1, duration: 200,
-          mimetype: mimetype, streamUrl: "https://example.com/stream/test",
-          downloadUrl: "https://example.com/download/test")
+    Track(
+        id: id, artistId: testArtist.id, albumArtistId: testArtist.id,
+        albumId: testAlbumId, artist: testArtist, albumArtistSortName: testArtist.sortName,
+        name: name, disc: 1, number: 1, duration: 200,
+        mimetype: mimetype, streamUrl: "https://example.com/stream/test",
+        downloadUrl: "https://example.com/download/test")
 }
 
 private func makeInfo(track: Track? = nil, album: Album? = nil, artist: Artist? = nil) -> DownloadService.DownloadInfo {
@@ -26,7 +29,7 @@ private func makeLibrary() throws -> MusicLibrary {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try ModelContainer(
         for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-             LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+        LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
         configurations: config
     )
     return MusicLibrary(container: container)
@@ -35,8 +38,9 @@ private func makeLibrary() throws -> MusicLibrary {
 private func makeService(library: MusicLibrary? = nil, settings: SettingsStore? = nil) throws -> DownloadService {
     let lib = try library ?? makeLibrary()
     let s = settings ?? SettingsStore()
-    return DownloadService(baseURL: URL(string: "https://example.com/api")!,
-                           sessionToken: "test-token", musicLibrary: lib, settings: s)
+    return DownloadService(
+        baseURL: URL(string: "https://example.com/api")!,
+        sessionToken: "test-token", musicLibrary: lib, settings: s)
 }
 
 // MARK: - Initial State
@@ -99,16 +103,25 @@ private func makeService(library: MusicLibrary? = nil, settings: SettingsStore? 
 
         // Insert a track into the library and mark it downloaded
         let now = Date()
-        library.upsertArtists([SyncArtist(id: testArtist.id, name: "Test Artist", sortName: "Test Artist",
-                                          slug: "test-artist", albumCount: 1, insertedAt: now)])
-        library.upsertAlbums([SyncAlbum(id: testAlbumId, artistId: testArtist.id, name: "Test Album",
-                                        sortName: "Test Album", slug: "test-album", releaseYear: nil,
-                                        artworkUrl: nil, isUnknown: false, trackCount: 1, insertedAt: now)])
-        library.upsertTracks([SyncTrack(id: trackId, artistId: testArtist.id, albumArtistId: testArtist.id,
-                                        albumId: testAlbumId, name: "Track", disc: 1, number: 1,
-                                        duration: 200, mimetype: "audio/mp4",
-                                        streamUrl: "/stream/test", downloadUrl: "/download/test",
-                                        insertedAt: now)])
+        library.upsertArtists([
+            SyncArtist(
+                id: testArtist.id, name: "Test Artist", sortName: "Test Artist",
+                slug: "test-artist", albumCount: 1, insertedAt: now)
+        ])
+        library.upsertAlbums([
+            SyncAlbum(
+                id: testAlbumId, artistId: testArtist.id, name: "Test Album",
+                sortName: "Test Album", slug: "test-album", releaseYear: nil,
+                artworkUrl: nil, isUnknown: false, trackCount: 1, insertedAt: now)
+        ])
+        library.upsertTracks([
+            SyncTrack(
+                id: trackId, artistId: testArtist.id, albumArtistId: testArtist.id,
+                albumId: testAlbumId, name: "Track", disc: 1, number: 1,
+                duration: 200, mimetype: "audio/mp4",
+                streamUrl: "/stream/test", downloadUrl: "/download/test",
+                insertedAt: now)
+        ])
         library.markDownloaded(trackId: trackId, relativePath: "Ondu/Downloads/test.mp4")
 
         let service = try makeService(library: library)
@@ -123,8 +136,9 @@ private func makeService(library: MusicLibrary? = nil, settings: SettingsStore? 
     @Test func downloadAlbumEnqueuesAllTracks() throws {
         let service = try makeService()
         let tracks = (1...5).map { makeTrack(name: "Track \($0)") }
-        let album = Album(id: testAlbumId, artistId: testArtist.id, name: "Album",
-                          sortName: "Album", slug: "album", tracks: tracks)
+        let album = Album(
+            id: testAlbumId, artistId: testArtist.id, name: "Album",
+            sortName: "Album", slug: "album", tracks: tracks)
 
         service.download(album: album, artist: testArtist)
 
@@ -137,8 +151,9 @@ private func makeService(library: MusicLibrary? = nil, settings: SettingsStore? 
 
     @Test func downloadAlbumWithNoTracksIsNoop() throws {
         let service = try makeService()
-        let album = Album(id: testAlbumId, artistId: testArtist.id, name: "Album",
-                          sortName: "Album", slug: "album", tracks: nil)
+        let album = Album(
+            id: testAlbumId, artistId: testArtist.id, name: "Album",
+            sortName: "Album", slug: "album", tracks: nil)
 
         service.download(album: album, artist: testArtist)
 
@@ -285,7 +300,7 @@ private func makeService(library: MusicLibrary? = nil, settings: SettingsStore? 
         let track = makeTrack()
         service.download(track: track, album: testAlbum, artist: testArtist)
 
-        service.cancelDownload(trackId: UUID()) // unknown ID
+        service.cancelDownload(trackId: UUID())  // unknown ID
 
         #expect(service.isDownloading(trackId: track.id))
     }
@@ -365,7 +380,7 @@ private func makeService(library: MusicLibrary? = nil, settings: SettingsStore? 
         let track = makeTrack()
         service.download(track: track, album: testAlbum, artist: testArtist)
 
-        service.pauseDownload(trackId: UUID()) // unknown ID
+        service.pauseDownload(trackId: UUID())  // unknown ID
 
         #expect(service.activeDownloads[track.id]?.isPaused != true)
     }
@@ -424,7 +439,7 @@ private func makeService(library: MusicLibrary? = nil, settings: SettingsStore? 
         )
         service.failedDownloads.append(failed)
 
-        #expect(service.hasActivity) // failedDownloads count
+        #expect(service.hasActivity)  // failedDownloads count
 
         service.retryDownload(failed)
 
@@ -451,10 +466,12 @@ private func makeService(library: MusicLibrary? = nil, settings: SettingsStore? 
     @Test func clearFailedRemovesAll() throws {
         let service = try makeService()
         let info = makeInfo()
-        service.failedDownloads.append(DownloadService.FailedDownload(
-            id: UUID(), trackName: "A", artistName: "X", info: info, reason: "err"))
-        service.failedDownloads.append(DownloadService.FailedDownload(
-            id: UUID(), trackName: "B", artistName: "Y", info: info, reason: "err"))
+        service.failedDownloads.append(
+            DownloadService.FailedDownload(
+                id: UUID(), trackName: "A", artistName: "X", info: info, reason: "err"))
+        service.failedDownloads.append(
+            DownloadService.FailedDownload(
+                id: UUID(), trackName: "B", artistName: "Y", info: info, reason: "err"))
 
         service.clearFailedDownloads()
 

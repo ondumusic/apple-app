@@ -5,8 +5,8 @@
 //  Created by Max van Wezel on 06/05/2026.
 //
 
-
 import XCTest
+
 @testable import Ondu  // adjust to match your project
 
 final class FractionalIndexTests: XCTestCase {
@@ -79,8 +79,10 @@ final class FractionalIndexTests: XCTestCase {
         )
         XCTAssertEqual(
             FractionalIndex.generateNKeysBetween("a0", "a2", n: 20, digits: base10),
-            ["a01", "a02", "a03", "a035", "a04", "a05", "a06", "a07", "a08", "a09",
-             "a1", "a11", "a12", "a13", "a14", "a15", "a16", "a17", "a18", "a19"]
+            [
+                "a01", "a02", "a03", "a035", "a04", "a05", "a06", "a07", "a08", "a09",
+                "a1", "a11", "a12", "a13", "a14", "a15", "a16", "a17", "a18", "a19",
+            ]
         )
     }
 

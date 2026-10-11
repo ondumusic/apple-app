@@ -67,17 +67,19 @@ where Option.AllCases: RandomAccessCollection, Option.RawValue == String {
                 // SwiftUI drops a Button's Label image, so the direction arrow never
                 // drew. A Toggle gets the real checkmark column, and re-picking the
                 // active field still calls set — which is the reverse gesture.
-                Toggle(isOn: Binding(
-                    get: { selection == option },
-                    set: { isOn in
-                        if isOn {
-                            selection = option
-                            ascending = true
-                        } else {
-                            ascending.toggle()
+                Toggle(
+                    isOn: Binding(
+                        get: { selection == option },
+                        set: { isOn in
+                            if isOn {
+                                selection = option
+                                ascending = true
+                            } else {
+                                ascending.toggle()
+                            }
                         }
-                    }
-                )) {
+                    )
+                ) {
                     Text(label(for: option))
                 }
             }

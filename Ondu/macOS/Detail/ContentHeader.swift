@@ -32,18 +32,20 @@ struct ContentHeader<Trailing: View>: View {
     private var strip: some View {
         HStack(spacing: Spacing.related) {
             if let backDestination {
-                Button { dismiss() } label: {
+                Button {
+                    dismiss()
+                } label: {
                     Image(systemName: "chevron.backward")
                         .font(.body.weight(.medium))
                         .frame(width: 22, height: 22)
-                    // The glyph and label are smaller than the target, so without this
-                    // only the text itself would take the hover and the click.
-                    .contentShape(Rectangle())
-                    .padding(.horizontal, 3)
-                    .background {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.primary.opacity(isHoveringBack ? 0.10 : 0))
-                    }
+                        // The glyph and label are smaller than the target, so without this
+                        // only the text itself would take the hover and the click.
+                        .contentShape(Rectangle())
+                        .padding(.horizontal, 3)
+                        .background {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.primary.opacity(isHoveringBack ? 0.10 : 0))
+                        }
                 }
                 .buttonStyle(.plain)
                 .onHover { isHoveringBack = $0 }

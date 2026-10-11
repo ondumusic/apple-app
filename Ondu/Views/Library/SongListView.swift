@@ -121,12 +121,16 @@ struct SongListView: View {
                 Text("Downloaded").tag(LibraryFilter.downloaded)
             }
         } label: {
-            Label("Filter", systemImage: filterOption == .downloaded ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+            Label(
+                "Filter",
+                systemImage: filterOption == .downloaded
+                    ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
         }
     }
 
     private func reloadTracks() {
-        let allTracks = filterOption == .downloaded
+        let allTracks =
+            filterOption == .downloaded
             ? musicLibrary.downloadedTracks()
             : musicLibrary.allTracks()
         var grouped: [(letter: String, tracks: [Track])] = []

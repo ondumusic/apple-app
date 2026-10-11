@@ -54,8 +54,10 @@ struct DownloadActivityView: View {
         }
         .frame(minWidth: 460, minHeight: 260)
         .pageBackground()
-        .confirmationDialog("Cancel All Downloads?", isPresented: $showCancelAllConfirmation,
-                            titleVisibility: .visible) {
+        .confirmationDialog(
+            "Cancel All Downloads?", isPresented: $showCancelAllConfirmation,
+            titleVisibility: .visible
+        ) {
             Button("Cancel All", role: .destructive) { downloadService.cancelAll() }
             Button("Keep Downloading", role: .cancel) {}
         } message: {
@@ -137,31 +139,35 @@ struct DownloadActivityView: View {
                 primary: state.isPaused
                     ? .init(label: "Resume", symbol: "play.circle") { downloadService.resumeDownload(trackId: trackId) }
                     : .init(label: "Pause", symbol: "pause.circle") { downloadService.pauseDownload(trackId: trackId) },
-                secondary: .init(label: "Cancel", symbol: "xmark.circle") { downloadService.cancelDownload(trackId: trackId) }
+                secondary: .init(label: "Cancel", symbol: "xmark.circle") {
+                    downloadService.cancelDownload(trackId: trackId)
+                }
             )
         }
     }
 
     private var queuedRows: [ActivityRow] {
         downloadService.pendingQueue.map { info in
-            ActivityRow(id: "queued-\(info.track.id)", title: info.track.name, artist: info.track.artist.name,
-                        progress: nil, status: "Waiting", isError: false, primary: nil,
-                        secondary: .init(label: "Cancel", symbol: "xmark.circle") {
-                            downloadService.cancelDownload(trackId: info.track.id)
-                        })
+            ActivityRow(
+                id: "queued-\(info.track.id)", title: info.track.name, artist: info.track.artist.name,
+                progress: nil, status: "Waiting", isError: false, primary: nil,
+                secondary: .init(label: "Cancel", symbol: "xmark.circle") {
+                    downloadService.cancelDownload(trackId: info.track.id)
+                })
         }
     }
 
     private var failedRows: [ActivityRow] {
         downloadService.failedDownloads.map { failed in
-            ActivityRow(id: "failed-\(failed.id)", title: failed.trackName, artist: failed.artistName,
-                        progress: nil, status: failed.reason, isError: true,
-                        primary: .init(label: "Retry", symbol: "arrow.clockwise") {
-                            downloadService.retryDownload(failed)
-                        },
-                        secondary: .init(label: "Dismiss", symbol: "xmark.circle") {
-                            downloadService.dismissFailedDownload(failed)
-                        })
+            ActivityRow(
+                id: "failed-\(failed.id)", title: failed.trackName, artist: failed.artistName,
+                progress: nil, status: failed.reason, isError: true,
+                primary: .init(label: "Retry", symbol: "arrow.clockwise") {
+                    downloadService.retryDownload(failed)
+                },
+                secondary: .init(label: "Dismiss", symbol: "xmark.circle") {
+                    downloadService.dismissFailedDownload(failed)
+                })
         }
     }
 }

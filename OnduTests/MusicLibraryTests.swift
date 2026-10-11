@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 // MARK: - Helpers
@@ -9,7 +10,7 @@ private func makeTestLibrary() throws -> MusicLibrary {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try ModelContainer(
         for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-             LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+        LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
         configurations: config
     )
     return MusicLibrary(container: container)
@@ -17,28 +18,37 @@ private func makeTestLibrary() throws -> MusicLibrary {
 
 private let now = Date()
 
-private func syncArtist(id: UUID = UUID(), name: String, sortName: String? = nil,
-                        slug: String? = nil, albumCount: Int = 1) -> SyncArtist {
-    SyncArtist(id: id, name: name, sortName: sortName ?? name, slug: slug ?? name.lowercased(),
-               albumCount: albumCount, insertedAt: now)
+private func syncArtist(
+    id: UUID = UUID(), name: String, sortName: String? = nil,
+    slug: String? = nil, albumCount: Int = 1
+) -> SyncArtist {
+    SyncArtist(
+        id: id, name: name, sortName: sortName ?? name, slug: slug ?? name.lowercased(),
+        albumCount: albumCount, insertedAt: now)
 }
 
-private func syncAlbum(id: UUID = UUID(), artistId: UUID, name: String, sortName: String? = nil,
-                       slug: String? = nil, releaseYear: Int? = nil, trackCount: Int = 1,
-                       isUnknown: Bool = false) -> SyncAlbum {
-    SyncAlbum(id: id, artistId: artistId, name: name, sortName: sortName ?? name,
-              slug: slug ?? name.lowercased(), releaseYear: releaseYear,
-              artworkUrl: nil, isUnknown: isUnknown, trackCount: trackCount, insertedAt: now)
+private func syncAlbum(
+    id: UUID = UUID(), artistId: UUID, name: String, sortName: String? = nil,
+    slug: String? = nil, releaseYear: Int? = nil, trackCount: Int = 1,
+    isUnknown: Bool = false
+) -> SyncAlbum {
+    SyncAlbum(
+        id: id, artistId: artistId, name: name, sortName: sortName ?? name,
+        slug: slug ?? name.lowercased(), releaseYear: releaseYear,
+        artworkUrl: nil, isUnknown: isUnknown, trackCount: trackCount, insertedAt: now)
 }
 
-private func syncTrack(id: UUID = UUID(), artistId: UUID, albumArtistId: UUID? = nil,
-                       albumId: UUID, name: String, disc: Int = 1, number: Int = 1,
-                       duration: Double = 200, mimetype: String = "audio/mp4") -> SyncTrack {
-    SyncTrack(id: id, artistId: artistId, albumArtistId: albumArtistId ?? artistId,
-              albumId: albumId, name: name, disc: disc, number: number,
-              duration: duration, mimetype: mimetype,
-              streamUrl: "/stream/\(id)", downloadUrl: "/download/\(id)",
-              insertedAt: now)
+private func syncTrack(
+    id: UUID = UUID(), artistId: UUID, albumArtistId: UUID? = nil,
+    albumId: UUID, name: String, disc: Int = 1, number: Int = 1,
+    duration: Double = 200, mimetype: String = "audio/mp4"
+) -> SyncTrack {
+    SyncTrack(
+        id: id, artistId: artistId, albumArtistId: albumArtistId ?? artistId,
+        albumId: albumId, name: name, disc: disc, number: number,
+        duration: duration, mimetype: mimetype,
+        streamUrl: "/stream/\(id)", downloadUrl: "/download/\(id)",
+        insertedAt: now)
 }
 
 // MARK: - Artist Query Tests
@@ -161,7 +171,8 @@ struct MusicLibraryAlbumTests {
 
     @Test func albumsForArtistDoesNotReturnOtherArtists() throws {
         let lib = try makeTestLibrary()
-        let a1 = UUID(), a2 = UUID()
+        let a1 = UUID()
+        let a2 = UUID()
         lib.upsertArtists([
             syncArtist(id: a1, name: "Artist 1"),
             syncArtist(id: a2, name: "Artist 2"),
@@ -275,8 +286,11 @@ struct MusicLibraryTrackTests {
         let trackId = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Pink Floyd", sortName: "Pink Floyd", slug: "pink-floyd")])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "The Wall", sortName: "Wall, The")])
-        lib.upsertTracks([syncTrack(id: trackId, artistId: artistId, albumId: albumId, name: "Comfortably Numb",
-                                    disc: 2, number: 6, duration: 382, mimetype: "audio/flac")])
+        lib.upsertTracks([
+            syncTrack(
+                id: trackId, artistId: artistId, albumId: albumId, name: "Comfortably Numb",
+                disc: 2, number: 6, duration: 382, mimetype: "audio/flac")
+        ])
         lib.bumpRevision()
 
         let track = lib.track(trackId)!
@@ -301,8 +315,11 @@ struct MusicLibraryTrackTests {
             syncArtist(id: trackArtistId, name: "Featured Artist", sortName: "Featured Artist"),
         ])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: albumArtistId, name: "Compilation")])
-        lib.upsertTracks([syncTrack(id: trackId, artistId: trackArtistId, albumArtistId: albumArtistId,
-                                    albumId: albumId, name: "Featured Song")])
+        lib.upsertTracks([
+            syncTrack(
+                id: trackId, artistId: trackArtistId, albumArtistId: albumArtistId,
+                albumId: albumId, name: "Featured Song")
+        ])
         lib.bumpRevision()
 
         let track = lib.track(trackId)!
@@ -430,7 +447,9 @@ struct MusicLibraryDownloadTests {
         let lib = try makeTestLibrary()
         let artistId = UUID()
         let albumId = UUID()
-        let t1 = UUID(), t2 = UUID(), t3 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
+        let t3 = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 3)])
         lib.upsertTracks([
@@ -449,7 +468,8 @@ struct MusicLibraryDownloadTests {
         let lib = try makeTestLibrary()
         let artistId = UUID()
         let albumId = UUID()
-        let t1 = UUID(), t2 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 2)])
         lib.upsertTracks([
@@ -481,9 +501,15 @@ struct MusicLibraryDownloadTests {
 
     @Test func downloadedArtistsReturnsSortedArtistsWithDownloads() throws {
         let lib = try makeTestLibrary()
-        let a1 = UUID(), a2 = UUID(), a3 = UUID()
-        let album1 = UUID(), album2 = UUID(), album3 = UUID()
-        let t1 = UUID(), t2 = UUID(), t3 = UUID()
+        let a1 = UUID()
+        let a2 = UUID()
+        let a3 = UUID()
+        let album1 = UUID()
+        let album2 = UUID()
+        let album3 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
+        let t3 = UUID()
         lib.upsertArtists([
             syncArtist(id: a1, name: "Zed", sortName: "Zed"),
             syncArtist(id: a2, name: "Alpha", sortName: "Alpha"),
@@ -513,7 +539,8 @@ struct MusicLibraryDownloadTests {
         let lib = try makeTestLibrary()
         let artistId = UUID()
         let albumId = UUID()
-        let t1 = UUID(), t2 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 2)])
         lib.upsertTracks([
@@ -533,7 +560,8 @@ struct MusicLibraryDownloadTests {
         let lib = try makeTestLibrary()
         let artistId = UUID()
         let albumId = UUID()
-        let t1 = UUID(), t2 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 2)])
         lib.upsertTracks([
@@ -571,7 +599,8 @@ struct MusicLibraryDownloadTests {
         let lib = try makeTestLibrary()
         let artistId = UUID()
         let albumId = UUID()
-        let t1 = UUID(), t2 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 2)])
         lib.upsertTracks([
@@ -739,10 +768,14 @@ struct MusicLibrarySearchTests {
 
     @Test func downloadedAlbumEntriesCountsAndSizesPerAlbum() throws {
         let lib = try makeTestLibrary()
-        let artistId = UUID(), one = UUID(), two = UUID()
+        let artistId = UUID()
+        let one = UUID()
+        let two = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist", albumCount: 2)])
-        lib.upsertAlbums([syncAlbum(id: one, artistId: artistId, name: "Alpha"),
-                          syncAlbum(id: two, artistId: artistId, name: "Beta")])
+        lib.upsertAlbums([
+            syncAlbum(id: one, artistId: artistId, name: "Alpha"),
+            syncAlbum(id: two, artistId: artistId, name: "Beta"),
+        ])
         let a1 = syncTrack(artistId: artistId, albumId: one, name: "A1")
         let a2 = syncTrack(artistId: artistId, albumId: one, name: "A2", number: 2)
         let b1 = syncTrack(artistId: artistId, albumId: two, name: "B1")
@@ -764,7 +797,8 @@ struct MusicLibrarySearchTests {
 
     @Test func downloadedAlbumEntriesExcludesAlbumsWithNothingOnDisk() throws {
         let lib = try makeTestLibrary()
-        let artistId = UUID(), albumId = UUID()
+        let artistId = UUID()
+        let albumId = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Alpha")])
         lib.upsertTracks([syncTrack(artistId: artistId, albumId: albumId, name: "A1")])
@@ -775,14 +809,22 @@ struct MusicLibrarySearchTests {
 
     @Test func searchFindsAlbumsByArtistName() throws {
         let lib = try makeTestLibrary()
-        let beatles = UUID(), zeppelin = UUID()
-        let abbey = UUID(), four = UUID()
-        lib.upsertArtists([syncArtist(id: beatles, name: "The Beatles", albumCount: 1),
-                           syncArtist(id: zeppelin, name: "Led Zeppelin", albumCount: 1)])
-        lib.upsertAlbums([syncAlbum(id: abbey, artistId: beatles, name: "Abbey Road"),
-                          syncAlbum(id: four, artistId: zeppelin, name: "IV")])
-        lib.upsertTracks([syncTrack(artistId: beatles, albumId: abbey, name: "Come Together"),
-                          syncTrack(artistId: zeppelin, albumId: four, name: "Black Dog")])
+        let beatles = UUID()
+        let zeppelin = UUID()
+        let abbey = UUID()
+        let four = UUID()
+        lib.upsertArtists([
+            syncArtist(id: beatles, name: "The Beatles", albumCount: 1),
+            syncArtist(id: zeppelin, name: "Led Zeppelin", albumCount: 1),
+        ])
+        lib.upsertAlbums([
+            syncAlbum(id: abbey, artistId: beatles, name: "Abbey Road"),
+            syncAlbum(id: four, artistId: zeppelin, name: "IV"),
+        ])
+        lib.upsertTracks([
+            syncTrack(artistId: beatles, albumId: abbey, name: "Come Together"),
+            syncTrack(artistId: zeppelin, albumId: four, name: "Black Dog"),
+        ])
         lib.bumpRevision()
 
         // "Abbey Road" doesn't contain "beatles" — it matches through its artist.
@@ -792,12 +834,18 @@ struct MusicLibrarySearchTests {
 
     @Test func searchRanksAlbumNameMatchesFirst() throws {
         let lib = try makeTestLibrary()
-        let artistId = UUID(), named = UUID(), other = UUID()
+        let artistId = UUID()
+        let named = UUID()
+        let other = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "The Beatles", albumCount: 2)])
-        lib.upsertAlbums([syncAlbum(id: other, artistId: artistId, name: "Abbey Road"),
-                          syncAlbum(id: named, artistId: artistId, name: "With The Beatles")])
-        lib.upsertTracks([syncTrack(artistId: artistId, albumId: other, name: "Come Together"),
-                          syncTrack(artistId: artistId, albumId: named, name: "All My Loving")])
+        lib.upsertAlbums([
+            syncAlbum(id: other, artistId: artistId, name: "Abbey Road"),
+            syncAlbum(id: named, artistId: artistId, name: "With The Beatles"),
+        ])
+        lib.upsertTracks([
+            syncTrack(artistId: artistId, albumId: other, name: "Come Together"),
+            syncTrack(artistId: artistId, albumId: named, name: "All My Loving"),
+        ])
         lib.bumpRevision()
 
         let results = lib.search("beatles")
@@ -806,12 +854,18 @@ struct MusicLibrarySearchTests {
 
     @Test func searchFindsTracksByArtistName() throws {
         let lib = try makeTestLibrary()
-        let beatles = UUID(), zeppelin = UUID()
-        let abbey = UUID(), four = UUID()
-        lib.upsertArtists([syncArtist(id: beatles, name: "The Beatles"),
-                           syncArtist(id: zeppelin, name: "Led Zeppelin")])
-        lib.upsertAlbums([syncAlbum(id: abbey, artistId: beatles, name: "Abbey Road"),
-                          syncAlbum(id: four, artistId: zeppelin, name: "IV")])
+        let beatles = UUID()
+        let zeppelin = UUID()
+        let abbey = UUID()
+        let four = UUID()
+        lib.upsertArtists([
+            syncArtist(id: beatles, name: "The Beatles"),
+            syncArtist(id: zeppelin, name: "Led Zeppelin"),
+        ])
+        lib.upsertAlbums([
+            syncAlbum(id: abbey, artistId: beatles, name: "Abbey Road"),
+            syncAlbum(id: four, artistId: zeppelin, name: "IV"),
+        ])
         lib.upsertTracks([
             syncTrack(artistId: beatles, albumId: abbey, name: "Come Together"),
             syncTrack(artistId: zeppelin, albumId: four, name: "Black Dog", number: 2),
@@ -825,10 +879,14 @@ struct MusicLibrarySearchTests {
 
     @Test func searchFindsTracksByAlbumName() throws {
         let lib = try makeTestLibrary()
-        let artistId = UUID(), abbey = UUID(), other = UUID()
+        let artistId = UUID()
+        let abbey = UUID()
+        let other = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "The Beatles")])
-        lib.upsertAlbums([syncAlbum(id: abbey, artistId: artistId, name: "Abbey Road"),
-                          syncAlbum(id: other, artistId: artistId, name: "Revolver")])
+        lib.upsertAlbums([
+            syncAlbum(id: abbey, artistId: artistId, name: "Abbey Road"),
+            syncAlbum(id: other, artistId: artistId, name: "Revolver"),
+        ])
         lib.upsertTracks([
             syncTrack(artistId: artistId, albumId: abbey, name: "Come Together"),
             syncTrack(artistId: artistId, albumId: other, name: "Taxman", number: 2),
@@ -843,7 +901,8 @@ struct MusicLibrarySearchTests {
     /// searching a song name doesn't bury it under that artist's discography.
     @Test func searchRanksTitleMatchesFirst() throws {
         let lib = try makeTestLibrary()
-        let artistId = UUID(), albumId = UUID()
+        let artistId = UUID()
+        let albumId = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Aardvark")])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Debut")])
         lib.upsertTracks([
@@ -978,7 +1037,8 @@ struct MusicLibraryAdditionalQueryTests {
     @Test func albumsWithTracksForArtist() throws {
         let lib = try makeTestLibrary()
         let artistId = UUID()
-        let album1 = UUID(), album2 = UUID()
+        let album1 = UUID()
+        let album2 = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([
             syncAlbum(id: album1, artistId: artistId, name: "A1", releaseYear: 2020, trackCount: 1),
@@ -1028,8 +1088,10 @@ struct MusicLibraryAdditionalQueryTests {
         ])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: albumArtist, name: "Album", trackCount: 2)])
         lib.upsertTracks([
-            syncTrack(artistId: albumArtist, albumArtistId: albumArtist, albumId: albumId, name: "Solo Track", number: 1),
-            syncTrack(artistId: featuredArtist, albumArtistId: albumArtist, albumId: albumId, name: "Feat Track", number: 2),
+            syncTrack(
+                artistId: albumArtist, albumArtistId: albumArtist, albumId: albumId, name: "Solo Track", number: 1),
+            syncTrack(
+                artistId: featuredArtist, albumArtistId: albumArtist, albumId: albumId, name: "Feat Track", number: 2),
         ])
         lib.bumpRevision()
 
@@ -1065,8 +1127,10 @@ struct MusicLibraryAdditionalQueryTests {
     @Test func downloadedAlbumsReturnsOnlyWithDownloads() throws {
         let lib = try makeTestLibrary()
         let artistId = UUID()
-        let album1 = UUID(), album2 = UUID()
-        let t1 = UUID(), t2 = UUID()
+        let album1 = UUID()
+        let album2 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([
             syncAlbum(id: album1, artistId: artistId, name: "Downloaded Album"),
@@ -1085,9 +1149,12 @@ struct MusicLibraryAdditionalQueryTests {
 
     @Test func downloadedTracksReturnsSorted() throws {
         let lib = try makeTestLibrary()
-        let a1 = UUID(), a2 = UUID()
-        let album1 = UUID(), album2 = UUID()
-        let t1 = UUID(), t2 = UUID()
+        let a1 = UUID()
+        let a2 = UUID()
+        let album1 = UUID()
+        let album2 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
         lib.upsertArtists([
             syncArtist(id: a1, name: "Zed", sortName: "Zed"),
             syncArtist(id: a2, name: "Alpha", sortName: "Alpha"),
@@ -1112,8 +1179,10 @@ struct MusicLibraryAdditionalQueryTests {
     @Test func downloadedAlbumsForArtist() throws {
         let lib = try makeTestLibrary()
         let artistId = UUID()
-        let album1 = UUID(), album2 = UUID()
-        let t1 = UUID(), t2 = UUID()
+        let album1 = UUID()
+        let album2 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([
             syncAlbum(id: album1, artistId: artistId, name: "A1", releaseYear: 2020),
@@ -1134,7 +1203,8 @@ struct MusicLibraryAdditionalQueryTests {
         let lib = try makeTestLibrary()
         let artistId = UUID()
         let albumId = UUID()
-        let t1 = UUID(), t2 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([syncAlbum(id: albumId, artistId: artistId, name: "Album", trackCount: 2)])
         lib.upsertTracks([
@@ -1153,8 +1223,10 @@ struct MusicLibraryAdditionalQueryTests {
     @Test func markArtistUndownloaded() throws {
         let lib = try makeTestLibrary()
         let artistId = UUID()
-        let album1 = UUID(), album2 = UUID()
-        let t1 = UUID(), t2 = UUID()
+        let album1 = UUID()
+        let album2 = UUID()
+        let t1 = UUID()
+        let t2 = UUID()
         lib.upsertArtists([syncArtist(id: artistId, name: "Artist")])
         lib.upsertAlbums([
             syncAlbum(id: album1, artistId: artistId, name: "A1"),
@@ -1177,12 +1249,14 @@ struct MusicLibraryAdditionalQueryTests {
         let lib = try makeTestLibrary()
         let artist = Artist(id: UUID(), name: "A", sortName: "A", slug: "a")
         let tracks = [
-            Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
-                  artist: artist, albumArtistSortName: "A", name: "T1", disc: 1, number: 1,
-                  duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: false),
-            Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
-                  artist: artist, albumArtistSortName: "A", name: "T2", disc: 1, number: 2,
-                  duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: true),
+            Track(
+                id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
+                artist: artist, albumArtistSortName: "A", name: "T1", disc: 1, number: 1,
+                duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: false),
+            Track(
+                id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
+                artist: artist, albumArtistSortName: "A", name: "T2", disc: 1, number: 2,
+                duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: true),
         ]
         // Online: all tracks available
         #expect(lib.availableTracks(tracks, isOnline: true).count == 2)
@@ -1194,12 +1268,14 @@ struct MusicLibraryAdditionalQueryTests {
     @Test func availableItemsOnlineVsOffline() throws {
         let lib = try makeTestLibrary()
         let artist = Artist(id: UUID(), name: "A", sortName: "A", slug: "a")
-        let t1 = Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
-                       artist: artist, albumArtistSortName: "A", name: "T1", disc: 1, number: 1,
-                       duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: false)
-        let t2 = Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
-                       artist: artist, albumArtistSortName: "A", name: "T2", disc: 1, number: 2,
-                       duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: true)
+        let t1 = Track(
+            id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
+            artist: artist, albumArtistSortName: "A", name: "T1", disc: 1, number: 1,
+            duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: false)
+        let t2 = Track(
+            id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
+            artist: artist, albumArtistSortName: "A", name: "T2", disc: 1, number: 2,
+            duration: 100, mimetype: "audio/mp4", streamUrl: "/s", isDownloaded: true)
         let items = [QueueItem(track: t1), QueueItem(track: t2)]
 
         #expect(lib.availableItems(items, isOnline: true).count == 2)

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 /// The controller persists the shortcut's playlist in UserDefaults, so these share one
@@ -17,7 +18,7 @@ struct PlaylistControllerTests {
     init() throws {
         let container = try ModelContainer(
             for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-                 LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+            LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         library = MusicLibrary(container: container)
@@ -32,8 +33,9 @@ struct PlaylistControllerTests {
     }
 
     private func confirmed(_ playlist: Playlist) -> Playlist {
-        Playlist(id: UUID(), name: playlist.name, trackCount: 1,
-                 insertedAt: playlist.insertedAt, isFolder: false, parentId: nil)
+        Playlist(
+            id: UUID(), name: playlist.name, trackCount: 1,
+            insertedAt: playlist.insertedAt, isFolder: false, parentId: nil)
     }
 
     @Test func followsThePlaylistWhenTheServerConfirmsIt() throws {
@@ -53,17 +55,28 @@ struct PlaylistControllerTests {
     @Test func cancellingDownloadsStopsSyncQueueingThemAgain() throws {
         defer { UserDefaults.standard.removeObject(forKey: Self.lastUsedKey) }
         let now = Date()
-        let artist = UUID(), album = UUID(), done = UUID(), pending = UUID()
-        library.upsertArtists([SyncArtist(id: artist, name: "A", sortName: "A", slug: "a",
-                                          albumCount: 1, insertedAt: now)])
-        _ = library.upsertAlbums([SyncAlbum(id: album, artistId: artist, name: "B", sortName: "B",
-                                            slug: "b", releaseYear: 2000, artworkUrl: nil,
-                                            isUnknown: false, trackCount: 2, insertedAt: now)])
-        _ = library.upsertTracks([done, pending].map {
-            SyncTrack(id: $0, artistId: artist, albumArtistId: artist, albumId: album,
-                      name: "T", disc: 1, number: 1, duration: 200, mimetype: "audio/mp4",
-                      streamUrl: "/stream/\($0)", downloadUrl: "/download/\($0)", insertedAt: now)
-        })
+        let artist = UUID()
+        let album = UUID()
+        let done = UUID()
+        let pending = UUID()
+        library.upsertArtists([
+            SyncArtist(
+                id: artist, name: "A", sortName: "A", slug: "a",
+                albumCount: 1, insertedAt: now)
+        ])
+        _ = library.upsertAlbums([
+            SyncAlbum(
+                id: album, artistId: artist, name: "B", sortName: "B",
+                slug: "b", releaseYear: 2000, artworkUrl: nil,
+                isUnknown: false, trackCount: 2, insertedAt: now)
+        ])
+        _ = library.upsertTracks(
+            [done, pending].map {
+                SyncTrack(
+                    id: $0, artistId: artist, albumArtistId: artist, albumId: album,
+                    name: "T", disc: 1, number: 1, duration: 200, mimetype: "audio/mp4",
+                    streamUrl: "/stream/\($0)", downloadUrl: "/download/\($0)", insertedAt: now)
+            })
         library.markDownloaded(trackId: done, relativePath: "Ondu/Downloads/a/b/done.m4a")
 
         let controller = makeController()

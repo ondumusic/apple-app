@@ -7,7 +7,9 @@ struct ShuffleButton: View {
     @Environment(PlayerService.self) private var player
 
     var body: some View {
-        Button { player.toggleShuffle() } label: {
+        Button {
+            player.toggleShuffle()
+        } label: {
             Image(systemName: "shuffle")
                 .font(.system(size: 14))
                 .frame(width: playerControlSize, height: playerControlSize)
@@ -24,7 +26,9 @@ struct RepeatButton: View {
     @Environment(PlayerService.self) private var player
 
     var body: some View {
-        Button { player.cycleRepeatMode() } label: {
+        Button {
+            player.cycleRepeatMode()
+        } label: {
             Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
                 .font(.system(size: 14))
                 .frame(width: playerControlSize, height: playerControlSize)
@@ -54,7 +58,9 @@ struct TransportButtons: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Button { player.back() } label: {
+            Button {
+                player.back()
+            } label: {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 14))
                     .frame(width: playerControlSize, height: playerControlSize)
@@ -63,7 +69,9 @@ struct TransportButtons: View {
             .help("Previous")
             .accessibilityLabel("Previous")
 
-            Button { player.togglePlayPause() } label: {
+            Button {
+                player.togglePlayPause()
+            } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 19))
                     .frame(width: playerControlSize, height: playerControlSize)
@@ -72,7 +80,9 @@ struct TransportButtons: View {
             .help(player.isPlaying ? "Pause" : "Play")
             .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
 
-            Button { player.skip() } label: {
+            Button {
+                player.skip()
+            } label: {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 14))
                     .frame(width: playerControlSize, height: playerControlSize)
@@ -208,7 +218,9 @@ struct VolumeControl: View {
 
     var body: some View {
         @Bindable var player = player
-        Button { showingSlider.toggle() } label: {
+        Button {
+            showingSlider.toggle()
+        } label: {
             Image(systemName: iconName)
                 .font(iconSize.map { .system(size: $0) })
                 .foregroundStyle(.secondary)
@@ -274,7 +286,9 @@ struct VolumeSlider: View {
                 .tint(.secondary)
                 .accessibilityLabel("Volume")
 
-            Button { player.volume = 1 } label: {
+            Button {
+                player.volume = 1
+            } label: {
                 Image(systemName: "speaker.wave.3.fill")
                     .font(.system(size: 12))
                     .frame(width: playerControlSize, height: playerControlSize)
@@ -378,7 +392,7 @@ final class ProgressTrackNSView: NSView {
     var tint: NSColor = .controlAccentColor
     var trackColor: NSColor = NSColor.labelColor.withAlphaComponent(0.18)
     var onScrub: (Double) -> Void = { _ in }
-    var onCommit: () -> Void = { }
+    var onCommit: () -> Void = {}
 
     private var isHovered = false
     private var trackingArea: NSTrackingArea?

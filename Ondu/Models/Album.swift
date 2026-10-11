@@ -17,10 +17,12 @@ nonisolated struct Album: Codable, Identifiable, Sendable, Hashable {
     var artistName: String?
     var artistSortName: String?
 
-    init(id: UUID, artistId: UUID, name: String, sortName: String, slug: String,
-         releaseYear: Int? = nil, tracks: [Track]? = nil, isUnknown: Bool = false,
-         artworkUrl: URL? = nil, artwork: [ArtworkVariant] = [], insertedAt: Date? = nil,
-         artistName: String? = nil, artistSortName: String? = nil) {
+    init(
+        id: UUID, artistId: UUID, name: String, sortName: String, slug: String,
+        releaseYear: Int? = nil, tracks: [Track]? = nil, isUnknown: Bool = false,
+        artworkUrl: URL? = nil, artwork: [ArtworkVariant] = [], insertedAt: Date? = nil,
+        artistName: String? = nil, artistSortName: String? = nil
+    ) {
         self.id = id
         self.artistId = artistId
         self.name = name

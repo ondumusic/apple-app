@@ -12,9 +12,11 @@ struct ServerNoticesView: View {
     var body: some View {
         ForEach(syncService.notices) { notice in
             HStack(spacing: 6) {
-                Image(systemName: notice.level == .warning
-                      ? "exclamationmark.triangle.fill" : "info.circle.fill")
-                    .foregroundStyle(notice.level == .warning ? .orange : .secondary)
+                Image(
+                    systemName: notice.level == .warning
+                        ? "exclamationmark.triangle.fill" : "info.circle.fill"
+                )
+                .foregroundStyle(notice.level == .warning ? .orange : .secondary)
                 Text(notice.text)
                 Spacer(minLength: 0)
                 Button("Dismiss") {

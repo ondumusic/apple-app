@@ -44,9 +44,10 @@ enum MainWindowNavigation {
         // own openWindow — which the Window menu's item is already wired to. Matched on
         // its key equivalent rather than its title, which is localized.
         guard let menu = NSApp.mainMenu?.item(withTitle: "Window")?.submenu,
-              let index = menu.items.firstIndex(where: {
-                  $0.keyEquivalent == "0" && $0.keyEquivalentModifierMask == .command
-              }) else { return }
+            let index = menu.items.firstIndex(where: {
+                $0.keyEquivalent == "0" && $0.keyEquivalentModifierMask == .command
+            })
+        else { return }
         menu.performActionForItem(at: index)
     }
 }

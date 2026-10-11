@@ -303,7 +303,8 @@ final class TracksTableViewController: NSViewController {
         _ = view
         for column in tableView.tableColumns {
             guard let sortColumn = TrackSortColumn(rawValue: column.identifier.rawValue) else { continue }
-            column.sortDescriptorPrototype = sortable
+            column.sortDescriptorPrototype =
+                sortable
                 ? NSSortDescriptor(key: sortColumn.rawValue, ascending: sortColumn.defaultAscending)
                 : nil
         }
@@ -318,9 +319,10 @@ final class TracksTableViewController: NSViewController {
     }
 
     private func applySortIndicator() {
-        let wanted: [NSSortDescriptor] = activeSort.map {
-            [NSSortDescriptor(key: $0.column.rawValue, ascending: $0.ascending)]
-        } ?? []
+        let wanted: [NSSortDescriptor] =
+            activeSort.map {
+                [NSSortDescriptor(key: $0.column.rawValue, ascending: $0.ascending)]
+            } ?? []
         guard tableView.sortDescriptors != wanted else { return }
         suppressSortCallback = true
         tableView.sortDescriptors = wanted
@@ -355,10 +357,12 @@ final class TracksTableViewController: NSViewController {
 
     private func persistHiddenColumns() {
         guard let columnPreferenceKey else { return }
-        UserDefaults.standard.set(userHiddenColumns.sorted(),
-                                  forKey: Self.hiddenColumnsDefaultsKey(columnPreferenceKey))
-        UserDefaults.standard.set(Self.allColumnIdentifiers.sorted(),
-                                  forKey: Self.knownColumnsDefaultsKey(columnPreferenceKey))
+        UserDefaults.standard.set(
+            userHiddenColumns.sorted(),
+            forKey: Self.hiddenColumnsDefaultsKey(columnPreferenceKey))
+        UserDefaults.standard.set(
+            Self.allColumnIdentifiers.sorted(),
+            forKey: Self.knownColumnsDefaultsKey(columnPreferenceKey))
     }
 
     /// Whether this table offers the column at all, before the user's choice.
@@ -398,8 +402,10 @@ final class TracksTableViewController: NSViewController {
             return
         }
         let menu = NSMenu()
-        for column in [numberColumn, discColumn, artistColumn, albumColumn, yearColumn,
-                       durationColumn, playsColumn, lastPlayedColumn]
+        for column in [
+            numberColumn, discColumn, artistColumn, albumColumn, yearColumn,
+            durationColumn, playsColumn, lastPlayedColumn,
+        ]
         where callerOffers(column) {
             let item = NSMenuItem(title: column.title, action: #selector(toggleColumn(_:)), keyEquivalent: "")
             item.target = self
@@ -413,8 +419,9 @@ final class TracksTableViewController: NSViewController {
         }
         menu.addItem(.separator())
         // The way back to the view's own order, which no column can express.
-        let reset = NSMenuItem(title: NSLocalizedString("Default Order", comment: ""),
-                               action: #selector(resetSort), keyEquivalent: "")
+        let reset = NSMenuItem(
+            title: NSLocalizedString("Default Order", comment: ""),
+            action: #selector(resetSort), keyEquivalent: "")
         reset.target = self
         reset.state = activeSort == nil ? .on : .off
         menu.addItem(reset)
@@ -441,7 +448,12 @@ final class TracksTableViewController: NSViewController {
     }
 
     var groupLabels: [Int: String] = [:] {
-        didSet { if groupLabels != oldValue { rebuildDisplayRows(); tableView.reloadData() } }
+        didSet {
+            if groupLabels != oldValue {
+                rebuildDisplayRows()
+                tableView.reloadData()
+            }
+        }
     }
     private static let labelRowHeight: CGFloat = 30
     var sectionHeaderHeight: CGFloat = 80
@@ -475,9 +487,9 @@ final class TracksTableViewController: NSViewController {
     private let numberColumn = NSTableColumn(identifier: .init("number"))
     private let discColumn = NSTableColumn(identifier: .init("disc"))
     private let yearColumn = NSTableColumn(identifier: .init("year"))
-    private let titleColumn  = NSTableColumn(identifier: .init("title"))
+    private let titleColumn = NSTableColumn(identifier: .init("title"))
     private let artistColumn = NSTableColumn(identifier: .init("artist"))
-    private let albumColumn  = NSTableColumn(identifier: .init("album"))
+    private let albumColumn = NSTableColumn(identifier: .init("album"))
     private let durationColumn = NSTableColumn(identifier: .init("duration"))
     private let playsColumn = NSTableColumn(identifier: .init("plays"))
     private let lastPlayedColumn = NSTableColumn(identifier: .init("lastPlayed"))
@@ -541,24 +553,26 @@ final class TracksTableViewController: NSViewController {
         tableView.onEnter = { [weak self] in self?.handleEnter() }
 
         let artworkWidth = Self.artworkColumnWidth
-        configureColumn(artworkColumn,  title: "",         width: artworkWidth, alignment: .left, resizable: false)
+        configureColumn(artworkColumn, title: "", width: artworkWidth, alignment: .left, resizable: false)
         artworkColumn.minWidth = artworkWidth
         artworkColumn.maxWidth = artworkWidth
         artworkColumn.isHidden = !showsArtwork
-        configureColumn(numberColumn,   title: "#",        width: 36,  alignment: .right,  resizable: false)
-        configureColumn(titleColumn,    title: "Title",    width: 280, alignment: .left,   resizable: true)
-        configureColumn(artistColumn,   title: "Artist",   width: 180, alignment: .left,   resizable: true)
-        configureColumn(albumColumn,    title: "Album",    width: 180, alignment: .left,   resizable: true)
-        configureColumn(durationColumn, title: "Duration", width: 70,  alignment: .right,  resizable: false)
+        configureColumn(numberColumn, title: "#", width: 36, alignment: .right, resizable: false)
+        configureColumn(titleColumn, title: "Title", width: 280, alignment: .left, resizable: true)
+        configureColumn(artistColumn, title: "Artist", width: 180, alignment: .left, resizable: true)
+        configureColumn(albumColumn, title: "Album", width: 180, alignment: .left, resizable: true)
+        configureColumn(durationColumn, title: "Duration", width: 70, alignment: .right, resizable: false)
         // Off unless asked for, via the header's menu. Useful when they matter — a
         // multi-disc set, or sorting a library by year — and noise the rest of the time.
-        configureColumn(discColumn,     title: "Disc",     width: 44,  alignment: .right,  resizable: false)
-        configureColumn(yearColumn,     title: "Year",     width: 54,  alignment: .right,  resizable: false)
-        configureColumn(playsColumn,    title: "Plays",    width: 54,  alignment: .right,  resizable: false)
+        configureColumn(discColumn, title: "Disc", width: 44, alignment: .right, resizable: false)
+        configureColumn(yearColumn, title: "Year", width: 54, alignment: .right, resizable: false)
+        configureColumn(playsColumn, title: "Plays", width: 54, alignment: .right, resizable: false)
         configureColumn(lastPlayedColumn, title: "Last Played", width: 96, alignment: .right, resizable: false)
 
-        for column in [artworkColumn, numberColumn, discColumn, titleColumn, artistColumn,
-                       albumColumn, yearColumn, durationColumn, playsColumn, lastPlayedColumn] {
+        for column in [
+            artworkColumn, numberColumn, discColumn, titleColumn, artistColumn,
+            albumColumn, yearColumn, durationColumn, playsColumn, lastPlayedColumn,
+        ] {
             tableView.addTableColumn(column)
         }
 
@@ -609,7 +623,9 @@ final class TracksTableViewController: NSViewController {
         ])
     }
 
-    private func configureColumn(_ column: NSTableColumn, title: String, width: CGFloat, alignment: NSTextAlignment, resizable: Bool) {
+    private func configureColumn(
+        _ column: NSTableColumn, title: String, width: CGFloat, alignment: NSTextAlignment, resizable: Bool
+    ) {
         column.title = title
         column.width = width
         column.minWidth = max(24, width / 2)
@@ -656,8 +672,10 @@ final class TracksTableViewController: NSViewController {
             for row in 0..<tableView.numberOfRows where flatTrackIndex(forRow: row) != nil {
                 // In sections mode the spacer column shifts cell origins by sectionsLeftInset;
                 // subtract it so we get the inset NSTableView itself adds.
-                return tableView.frameOfCell(atColumn: tableView.column(withIdentifier: numberColumn.identifier),
-                                              row: row).minX - sectionsLeftInset
+                return tableView.frameOfCell(
+                    atColumn: tableView.column(withIdentifier: numberColumn.identifier),
+                    row: row
+                ).minX - sectionsLeftInset
             }
             return 16
         }()
@@ -737,9 +755,10 @@ final class TracksTableViewController: NSViewController {
                 // the accent when the row was last hosted, so repainting the cell isn't
                 // enough — it has to be built again.
                 if displayRows.indices.contains(row),
-                   case .header(let album) = displayRows[row],
-                   let builder = sectionHeaderBuilder,
-                   let cell = rowView.view(atColumn: 0) as? SectionHeaderCell {
+                    case .header(let album) = displayRows[row],
+                    let builder = sectionHeaderBuilder,
+                    let cell = rowView.view(atColumn: 0) as? SectionHeaderCell
+                {
                     cell.host(view: builder(album))
                 }
                 rowView.needsDisplay = true
@@ -783,8 +802,12 @@ final class TracksTableViewController: NSViewController {
             // sized manually in viewDidLayout. Remove (not just hide) the artist/album
             // columns — even with isHidden = true and width = 0 they still contribute
             // to the documentView width and overflow the clipView.
-            numberColumn.minWidth = 36; numberColumn.maxWidth = 36; numberColumn.width = 36
-            durationColumn.minWidth = 70; durationColumn.maxWidth = 70; durationColumn.width = 70
+            numberColumn.minWidth = 36
+            numberColumn.maxWidth = 36
+            numberColumn.width = 36
+            durationColumn.minWidth = 70
+            durationColumn.maxWidth = 70
+            durationColumn.width = 70
             if tableView.tableColumns.contains(artistColumn) {
                 tableView.removeTableColumn(artistColumn)
             }
@@ -829,7 +852,7 @@ final class TracksTableViewController: NSViewController {
             }
             scrollView.hasVerticalScroller = true
             scrollView.verticalScrollElasticity = .automatic
-        }       
+        }
         tableView.reloadData()
     }
 
@@ -886,13 +909,15 @@ final class TracksTableViewController: NSViewController {
             var rows = downloadStateChangedRows
             if previousCurrent != newCurrent || previousPlaying != newIsPlaying {
                 if let prev = previousCurrent,
-                   let trackIdx = tracks.firstIndex(where: { $0.id == prev }),
-                   let row = rowForTrackIndex[trackIdx] {
+                    let trackIdx = tracks.firstIndex(where: { $0.id == prev }),
+                    let row = rowForTrackIndex[trackIdx]
+                {
                     rows.insert(row)
                 }
                 if let cur = newCurrent,
-                   let trackIdx = tracks.firstIndex(where: { $0.id == cur }),
-                   let row = rowForTrackIndex[trackIdx] {
+                    let trackIdx = tracks.firstIndex(where: { $0.id == cur }),
+                    let row = rowForTrackIndex[trackIdx]
+                {
                     rows.insert(row)
                 }
             }
@@ -1058,10 +1083,11 @@ final class TracksTableViewController: NSViewController {
             }
             return
         }
-        let indices = IndexSet(tracks.enumerated().compactMap { (idx, track) -> Int? in
-            guard ids.contains(track.id), let row = rowForTrackIndex[idx] else { return nil }
-            return row
-        })
+        let indices = IndexSet(
+            tracks.enumerated().compactMap { (idx, track) -> Int? in
+                guard ids.contains(track.id), let row = rowForTrackIndex[idx] else { return nil }
+                return row
+            })
         if indices == tableView.selectedRowIndexes { return }
         suppressSelectionCallback = true
         tableView.selectRowIndexes(indices, byExtendingSelection: false)
@@ -1092,8 +1118,10 @@ final class TracksTableViewController: NSViewController {
         let column = tableView.column(withIdentifier: numberColumn.identifier)
         guard column >= 0 else { return }
         for visible in 0..<tableView.numberOfRows {
-            guard let cell = tableView.view(atColumn: column, row: visible, makeIfNecessary: false)
-                    as? NumberOrSpeakerCell else { continue }
+            guard
+                let cell = tableView.view(atColumn: column, row: visible, makeIfNecessary: false)
+                    as? NumberOrSpeakerCell
+            else { continue }
             cell.isHovered = (visible == target)
         }
     }
@@ -1157,8 +1185,9 @@ private final class KeyAwareTableView: NSTableView {
         let point = convert(event.locationInWindow, from: nil)
         let clicked = column(at: point)
         if event.clickCount == 1, clicked >= 0,
-           tableColumns[clicked].identifier.rawValue == "number",
-           row(at: point) >= 0 {
+            tableColumns[clicked].identifier.rawValue == "number",
+            row(at: point) >= 0
+        {
             onNumberColumnClick?(row(at: point))
             return
         }
@@ -1239,12 +1268,15 @@ extension TracksTableViewController: NSTableViewDataSource {
         return item
     }
 
-    func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+    func tableView(
+        _ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int,
+        proposedDropOperation dropOperation: NSTableView.DropOperation
+    ) -> NSDragOperation {
         // Reorder is disabled in sections mode — meaning would be ambiguous when dropping
         // between or onto section headers.
         guard onReorder != nil,
-              sections == nil,
-              info.draggingSource as? NSTableView === self.tableView
+            sections == nil,
+            info.draggingSource as? NSTableView === self.tableView
         else { return [] }
         // Force the operation to .above so dropping anywhere (even directly on a row)
         // becomes "insert between rows" instead of "drop onto row" (which we don't
@@ -1255,21 +1287,26 @@ extension TracksTableViewController: NSTableViewDataSource {
         return .move
     }
 
-    func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation dropOperation: NSTableView.DropOperation) -> Bool {
+    func tableView(
+        _ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int,
+        dropOperation dropOperation: NSTableView.DropOperation
+    ) -> Bool {
         guard let onReorder,
-              sections == nil,
-              info.draggingSource as? NSTableView === self.tableView
+            sections == nil,
+            info.draggingSource as? NSTableView === self.tableView
         else { return false }
         // Dragged rows aren't necessarily in selectedRowIndexes — NSTableView lets you
         // click-and-drag an unselected row directly. Read the dragged track ids out of
         // the pasteboard items we wrote in pasteboardWriterForRow and resolve them
         // back to row indices in the current `tracks` array.
-        let draggedTrackIds: [UUID] = info.draggingPasteboard.pasteboardItems?.compactMap { item in
-            item.string(forType: .onduTracks).flatMap(UUID.init)
-        } ?? []
-        let draggedRows = IndexSet(draggedTrackIds.compactMap { id in
-            tracks.firstIndex(where: { $0.id == id })
-        })
+        let draggedTrackIds: [UUID] =
+            info.draggingPasteboard.pasteboardItems?.compactMap { item in
+                item.string(forType: .onduTracks).flatMap(UUID.init)
+            } ?? []
+        let draggedRows = IndexSet(
+            draggedTrackIds.compactMap { id in
+                tracks.firstIndex(where: { $0.id == id })
+            })
         guard !draggedRows.isEmpty else { return false }
         onReorder(draggedRows, row)
         return true
@@ -1362,7 +1399,8 @@ extension TracksTableViewController: NSTableViewDelegate {
         // full row width.
         if case .pageHeader = displayRows[row], let pageHeader {
             let cellId = NSUserInterfaceItemIdentifier("trackPageHeader")
-            let cell = tableView.makeView(withIdentifier: cellId, owner: nil) as? SectionHeaderCell
+            let cell =
+                tableView.makeView(withIdentifier: cellId, owner: nil) as? SectionHeaderCell
                 ?? SectionHeaderCell(identifier: cellId)
             // The header sits where the page around the table does, not where rows do.
             cell.horizontalOutset = cellInset
@@ -1371,7 +1409,8 @@ extension TracksTableViewController: NSTableViewDelegate {
         }
         if case .header(let album) = displayRows[row] {
             let cellId = NSUserInterfaceItemIdentifier("trackSectionHeader")
-            let cell = tableView.makeView(withIdentifier: cellId, owner: nil) as? SectionHeaderCell
+            let cell =
+                tableView.makeView(withIdentifier: cellId, owner: nil) as? SectionHeaderCell
                 ?? SectionHeaderCell(identifier: cellId)
             cell.horizontalOutset = sectionHeaderIgnoresCellInset ? cellInset : 0
             if let builder = sectionHeaderBuilder {
@@ -1381,7 +1420,8 @@ extension TracksTableViewController: NSTableViewDelegate {
         }
         if case .label(let text) = displayRows[row] {
             let cellId = NSUserInterfaceItemIdentifier("trackGroupLabel")
-            let cell = tableView.makeView(withIdentifier: cellId, owner: nil) as? GroupLabelCell
+            let cell =
+                tableView.makeView(withIdentifier: cellId, owner: nil) as? GroupLabelCell
                 ?? GroupLabelCell(identifier: cellId)
             cell.text = text
             let titleColumn = tableView.column(withIdentifier: self.titleColumn.identifier)
@@ -1406,20 +1446,27 @@ extension TracksTableViewController: NSTableViewDelegate {
         if column === spacerColumn {
             let cellId = NSUserInterfaceItemIdentifier("trackSectionSpacer")
             return tableView.makeView(withIdentifier: cellId, owner: nil)
-                ?? { let v = NSView(); v.identifier = cellId; return v }()
+                ?? {
+                    let v = NSView()
+                    v.identifier = cellId
+                    return v
+                }()
         }
 
         let cell: NSTableCellView?
         switch column.identifier.rawValue {
         case "artwork":
-            let c = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TrackArtworkCell
-                ?? TrackArtworkCell(identifier: column.identifier, size: Self.artworkSize,
-                                    leading: Self.artworkLeadingGap)
+            let c =
+                tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TrackArtworkCell
+                ?? TrackArtworkCell(
+                    identifier: column.identifier, size: Self.artworkSize,
+                    leading: Self.artworkLeadingGap)
             c.show(url: track.album?.artworkUrl)
             c.isUnavailable = isUnavailable
             cell = c
         case "number":
-            let c = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? NumberOrSpeakerCell
+            let c =
+                tableView.makeView(withIdentifier: column.identifier, owner: nil) as? NumberOrSpeakerCell
                 ?? NumberOrSpeakerCell(identifier: column.identifier)
             c.accentColor = accentNSColor
             c.isUnavailable = isUnavailable
@@ -1436,7 +1483,8 @@ extension TracksTableViewController: NSTableViewDelegate {
             }
             cell = c
         case "title":
-            let c = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TitleCell
+            let c =
+                tableView.makeView(withIdentifier: column.identifier, owner: nil) as? TitleCell
                 ?? TitleCell(identifier: column.identifier)
             // In embedded mode we hide the Artist column and stack the artist beneath
             // the title when the host wanted artist info — consistent with iTunes /
@@ -1488,9 +1536,10 @@ extension TracksTableViewController: NSTableViewDelegate {
             cell = c
         case "lastPlayed":
             let c = textCell(for: column.identifier, in: tableView)
-            c.label.stringValue = track.lastPlayedAt.map {
-                Self.lastPlayedFormatter.localizedString(for: $0, relativeTo: Date())
-            } ?? ""
+            c.label.stringValue =
+                track.lastPlayedAt.map {
+                    Self.lastPlayedFormatter.localizedString(for: $0, relativeTo: Date())
+                } ?? ""
             c.label.alignment = .right
             c.label.font = .systemFont(ofSize: NSFont.systemFontSize)
             c.unselectedColor = .secondaryLabelColor
@@ -1530,10 +1579,11 @@ extension TracksTableViewController: NSTableViewDelegate {
     /// shouldn't move the page under the user.
     private func scrollSelectionIntoEnclosingScrollView() {
         guard isEmbedded,
-              tableView.window?.firstResponder === tableView,
-              let row = tableView.selectedRowIndexes.last,
-              let outer = view.enclosingScrollView,
-              let document = outer.documentView else { return }
+            tableView.window?.firstResponder === tableView,
+            let row = tableView.selectedRowIndexes.last,
+            let outer = view.enclosingScrollView,
+            let document = outer.documentView
+        else { return }
         let rect = tableView.convert(tableView.rect(ofRow: row), to: document)
         document.scrollToVisible(rect.insetBy(dx: 0, dy: -12))
     }
@@ -1541,8 +1591,9 @@ extension TracksTableViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
         guard !suppressSortCallback else { return }
         guard let descriptor = tableView.sortDescriptors.first,
-              let key = descriptor.key,
-              let column = TrackSortColumn(rawValue: key) else {
+            let key = descriptor.key,
+            let column = TrackSortColumn(rawValue: key)
+        else {
             activeSort = nil
             onSortChange?(nil)
             rebuildHeaderMenu()
@@ -1569,10 +1620,11 @@ extension TracksTableViewController: NSTableViewDelegate {
         }
         scrollSelectionIntoEnclosingScrollView()
         if suppressSelectionCallback { return }
-        let ids = Set(tableView.selectedRowIndexes.compactMap { row -> UUID? in
-            guard let trackIdx = flatTrackIndex(forRow: row) else { return nil }
-            return tracks[trackIdx].id
-        })
+        let ids = Set(
+            tableView.selectedRowIndexes.compactMap { row -> UUID? in
+                guard let trackIdx = flatTrackIndex(forRow: row) else { return nil }
+                return tracks[trackIdx].id
+            })
         onSelectionChange?(ids)
     }
 }
@@ -1702,7 +1754,7 @@ private final class TrackArtworkCell: NSTableCellView {
             artwork.leadingAnchor.constraint(equalTo: leadingAnchor, constant: leading),
             artwork.centerYAnchor.constraint(equalTo: centerYAnchor),
             artwork.widthAnchor.constraint(equalToConstant: size),
-            artwork.heightAnchor.constraint(equalToConstant: size)
+            artwork.heightAnchor.constraint(equalToConstant: size),
         ])
     }
 
@@ -1760,7 +1812,7 @@ private final class GroupLabelCell: NSTableCellView {
         leading = label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: leadingInset)
         NSLayoutConstraint.activate([
             leading,
-            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6)
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
         ])
     }
 
@@ -1802,8 +1854,16 @@ private final class SectionHeaderCell: NSTableCellView {
         h.safeAreaRegions = []
         addSubview(h)
         NSLayoutConstraint.activate([
-            { let c = h.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -horizontalOutset); leading = c; return c }(),
-            { let c = h.trailingAnchor.constraint(equalTo: trailingAnchor, constant: horizontalOutset); trailing = c; return c }(),
+            {
+                let c = h.leadingAnchor.constraint(equalTo: leadingAnchor, constant: -horizontalOutset)
+                leading = c
+                return c
+            }(),
+            {
+                let c = h.trailingAnchor.constraint(equalTo: trailingAnchor, constant: horizontalOutset)
+                trailing = c
+                return c
+            }(),
             h.topAnchor.constraint(equalTo: topAnchor),
             h.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
@@ -1863,7 +1923,8 @@ private final class TextCell: NSTableCellView {
     }
 
     private func applyEmphasis() {
-        label.textColor = backgroundStyle == .emphasized
+        label.textColor =
+            backgroundStyle == .emphasized
             ? .alternateSelectedControlTextColor
             : (isUnavailable ? .tertiaryLabelColor : unselectedColor)
     }
@@ -2025,7 +2086,8 @@ private final class TitleCell: NSTableCellView {
         addSubview(artistLabel)
 
         downloadedIcon.translatesAutoresizingMaskIntoConstraints = false
-        downloadedIcon.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: "Downloaded")
+        downloadedIcon.image = NSImage(
+            systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: "Downloaded")
         downloadedIcon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
         downloadedIcon.contentTintColor = .secondaryLabelColor
         downloadedIcon.isHidden = true

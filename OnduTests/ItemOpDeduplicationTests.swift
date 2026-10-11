@@ -1,7 +1,7 @@
 import Foundation
 import Testing
-@testable import Ondu
 
+@testable import Ondu
 
 /// The server rejects the same item twice in one request, and batching two drags of one
 /// track produces exactly that.
@@ -12,7 +12,8 @@ struct ItemOpDeduplicationTests {
     }
 
     @Test func keepsOnlyTheLastMoveOfAnItem() {
-        let a = UUID(), b = UUID()
+        let a = UUID()
+        let b = UUID()
         let entries = [move(a, "a0"), move(b, "a1"), move(a, "a2")]
 
         let kept = OutboxService.lastPerItem(entries)
@@ -26,7 +27,8 @@ struct ItemOpDeduplicationTests {
     }
 
     @Test func dropsRepeatedRemovals() {
-        let a = UUID(), b = UUID()
+        let a = UUID()
+        let b = UUID()
         #expect(OutboxService.deduplicated([a, b, a]) == [a, b])
     }
 }

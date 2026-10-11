@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 // MARK: - Helpers
@@ -56,7 +57,8 @@ private func cleanup(_ dir: URL) {
         defer { cleanup(dir) }
 
         // Manually add entries by writing metadata
-        let id1 = UUID(), id2 = UUID()
+        let id1 = UUID()
+        let id2 = UUID()
         _ = writeFakeFile(in: dir, trackId: id1, size: 1000)
         _ = writeFakeFile(in: dir, trackId: id2, size: 2000)
 
@@ -92,11 +94,19 @@ private func cleanup(_ dir: URL) {
         let dir = makeTempCacheDir()
         defer { cleanup(dir) }
 
-        let id1 = UUID(), id2 = UUID(), id3 = UUID()
+        let id1 = UUID()
+        let id2 = UUID()
+        let id3 = UUID()
         let entries: [PlaybackCache.CacheEntry] = [
-            .init(trackId: id1, filename: "\(id1.uuidString).m4a", size: 100, lastAccessed: Date(timeIntervalSince1970: 1000)),
-            .init(trackId: id2, filename: "\(id2.uuidString).m4a", size: 200, lastAccessed: Date(timeIntervalSince1970: 2000)),
-            .init(trackId: id3, filename: "\(id3.uuidString).m4a", size: 300, lastAccessed: Date(timeIntervalSince1970: 3000)),
+            .init(
+                trackId: id1, filename: "\(id1.uuidString).m4a", size: 100,
+                lastAccessed: Date(timeIntervalSince1970: 1000)),
+            .init(
+                trackId: id2, filename: "\(id2.uuidString).m4a", size: 200,
+                lastAccessed: Date(timeIntervalSince1970: 2000)),
+            .init(
+                trackId: id3, filename: "\(id3.uuidString).m4a", size: 300,
+                lastAccessed: Date(timeIntervalSince1970: 3000)),
         ]
 
         // Write files and metadata
@@ -130,7 +140,7 @@ private func cleanup(_ dir: URL) {
 
         let id1 = UUID()
         let entries: [PlaybackCache.CacheEntry] = [
-            .init(trackId: id1, filename: "\(id1.uuidString).m4a", size: 1000, lastAccessed: Date()),
+            .init(trackId: id1, filename: "\(id1.uuidString).m4a", size: 1000, lastAccessed: Date())
         ]
         let metadataURL = dir.appendingPathComponent(".cache-metadata.json")
         try! JSONEncoder().encode(entries).write(to: metadataURL)
@@ -151,7 +161,7 @@ private func cleanup(_ dir: URL) {
         let id1 = UUID()
         let filename = writeFakeFile(in: dir, trackId: id1, size: 500)
         let entries: [PlaybackCache.CacheEntry] = [
-            .init(trackId: id1, filename: filename, size: 500, lastAccessed: Date()),
+            .init(trackId: id1, filename: filename, size: 500, lastAccessed: Date())
         ]
         let metadataURL = dir.appendingPathComponent(".cache-metadata.json")
         try! JSONEncoder().encode(entries).write(to: metadataURL)
@@ -179,10 +189,15 @@ private func cleanup(_ dir: URL) {
         let dir = makeTempCacheDir()
         defer { cleanup(dir) }
 
-        let id1 = UUID(), id2 = UUID()
+        let id1 = UUID()
+        let id2 = UUID()
         let entries: [PlaybackCache.CacheEntry] = [
-            .init(trackId: id1, filename: "\(id1.uuidString).m4a", size: 1000, lastAccessed: Date(timeIntervalSince1970: 1000)),
-            .init(trackId: id2, filename: "\(id2.uuidString).m4a", size: 2000, lastAccessed: Date(timeIntervalSince1970: 2000)),
+            .init(
+                trackId: id1, filename: "\(id1.uuidString).m4a", size: 1000,
+                lastAccessed: Date(timeIntervalSince1970: 1000)),
+            .init(
+                trackId: id2, filename: "\(id2.uuidString).m4a", size: 2000,
+                lastAccessed: Date(timeIntervalSince1970: 2000)),
         ]
 
         // Write files
@@ -206,12 +221,20 @@ private func cleanup(_ dir: URL) {
         let dir = makeTempCacheDir()
         defer { cleanup(dir) }
 
-        let id1 = UUID(), id2 = UUID(), id3 = UUID()
+        let id1 = UUID()
+        let id2 = UUID()
+        let id3 = UUID()
         // Write in non-sorted order
         let entries: [PlaybackCache.CacheEntry] = [
-            .init(trackId: id3, filename: "\(id3.uuidString).m4a", size: 300, lastAccessed: Date(timeIntervalSince1970: 3000)),
-            .init(trackId: id1, filename: "\(id1.uuidString).m4a", size: 100, lastAccessed: Date(timeIntervalSince1970: 1000)),
-            .init(trackId: id2, filename: "\(id2.uuidString).m4a", size: 200, lastAccessed: Date(timeIntervalSince1970: 2000)),
+            .init(
+                trackId: id3, filename: "\(id3.uuidString).m4a", size: 300,
+                lastAccessed: Date(timeIntervalSince1970: 3000)),
+            .init(
+                trackId: id1, filename: "\(id1.uuidString).m4a", size: 100,
+                lastAccessed: Date(timeIntervalSince1970: 1000)),
+            .init(
+                trackId: id2, filename: "\(id2.uuidString).m4a", size: 200,
+                lastAccessed: Date(timeIntervalSince1970: 2000)),
         ]
 
         for entry in entries {

@@ -67,8 +67,8 @@ extension NSDraggingInfo {
         // A promised item can leave the pasteboard with the type declared but no item
         // carrying it until the data is pulled from the pasteboard itself.
         guard let data = draggingPasteboard.data(forType: type),
-              let string = String(data: data, encoding: .utf8),
-              let id = UUID(uuidString: string)
+            let string = String(data: data, encoding: .utf8),
+            let id = UUID(uuidString: string)
         else { return [] }
         return [id]
     }

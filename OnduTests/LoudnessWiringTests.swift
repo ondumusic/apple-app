@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 /// The path from the Settings toggle to the gain on the playing track: the setting's
@@ -12,7 +13,7 @@ struct LoudnessWiringTests {
     func makeLibrary() throws -> MusicLibrary {
         let container = try ModelContainer(
             for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-                 LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+            LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         return MusicLibrary(container: container)
@@ -21,17 +22,26 @@ struct LoudnessWiringTests {
     /// One album, one track per entry in `lufs`, returning the track ids in order.
     /// `albumLUFS` is what the server measured for the album as a whole.
     func seed(_ lib: MusicLibrary, lufs: [Double?], albumLUFS: Double? = nil) -> [UUID] {
-        let artistId = UUID(), albumId = UUID(), now = Date()
-        lib.upsertArtists([SyncArtist(id: artistId, name: "Artist", sortName: "Artist",
-                                      slug: "artist", albumCount: 1, insertedAt: now)])
-        lib.upsertAlbums([SyncAlbum(id: albumId, artistId: artistId, name: "Album", sortName: "Album",
-                                    slug: "album", releaseYear: nil, artworkUrl: nil, isUnknown: false,
-                                    trackCount: lufs.count, insertedAt: now, lufs: albumLUFS)])
+        let artistId = UUID()
+        let albumId = UUID()
+        let now = Date()
+        lib.upsertArtists([
+            SyncArtist(
+                id: artistId, name: "Artist", sortName: "Artist",
+                slug: "artist", albumCount: 1, insertedAt: now)
+        ])
+        lib.upsertAlbums([
+            SyncAlbum(
+                id: albumId, artistId: artistId, name: "Album", sortName: "Album",
+                slug: "album", releaseYear: nil, artworkUrl: nil, isUnknown: false,
+                trackCount: lufs.count, insertedAt: now, lufs: albumLUFS)
+        ])
         let tracks = lufs.enumerated().map { index, value in
-            SyncTrack(id: UUID(), artistId: artistId, albumArtistId: artistId, albumId: albumId,
-                      name: "Track \(index)", disc: 1, number: index + 1, duration: 200,
-                      mimetype: "audio/mp4", streamUrl: "/s/\(index)", downloadUrl: "/d/\(index)",
-                      insertedAt: now, lufs: value)
+            SyncTrack(
+                id: UUID(), artistId: artistId, albumArtistId: artistId, albumId: albumId,
+                name: "Track \(index)", disc: 1, number: index + 1, duration: 200,
+                mimetype: "audio/mp4", streamUrl: "/s/\(index)", downloadUrl: "/d/\(index)",
+                insertedAt: now, lufs: value)
         }
         lib.upsertTracks(tracks)
         lib.bumpRevision()
@@ -39,8 +49,10 @@ struct LoudnessWiringTests {
     }
 
     /// Restores a queue so `currentTrack` is set without needing a server to play from.
-    func makePlayer(_ lib: MusicLibrary, queue ids: [UUID],
-                            settings: SettingsStore) async -> PlayerService {
+    func makePlayer(
+        _ lib: MusicLibrary, queue ids: [UUID],
+        settings: SettingsStore
+    ) async -> PlayerService {
         let store = PlaybackStateStore(
             fileURL: FileManager.default.temporaryDirectory
                 .appendingPathComponent("loudness-wiring/\(UUID().uuidString).json"),
@@ -130,7 +142,10 @@ extension LoudnessWiringTests {
 struct DownloadManifestPathTests {
 
     @Test func buildsTheRelativePathFromTheTrailingComponents() {
-        let url = URL(fileURLWithPath: "/private/var/mobile/Containers/Data/Application/ABC/Library/Application Support/Ondu/Downloads/artist-id/album-id/track-id.m4a")
+        let url = URL(
+            fileURLWithPath:
+                "/private/var/mobile/Containers/Data/Application/ABC/Library/Application Support/Ondu/Downloads/artist-id/album-id/track-id.m4a"
+        )
         #expect(MusicLibrary.downloadRelativePath(for: url) == "Ondu/Downloads/artist-id/album-id/track-id.m4a")
     }
 
@@ -138,7 +153,8 @@ struct DownloadManifestPathTests {
     @Test func isUnaffectedByHowTheBasePathWasSpelled() {
         let resolved = URL(fileURLWithPath: "/private/var/app/Library/Application Support/Ondu/Downloads/a/b/c.m4a")
         let unresolved = URL(fileURLWithPath: "/var/app/Library/Application Support/Ondu/Downloads/a/b/c.m4a")
-        #expect(MusicLibrary.downloadRelativePath(for: resolved)
+        #expect(
+            MusicLibrary.downloadRelativePath(for: resolved)
                 == MusicLibrary.downloadRelativePath(for: unresolved))
     }
 

@@ -90,7 +90,8 @@ struct ArtistListView: View {
     }
 
     private func reloadArtists() {
-        let allArtists = filterOption == .downloaded
+        let allArtists =
+            filterOption == .downloaded
             ? musicLibrary.downloadedArtists()
             : musicLibrary.allArtists()
 
@@ -126,7 +127,10 @@ struct ArtistListView: View {
                 Text("Downloaded").tag(LibraryFilter.downloaded)
             }
         } label: {
-            Label("Filter", systemImage: filterOption == .downloaded ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+            Label(
+                "Filter",
+                systemImage: filterOption == .downloaded
+                    ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
         }
     }
 }

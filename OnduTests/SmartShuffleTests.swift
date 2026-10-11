@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 // MARK: - Helpers
@@ -19,15 +20,17 @@ private nonisolated struct SeededGenerator: RandomNumberGenerator {
 
 private func makeItem(artist: UUID, album: UUID) -> QueueItem {
     let artistStruct = Artist(id: artist, name: "Artist", sortName: "Artist", slug: "artist")
-    let track = Track(id: UUID(), artistId: artist, albumArtistId: artist, albumId: album,
-                      artist: artistStruct, albumArtistSortName: "Artist",
-                      name: "Track", disc: 1, number: 1, duration: 200,
-                      mimetype: "audio/mp4", streamUrl: "/stream/test")
+    let track = Track(
+        id: UUID(), artistId: artist, albumArtistId: artist, albumId: album,
+        artist: artistStruct, albumArtistSortName: "Artist",
+        name: "Track", disc: 1, number: 1, duration: 200,
+        mimetype: "audio/mp4", streamUrl: "/stream/test")
     return QueueItem(track: track)
 }
 
 private func longestRun<T: Equatable>(of values: [T]) -> Int {
-    var run = 1, maxRun = values.isEmpty ? 0 : 1
+    var run = 1
+    var maxRun = values.isEmpty ? 0 : 1
     for (prev, cur) in zip(values, values.dropFirst()) {
         run = prev == cur ? run + 1 : 1
         maxRun = max(maxRun, run)
@@ -54,8 +57,10 @@ struct SmartShuffleTests {
 
     @Test(arguments: 1...20) func spreadsAnArtistAcrossTheQueue(seed: Int) {
         // 4 tracks by one artist among 56 one-off artists: ideal spacing is 15.
-        let artist = UUID(), album = UUID()
-        let items = (0..<56).map { _ in makeItem(artist: UUID(), album: UUID()) }
+        let artist = UUID()
+        let album = UUID()
+        let items =
+            (0..<56).map { _ in makeItem(artist: UUID(), album: UUID()) }
             + (0..<4).map { _ in makeItem(artist: artist, album: album) }
         var rng = SeededGenerator(state: UInt64(seed))
         let order = SmartShuffle.shuffledIndices(for: items, using: &rng)
@@ -65,8 +70,10 @@ struct SmartShuffleTests {
     }
 
     @Test(arguments: 1...20) func twoArtistQueueNeverRunsLong(seed: Int) {
-        let a = UUID(), b = UUID()
-        let items = (0..<10).map { _ in makeItem(artist: a, album: UUID()) }
+        let a = UUID()
+        let b = UUID()
+        let items =
+            (0..<10).map { _ in makeItem(artist: a, album: UUID()) }
             + (0..<10).map { _ in makeItem(artist: b, album: UUID()) }
         var rng = SeededGenerator(state: UInt64(seed))
         let order = SmartShuffle.shuffledIndices(for: items, using: &rng)
@@ -75,8 +82,11 @@ struct SmartShuffleTests {
     }
 
     @Test(arguments: 1...20) func spreadsAlbumsWithinAnArtist(seed: Int) {
-        let artist = UUID(), first = UUID(), second = UUID()
-        let items = (0..<8).map { _ in makeItem(artist: artist, album: first) }
+        let artist = UUID()
+        let first = UUID()
+        let second = UUID()
+        let items =
+            (0..<8).map { _ in makeItem(artist: artist, album: first) }
             + (0..<8).map { _ in makeItem(artist: artist, album: second) }
         var rng = SeededGenerator(state: UInt64(seed))
         let order = SmartShuffle.shuffledIndices(for: items, using: &rng)
@@ -85,7 +95,8 @@ struct SmartShuffleTests {
     }
 
     @Test func singleAlbumQueueIsAPlainShuffle() {
-        let artist = UUID(), album = UUID()
+        let artist = UUID()
+        let album = UUID()
         let items = (0..<30).map { _ in makeItem(artist: artist, album: album) }
         var rng = SeededGenerator(state: 7)
         let order = SmartShuffle.shuffledIndices(for: items, using: &rng)

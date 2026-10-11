@@ -36,28 +36,30 @@ struct PlaylistDetailMac: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             if tracks.isEmpty {
-                LibraryEmptyState(subject: .playlist,
-                                  isFiltered: libraryFilter == .downloaded) {
+                LibraryEmptyState(
+                    subject: .playlist,
+                    isFiltered: libraryFilter == .downloaded
+                ) {
                     libraryFilter = .all
                 }
             } else {
-            TracksTable(
-                tracks: tracks,
-                selection: $selection,
-                onPlay: playTrack(at:),
-                actions: trackActions,
-                showArtist: true,
-                showAlbum: true,
-                isOffline: !network.isOnline,
-                accent: settings.resolvedAccentColor,
-                currentlyPlayingTrackId: player.currentTrack?.id,
-                isPlaying: player.isPlaying,
-                usesPlaylistPosition: true,
-                onReorder: reorderRows(_:to:),
-                onDelete: removeRows(_:),
-                rowHeight: DetailPageMetrics.trackRowHeight,
-                claimsKeyboardFocus: true
-            )
+                TracksTable(
+                    tracks: tracks,
+                    selection: $selection,
+                    onPlay: playTrack(at:),
+                    actions: trackActions,
+                    showArtist: true,
+                    showAlbum: true,
+                    isOffline: !network.isOnline,
+                    accent: settings.resolvedAccentColor,
+                    currentlyPlayingTrackId: player.currentTrack?.id,
+                    isPlaying: player.isPlaying,
+                    usesPlaylistPosition: true,
+                    onReorder: reorderRows(_:to:),
+                    onDelete: removeRows(_:),
+                    rowHeight: DetailPageMetrics.trackRowHeight,
+                    claimsKeyboardFocus: true
+                )
             }
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }
@@ -81,8 +83,9 @@ struct PlaylistDetailMac: View {
             state: isDownloading ? .downloading : (isComplete ? .downloaded : .notDownloaded),
             action: {
                 if isComplete {
-                    DownloadRemovalRequest.post(trackIds: ids, subject: playlist?.name ?? "",
-                                                playlistId: playlistId)
+                    DownloadRemovalRequest.post(
+                        trackIds: ids, subject: playlist?.name ?? "",
+                        playlistId: playlistId)
                 } else {
                     playlistController.enableAutoDownload(playlistId)
                 }
@@ -224,7 +227,9 @@ struct PlaylistDetailMac: View {
         var prevPosition: String? = clampedTarget > 0 ? stayingItems[clampedTarget - 1].position : nil
         let endPosition: String? = clampedTarget < stayingItems.count ? stayingItems[clampedTarget].position : nil
         #if DEBUG
-        print("[PL] stayingTargetIdx=\(stayingTargetIdx) clampedTarget=\(clampedTarget) prev=\(prevPosition ?? "nil") end=\(endPosition ?? "nil")")
+        print(
+            "[PL] stayingTargetIdx=\(stayingTargetIdx) clampedTarget=\(clampedTarget) prev=\(prevPosition ?? "nil") end=\(endPosition ?? "nil")"
+        )
         #endif
         for moved in movedItems {
             let newPosition = FractionalIndex.between(prevPosition, endPosition)

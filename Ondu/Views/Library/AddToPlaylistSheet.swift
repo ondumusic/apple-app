@@ -87,11 +87,13 @@ struct AddToPlaylistSheet: View {
     private func reload() {
         let all = musicLibrary.allPlaylists()
         let folderNames: [UUID: (name: String, parentId: UUID?)] = Dictionary(
-            uniqueKeysWithValues: all
+            uniqueKeysWithValues:
+                all
                 .filter { $0.isFolder }
                 .map { ($0.id, ($0.name, $0.parentId)) }
         )
-        entries = all
+        entries =
+            all
             .filter { !$0.isFolder }
             .map { playlist in
                 PlaylistEntry(

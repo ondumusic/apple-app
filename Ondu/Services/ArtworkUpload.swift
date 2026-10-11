@@ -24,14 +24,14 @@ nonisolated enum ArtworkUpload {
 
     static func prepare(contentsOf url: URL) throws -> Prepared {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              CGImageSourceGetCount(source) > 0
+            CGImageSourceGetCount(source) > 0
         else { throw Failure.notAnImage }
         return try prepare(source: source)
     }
 
     static func prepare(data: Data) throws -> Prepared {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              CGImageSourceGetCount(source) > 0
+            CGImageSourceGetCount(source) > 0
         else { throw Failure.notAnImage }
         return try prepare(source: source)
     }
@@ -48,11 +48,13 @@ nonisolated enum ArtworkUpload {
         else { throw Failure.notAnImage }
 
         let encoded = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            encoded, UTType.jpeg.identifier as CFString, 1, nil)
+        guard
+            let destination = CGImageDestinationCreateWithData(
+                encoded, UTType.jpeg.identifier as CFString, 1, nil)
         else { throw Failure.notAnImage }
-        CGImageDestinationAddImage(destination, image,
-                                   [kCGImageDestinationLossyCompressionQuality: jpegQuality] as CFDictionary)
+        CGImageDestinationAddImage(
+            destination, image,
+            [kCGImageDestinationLossyCompressionQuality: jpegQuality] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw Failure.notAnImage }
 
         return Prepared(data: encoded as Data, filename: "artwork.jpg", mimeType: "image/jpeg")

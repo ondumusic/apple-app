@@ -112,8 +112,10 @@ final class DownloadsTableViewController: NSViewController {
         view = scrollView
     }
 
-    private func configure(_ column: NSTableColumn, title: String, width: CGFloat,
-                           alignment: NSTextAlignment, resizable: Bool) {
+    private func configure(
+        _ column: NSTableColumn, title: String, width: CGFloat,
+        alignment: NSTextAlignment, resizable: Bool
+    ) {
         column.title = title
         column.width = width
         column.minWidth = resizable ? 120 : width
@@ -194,16 +196,19 @@ extension DownloadsTableViewController: NSTableViewDelegate {
         let emphasized = tableView.selectedRowIndexes.contains(row)
 
         if column === albumColumn {
-            let cell = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? DownloadAlbumCell
+            let cell =
+                tableView.makeView(withIdentifier: column.identifier, owner: nil) as? DownloadAlbumCell
                 ?? DownloadAlbumCell(identifier: column.identifier)
             cell.configure(album: entry.album)
             cell.backgroundStyle = emphasized ? .emphasized : .normal
             return cell
         }
 
-        let cell = tableView.makeView(withIdentifier: column.identifier, owner: nil) as? DownloadTextCell
-            ?? DownloadTextCell(identifier: column.identifier,
-                                alignment: column === albumColumn ? .left : (column === artistColumn ? .left : .right))
+        let cell =
+            tableView.makeView(withIdentifier: column.identifier, owner: nil) as? DownloadTextCell
+            ?? DownloadTextCell(
+                identifier: column.identifier,
+                alignment: column === albumColumn ? .left : (column === artistColumn ? .left : .right))
         switch column {
         case artistColumn: cell.label.stringValue = entry.album.artistName ?? ""
         case songsColumn: cell.label.stringValue = "\(entry.trackCount)"

@@ -105,7 +105,10 @@ final class AlbumsGridViewController: NSViewController {
         let columns = Self.columns(forWidth: width)
         let rowHeight = itemSize(forWidth: width).height
         if let last = lastReportedMetrics,
-           last.columns == columns, abs(last.rowHeight - rowHeight) < 0.5 { return }
+            last.columns == columns, abs(last.rowHeight - rowHeight) < 0.5
+        {
+            return
+        }
         lastReportedMetrics = (columns, rowHeight)
         onMetricsChange(columns, rowHeight)
     }
@@ -119,12 +122,15 @@ final class AlbumsGridViewController: NSViewController {
 
     /// Height of a grid showing `rows` rows at this width — what an embedded caller has
     /// to reserve, since the grid can't size itself inside a page that scrolls.
-    static func height(forWidth width: CGFloat, rows: Int, embedded: Bool = false,
-                       titleLines: Int = 2) -> CGFloat {
+    static func height(
+        forWidth width: CGFloat, rows: Int, embedded: Bool = false,
+        titleLines: Int = 2
+    ) -> CGFloat {
         let columns = CGFloat(columns(forWidth: width))
         let available = width - sectionInset * 2
-        let itemWidth = max(minimumItemWidth,
-                            floor((available - interitemSpacing * (columns - 1)) / columns))
+        let itemWidth = max(
+            minimumItemWidth,
+            floor((available - interitemSpacing * (columns - 1)) / columns))
         let itemHeight = itemWidth + captionHeight(titleLines: titleLines)
         return CGFloat(rows) * itemHeight
             + CGFloat(max(0, rows - 1)) * lineSpacing
@@ -165,8 +171,9 @@ final class AlbumsGridViewController: NSViewController {
         guard let layout = collectionView.collectionViewLayout as? NSCollectionViewFlowLayout
         else { return }
         let vertical = isEmbedded ? 0 : Self.sectionInset
-        layout.sectionInset = NSEdgeInsets(top: vertical, left: Self.sectionInset,
-                                           bottom: vertical, right: Self.sectionInset)
+        layout.sectionInset = NSEdgeInsets(
+            top: vertical, left: Self.sectionInset,
+            bottom: vertical, right: Self.sectionInset)
     }
 
     override func viewDidAppear() {
@@ -247,8 +254,9 @@ final class AlbumsGridViewController: NSViewController {
     fileprivate func itemSize(forWidth width: CGFloat) -> NSSize {
         let available = width - Self.sectionInset * 2
         guard available > 0 else {
-            return NSSize(width: Self.minimumItemWidth,
-                          height: Self.minimumItemWidth + Self.captionHeight(titleLines: titleLines))
+            return NSSize(
+                width: Self.minimumItemWidth,
+                height: Self.minimumItemWidth + Self.captionHeight(titleLines: titleLines))
         }
         let spacing = Self.interitemSpacing
         let columns = max(1, Int((available + spacing) / (Self.minimumItemWidth + spacing)))
@@ -261,8 +269,9 @@ final class AlbumsGridViewController: NSViewController {
         albums = newAlbums
         if changed { collectionView.reloadData() }
 
-        let target = Set(albums.indices.filter { selection.contains(albums[$0].id) }
-            .map { IndexPath(item: $0, section: 0) })
+        let target = Set(
+            albums.indices.filter { selection.contains(albums[$0].id) }
+                .map { IndexPath(item: $0, section: 0) })
         guard target != collectionView.selectionIndexPaths else { return }
         isApplyingExternalSelection = true
         collectionView.selectionIndexPaths = target
@@ -284,7 +293,8 @@ final class AlbumsGridViewController: NSViewController {
         for (index, item) in collectionView.visibleItems().enumerated() {
             _ = index
             guard let cell = item as? AlbumGridItem,
-                  let itemPath = collectionView.indexPath(for: item) else { continue }
+                let itemPath = collectionView.indexPath(for: item)
+            else { continue }
             cell.isHovered = itemPath == path
         }
     }
@@ -307,11 +317,12 @@ final class AlbumsGridViewController: NSViewController {
     /// and only while the grid has focus — a click already has the item in view.
     private func scrollSelectionIntoEnclosingScrollView() {
         guard isEmbedded,
-              collectionView.window?.firstResponder === collectionView,
-              let path = collectionView.selectionIndexPaths.sorted().last,
-              let item = collectionView.item(at: path),
-              let outer = view.enclosingScrollView,
-              let document = outer.documentView else { return }
+            collectionView.window?.firstResponder === collectionView,
+            let path = collectionView.selectionIndexPaths.sorted().last,
+            let item = collectionView.item(at: path),
+            let outer = view.enclosingScrollView,
+            let document = outer.documentView
+        else { return }
         let rect = collectionView.convert(item.view.frame, to: document)
         document.scrollToVisible(rect.insetBy(dx: 0, dy: -12))
     }
@@ -322,7 +333,8 @@ final class AlbumsGridViewController: NSViewController {
     /// acts on that album alone and adopts it, so the menu and the selection agree.
     private func albumsForContextAction() -> [Album] {
         guard let clicked = collectionView.clickedIndexPath,
-              albums.indices.contains(clicked.item) else { return [] }
+            albums.indices.contains(clicked.item)
+        else { return [] }
         if collectionView.selectionIndexPaths.contains(clicked) {
             return selectedAlbums()
         }
@@ -357,9 +369,11 @@ extension AlbumsGridViewController: NSCollectionViewDelegateFlowLayout {
     /// nothing recomputed it afterwards. Undersized items don't just look small:
     /// NSCollectionViewFlowLayout justifies each row, so the slack turns into gaps, and
     /// the grid opens with the covers spread far apart until the window is nudged.
-    func collectionView(_ collectionView: NSCollectionView,
-                        layout collectionViewLayout: NSCollectionViewLayout,
-                        sizeForItemAt indexPath: IndexPath) -> NSSize {
+    func collectionView(
+        _ collectionView: NSCollectionView,
+        layout collectionViewLayout: NSCollectionViewLayout,
+        sizeForItemAt indexPath: IndexPath
+    ) -> NSSize {
         itemSize(forWidth: collectionView.bounds.width)
     }
 }
@@ -369,7 +383,9 @@ extension AlbumsGridViewController: NSCollectionViewDataSource {
         albums.count
     }
 
-    func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
+    func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath)
+        -> NSCollectionViewItem
+    {
         let item = collectionView.makeItem(withIdentifier: AlbumGridItem.identifier, for: indexPath)
         guard let cell = item as? AlbumGridItem, albums.indices.contains(indexPath.item) else { return item }
         cell.titleLines = titleLines
@@ -384,12 +400,16 @@ extension AlbumsGridViewController: NSCollectionViewDataSource {
 }
 
 extension AlbumsGridViewController: NSCollectionViewDelegate {
-    func collectionView(_ collectionView: NSCollectionView, canDragItemsAt indexPaths: Set<IndexPath>, with event: NSEvent) -> Bool {
+    func collectionView(
+        _ collectionView: NSCollectionView, canDragItemsAt indexPaths: Set<IndexPath>, with event: NSEvent
+    ) -> Bool {
         !indexPaths.isEmpty
     }
 
     /// One item per album carrying its id; the sidebar expands it to tracks on drop.
-    func collectionView(_ collectionView: NSCollectionView, pasteboardWriterForItemAt indexPath: IndexPath) -> NSPasteboardWriting? {
+    func collectionView(_ collectionView: NSCollectionView, pasteboardWriterForItemAt indexPath: IndexPath)
+        -> NSPasteboardWriting?
+    {
         guard albums.indices.contains(indexPath.item) else { return nil }
         let item = NSPasteboardItem()
         item.setString(albums[indexPath.item].id.uuidString, forType: .onduAlbums)
@@ -467,8 +487,10 @@ extension AlbumsGridViewController: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         guard let clicked = collectionView.clickedIndexPath,
-              albums.indices.contains(clicked.item) else { return }
-        let target = collectionView.selectionIndexPaths.contains(clicked)
+            albums.indices.contains(clicked.item)
+        else { return }
+        let target =
+            collectionView.selectionIndexPaths.contains(clicked)
             ? selectedAlbums()
             : [albums[clicked.item]]
 
@@ -526,11 +548,12 @@ final class AlbumsCollectionView: NSCollectionView {
         onEmphasisChange?()
         guard let window else { return }
         for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
-            keyObservers.append(NotificationCenter.default.addObserver(
-                forName: name, object: window, queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.onEmphasisChange?() }
-            })
+            keyObservers.append(
+                NotificationCenter.default.addObserver(
+                    forName: name, object: window, queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.onEmphasisChange?() }
+                })
         }
     }
 
@@ -563,10 +586,16 @@ final class AlbumsCollectionView: NSCollectionView {
     /// Recomputed from the pointer's current position rather than an event, for the cases
     /// that produce no mouse event at all — scrolling, and cells being recycled under it.
     func refreshHoverFromPointer() {
-        guard let window, window.isKeyWindow else { onHoverChange?(nil); return }
+        guard let window, window.isKeyWindow else {
+            onHoverChange?(nil)
+            return
+        }
         let inWindow = window.mouseLocationOutsideOfEventStream
         let local = convert(inWindow, from: nil)
-        guard visibleRect.contains(local) else { onHoverChange?(nil); return }
+        guard visibleRect.contains(local) else {
+            onHoverChange?(nil)
+            return
+        }
         onHoverChange?(indexPathForItem(at: local))
     }
 

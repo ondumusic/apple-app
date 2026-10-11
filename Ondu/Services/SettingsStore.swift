@@ -55,7 +55,7 @@ nonisolated enum AccentColor: String, CaseIterable, Sendable {
         case .yellow: .yellow
         case .green: .green
         case .teal: .teal
-        case .custom: .blue // Placeholder — resolved via SettingsStore.resolvedAccentColor
+        case .custom: .blue  // Placeholder — resolved via SettingsStore.resolvedAccentColor
         }
     }
 }
@@ -187,9 +187,11 @@ final class SettingsStore {
         self.recordPlays = defaults.object(forKey: "recordPlays") as? Bool ?? true
         self.showArtistArtwork = defaults.object(forKey: "showArtistArtwork") as? Bool ?? true
         self.repeatMode = RepeatMode(rawValue: defaults.string(forKey: "repeatMode") ?? "") ?? .off
-        self.playbackCacheLimit = defaults.object(forKey: "playbackCacheLimit") as? Int64 ?? (2 * 1024 * 1024 * 1024) // 2 GB default
+        // 2 GB default
+        self.playbackCacheLimit = defaults.object(forKey: "playbackCacheLimit") as? Int64 ?? (2 * 1024 * 1024 * 1024)
         self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original
-        self.streamingQuality = StreamingQuality(rawValue: defaults.string(forKey: "streamingQuality") ?? "") ?? .original
+        self.streamingQuality =
+            StreamingQuality(rawValue: defaults.string(forKey: "streamingQuality") ?? "") ?? .original
         self.artworkTintedPlayer = defaults.object(forKey: "artworkTintedPlayer") as? Bool ?? true
         self.miniPlayerAlwaysOnTop = defaults.object(forKey: "miniPlayerAlwaysOnTop") as? Bool ?? false
         self.accentColor = AccentColor(rawValue: defaults.string(forKey: "accentColor") ?? "") ?? .blue

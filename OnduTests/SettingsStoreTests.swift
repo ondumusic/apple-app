@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 struct SettingsStoreTests {
@@ -57,7 +58,7 @@ struct SettingsStoreTests {
     @Test func defaultPlaybackCacheLimit() {
         let defaults = isolatedDefaults()
         let store = SettingsStore(defaults: defaults)
-        #expect(store.playbackCacheLimit == 2 * 1024 * 1024 * 1024) // 2 GB
+        #expect(store.playbackCacheLimit == 2 * 1024 * 1024 * 1024)  // 2 GB
     }
 
     @Test func defaultDownloadQuality() {

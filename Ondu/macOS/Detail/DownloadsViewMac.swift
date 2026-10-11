@@ -42,7 +42,9 @@ struct DownloadsViewMac: View {
         } content: { topInset in
             VStack(spacing: 0) {
                 DownloadPausedNotice()
-                    .onGeometryChange(for: Bool.self) { $0.size.height > 0 } action: {
+                    .onGeometryChange(for: Bool.self) {
+                        $0.size.height > 0
+                    } action: {
                         isShowingPausedNotice = $0
                     }
                 if entries.isEmpty && !isTransferring {
@@ -80,7 +82,9 @@ struct DownloadsViewMac: View {
             Button("Download All") { downloadService.downloadAll(library: musicLibrary) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Every song is downloaded to this Mac for offline playback. You can watch progress in the Activity window.")
+            Text(
+                "Every song is downloaded to this Mac for offline playback. You can watch progress in the Activity window."
+            )
         }
         .confirmationDialog(
             "Remove All Downloads?",
@@ -99,7 +103,8 @@ struct DownloadsViewMac: View {
 
     private func requestRemoval(_ albums: [Album]) {
         let ids = albums.flatMap { musicLibrary.tracksForAlbum($0.id).filter(\.isDownloaded).map(\.id) }
-        let subject = albums.count == 1
+        let subject =
+            albums.count == 1
             ? albums[0].name
             : String(AttributedString(localized: "^[\(albums.count) album](inflect: true)").characters)
         DownloadRemovalRequest.post(trackIds: Set(ids), subject: subject)

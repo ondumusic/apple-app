@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 /// allTracks() sorts album-by-album rather than track-by-track. These pin the ordering
@@ -13,7 +14,7 @@ struct AllTracksOrderingTests {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
             for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-                 LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+            LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
             configurations: config
         )
         return MusicLibrary(container: container)
@@ -22,33 +23,45 @@ struct AllTracksOrderingTests {
     private let now = Date()
 
     private func artist(_ id: UUID, _ name: String, sort: String) -> SyncArtist {
-        SyncArtist(id: id, name: name, sortName: sort, slug: name.lowercased(),
-                   albumCount: 1, insertedAt: now)
+        SyncArtist(
+            id: id, name: name, sortName: sort, slug: name.lowercased(),
+            albumCount: 1, insertedAt: now)
     }
 
     private func album(_ id: UUID, artist: UUID, _ name: String, sort: String) -> SyncAlbum {
-        SyncAlbum(id: id, artistId: artist, name: name, sortName: sort, slug: name.lowercased(),
-                  releaseYear: 2000, artworkUrl: nil, isUnknown: false, trackCount: 1, insertedAt: now)
+        SyncAlbum(
+            id: id, artistId: artist, name: name, sortName: sort, slug: name.lowercased(),
+            releaseYear: 2000, artworkUrl: nil, isUnknown: false, trackCount: 1, insertedAt: now)
     }
 
-    private func track(_ name: String, artist: UUID, albumArtist: UUID, album: UUID,
-                       disc: Int = 1, number: Int) -> SyncTrack {
+    private func track(
+        _ name: String, artist: UUID, albumArtist: UUID, album: UUID,
+        disc: Int = 1, number: Int
+    ) -> SyncTrack {
         let id = UUID()
-        return SyncTrack(id: id, artistId: artist, albumArtistId: albumArtist, albumId: album,
-                         name: name, disc: disc, number: number, duration: 200,
-                         mimetype: "audio/mp4", streamUrl: "/stream/\(id)",
-                         downloadUrl: "/download/\(id)", insertedAt: now)
+        return SyncTrack(
+            id: id, artistId: artist, albumArtistId: albumArtist, albumId: album,
+            name: name, disc: disc, number: number, duration: 200,
+            mimetype: "audio/mp4", streamUrl: "/stream/\(id)",
+            downloadUrl: "/download/\(id)", insertedAt: now)
     }
 
     @Test func sortsByAlbumArtistThenAlbumThenDiscThenNumber() throws {
         let lib = try makeLibrary()
-        let beatles = UUID(), radiohead = UUID()
-        let revolver = UUID(), abbey = UUID(), kida = UUID()
-        lib.upsertArtists([artist(beatles, "The Beatles", sort: "Beatles, The"),
-                           artist(radiohead, "Radiohead", sort: "Radiohead")])
-        lib.upsertAlbums([album(revolver, artist: beatles, "Revolver", sort: "Revolver"),
-                          album(abbey, artist: beatles, "Abbey Road", sort: "Abbey Road"),
-                          album(kida, artist: radiohead, "Kid A", sort: "Kid A")])
+        let beatles = UUID()
+        let radiohead = UUID()
+        let revolver = UUID()
+        let abbey = UUID()
+        let kida = UUID()
+        lib.upsertArtists([
+            artist(beatles, "The Beatles", sort: "Beatles, The"),
+            artist(radiohead, "Radiohead", sort: "Radiohead"),
+        ])
+        lib.upsertAlbums([
+            album(revolver, artist: beatles, "Revolver", sort: "Revolver"),
+            album(abbey, artist: beatles, "Abbey Road", sort: "Abbey Road"),
+            album(kida, artist: radiohead, "Kid A", sort: "Kid A"),
+        ])
         lib.upsertTracks([
             track("Idioteque", artist: radiohead, albumArtist: radiohead, album: kida, number: 8),
             track("Taxman", artist: beatles, albumArtist: beatles, album: revolver, disc: 2, number: 1),
@@ -58,22 +71,27 @@ struct AllTracksOrderingTests {
         ])
         lib.bumpRevision()
 
-        #expect(lib.allTracks().map(\.name) == [
-            "Come Together",                                    // Beatles / Abbey Road
-            "Yellow Submarine", "Eleanor Rigby", "Taxman",      // Beatles / Revolver, disc then number
-            "Idioteque",                                        // Radiohead / Kid A
-        ])
+        #expect(
+            lib.allTracks().map(\.name) == [
+                "Come Together",  // Beatles / Abbey Road
+                "Yellow Submarine", "Eleanor Rigby", "Taxman",  // Beatles / Revolver, disc then number
+                "Idioteque",  // Radiohead / Kid A
+            ])
     }
 
     /// A compilation puts several album artists in one album; each keeps its own slot in
     /// the artist ordering rather than inheriting the first track's.
     @Test func splitsAnAlbumWhoseTracksHaveDifferentAlbumArtists() throws {
         let lib = try makeLibrary()
-        let zoe = UUID(), adam = UUID(), various = UUID()
+        let zoe = UUID()
+        let adam = UUID()
+        let various = UUID()
         let comp = UUID()
-        lib.upsertArtists([artist(zoe, "Zoe", sort: "Zoe"),
-                           artist(adam, "Adam", sort: "Adam"),
-                           artist(various, "Various", sort: "Various")])
+        lib.upsertArtists([
+            artist(zoe, "Zoe", sort: "Zoe"),
+            artist(adam, "Adam", sort: "Adam"),
+            artist(various, "Various", sort: "Various"),
+        ])
         lib.upsertAlbums([album(comp, artist: various, "Compilation", sort: "Compilation")])
         lib.upsertTracks([
             track("Zoe Song", artist: zoe, albumArtist: zoe, album: comp, number: 1),
@@ -86,7 +104,8 @@ struct AllTracksOrderingTests {
 
     @Test func cachedResultReflectsDownloadStateChanges() throws {
         let lib = try makeLibrary()
-        let a = UUID(), alb = UUID()
+        let a = UUID()
+        let alb = UUID()
         lib.upsertArtists([artist(a, "Artist", sort: "Artist")])
         lib.upsertAlbums([album(alb, artist: a, "Album", sort: "Album")])
         let t = track("Song", artist: a, albumArtist: a, album: alb, number: 1)
@@ -110,7 +129,7 @@ struct BackgroundTrackCacheTests {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
             for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-                 LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+            LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
             configurations: config
         )
         return MusicLibrary(container: container)
@@ -119,28 +138,35 @@ struct BackgroundTrackCacheTests {
     @Test func prepareMatchesSynchronousOrdering() async throws {
         let lib = try makeLibrary()
         let now = Date()
-        let beatles = UUID(), radiohead = UUID()
-        let revolver = UUID(), kida = UUID()
+        let beatles = UUID()
+        let radiohead = UUID()
+        let revolver = UUID()
+        let kida = UUID()
         lib.upsertArtists([
-            SyncArtist(id: beatles, name: "The Beatles", sortName: "Beatles, The",
-                       slug: "beatles", albumCount: 1, insertedAt: now),
-            SyncArtist(id: radiohead, name: "Radiohead", sortName: "Radiohead",
-                       slug: "radiohead", albumCount: 1, insertedAt: now),
+            SyncArtist(
+                id: beatles, name: "The Beatles", sortName: "Beatles, The",
+                slug: "beatles", albumCount: 1, insertedAt: now),
+            SyncArtist(
+                id: radiohead, name: "Radiohead", sortName: "Radiohead",
+                slug: "radiohead", albumCount: 1, insertedAt: now),
         ])
         lib.upsertAlbums([
-            SyncAlbum(id: revolver, artistId: beatles, name: "Revolver", sortName: "Revolver",
-                      slug: "revolver", releaseYear: 1966, artworkUrl: nil, isUnknown: false,
-                      trackCount: 2, insertedAt: now),
-            SyncAlbum(id: kida, artistId: radiohead, name: "Kid A", sortName: "Kid A",
-                      slug: "kid-a", releaseYear: 2000, artworkUrl: nil, isUnknown: false,
-                      trackCount: 1, insertedAt: now),
+            SyncAlbum(
+                id: revolver, artistId: beatles, name: "Revolver", sortName: "Revolver",
+                slug: "revolver", releaseYear: 1966, artworkUrl: nil, isUnknown: false,
+                trackCount: 2, insertedAt: now),
+            SyncAlbum(
+                id: kida, artistId: radiohead, name: "Kid A", sortName: "Kid A",
+                slug: "kid-a", releaseYear: 2000, artworkUrl: nil, isUnknown: false,
+                trackCount: 1, insertedAt: now),
         ])
         func track(_ name: String, artist: UUID, album: UUID, number: Int) -> SyncTrack {
             let id = UUID()
-            return SyncTrack(id: id, artistId: artist, albumArtistId: artist, albumId: album,
-                             name: name, disc: 1, number: number, duration: 200,
-                             mimetype: "audio/mp4", streamUrl: "/s/\(id)",
-                             downloadUrl: "/d/\(id)", insertedAt: now)
+            return SyncTrack(
+                id: id, artistId: artist, albumArtistId: artist, albumId: album,
+                name: name, disc: 1, number: number, duration: 200,
+                mimetype: "audio/mp4", streamUrl: "/s/\(id)",
+                downloadUrl: "/d/\(id)", insertedAt: now)
         }
         lib.upsertTracks([
             track("Idioteque", artist: radiohead, album: kida, number: 8),

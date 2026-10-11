@@ -30,8 +30,9 @@ struct ArtistArtworkView: View {
                 // where a track change should dissolve. Here it meant every artist began
                 // as a glyph and faded in, which looks like nothing is cached — and
                 // nowhere else in the app does artwork fade.
-                ArtworkView(url: variant.url, cornerRadius: 0,
-                            size: size > 64 ? .medium : .thumbnail)
+                ArtworkView(
+                    url: variant.url, cornerRadius: 0,
+                    size: size > 64 ? .medium : .thumbnail)
             } else {
                 ZStack {
                     Circle().fill(.quaternary)

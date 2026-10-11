@@ -24,7 +24,9 @@ final class PlaybackCache {
 
     init(settings: SettingsStore) {
         self.settings = settings
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fileManager.temporaryDirectory
+        let appSupport =
+            fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
         self.cacheDir = appSupport.appendingPathComponent("Ondu/PlaybackCache", isDirectory: true)
         self.metadataURL = cacheDir.appendingPathComponent(".cache-metadata.json")
 
@@ -130,7 +132,7 @@ final class PlaybackCache {
 
     private func evictIfNeeded() {
         let limit = settings.playbackCacheLimit
-        guard limit > 0 else { return } // 0 = unlimited
+        guard limit > 0 else { return }  // 0 = unlimited
 
         // Evict least recently used entries until under limit
         while currentSize > limit && !entries.isEmpty {
@@ -148,7 +150,8 @@ final class PlaybackCache {
 
     private func loadMetadata() {
         guard let data = try? Data(contentsOf: metadataURL),
-              let loaded = try? JSONDecoder().decode([CacheEntry].self, from: data) else {
+            let loaded = try? JSONDecoder().decode([CacheEntry].self, from: data)
+        else {
             recalculateSize()
             return
         }

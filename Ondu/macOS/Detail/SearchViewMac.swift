@@ -30,7 +30,9 @@ struct SearchViewMac: View {
     private static let songsTableInset: CGFloat = 6 + TracksTableViewController.artworkLeadingGap
     private static let songRowHeight = DetailPageMetrics.trackRowHeightTwoLine
 
-    private let artistColumns = [GridItem(.adaptive(minimum: SearchViewMac.artistCell), spacing: SearchViewMac.artistSpacing)]
+    private let artistColumns = [
+        GridItem(.adaptive(minimum: SearchViewMac.artistCell), spacing: SearchViewMac.artistSpacing)
+    ]
 
     /// How many cells the adaptive grid will fit across — the same arithmetic LazyVGrid
     /// does. Used to trim the results to whole rows: capping the region by height instead
@@ -63,8 +65,9 @@ struct SearchViewMac: View {
     @Environment(\.pageTopInset) private var pageTopInset
 
     private var isShowingResults: Bool {
-        !query.isEmpty && !(displayedQuery == query && results.tracks.isEmpty
-                            && results.artists.isEmpty && results.albums.isEmpty)
+        !query.isEmpty
+            && !(displayedQuery == query && results.tracks.isEmpty
+                && results.artists.isEmpty && results.albums.isEmpty)
     }
 
     var body: some View {
@@ -120,11 +123,17 @@ struct SearchViewMac: View {
         // Same surface the tracks table paints, so the grids above it read as one page
         // rather than a separate panel stuck on top.
         .pageBackground()
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+        .onGeometryChange(for: CGFloat.self) {
+            $0.size.width
+        } action: {
+            contentWidth = $0
+        }
     }
 
-    private func sectionHeader(_ title: String, count: Int, unit: String,
-                               showAll: SearchAllRequest.Kind? = nil) -> some View {
+    private func sectionHeader(
+        _ title: String, count: Int, unit: String,
+        showAll: SearchAllRequest.Kind? = nil
+    ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.related) {
             Text(title)
                 .font(.title3.weight(.semibold))
@@ -155,8 +164,9 @@ struct SearchViewMac: View {
 
     private var artistsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.element) {
-            sectionHeader("Artists", count: results.artists.count, unit: "artist",
-                          showAll: shownArtists.count < results.artists.count ? .artists : nil)
+            sectionHeader(
+                "Artists", count: results.artists.count, unit: "artist",
+                showAll: shownArtists.count < results.artists.count ? .artists : nil)
             LazyVGrid(columns: artistColumns, alignment: .leading, spacing: Spacing.block) {
                 ForEach(shownArtists) { artist in
                     SearchArtistCell(artist: artist)
@@ -171,13 +181,15 @@ struct SearchViewMac: View {
     /// scroll and each is framed to its content.
     private var albumsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.element) {
-            sectionHeader("Albums", count: results.albums.count, unit: "album",
-                          showAll: shownAlbums.count < results.albums.count ? .albums : nil)
+            sectionHeader(
+                "Albums", count: results.albums.count, unit: "album",
+                showAll: shownAlbums.count < results.albums.count ? .albums : nil)
             AlbumsGrid(
                 albums: shownAlbums,
                 selection: $albumSelection,
-                actions: .standard(player: player, musicLibrary: musicLibrary,
-                                   network: network, downloadService: downloadService),
+                actions: .standard(
+                    player: player, musicLibrary: musicLibrary,
+                    network: network, downloadService: downloadService),
                 accent: settings.resolvedAccentColor,
                 onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) },
                 titleLines: 1,
@@ -195,8 +207,9 @@ struct SearchViewMac: View {
 
     private var songsSection: some View {
         VStack(alignment: .leading, spacing: Spacing.element) {
-            sectionHeader("Songs", count: results.tracks.count, unit: "song",
-                          showAll: shownTracks.count < results.tracks.count ? .songs : nil)
+            sectionHeader(
+                "Songs", count: results.tracks.count, unit: "song",
+                showAll: shownTracks.count < results.tracks.count ? .songs : nil)
             TracksTable(
                 tracks: shownTracks,
                 selection: $trackSelection,

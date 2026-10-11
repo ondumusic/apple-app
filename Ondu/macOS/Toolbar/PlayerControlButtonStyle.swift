@@ -67,7 +67,9 @@ struct VolumeIconButtonStyle: ButtonStyle {
         var body: some View {
             configuration.label
                 .contentShape(Rectangle())
-                .foregroundStyle(isHovering || configuration.isPressed ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
+                .foregroundStyle(
+                    isHovering || configuration.isPressed ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary)
+                )
                 .opacity(isEnabled ? 1 : 0.35)
                 .onHover { isHovering = $0 }
                 // A custom ButtonStyle replaces .plain wholesale, and the dimming of

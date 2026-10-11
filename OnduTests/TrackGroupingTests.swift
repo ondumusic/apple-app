@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 struct TrackGroupingTests {
@@ -10,7 +11,8 @@ struct TrackGroupingTests {
     }
 
     @Test func labelsMarkTheFirstTrackOfEachDisc() {
-        let tracks = (1...3).map { makeTrack(disc: 1, number: $0) }
+        let tracks =
+            (1...3).map { makeTrack(disc: 1, number: $0) }
             + (1...2).map { makeTrack(disc: 2, number: $0) }
         let labels = TrackGrouping.discLabels(for: tracks)
         #expect(labels.keys.sorted() == [0, 3])
@@ -24,7 +26,7 @@ struct TrackGroupingTests {
         let tracks = [
             makeTrack(disc: 1, number: 1),
             makeTrack(disc: 2, number: 1),
-            makeTrack(disc: 1, number: 2)
+            makeTrack(disc: 1, number: 2),
         ]
         #expect(TrackGrouping.discLabels(for: tracks).keys.sorted() == [0, 1, 2])
     }

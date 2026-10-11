@@ -120,7 +120,9 @@ nonisolated enum FractionalIndex {
     }
 
     /// Validates a key, returning a `Result` describing the outcome.
-    static func validate(_ key: String, maxLength: Int = defaultMaxLength, digits: String = base62Digits) -> Result<Void, FIError> {
+    static func validate(_ key: String, maxLength: Int = defaultMaxLength, digits: String = base62Digits) -> Result<
+        Void, FIError
+    > {
         if key.isEmpty {
             return .failure(.emptyKey)
         }
@@ -156,7 +158,9 @@ nonisolated enum FractionalIndex {
         }
     }
 
-    static func generateNKeysBetweenThrowing(_ a: String?, _ b: String?, n: Int, digits: String = base62Digits) throws -> [String] {
+    static func generateNKeysBetweenThrowing(_ a: String?, _ b: String?, n: Int, digits: String = base62Digits) throws
+        -> [String]
+    {
         if n == 0 { return [] }
         if n == 1 { return [try betweenThrowing(a, b, digits: digits)] }
         if b == nil {
@@ -220,7 +224,8 @@ nonisolated enum FractionalIndex {
             return ia + (try midpoint(fa, nil, digits: digits))
         }
 
-        let a = a!, b = b!
+        let a = a!
+        let b = b!
         let ia = try getIntegerPart(a)
         let fa = String(a.dropFirst(ia.count))
         let ib = try getIntegerPart(b)
@@ -253,7 +258,8 @@ nonisolated enum FractionalIndex {
         return try midpointNoTrailingZero(a, b, digits: digits, zero: zero)
     }
 
-    private static func midpointNoTrailingZero(_ a: String, _ b: String?, digits: String, zero: String) throws -> String {
+    private static func midpointNoTrailingZero(_ a: String, _ b: String?, digits: String, zero: String) throws -> String
+    {
         let n: Int
         if let b = b {
             n = commonPrefixLen(a, b, zero: zero)

@@ -29,7 +29,8 @@ final class PlaylistController {
         self.outbox = outbox
         self.downloadService = downloadService
         if let raw = UserDefaults.standard.string(forKey: Self.lastUsedKey),
-           let id = UUID(uuidString: raw) {
+            let id = UUID(uuidString: raw)
+        {
             self.lastUsedPlaylistId = id
         }
         // A playlist made here is recorded under its temporary id until the server
@@ -39,8 +40,9 @@ final class PlaylistController {
             forName: .playlistIdRemapped, object: nil, queue: .main
         ) { [weak self] note in
             guard let temp = note.userInfo?["temp"] as? UUID,
-                  let real = note.userInfo?["real"] as? UUID,
-                  self?.lastUsedPlaylistId == temp else { return }
+                let real = note.userInfo?["real"] as? UUID,
+                self?.lastUsedPlaylistId == temp
+            else { return }
             self?.lastUsedPlaylistId = real
         }
     }
@@ -91,8 +93,9 @@ final class PlaylistController {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
         let tempId = UUID()
-        let optimistic = Playlist(id: tempId, name: trimmed, trackCount: 0,
-                                  insertedAt: Date(), isFolder: false, parentId: parentId)
+        let optimistic = Playlist(
+            id: tempId, name: trimmed, trackCount: 0,
+            insertedAt: Date(), isFolder: false, parentId: parentId)
         musicLibrary.insertLocalPlaylist(optimistic)
         outbox.enqueueCreatePlaylist(tempId: tempId, name: trimmed, parentId: parentId)
         return optimistic
@@ -103,8 +106,9 @@ final class PlaylistController {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
         let tempId = UUID()
-        let optimistic = Playlist(id: tempId, name: trimmed, trackCount: 0,
-                                  insertedAt: Date(), isFolder: true, parentId: parentId)
+        let optimistic = Playlist(
+            id: tempId, name: trimmed, trackCount: 0,
+            insertedAt: Date(), isFolder: true, parentId: parentId)
         musicLibrary.insertLocalPlaylist(optimistic)
         outbox.enqueueCreateFolder(tempId: tempId, name: trimmed, parentId: parentId)
         return optimistic

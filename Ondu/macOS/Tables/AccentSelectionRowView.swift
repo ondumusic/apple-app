@@ -36,8 +36,9 @@ final class AccentSelectionRowView: NSTableRowView {
 
     override var focusRingType: NSFocusRingType {
         get { .none }
-        set { /* ignore — pinned to .none so NSTableView's right-click target ring
-              doesn't paint a full-row outline ignoring our custom selection bounds. */ }
+        // Pinned to .none so NSTableView's right-click target ring doesn't paint a
+        // full-row outline ignoring our custom selection bounds.
+        set {}
     }
 
     override var isSelected: Bool {
@@ -92,15 +93,16 @@ final class AccentSelectionRowView: NSTableRowView {
         keyObservers.removeAll()
         guard let window else { return }
         for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
-            keyObservers.append(NotificationCenter.default.addObserver(
-                forName: name, object: window, queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    self.applyCellEmphasis()
-                    self.needsDisplay = true
-                }
-            })
+            keyObservers.append(
+                NotificationCenter.default.addObserver(
+                    forName: name, object: window, queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.applyCellEmphasis()
+                        self.needsDisplay = true
+                    }
+                })
         }
     }
 
@@ -127,10 +129,11 @@ final class AccentSelectionRowView: NSTableRowView {
         // Inter-row hairline. Skipped on suppressed rows, selected rows, and rows above
         // a selected row so the pill stays clean.
         guard !suppressDivider, !isSelected, !isNextRowSelected else { return }
-        let line = NSRect(x: bounds.minX + dividerLeadingInset,
-                          y: bounds.maxY - 0.5,
-                          width: max(0, bounds.width - dividerLeadingInset - dividerTrailingInset),
-                          height: 0.5)
+        let line = NSRect(
+            x: bounds.minX + dividerLeadingInset,
+            y: bounds.maxY - 0.5,
+            width: max(0, bounds.width - dividerLeadingInset - dividerTrailingInset),
+            height: 0.5)
         NSColor.separatorColor.setFill()
         line.fill()
     }
@@ -204,31 +207,38 @@ final class AccentSelectionRowView: NSTableRowView {
     /// so the geometry is correct in either flipped or non-flipped coordinate systems.
     private func roundedRectPath(_ rect: NSRect, topRadius: CGFloat, bottomRadius: CGFloat) -> NSBezierPath {
         let path = NSBezierPath()
-        let minX = rect.minX, maxX = rect.maxX, minY = rect.minY, maxY = rect.maxY
+        let minX = rect.minX
+        let maxX = rect.maxX
+        let minY = rect.minY
+        let maxY = rect.maxY
         path.move(to: NSPoint(x: minX + topRadius, y: minY))
         path.line(to: NSPoint(x: maxX - topRadius, y: minY))
         if topRadius > 0 {
-            path.appendArc(from: NSPoint(x: maxX, y: minY),
-                           to: NSPoint(x: maxX, y: minY + topRadius),
-                           radius: topRadius)
+            path.appendArc(
+                from: NSPoint(x: maxX, y: minY),
+                to: NSPoint(x: maxX, y: minY + topRadius),
+                radius: topRadius)
         }
         path.line(to: NSPoint(x: maxX, y: maxY - bottomRadius))
         if bottomRadius > 0 {
-            path.appendArc(from: NSPoint(x: maxX, y: maxY),
-                           to: NSPoint(x: maxX - bottomRadius, y: maxY),
-                           radius: bottomRadius)
+            path.appendArc(
+                from: NSPoint(x: maxX, y: maxY),
+                to: NSPoint(x: maxX - bottomRadius, y: maxY),
+                radius: bottomRadius)
         }
         path.line(to: NSPoint(x: minX + bottomRadius, y: maxY))
         if bottomRadius > 0 {
-            path.appendArc(from: NSPoint(x: minX, y: maxY),
-                           to: NSPoint(x: minX, y: maxY - bottomRadius),
-                           radius: bottomRadius)
+            path.appendArc(
+                from: NSPoint(x: minX, y: maxY),
+                to: NSPoint(x: minX, y: maxY - bottomRadius),
+                radius: bottomRadius)
         }
         path.line(to: NSPoint(x: minX, y: minY + topRadius))
         if topRadius > 0 {
-            path.appendArc(from: NSPoint(x: minX, y: minY),
-                           to: NSPoint(x: minX + topRadius, y: minY),
-                           radius: topRadius)
+            path.appendArc(
+                from: NSPoint(x: minX, y: minY),
+                to: NSPoint(x: minX + topRadius, y: minY),
+                radius: topRadius)
         }
         path.close()
         return path

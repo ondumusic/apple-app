@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 struct ServerNoticeTests {
@@ -9,16 +10,16 @@ struct ServerNoticeTests {
     }
 
     private let known = """
-    {"id":"6f1a3f1e-0000-4000-8000-000000000001","code":"library_unavailable",
-     "level":"warning","message":"No music was found in the music path.",
-     "raisedAt":"2026-10-04T18:00:00Z"}
-    """
+        {"id":"6f1a3f1e-0000-4000-8000-000000000001","code":"library_unavailable",
+         "level":"warning","message":"No music was found in the music path.",
+         "raisedAt":"2026-10-04T18:00:00Z"}
+        """
 
     private let unknown = """
-    {"id":"6f1a3f1e-0000-4000-8000-000000000002","code":"disk_filling_up",
-     "level":"info","message":"The disk is nearly full.",
-     "raisedAt":"2026-10-04T18:00:00Z"}
-    """
+        {"id":"6f1a3f1e-0000-4000-8000-000000000002","code":"disk_filling_up",
+         "level":"info","message":"The disk is nearly full.",
+         "raisedAt":"2026-10-04T18:00:00Z"}
+        """
 
     /// A code this build knows gets our own wording, which goes through the string
     /// catalogue and can say what to do about it.
@@ -58,9 +59,9 @@ struct ServerNoticeTests {
 
     @Test func noticesDecodeFromASyncResponse() throws {
         let json = """
-        {"artists":[],"albums":[],"tracks":[],"deletions":[],"cursor":"c","complete":true,
-         "notices":[\(known)]}
-        """
+            {"artists":[],"albums":[],"tracks":[],"deletions":[],"cursor":"c","complete":true,
+             "notices":[\(known)]}
+            """
         let response = try JSONDecoder.api.decode(SyncResponse.self, from: Data(json.utf8))
         #expect(response.notices.count == 1)
         #expect(response.notices.first?.known == .libraryUnavailable)

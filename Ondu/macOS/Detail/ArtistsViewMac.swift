@@ -41,32 +41,32 @@ struct ArtistsViewMac: View {
                 }
                 .padding(.top, topInset)
             } else {
-            HStack(spacing: 0) {
-                ArtistsTable(
-                    artists: artists,
-                    selection: $selectedArtistId,
-                    actions: artistActions,
-                    accent: settings.resolvedAccentColor,
-                    showsArtwork: settings.showArtistArtwork,
-                    topContentInset: topInset
-                )
-                .background(.background)
-                .frame(width: artistListWidth)
+                HStack(spacing: 0) {
+                    ArtistsTable(
+                        artists: artists,
+                        selection: $selectedArtistId,
+                        actions: artistActions,
+                        accent: settings.resolvedAccentColor,
+                        showsArtwork: settings.showArtistArtwork,
+                        topContentInset: topInset
+                    )
+                    .background(.background)
+                    .frame(width: artistListWidth)
 
-                SidebarDivider(width: $artistListWidth, range: 180...420)
-                    .padding(.top, topInset)
+                    SidebarDivider(width: $artistListWidth, range: 180...420)
+                        .padding(.top, topInset)
 
-                Group {
-                    if let id = selectedArtistId, let artist = artists.first(where: { $0.id == id }) {
-                        ArtistDetailMac(artist: artist, isEmbedded: true)
-                            .id(artist.id)
-                    } else {
-                        ContentUnavailableView("Select an Artist", systemImage: "music.mic")
-                            .padding(.top, topInset)
+                    Group {
+                        if let id = selectedArtistId, let artist = artists.first(where: { $0.id == id }) {
+                            ArtistDetailMac(artist: artist, isEmbedded: true)
+                                .id(artist.id)
+                        } else {
+                            ContentUnavailableView("Select an Artist", systemImage: "music.mic")
+                                .padding(.top, topInset)
+                        }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
             }
         }
         .artworkFailureAlert(

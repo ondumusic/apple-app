@@ -86,8 +86,9 @@ final class PasteboardDragHandleView: NSView {
     /// edge, AppKit from the bottom.
     private var imageFrame: NSRect {
         guard let rect = dragImageRect else { return bounds }
-        return NSRect(x: rect.minX, y: bounds.height - rect.maxY,
-                      width: rect.width, height: rect.height)
+        return NSRect(
+            x: rect.minX, y: bounds.height - rect.maxY,
+            width: rect.width, height: rect.height)
     }
 
     /// The drag image, cut out of what is already on screen.
@@ -109,9 +110,11 @@ final class PasteboardDragHandleView: NSView {
         let masked = NSImage(size: frame.size)
         let bounds = NSRect(origin: .zero, size: frame.size)
         masked.lockFocus()
-        NSBezierPath(roundedRect: bounds,
-                     xRadius: dragImageCornerRadius,
-                     yRadius: dragImageCornerRadius).addClip()
+        NSBezierPath(
+            roundedRect: bounds,
+            xRadius: dragImageCornerRadius,
+            yRadius: dragImageCornerRadius
+        ).addClip()
         image.draw(in: bounds)
         masked.unlockFocus()
         return masked

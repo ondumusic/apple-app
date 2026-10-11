@@ -32,7 +32,8 @@ final class SearchHistory {
 
     private func load() {
         guard let data = UserDefaults.standard.data(forKey: Self.key),
-              let decoded = try? JSONDecoder().decode([SearchHistoryItem].self, from: data) else { return }
+            let decoded = try? JSONDecoder().decode([SearchHistoryItem].self, from: data)
+        else { return }
         items = decoded
     }
 

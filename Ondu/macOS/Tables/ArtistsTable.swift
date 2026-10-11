@@ -185,7 +185,8 @@ extension ArtistsTableViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard artists.indices.contains(row) else { return nil }
         let identifier = NSUserInterfaceItemIdentifier("ArtistCell")
-        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? ArtistCell
+        let cell =
+            tableView.makeView(withIdentifier: identifier, owner: self) as? ArtistCell
             ?? ArtistCell(identifier: identifier)
         cell.show(artists[row], showsArtwork: showsArtwork)
         return cell
@@ -217,7 +218,8 @@ extension ArtistsTableViewController: NSTableViewDelegate {
         guard isViewLoaded else { return }
         tableView.enumerateAvailableRowViews { rowView, row in
             guard artists.indices.contains(row),
-                  let cell = rowView.view(atColumn: 0) as? ArtistCell else { return }
+                let cell = rowView.view(atColumn: 0) as? ArtistCell
+            else { return }
             cell.show(artists[row], showsArtwork: showsArtwork)
         }
     }
@@ -231,7 +233,8 @@ extension ArtistsTableViewController: NSTableViewDelegate {
         }
         tableView.enumerateAvailableRowViews { rowView, row in
             guard artists.indices.contains(row),
-                  let cell = rowView.view(atColumn: 0) as? ArtistCell else { return }
+                let cell = rowView.view(atColumn: 0) as? ArtistCell
+            else { return }
             cell.show(artists[row], showsArtwork: showsArtwork)
         }
     }
@@ -322,10 +325,11 @@ private final class ArtistCell: NSTableCellView {
             // The shared bucket rather than this cell's own size: a resize of its own
             // would be a second cache entry and a second decode of the same picture the
             // rest of the app already has.
-            let request = ImageRequest(url: variant.url,
-                                       processors: [.resize(width: CGFloat(ArtworkSize.thumbnail.pixels))])
+            let request = ImageRequest(
+                url: variant.url,
+                processors: [.resize(width: CGFloat(ArtworkSize.thumbnail.pixels))])
             guard let image = try? await ImagePipeline.shared.image(for: request),
-                  !Task.isCancelled, let self, self.shownIdentity == wanted
+                !Task.isCancelled, let self, self.shownIdentity == wanted
             else { return }
             self.thumbnail.image = image
         }
@@ -359,8 +363,9 @@ private final class ArtistThumbnailView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let side = min(bounds.width, bounds.height)
-        let circle = NSRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2,
-                            width: side, height: side)
+        let circle = NSRect(
+            x: (bounds.width - side) / 2, y: (bounds.height - side) / 2,
+            width: side, height: side)
         let path = NSBezierPath(ovalIn: circle)
 
         guard let image else {
@@ -378,13 +383,16 @@ private final class ArtistThumbnailView: NSView {
 
     private func drawGlyph(in circle: NSRect) {
         let configuration = NSImage.SymbolConfiguration(pointSize: circle.height * 0.38, weight: .regular)
-        guard let glyph = NSImage(systemSymbolName: "music.mic", accessibilityDescription: nil)?
-            .withSymbolConfiguration(configuration)?
-            .tinted(isEmphasized ? .white : .controlAccentColor)
+        guard
+            let glyph = NSImage(systemSymbolName: "music.mic", accessibilityDescription: nil)?
+                .withSymbolConfiguration(configuration)?
+                .tinted(isEmphasized ? .white : .controlAccentColor)
         else { return }
         let size = glyph.size
-        glyph.draw(in: NSRect(x: circle.midX - size.width / 2, y: circle.midY - size.height / 2,
-                              width: size.width, height: size.height))
+        glyph.draw(
+            in: NSRect(
+                x: circle.midX - size.width / 2, y: circle.midY - size.height / 2,
+                width: size.width, height: size.height))
     }
 
     /// Fills the circle and centres the overflow, rather than letterboxing a photo that
@@ -393,13 +401,14 @@ private final class ArtistThumbnailView: NSView {
         guard size.width > 0, size.height > 0 else { return rect }
         let scale = max(rect.width / size.width, rect.height / size.height)
         let scaled = NSSize(width: size.width * scale, height: size.height * scale)
-        return NSRect(x: rect.midX - scaled.width / 2, y: rect.midY - scaled.height / 2,
-                      width: scaled.width, height: scaled.height)
+        return NSRect(
+            x: rect.midX - scaled.width / 2, y: rect.midY - scaled.height / 2,
+            width: scaled.width, height: scaled.height)
     }
 }
 
-private extension NSImage {
-    func tinted(_ color: NSColor) -> NSImage {
+extension NSImage {
+    fileprivate func tinted(_ color: NSColor) -> NSImage {
         let copy = NSImage(size: size)
         copy.lockFocus()
         color.set()
@@ -413,7 +422,9 @@ private extension NSImage {
 extension ArtistsTableViewController: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        guard let artist = artists.indices.contains(tableView.clickedRow) ? artists[tableView.clickedRow] : nil else { return }
+        guard let artist = artists.indices.contains(tableView.clickedRow) ? artists[tableView.clickedRow] : nil else {
+            return
+        }
 
         addItem(to: menu, title: "Play", action: #selector(menuPlay))
         addItem(to: menu, title: "Shuffle", action: #selector(menuShuffle))
@@ -432,9 +443,10 @@ extension ArtistsTableViewController: NSMenuDelegate {
         }
         if actions.supportsArtwork, showsArtwork {
             menu.addItem(.separator())
-            addItem(to: menu,
-                    title: artist.artwork.isEmpty ? "Choose Artwork…" : "Replace Artwork…",
-                    action: #selector(menuChooseArtwork))
+            addItem(
+                to: menu,
+                title: artist.artwork.isEmpty ? "Choose Artwork…" : "Replace Artwork…",
+                action: #selector(menuChooseArtwork))
             if !artist.artwork.isEmpty {
                 addItem(to: menu, title: "Remove Artwork", action: #selector(menuRemoveArtwork))
             }

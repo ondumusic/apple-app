@@ -1,4 +1,5 @@
 import Foundation
+
 #if canImport(UIKit)
 import UIKit
 #else
@@ -191,7 +192,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     // MARK: - Paths
 
     nonisolated private static var downloadsDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
+        let appSupport =
+            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         return appSupport.appendingPathComponent("Ondu/Downloads", isDirectory: true)
     }
 
@@ -205,7 +208,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         self.musicLibrary = musicLibrary
         self.settings = settings
         super.init()
-        _ = backgroundSession // reconnect to any in-flight background tasks
+        _ = backgroundSession  // reconnect to any in-flight background tasks
         processPendingCompletions()
         observeAppLifecycle()
     }
@@ -237,8 +240,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func download(track: Track, album: Album, artist: Artist) {
         guard !musicLibrary.isDownloaded(trackId: track.id),
-              !isDownloading(trackId: track.id),
-              !isQueued(trackId: track.id) else { return }
+            !isDownloading(trackId: track.id),
+            !isQueued(trackId: track.id)
+        else { return }
 
         let info = DownloadInfo(track: track, album: album, artist: artist)
         pendingQueue.append(info)
@@ -260,8 +264,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 guard let tracks = album.tracks else { continue }
                 for track in tracks {
                     if !musicLibrary.isDownloaded(trackId: track.id),
-                       !isDownloading(trackId: track.id),
-                       !isQueued(trackId: track.id) {
+                        !isDownloading(trackId: track.id),
+                        !isQueued(trackId: track.id)
+                    {
                         return true
                     }
                 }
@@ -302,8 +307,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 guard let tracks = album.tracks else { continue }
                 for track in tracks where trackIds.contains(track.id) {
                     guard !musicLibrary.isDownloaded(trackId: track.id),
-                          !isDownloading(trackId: track.id),
-                          !isQueued(trackId: track.id) else { continue }
+                        !isDownloading(trackId: track.id),
+                        !isQueued(trackId: track.id)
+                    else { continue }
                     pendingQueue.append(DownloadInfo(track: track, album: album, artist: artist))
                 }
             }
@@ -382,7 +388,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     func resumeAll() {
         isPaused = false
-        let pausedIds = trackPhases.filter { if case .paused = $0.value { return true }; return false }.map(\.key)
+        let pausedIds = trackPhases.filter {
+            if case .paused = $0.value { return true }
+            return false
+        }.map(\.key)
         for trackId in pausedIds {
             resumeDownload(trackId: trackId)
         }
@@ -420,8 +429,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     }
 
     func isAlbumDownloading(albumId: UUID) -> Bool {
-        activeDownloads.values.contains { $0.albumId == albumId } ||
-        pendingQueue.contains { $0.album.id == albumId }
+        activeDownloads.values.contains { $0.albumId == albumId } || pendingQueue.contains { $0.album.id == albumId }
     }
 
     func cancelAlbumDownloads(albumId: UUID) {
@@ -440,7 +448,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     // MARK: - Internal queue management
 
     /// Minimum free disk space (in bytes) required to start new downloads.
-    private static let minimumFreeDiskSpace: Int64 = 100 * 1024 * 1024 // 100 MB
+    private static let minimumFreeDiskSpace: Int64 = 100 * 1024 * 1024  // 100 MB
 
     /// Cached disk space value and timestamp to avoid frequent filesystem queries.
     @ObservationIgnored private var lastDiskSpaceCheck: (space: Int64, time: Date) = (Int64.max, .distantPast)
@@ -486,8 +494,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     nonisolated private static func availableDiskSpace() -> Int64 {
         guard let home = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
-              let values = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
-              let capacity = values.volumeAvailableCapacityForImportantUsage else {
+            let values = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+            let capacity = values.volumeAvailableCapacityForImportantUsage
+        else {
             return Int64.max
         }
         return capacity
@@ -517,7 +526,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         } else {
             // Background transcoded or original: download directly (no SSE prepare)
             guard let downloadURL = URL(string: info.track.downloadUrl),
-                  var comps = URLComponents(url: downloadURL, resolvingAgainstBaseURL: false) else {
+                var comps = URLComponents(url: downloadURL, resolvingAgainstBaseURL: false)
+            else {
                 inFlightCount -= 1
                 activeDownloads.removeValue(forKey: info.track.id)
                 activeDownloadOrder.removeAll { $0 == info.track.id }
@@ -588,16 +598,18 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 var fileSize: Int64?
                 for line in body.components(separatedBy: "\n") {
                     if line.hasPrefix("data: "),
-                       let jsonData = line.dropFirst(6).data(using: .utf8),
-                       let result = try? JSONDecoder().decode(PrepareResult.self, from: jsonData) {
+                        let jsonData = line.dropFirst(6).data(using: .utf8),
+                        let result = try? JSONDecoder().decode(PrepareResult.self, from: jsonData)
+                    {
                         fileSize = result.size
                         break
                     }
                 }
 
                 guard let fileSize,
-                      let downloadURL = URL(string: downloadUrlString),
-                      var comps = URLComponents(url: downloadURL, resolvingAgainstBaseURL: false) else {
+                    let downloadURL = URL(string: downloadUrlString),
+                    var comps = URLComponents(url: downloadURL, resolvingAgainstBaseURL: false)
+                else {
                     self.cleanupPrepare(trackId: trackId, reason: "Transcode response invalid")
                     return
                 }
@@ -672,7 +684,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         progressValues.removeValue(forKey: trackId)
         inFlightCount -= 1
         if let reason, let phase, let state {
-            addFailedDownload(trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: phase.info, reason: reason)
+            addFailedDownload(
+                trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: phase.info,
+                reason: reason)
         }
         stopProgressTimerIfIdle()
         startNextIfNeeded()
@@ -691,18 +705,23 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         progressLock.unlock()
         inFlightCount -= 1
         if let reason, let state, let phase {
-            addFailedDownload(trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: phase.info, reason: reason)
+            addFailedDownload(
+                trackId: trackId, trackName: state.trackName, artistName: state.artistName, info: phase.info,
+                reason: reason)
         }
         stopProgressTimerIfIdle()
         startNextIfNeeded()
     }
 
-    private func addFailedDownload(trackId: UUID, trackName: String, artistName: String, info: DownloadInfo, reason: String) {
+    private func addFailedDownload(
+        trackId: UUID, trackName: String, artistName: String, info: DownloadInfo, reason: String
+    ) {
         // Don't add duplicates
         guard !failedDownloads.contains(where: { $0.id == trackId }) else { return }
-        failedDownloads.append(FailedDownload(
-            id: trackId, trackName: trackName, artistName: artistName, info: info, reason: reason
-        ))
+        failedDownloads.append(
+            FailedDownload(
+                id: trackId, trackName: trackName, artistName: artistName, info: info, reason: reason
+            ))
     }
 
     func retryDownload(_ failed: FailedDownload) {
@@ -810,18 +829,21 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let taskId = downloadTask.taskIdentifier
 
         if let httpResponse = downloadTask.response as? HTTPURLResponse,
-           !(200...299).contains(httpResponse.statusCode) {
+            !(200...299).contains(httpResponse.statusCode)
+        {
             // Don't save — didCompleteWithError will handle the failure
             return
         }
 
         guard let descriptionData = downloadTask.taskDescription?.data(using: .utf8),
-              let metadata = try? JSONDecoder().decode(TaskMetadata.self, from: descriptionData) else {
+            let metadata = try? JSONDecoder().decode(TaskMetadata.self, from: descriptionData)
+        else {
             return
         }
 
         // Use response Content-Type if available (may differ from original when transcoding)
-        let responseMimetype = (downloadTask.response as? HTTPURLResponse)?
+        let responseMimetype =
+            (downloadTask.response as? HTTPURLResponse)?
             .value(forHTTPHeaderField: "Content-Type") ?? metadata.mimetype
 
         let saved = saveDownloadedFile(metadata: metadata, mimetype: responseMimetype, tempLocation: location)
@@ -839,7 +861,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
         Task { @MainActor in
             self.successfulSaves.insert(taskId)
-            self.musicLibrary.markDownloaded(trackId: metadata.trackId, relativePath: saved.path, downloadedFileSize: saved.size)
+            self.musicLibrary.markDownloaded(
+                trackId: metadata.trackId, relativePath: saved.path, downloadedFileSize: saved.size)
             self.removePendingCompletion(trackId: metadata.trackId)
         }
     }
@@ -852,7 +875,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         totalBytesExpectedToWrite: Int64
     ) {
         let taskId = downloadTask.taskIdentifier
-        let progress = totalBytesExpectedToWrite > 0
+        let progress =
+            totalBytesExpectedToWrite > 0
             ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             : 0
         progressLock.lock()
@@ -868,13 +892,16 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let taskId = task.taskIdentifier
         let statusCode = (task.response as? HTTPURLResponse)?.statusCode
 
-        let retryAfter: TimeInterval? = if [429, 503].contains(statusCode),
-            let header = (task.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Retry-After"),
-            let seconds = Double(header) { seconds } else { nil }
+        let retryAfter: TimeInterval? =
+            if [429, 503].contains(statusCode),
+                let header = (task.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Retry-After"),
+                let seconds = Double(header)
+            { seconds } else { nil }
 
         Task { @MainActor in
             guard let trackId = self.taskIdToTrackId[taskId],
-                  case .downloading(_, _, let info) = self.trackPhases[trackId] else { return }
+                case .downloading(_, _, let info) = self.trackPhases[trackId]
+            else { return }
 
             if statusCode == 401 {
                 self.handleUnauthorized(requeue: info)
@@ -884,7 +911,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             if [408, 429, 502, 503, 504].contains(statusCode), info.retryCount < 3 {
                 let delay = retryAfter ?? 5
                 #if DEBUG
-                print("DownloadService: server busy for \(info.track.name), retrying in \(Int(delay))s (attempt \(info.retryCount + 1)/3)")
+                print(
+                    "DownloadService: server busy for \(info.track.name), retrying in \(Int(delay))s (attempt \(info.retryCount + 1)/3)"
+                )
                 #endif
                 var retryInfo = info
                 retryInfo.retryCount += 1
@@ -934,7 +963,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
             print("  code: \(nsError.code) domain: \(nsError.domain)")
             print("  userInfo: \(nsError.userInfo)")
             if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
-                print("  underlying: code=\(underlying.code) domain=\(underlying.domain) \(underlying.localizedDescription)")
+                print(
+                    "  underlying: code=\(underlying.code) domain=\(underlying.domain) \(underlying.localizedDescription)"
+                )
             }
             if let response = task.response as? HTTPURLResponse {
                 print("  response: HTTP \(response.statusCode) headers=\(response.allHeaderFields)")
@@ -945,15 +976,17 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
             // Retry transient network errors
             let retryableErrors = [
-                NSURLErrorUnknown,              // -1
-                NSURLErrorTimedOut,              // -1001
-                NSURLErrorNetworkConnectionLost, // -1005
+                NSURLErrorUnknown,  // -1
+                NSURLErrorTimedOut,  // -1001
+                NSURLErrorNetworkConnectionLost,  // -1005
             ]
             if retryableErrors.contains(nsError.code), info.retryCount < 3 {
                 var retryInfo = info
                 retryInfo.retryCount += 1
                 #if DEBUG
-                print("DownloadService: transient error for \(info.track.name), retrying (attempt \(retryInfo.retryCount)/3, code: \(nsError.code))")
+                print(
+                    "DownloadService: transient error for \(info.track.name), retrying (attempt \(retryInfo.retryCount)/3, code: \(nsError.code))"
+                )
                 #endif
                 pendingQueue.insert(retryInfo, at: 0)
                 cleanupTask(trackId: trackId, taskId: taskId)
@@ -982,7 +1015,9 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
     // MARK: - File management
 
     /// Moves downloaded file directly to its final path. Returns (relativePath, fileSize) or nil.
-    nonisolated private func saveDownloadedFile(metadata: TaskMetadata, mimetype: String, tempLocation: URL) -> (path: String, size: Int64)? {
+    nonisolated private func saveDownloadedFile(metadata: TaskMetadata, mimetype: String, tempLocation: URL) -> (
+        path: String, size: Int64
+    )? {
         let fm = FileManager.default
         let dir = Self.downloadsDirectory
             .appendingPathComponent(metadata.artistId.uuidString, isDirectory: true)
@@ -990,7 +1025,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
         let ext = extensionFromMimetype(mimetype)
         let destURL = dir.appendingPathComponent("\(metadata.trackId.uuidString).\(ext)")
-        let relativePath = "Ondu/Downloads/\(metadata.artistId.uuidString)/\(metadata.albumId.uuidString)/\(metadata.trackId.uuidString).\(ext)"
+        let relativePath =
+            "Ondu/Downloads/\(metadata.artistId.uuidString)/\(metadata.albumId.uuidString)/\(metadata.trackId.uuidString).\(ext)"
 
         do {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -1059,9 +1095,10 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
                 let scanSize = min(fileSize, 512 * 1024)
                 try? handle.seek(toOffset: fileSize - scanSize)
                 guard let tail = try? handle.read(upToCount: Int(scanSize)), tail.count >= 8 else { return false }
-                let moov: [UInt8] = [0x6D, 0x6F, 0x6F, 0x76] // "moov"
-                for i in 4 ..< tail.count where tail[i] == moov[0] {
-                    if i + 3 < tail.count && tail[i+1] == moov[1] && tail[i+2] == moov[2] && tail[i+3] == moov[3] {
+                let moov: [UInt8] = [0x6D, 0x6F, 0x6F, 0x76]  // "moov"
+                for i in 4..<tail.count where tail[i] == moov[0] {
+                    if i + 3 < tail.count && tail[i + 1] == moov[1] && tail[i + 2] == moov[2] && tail[i + 3] == moov[3]
+                    {
                         return true
                     }
                 }
@@ -1083,7 +1120,8 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         let dir = Self.pendingDirectory
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        let record = PendingCompletion(trackId: trackId, relativePath: relativePath, downloadedFileSize: downloadedFileSize)
+        let record = PendingCompletion(
+            trackId: trackId, relativePath: relativePath, downloadedFileSize: downloadedFileSize)
         let file = dir.appendingPathComponent("\(trackId.uuidString).json")
         try? JSONEncoder().encode(record).write(to: file)
     }
@@ -1104,13 +1142,16 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
         for file in files where file.pathExtension == "json" {
             guard let data = try? Data(contentsOf: file),
-                  let record = try? JSONDecoder().decode(PendingCompletion.self, from: data) else {
+                let record = try? JSONDecoder().decode(PendingCompletion.self, from: data)
+            else {
                 try? fm.removeItem(at: file)
                 continue
             }
 
             if !musicLibrary.isDownloaded(trackId: record.trackId) {
-                musicLibrary.markDownloaded(trackId: record.trackId, relativePath: record.relativePath, downloadedFileSize: record.downloadedFileSize)
+                musicLibrary.markDownloaded(
+                    trackId: record.trackId, relativePath: record.relativePath,
+                    downloadedFileSize: record.downloadedFileSize)
             }
             try? fm.removeItem(at: file)
         }

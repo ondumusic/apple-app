@@ -98,7 +98,8 @@ struct MacOSContentView: View {
                     // theirs across widths: it pushes at a 1300pt window and overlays at
                     // 1275, the switch landing where the remaining column would drop
                     // below about 790pt for their 300pt panel.
-                    let pushes = showQueue
+                    let pushes =
+                        showQueue
                         && geo.size.width - Self.queueWidth >= Self.queuePushMinContent
                     HStack(spacing: 0) {
                         detailStack
@@ -130,7 +131,9 @@ struct MacOSContentView: View {
                         // up behind the chrome, so the two blur as one.
                         if Self.floatsChrome {
                             chrome
-                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                                .onGeometryChange(for: CGFloat.self) {
+                                    $0.size.height
+                                } action: {
                                     chromeHeight = $0
                                 }
                         }
@@ -173,7 +176,8 @@ struct MacOSContentView: View {
                     if !searchText.isEmpty {
                         ChromedPage { _ in SearchViewMac(query: searchText) }
                     } else {
-                        DetailPlaceholder(selection: sidebarSelection, pendingArtistNavigation: $pendingArtistNavigation)
+                        DetailPlaceholder(
+                            selection: sidebarSelection, pendingArtistNavigation: $pendingArtistNavigation)
                     }
                 }
                 .navigationDestination(for: Album.self) { album in
@@ -207,115 +211,120 @@ struct MacOSContentView: View {
 
     private var splitViewChrome: some View {
         splitViewWithPlayer
-        .onReceive(NotificationCenter.default.publisher(for: .toggleUpNext)) { _ in
-            guard let key = NSApp.keyWindow, MacOSAppDelegate.isMainWindow(key) else { return }
-            showQueue.toggle()
-        }
-        .replaceQueueConfirmation()
-        .removeDownloadConfirmation()
-        .sheet(
-            isPresented: Binding(
-                get: { !addToPlaylistTrackIds.isEmpty },
-                set: { if !$0 { addToPlaylistTrackIds = [] } }
-            )
-        ) {
-            AddToPlaylistSheet(trackIds: addToPlaylistTrackIds)
-                .frame(minWidth: 420, minHeight: 420)
-        }
-        .confirmationDialog(
-            deleteTarget.map { "Delete \($0.name)?" } ?? "",
-            isPresented: Binding(
-                get: { deleteTarget != nil },
-                set: { if !$0 { deleteTarget = nil } }
-            ),
-            titleVisibility: .visible,
-            presenting: deleteTarget
-        ) { entry in
-            Button(entry.isFolder ? "Delete Folder" : "Delete Playlist", role: .destructive) {
-                playlistController.deletePlaylist(entry.id)
+            .onReceive(NotificationCenter.default.publisher(for: .toggleUpNext)) { _ in
+                guard let key = NSApp.keyWindow, MacOSAppDelegate.isMainWindow(key) else { return }
+                showQueue.toggle()
             }
-            Button("Cancel", role: .cancel) {}
-        } message: { entry in
-            if entry.isFolder {
-                Text("This will permanently delete the folder and everything inside it.")
-            } else {
-                Text("This will permanently delete the playlist.")
+            .replaceQueueConfirmation()
+            .removeDownloadConfirmation()
+            .sheet(
+                isPresented: Binding(
+                    get: { !addToPlaylistTrackIds.isEmpty },
+                    set: { if !$0 { addToPlaylistTrackIds = [] } }
+                )
+            ) {
+                AddToPlaylistSheet(trackIds: addToPlaylistTrackIds)
+                    .frame(minWidth: 420, minHeight: 420)
             }
-        }
-        .onChange(of: sidebarSelection) { _, newValue in
-            handleSelectionChange(newValue)
-        }
-        .onChange(of: detailPath.count) { _, depth in
-            if depth == 0 { rememberDetail(nil) }
-        }
-        .onChange(of: downloadsRemaining) { previous, current in
-            if current == 0 {
-                batchTotal = 0
-                batchCompleted = 0
-            } else if current < previous {
-                batchCompleted += previous - current
-            } else {
-                batchTotal += current - previous
-            }
-        }
-        .onChange(of: searchText) { oldValue, newValue in
-            if newValue.isEmpty {
-                guard !oldValue.isEmpty else { return }
-                sidebarSelection = selectionBeforeSearch ?? .category(.artists)
-                selectionBeforeSearch = nil
-            } else if oldValue.isEmpty {
-                selectionBeforeSearch = sidebarSelection
-                sidebarSelection = nil
-            } else {
-                // Refining the query drops any "show all" drill-in — it was built from
-                // the previous query and would otherwise sit there showing stale results.
-                detailPath = NavigationPath()
-            }
-        }
-        .onAppear {
-            if case .playlist(let id) = sidebarSelection, musicLibrary.playlist(id) == nil {
-                sidebarSelection = .category(.artists)
-            }
-            restoreDetail()
-            // Anything requested while this window was closed — Go to Album from the
-            // mini player, Go to Current Song from the menu bar — has been held for it.
-            Task { @MainActor in MainWindowNavigation.deliverPending() }
-            // Build the tracks cache before anyone opens Songs.
-            Task { await musicLibrary.prepareAllTracks() }
-            // Reopen the mini player if it was showing when the app last quit, in
-            // whichever z-order and focus the user left the two windows in.
-            if UserDefaults.standard.bool(forKey: MiniPlayerWindowController.visibleDefaultsKey) {
-                let mp = miniPlayer ?? MiniPlayerWindowController(player: player, settings: settings, musicLibrary: musicLibrary, network: network)
-                miniPlayer = mp
-                mp.restoreAtLaunch()
-                // Quit with only the mini player showing and that's what comes back. The
-                // Window scene always creates its window regardless, so the delegate has
-                // kept it off-screen since launch; now that the mini player is up it can
-                // be closed for real.
-                if MacOSAppDelegate.suppressesMainWindow {
-                    MacOSAppDelegate.suppressesMainWindow = false
-                    closeMainWindow()
+            .confirmationDialog(
+                deleteTarget.map { "Delete \($0.name)?" } ?? "",
+                isPresented: Binding(
+                    get: { deleteTarget != nil },
+                    set: { if !$0 { deleteTarget = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: deleteTarget
+            ) { entry in
+                Button(entry.isFolder ? "Delete Folder" : "Delete Playlist", role: .destructive) {
+                    playlistController.deletePlaylist(entry.id)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { entry in
+                if entry.isFolder {
+                    Text("This will permanently delete the folder and everything inside it.")
+                } else {
+                    Text("This will permanently delete the playlist.")
                 }
             }
-        }
-        .modifier(WindowNotificationHandlers(
-            toggleMiniPlayer: toggleMiniPlayer,
-            switchToMiniPlayer: switchToMiniPlayer,
-            newPlaylist: { sidebarActions.createPlaylist(nil) },
-            showActivity: { openWindow(id: "activity") },
-            navigateToAlbum: { detailPath.append($0) },
-            selectSection: { sidebarSelection = .category($0) },
-            navigateBack: { if !detailPath.isEmpty { detailPath.removeLast() } },
-            goToCurrentSong: {
-                // The album is as close as the library gets to "where this song lives",
-                // and it's what a click on the now-playing artwork would reach.
-                guard let track = player.currentTrack,
-                      let album = musicLibrary.album(track.albumId) else { return }
-                detailPath.append(album)
-            },
-            navigateToArtist: handleArtistNavigation,
-            addToPlaylist: { addToPlaylistTrackIds = $0 }
-        ))
+            .onChange(of: sidebarSelection) { _, newValue in
+                handleSelectionChange(newValue)
+            }
+            .onChange(of: detailPath.count) { _, depth in
+                if depth == 0 { rememberDetail(nil) }
+            }
+            .onChange(of: downloadsRemaining) { previous, current in
+                if current == 0 {
+                    batchTotal = 0
+                    batchCompleted = 0
+                } else if current < previous {
+                    batchCompleted += previous - current
+                } else {
+                    batchTotal += current - previous
+                }
+            }
+            .onChange(of: searchText) { oldValue, newValue in
+                if newValue.isEmpty {
+                    guard !oldValue.isEmpty else { return }
+                    sidebarSelection = selectionBeforeSearch ?? .category(.artists)
+                    selectionBeforeSearch = nil
+                } else if oldValue.isEmpty {
+                    selectionBeforeSearch = sidebarSelection
+                    sidebarSelection = nil
+                } else {
+                    // Refining the query drops any "show all" drill-in — it was built from
+                    // the previous query and would otherwise sit there showing stale results.
+                    detailPath = NavigationPath()
+                }
+            }
+            .onAppear {
+                if case .playlist(let id) = sidebarSelection, musicLibrary.playlist(id) == nil {
+                    sidebarSelection = .category(.artists)
+                }
+                restoreDetail()
+                // Anything requested while this window was closed — Go to Album from the
+                // mini player, Go to Current Song from the menu bar — has been held for it.
+                Task { @MainActor in MainWindowNavigation.deliverPending() }
+                // Build the tracks cache before anyone opens Songs.
+                Task { await musicLibrary.prepareAllTracks() }
+                // Reopen the mini player if it was showing when the app last quit, in
+                // whichever z-order and focus the user left the two windows in.
+                if UserDefaults.standard.bool(forKey: MiniPlayerWindowController.visibleDefaultsKey) {
+                    let mp =
+                        miniPlayer
+                        ?? MiniPlayerWindowController(
+                            player: player, settings: settings, musicLibrary: musicLibrary, network: network)
+                    miniPlayer = mp
+                    mp.restoreAtLaunch()
+                    // Quit with only the mini player showing and that's what comes back. The
+                    // Window scene always creates its window regardless, so the delegate has
+                    // kept it off-screen since launch; now that the mini player is up it can
+                    // be closed for real.
+                    if MacOSAppDelegate.suppressesMainWindow {
+                        MacOSAppDelegate.suppressesMainWindow = false
+                        closeMainWindow()
+                    }
+                }
+            }
+            .modifier(
+                WindowNotificationHandlers(
+                    toggleMiniPlayer: toggleMiniPlayer,
+                    switchToMiniPlayer: switchToMiniPlayer,
+                    newPlaylist: { sidebarActions.createPlaylist(nil) },
+                    showActivity: { openWindow(id: "activity") },
+                    navigateToAlbum: { detailPath.append($0) },
+                    selectSection: { sidebarSelection = .category($0) },
+                    navigateBack: { if !detailPath.isEmpty { detailPath.removeLast() } },
+                    goToCurrentSong: {
+                        // The album is as close as the library gets to "where this song lives",
+                        // and it's what a click on the now-playing artwork would reach.
+                        guard let track = player.currentTrack,
+                            let album = musicLibrary.album(track.albumId)
+                        else { return }
+                        detailPath.append(album)
+                    },
+                    navigateToArtist: handleArtistNavigation,
+                    addToPlaylist: { addToPlaylistTrackIds = $0 }
+                ))
     }
 
     /// Space toggles playback, but only when nothing is taking text input. A menu key
@@ -345,8 +354,8 @@ struct MacOSContentView: View {
             queue: .main
         ) { note in
             guard let info = note.userInfo,
-                  let temp = info["temp"] as? UUID, temp == tempId,
-                  let real = info["real"] as? UUID
+                let temp = info["temp"] as? UUID, temp == tempId,
+                let real = info["real"] as? UUID
             else { return }
             #if DEBUG
             print("[rename] remap caught: \(temp) → \(real)")
@@ -378,7 +387,7 @@ struct MacOSContentView: View {
 
     private static func restoredSelection() -> SidebarSelection {
         guard let stored = UserDefaults.standard.string(forKey: lastSelectionKey),
-              let selection = SidebarSelection(storageValue: stored)
+            let selection = SidebarSelection(storageValue: stored)
         else { return .category(.artists) }
         return selection
     }
@@ -412,7 +421,7 @@ struct MacOSContentView: View {
 
     private func restoreDetail() {
         guard searchText.isEmpty,
-              let stored = UserDefaults.standard.string(forKey: Self.lastDetailKey)
+            let stored = UserDefaults.standard.string(forKey: Self.lastDetailKey)
         else { return }
         let parts = stored.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2, let id = UUID(uuidString: parts[1]) else { return }
@@ -450,7 +459,10 @@ struct MacOSContentView: View {
     /// Clicking the artwork swaps windows rather than stacking a second one on top,
     /// which is what Music.app does.
     private func switchToMiniPlayer() {
-        let mp = miniPlayer ?? MiniPlayerWindowController(player: player, settings: settings, musicLibrary: musicLibrary, network: network)
+        let mp =
+            miniPlayer
+            ?? MiniPlayerWindowController(
+                player: player, settings: settings, musicLibrary: musicLibrary, network: network)
         miniPlayer = mp
         mp.showWindow(nil)
         UserDefaults.standard.set(true, forKey: MiniPlayerWindowController.visibleDefaultsKey)
@@ -461,7 +473,8 @@ struct MacOSContentView: View {
         if let mp = miniPlayer {
             mp.toggle()
         } else {
-            let mp = MiniPlayerWindowController(player: player, settings: settings, musicLibrary: musicLibrary, network: network)
+            let mp = MiniPlayerWindowController(
+                player: player, settings: settings, musicLibrary: musicLibrary, network: network)
             miniPlayer = mp
             mp.showWindow(nil)
             UserDefaults.standard.set(true, forKey: MiniPlayerWindowController.visibleDefaultsKey)
@@ -566,7 +579,9 @@ struct MacOSContentView: View {
             playlistController.addTracks(trackIds, to: playlist.id)
         }
         a.createPlaylist = { parentId in
-            guard let new = playlistController.createPlaylist(name: "Untitled Playlist", parentId: parentId) else { return }
+            guard let new = playlistController.createPlaylist(name: "Untitled Playlist", parentId: parentId) else {
+                return
+            }
             scheduleInlineRename(forTempId: new.id)
         }
         a.createFolder = { parentId in
@@ -640,9 +655,10 @@ struct QueuePanel: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .help(scope == .upNext
-                          ? "Remove everything after the current track"
-                          : "Remove everything before the current track")
+                    .help(
+                        scope == .upNext
+                            ? "Remove everything after the current track"
+                            : "Remove everything before the current track")
                 }
             }
             .padding(.horizontal, 16)

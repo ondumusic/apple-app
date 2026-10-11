@@ -11,8 +11,10 @@ nonisolated class LibraryArtist {
     var insertedAt: Date
     var artwork: [ArtworkVariant] = []
 
-    init(serverId: UUID, name: String, sortName: String, slug: String, albumCount: Int,
-         insertedAt: Date, artwork: [ArtworkVariant] = []) {
+    init(
+        serverId: UUID, name: String, sortName: String, slug: String, albumCount: Int,
+        insertedAt: Date, artwork: [ArtworkVariant] = []
+    ) {
         self.serverId = serverId
         self.name = name
         self.sortName = sortName
@@ -40,9 +42,11 @@ nonisolated class LibraryAlbum {
     /// measured it.
     var lufs: Double?
 
-    init(serverId: UUID, artistId: UUID, name: String, sortName: String, slug: String,
-         releaseYear: Int?, artworkUrl: URL?, artwork: [ArtworkVariant] = [],
-         isUnknown: Bool, trackCount: Int, insertedAt: Date, lufs: Double? = nil) {
+    init(
+        serverId: UUID, artistId: UUID, name: String, sortName: String, slug: String,
+        releaseYear: Int?, artworkUrl: URL?, artwork: [ArtworkVariant] = [],
+        isUnknown: Bool, trackCount: Int, insertedAt: Date, lufs: Double? = nil
+    ) {
         self.serverId = serverId
         self.artistId = artistId
         self.name = name
@@ -83,11 +87,13 @@ nonisolated class LibraryTrack {
     /// Nil until it has been played once.
     var lastPlayedAt: Date?
 
-    init(serverId: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
-         name: String, disc: Int, number: Int?, duration: Double,
-         mimetype: String, streamUrl: String, downloadUrl: String = "", insertedAt: Date,
-         isDownloaded: Bool = false, localFilePath: String? = nil, lufs: Double? = nil,
-         playCount: Int = 0, lastPlayedAt: Date? = nil) {
+    init(
+        serverId: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
+        name: String, disc: Int, number: Int?, duration: Double,
+        mimetype: String, streamUrl: String, downloadUrl: String = "", insertedAt: Date,
+        isDownloaded: Bool = false, localFilePath: String? = nil, lufs: Double? = nil,
+        playCount: Int = 0, lastPlayedAt: Date? = nil
+    ) {
         self.serverId = serverId
         self.artistId = artistId
         self.albumArtistId = albumArtistId
@@ -110,7 +116,8 @@ nonisolated class LibraryTrack {
     /// Resolves the absolute file URL from the stored relative path.
     var resolvedFileURL: URL? {
         guard let localFilePath else { return nil }
-        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        else { return nil }
         return appSupport.appendingPathComponent(localFilePath)
     }
 }
@@ -128,8 +135,10 @@ nonisolated class LibraryPlaylist {
     /// to or from the server.
     var autoDownload: Bool = false
 
-    init(serverId: UUID, name: String, trackCount: Int, insertedAt: Date,
-         isFolder: Bool = false, parentId: UUID? = nil, autoDownload: Bool = false) {
+    init(
+        serverId: UUID, name: String, trackCount: Int, insertedAt: Date,
+        isFolder: Bool = false, parentId: UUID? = nil, autoDownload: Bool = false
+    ) {
         self.serverId = serverId
         self.name = name
         self.trackCount = trackCount

@@ -47,12 +47,15 @@ struct AlbumDetailView: View {
                         .foregroundStyle(.secondary)
 
                         if !tracks.isEmpty {
-                            let hasPlayable = network.isOnline || musicLibrary.downloadedTrackCount(albumId: album.id) > 0
+                            let hasPlayable =
+                                network.isOnline || musicLibrary.downloadedTrackCount(albumId: album.id) > 0
 
                             HStack(spacing: 12) {
                                 Button {
                                     let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
-                                    player.requestPlay { player.playNow(tracks: available, artworkURL: album.artworkUrl) }
+                                    player.requestPlay {
+                                        player.playNow(tracks: available, artworkURL: album.artworkUrl)
+                                    }
                                 } label: {
                                     Image(systemName: "play.fill")
                                         .font(.system(size: 13))
@@ -62,7 +65,9 @@ struct AlbumDetailView: View {
 
                                 Button {
                                     let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
-                                    player.requestPlay { player.playShuffled(tracks: available, artworkURL: album.artworkUrl) }
+                                    player.requestPlay {
+                                        player.playShuffled(tracks: available, artworkURL: album.artworkUrl)
+                                    }
                                 } label: {
                                     Image(systemName: "shuffle")
                                         .font(.system(size: 13))
@@ -81,7 +86,8 @@ struct AlbumDetailView: View {
                                 } else if !musicLibrary.isAlbumFullyDownloaded(albumId: album.id) {
                                     Button {
                                         guard let fullAlbum = musicLibrary.albumWithTracks(album.id) else { return }
-                                        let artist = musicLibrary.artist(album.artistId)
+                                        let artist =
+                                            musicLibrary.artist(album.artistId)
                                             ?? Artist(id: album.artistId, name: "", sortName: "", slug: "")
                                         downloadService.download(album: fullAlbum, artist: artist)
                                     } label: {
@@ -110,7 +116,9 @@ struct AlbumDetailView: View {
                         TrackRow(track: track, album: album) {
                             let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
                             if let index = available.firstIndex(where: { $0.id == track.id }) {
-                                player.requestPlay { player.playNow(tracks: available, startingAt: index, artworkURL: album.artworkUrl) }
+                                player.requestPlay {
+                                    player.playNow(tracks: available, startingAt: index, artworkURL: album.artworkUrl)
+                                }
                             }
                         }
                     }
@@ -162,7 +170,8 @@ struct AlbumDetailView: View {
     private func reloadTracks() {
         let allTracks = musicLibrary.tracksForAlbum(album.id)
         totalTrackCount = allTracks.count
-        tracks = downloadedOnly
+        tracks =
+            downloadedOnly
             ? allTracks.filter { $0.isDownloaded }
             : allTracks
 

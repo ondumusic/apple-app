@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 private func variant(_ width: Int) -> ArtworkVariant {
@@ -59,12 +60,13 @@ struct AlbumArtworkDecodingTests {
     }
 
     @Test func readsTheVariants() throws {
-        let album = try decodeSyncAlbum(body(
-            artwork: """
-            [{"url":"https://example.com/s.jpg","width":300,"height":300},
-             {"url":"https://example.com/l.jpg","width":1200,"height":1200}]
-            """,
-            artworkUrl: "\"https://example.com/l.jpg\""))
+        let album = try decodeSyncAlbum(
+            body(
+                artwork: """
+                    [{"url":"https://example.com/s.jpg","width":300,"height":300},
+                     {"url":"https://example.com/l.jpg","width":1200,"height":1200}]
+                    """,
+                artworkUrl: "\"https://example.com/l.jpg\""))
 
         #expect(album.artwork.count == 2)
         #expect(album.artwork.covering(pixelWidth: 200)?.width == 300)
@@ -73,12 +75,13 @@ struct AlbumArtworkDecodingTests {
     /// `artworkUrl` is deprecated and documented as the largest variant, so it's derived
     /// rather than read — the day the server drops it, nothing changes here.
     @Test func derivesTheLegacyUrlFromTheVariants() throws {
-        let album = try decodeSyncAlbum(body(
-            artwork: """
-            [{"url":"https://example.com/s.jpg","width":300,"height":300},
-             {"url":"https://example.com/l.jpg","width":1200,"height":1200}]
-            """,
-            artworkUrl: "null"))
+        let album = try decodeSyncAlbum(
+            body(
+                artwork: """
+                    [{"url":"https://example.com/s.jpg","width":300,"height":300},
+                     {"url":"https://example.com/l.jpg","width":1200,"height":1200}]
+                    """,
+                artworkUrl: "null"))
 
         #expect(album.artworkUrl?.absoluteString == "https://example.com/l.jpg")
     }
@@ -93,11 +96,11 @@ struct AlbumArtworkDecodingTests {
 
     @Test func toleratesTheArtworkKeyBeingAbsent() throws {
         let json = """
-        {"id":"7c388624-2362-45e2-ae94-ee9aa7a65cb6",
-         "artistId":"7c388624-2362-45e2-ae94-ee9aa7a65cb7",
-         "name":"A","sortName":"A","slug":"a","isUnknown":false,"trackCount":1,
-         "insertedAt":"2026-01-01T00:00:00Z","artworkUrl":"https://example.com/old.jpg"}
-        """
+            {"id":"7c388624-2362-45e2-ae94-ee9aa7a65cb6",
+             "artistId":"7c388624-2362-45e2-ae94-ee9aa7a65cb7",
+             "name":"A","sortName":"A","slug":"a","isUnknown":false,"trackCount":1,
+             "insertedAt":"2026-01-01T00:00:00Z","artworkUrl":"https://example.com/old.jpg"}
+            """
         #expect(try decodeSyncAlbum(json).artworkUrl?.absoluteString == "https://example.com/old.jpg")
     }
 }

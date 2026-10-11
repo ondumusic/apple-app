@@ -10,8 +10,10 @@ nonisolated struct Playlist: Codable, Identifiable, Sendable, Hashable {
     /// Local-only; see `LibraryPlaylist.autoDownload`.
     var autoDownload: Bool
 
-    init(id: UUID, name: String, trackCount: Int, insertedAt: Date,
-         isFolder: Bool = false, parentId: UUID? = nil, autoDownload: Bool = false) {
+    init(
+        id: UUID, name: String, trackCount: Int, insertedAt: Date,
+        isFolder: Bool = false, parentId: UUID? = nil, autoDownload: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.trackCount = trackCount

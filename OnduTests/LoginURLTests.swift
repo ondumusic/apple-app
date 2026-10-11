@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 struct LoginURLResolutionTests {
@@ -81,8 +82,9 @@ struct LoginURLSchemePolicyTests {
 
     /// A bare hostname still becomes https, so the common case never trips the rule.
     @Test func bareHostnameBecomesHttpsAndIsAccepted() {
-        #expect(LoginView.resolveServerURL("music.example.com", allowingInsecure: false)?
-            .absoluteString == "https://music.example.com/api")
+        #expect(
+            LoginView.resolveServerURL("music.example.com", allowingInsecure: false)?
+                .absoluteString == "https://music.example.com/api")
     }
 
     @Test func httpsIsAcceptedEitherWay() {

@@ -13,7 +13,10 @@ final class APIService: Sendable {
     // MARK: - Generic Fetch
 
     private func request(for endpoint: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {
-        guard var components = URLComponents(url: baseURL.appendingPathComponent(endpoint), resolvingAgainstBaseURL: false) else {
+        guard
+            var components = URLComponents(
+                url: baseURL.appendingPathComponent(endpoint), resolvingAgainstBaseURL: false)
+        else {
             throw APIError.invalidResponse
         }
         if !queryItems.isEmpty {
@@ -50,11 +53,14 @@ final class APIService: Sendable {
         do {
             return try decoder.decode(T.self, from: data)
         } catch let DecodingError.keyNotFound(key, context) {
-            throw APIError.decoding("Missing key '\(key.stringValue)' at \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+            throw APIError.decoding(
+                "Missing key '\(key.stringValue)' at \(context.codingPath.map(\.stringValue).joined(separator: "."))")
         } catch let DecodingError.typeMismatch(type, context) {
-            throw APIError.decoding("Type mismatch for \(type) at \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+            throw APIError.decoding(
+                "Type mismatch for \(type) at \(context.codingPath.map(\.stringValue).joined(separator: "."))")
         } catch let DecodingError.valueNotFound(type, context) {
-            throw APIError.decoding("Null value for \(type) at \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+            throw APIError.decoding(
+                "Null value for \(type) at \(context.codingPath.map(\.stringValue).joined(separator: "."))")
         } catch {
             throw APIError.decoding(error.localizedDescription)
         }
@@ -71,7 +77,7 @@ final class APIService: Sendable {
         req.httpMethod = "DELETE"
         let (_, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            return // Best-effort — still clear local state even if server call fails
+            return  // Best-effort — still clear local state even if server call fails
         }
     }
 
@@ -100,8 +106,8 @@ final class APIService: Sendable {
             guard let body = try? JSONDecoder.api.decode(DecodedBody.self, from: data) else { return nil }
             switch body.error {
             case "invalid_image": return .notAnImage
-            case "too_large":     return .tooLarge
-            default:              return nil
+            case "too_large": return .tooLarge
+            default: return nil
             }
         }
     }
@@ -110,8 +116,10 @@ final class APIService: Sendable {
     ///
     /// Not through the outbox: that queue exists to replay small ordered mutations after
     /// being offline, and neither half fits an upload of several megabytes.
-    func uploadArtistArtwork(artistId: UUID, imageData: Data, filename: String,
-                             mimeType: String) async throws -> Artist {
+    func uploadArtistArtwork(
+        artistId: UUID, imageData: Data, filename: String,
+        mimeType: String
+    ) async throws -> Artist {
         let boundary = "ondu.\(UUID().uuidString)"
         var body = Data()
         body.append("--\(boundary)\r\n")
@@ -137,8 +145,9 @@ final class APIService: Sendable {
     }
 
     func deleteArtistArtwork(artistId: UUID) async throws -> Artist {
-        try await perform("/artists/\(artistId.uuidString.lowercased())/artwork",
-                          method: "DELETE", body: nil)
+        try await perform(
+            "/artists/\(artistId.uuidString.lowercased())/artwork",
+            method: "DELETE", body: nil)
     }
 
     // MARK: - Notices
@@ -273,14 +282,14 @@ final class APIService: Sendable {
         static func decode(_ data: Data) -> PlaylistItemsError? {
             guard let body = try? JSONDecoder.api.decode(DecodedBody.self, from: data) else { return nil }
             switch body.error {
-            case "too_many_operations":    return .tooManyOperations
-            case "duplicate_items":        return .duplicateItems(itemIds: body.itemIds ?? [])
-            case "move_remove_conflict":   return .moveRemoveConflict(itemIds: body.itemIds ?? [])
-            case "unknown_items":          return .unknownItems(itemIds: body.itemIds ?? [])
-            case "unknown_tracks":         return .unknownTracks(trackIds: body.trackIds ?? [])
-            case "invalid_positions":      return .invalidPositions(positions: body.positions ?? [])
-            case "playlist_is_folder":     return .playlistIsFolder
-            default:                       return nil
+            case "too_many_operations": return .tooManyOperations
+            case "duplicate_items": return .duplicateItems(itemIds: body.itemIds ?? [])
+            case "move_remove_conflict": return .moveRemoveConflict(itemIds: body.itemIds ?? [])
+            case "unknown_items": return .unknownItems(itemIds: body.itemIds ?? [])
+            case "unknown_tracks": return .unknownTracks(trackIds: body.trackIds ?? [])
+            case "invalid_positions": return .invalidPositions(positions: body.positions ?? [])
+            case "playlist_is_folder": return .playlistIsFolder
+            default: return nil
             }
         }
     }
@@ -346,10 +355,12 @@ final class APIService: Sendable {
         let _: Playlist = try await perform("/playlists/\(id.uuidString.lowercased())", method: "DELETE", body: nil)
     }
 
-    func updatePlaylistItems(_ id: UUID,
-                             add: [PositionedTrackBody] = [],
-                             move: [PositionedItemBody] = [],
-                             remove: [UUID] = []) async throws -> UpdatePlaylistItemsResponse {
+    func updatePlaylistItems(
+        _ id: UUID,
+        add: [PositionedTrackBody] = [],
+        move: [PositionedItemBody] = [],
+        remove: [UUID] = []
+    ) async throws -> UpdatePlaylistItemsResponse {
         var req = try request(for: "/playlists/\(id.uuidString.lowercased())/items")
         req.httpMethod = "PATCH"
         req.httpBody = try JSONEncoder.api.encode(UpdatePlaylistItemsBody(add: add, move: move, remove: remove))
@@ -371,7 +382,9 @@ final class APIService: Sendable {
         guard (200...299).contains(http.statusCode) else {
             #if DEBUG
             let bodyString = String(data: data, encoding: .utf8) ?? "<non-utf8 body, \(data.count) bytes>"
-            print("APIService: PATCH /playlists/\(id.uuidString.lowercased())/items failed — HTTP \(http.statusCode), body: \(bodyString)")
+            print(
+                "APIService: PATCH /playlists/\(id.uuidString.lowercased())/items failed — HTTP \(http.statusCode), body: \(bodyString)"
+            )
             #endif
             throw APIError.httpError(http.statusCode)
         }
@@ -506,8 +519,8 @@ nonisolated enum LoginRejection: LocalizedError, Sendable {
     }
 }
 
-private extension Data {
-    mutating func append(_ string: String) {
+extension Data {
+    fileprivate mutating func append(_ string: String) {
         append(Data(string.utf8))
     }
 }

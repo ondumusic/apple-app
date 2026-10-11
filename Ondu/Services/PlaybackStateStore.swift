@@ -85,7 +85,8 @@ final class PlaybackStateStore {
 
     func loadPosition() -> PlaybackPosition? {
         guard let raw = defaults.string(forKey: Keys.positionTrackId),
-              let trackId = UUID(uuidString: raw) else { return nil }
+            let trackId = UUID(uuidString: raw)
+        else { return nil }
         return PlaybackPosition(trackId: trackId, elapsed: defaults.double(forKey: Keys.positionElapsed))
     }
 

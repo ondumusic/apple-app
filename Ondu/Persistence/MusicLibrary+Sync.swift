@@ -27,10 +27,11 @@ extension MusicLibrary {
                 la.artwork = sa.artwork
                 la.insertedAt = sa.insertedAt
             } else {
-                modelContext.insert(LibraryArtist(
-                    serverId: sa.id, name: sa.name, sortName: sa.sortName,
-                    slug: sa.slug, albumCount: sa.albumCount, insertedAt: sa.insertedAt,
-                                              artwork: sa.artwork))
+                modelContext.insert(
+                    LibraryArtist(
+                        serverId: sa.id, name: sa.name, sortName: sa.sortName,
+                        slug: sa.slug, albumCount: sa.albumCount, insertedAt: sa.insertedAt,
+                        artwork: sa.artwork))
             }
         }
         persistChanges()
@@ -59,12 +60,13 @@ extension MusicLibrary {
                 la.insertedAt = sa.insertedAt
                 la.lufs = sa.lufs
             } else {
-                modelContext.insert(LibraryAlbum(
-                    serverId: sa.id, artistId: sa.artistId, name: sa.name,
-                    sortName: sa.sortName, slug: sa.slug,
-                    releaseYear: sa.releaseYear, artworkUrl: sa.artworkUrl,
-                    artwork: sa.artwork, isUnknown: sa.isUnknown, trackCount: sa.trackCount,
-                    insertedAt: sa.insertedAt, lufs: sa.lufs))
+                modelContext.insert(
+                    LibraryAlbum(
+                        serverId: sa.id, artistId: sa.artistId, name: sa.name,
+                        sortName: sa.sortName, slug: sa.slug,
+                        releaseYear: sa.releaseYear, artworkUrl: sa.artworkUrl,
+                        artwork: sa.artwork, isUnknown: sa.isUnknown, trackCount: sa.trackCount,
+                        insertedAt: sa.insertedAt, lufs: sa.lufs))
                 inserted.insert(sa.id)
             }
         }
@@ -100,12 +102,13 @@ extension MusicLibrary {
                 lt.playCount = st.playCount
                 lt.lastPlayedAt = st.lastPlayedAt
             } else {
-                modelContext.insert(LibraryTrack(
-                    serverId: st.id, artistId: st.artistId, albumArtistId: st.albumArtistId,
-                    albumId: st.albumId, name: st.name, disc: st.disc, number: st.number,
-                    duration: st.duration, mimetype: st.mimetype, streamUrl: st.streamUrl,
-                    downloadUrl: st.downloadUrl, insertedAt: st.insertedAt, lufs: st.lufs,
-                    playCount: st.playCount, lastPlayedAt: st.lastPlayedAt))
+                modelContext.insert(
+                    LibraryTrack(
+                        serverId: st.id, artistId: st.artistId, albumArtistId: st.albumArtistId,
+                        albumId: st.albumId, name: st.name, disc: st.disc, number: st.number,
+                        duration: st.duration, mimetype: st.mimetype, streamUrl: st.streamUrl,
+                        downloadUrl: st.downloadUrl, insertedAt: st.insertedAt, lufs: st.lufs,
+                        playCount: st.playCount, lastPlayedAt: st.lastPlayedAt))
                 inserted.insert(st.id)
             }
         }
@@ -129,10 +132,11 @@ extension MusicLibrary {
                 lp.isFolder = sp.isFolder
                 lp.parentId = sp.parentId
             } else {
-                modelContext.insert(LibraryPlaylist(
-                    serverId: sp.id, name: sp.name,
-                    trackCount: sp.trackCount, insertedAt: sp.insertedAt,
-                    isFolder: sp.isFolder, parentId: sp.parentId))
+                modelContext.insert(
+                    LibraryPlaylist(
+                        serverId: sp.id, name: sp.name,
+                        trackCount: sp.trackCount, insertedAt: sp.insertedAt,
+                        isFolder: sp.isFolder, parentId: sp.parentId))
                 inserted.insert(sp.id)
             }
         }
@@ -155,9 +159,10 @@ extension MusicLibrary {
                 li.position = si.position
                 li.insertedAt = si.insertedAt
             } else {
-                modelContext.insert(LibraryPlaylistItem(
-                    serverId: si.id, playlistId: si.playlistId, trackId: si.trackId,
-                    position: si.position, insertedAt: si.insertedAt))
+                modelContext.insert(
+                    LibraryPlaylistItem(
+                        serverId: si.id, playlistId: si.playlistId, trackId: si.trackId,
+                        position: si.position, insertedAt: si.insertedAt))
                 inserted.insert(si.id)
             }
         }
@@ -296,10 +301,11 @@ extension MusicLibrary {
     }
 
     func insertLocalPlaylist(_ playlist: Playlist) {
-        modelContext.insert(LibraryPlaylist(
-            serverId: playlist.id, name: playlist.name,
-            trackCount: playlist.trackCount, insertedAt: playlist.insertedAt,
-            isFolder: playlist.isFolder, parentId: playlist.parentId))
+        modelContext.insert(
+            LibraryPlaylist(
+                serverId: playlist.id, name: playlist.name,
+                trackCount: playlist.trackCount, insertedAt: playlist.insertedAt,
+                isFolder: playlist.isFolder, parentId: playlist.parentId))
         persistChanges()
         revision += 1
     }
@@ -355,9 +361,10 @@ extension MusicLibrary {
 
     /// Inserts a local PlaylistItem, also bumping the parent playlist's track count.
     func insertLocalPlaylistItem(_ item: PlaylistItem) {
-        modelContext.insert(LibraryPlaylistItem(
-            serverId: item.id, playlistId: item.playlistId, trackId: item.trackId,
-            position: item.position, insertedAt: item.insertedAt))
+        modelContext.insert(
+            LibraryPlaylistItem(
+                serverId: item.id, playlistId: item.playlistId, trackId: item.trackId,
+                position: item.position, insertedAt: item.insertedAt))
         adjustPlaylistTrackCount(item.playlistId, delta: 1)
         persistChanges()
         revision += 1
@@ -382,9 +389,10 @@ extension MusicLibrary {
         if let item = fetch(descriptor)?.first {
             modelContext.delete(item)
         }
-        modelContext.insert(LibraryPlaylistItem(
-            serverId: confirmed.id, playlistId: confirmed.playlistId, trackId: confirmed.trackId,
-            position: confirmed.position, insertedAt: confirmed.insertedAt))
+        modelContext.insert(
+            LibraryPlaylistItem(
+                serverId: confirmed.id, playlistId: confirmed.playlistId, trackId: confirmed.trackId,
+                position: confirmed.position, insertedAt: confirmed.insertedAt))
         persistChanges()
         remapQueuedPlaylistItemId(from: tempId, to: confirmed.id)
         revision += 1
@@ -396,14 +404,17 @@ extension MusicLibrary {
         var rewrittenCount = 0
         for mutation in mutations {
             guard let kind = OutboxKind(rawValue: mutation.kind) else { continue }
-            guard let rewritten = rewrittenItemIdPayload(kind: kind, payload: mutation.payload, from: tempId, to: realId) else { continue }
+            guard
+                let rewritten = rewrittenItemIdPayload(kind: kind, payload: mutation.payload, from: tempId, to: realId)
+            else { continue }
             mutation.payload = rewritten
             rewrittenCount += 1
         }
         persistChanges()
         #if DEBUG
         if rewrittenCount > 0 {
-            print("MusicLibrary.remapQueuedPlaylistItemId: temp=\(tempId) → real=\(realId), rewritten=\(rewrittenCount)")
+            print(
+                "MusicLibrary.remapQueuedPlaylistItemId: temp=\(tempId) → real=\(realId), rewritten=\(rewrittenCount)")
         }
         #endif
     }
@@ -437,7 +448,10 @@ extension MusicLibrary {
             guard var p = try? decoder.decode(RemoveItemsPayload.self, from: payload) else { return nil }
             var changed = false
             p.itemIds = p.itemIds.map { id in
-                if id == tempId { changed = true; return realId }
+                if id == tempId {
+                    changed = true
+                    return realId
+                }
                 return id
             }
             return changed ? (try? encoder.encode(p)) : nil
@@ -464,11 +478,12 @@ extension MusicLibrary {
         if let playlist = fetch(descriptor)?.first {
             modelContext.delete(playlist)
         }
-        modelContext.insert(LibraryPlaylist(
-            serverId: confirmed.id, name: confirmed.name,
-            trackCount: confirmed.trackCount, insertedAt: confirmed.insertedAt,
-            isFolder: confirmed.isFolder, parentId: confirmed.parentId,
-            autoDownload: preservedAutoDownload))
+        modelContext.insert(
+            LibraryPlaylist(
+                serverId: confirmed.id, name: confirmed.name,
+                trackCount: confirmed.trackCount, insertedAt: confirmed.insertedAt,
+                isFolder: confirmed.isFolder, parentId: confirmed.parentId,
+                autoDownload: preservedAutoDownload))
 
         let itemDescriptor = FetchDescriptor<LibraryPlaylistItem>(
             predicate: #Predicate { $0.playlistId == tempId }
@@ -518,13 +533,16 @@ extension MusicLibrary {
         var rewrittenCount = 0
         for mutation in mutations {
             guard let kind = OutboxKind(rawValue: mutation.kind) else { continue }
-            guard let rewritten = rewrittenPayload(kind: kind, payload: mutation.payload, remap: [tempId: realId]) else { continue }
+            guard let rewritten = rewrittenPayload(kind: kind, payload: mutation.payload, remap: [tempId: realId])
+            else { continue }
             mutation.payload = rewritten
             rewrittenCount += 1
         }
         persistChanges()
         #if DEBUG
-        print("MusicLibrary.remapQueuedPlaylistId: temp=\(tempId) → real=\(realId), scanned=\(mutations.count), rewritten=\(rewrittenCount)")
+        print(
+            "MusicLibrary.remapQueuedPlaylistId: temp=\(tempId) → real=\(realId), scanned=\(mutations.count), rewritten=\(rewrittenCount)"
+        )
         #endif
     }
 
@@ -555,8 +573,14 @@ extension MusicLibrary {
         case .movePlaylist:
             guard var p = try? decoder.decode(MovePlaylistPayload.self, from: payload) else { return nil }
             var changed = false
-            if let mapped = remap[p.playlistId] { p.playlistId = mapped; changed = true }
-            if let parent = p.parentId, let mapped = remap[parent] { p.parentId = mapped; changed = true }
+            if let mapped = remap[p.playlistId] {
+                p.playlistId = mapped
+                changed = true
+            }
+            if let parent = p.parentId, let mapped = remap[parent] {
+                p.parentId = mapped
+                changed = true
+            }
             return changed ? (try? encoder.encode(p)) : nil
         case .deletePlaylist:
             guard var p = try? decoder.decode(DeletePlaylistPayload.self, from: payload) else { return nil }
@@ -608,21 +632,27 @@ extension MusicLibrary {
             case .recordPlays:
                 matches = false
             case .createPlaylist:
-                let m = (try? decoder.decode(CreatePlaylistPayload.self, from: mutation.payload))?.tempPlaylistId == playlistId
+                let m =
+                    (try? decoder.decode(CreatePlaylistPayload.self, from: mutation.payload))?.tempPlaylistId
+                    == playlistId
                 if m { foundPendingCreate = true }
                 matches = m
             case .renamePlaylist:
-                matches = (try? decoder.decode(RenamePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
+                matches =
+                    (try? decoder.decode(RenamePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
             case .movePlaylist:
-                matches = (try? decoder.decode(MovePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
+                matches =
+                    (try? decoder.decode(MovePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
             case .deletePlaylist:
-                matches = (try? decoder.decode(DeletePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
+                matches =
+                    (try? decoder.decode(DeletePlaylistPayload.self, from: mutation.payload))?.playlistId == playlistId
             case .addItems:
                 matches = (try? decoder.decode(AddItemsPayload.self, from: mutation.payload))?.playlistId == playlistId
             case .moveItems:
                 matches = (try? decoder.decode(MoveItemsPayload.self, from: mutation.payload))?.playlistId == playlistId
             case .removeItems:
-                matches = (try? decoder.decode(RemoveItemsPayload.self, from: mutation.payload))?.playlistId == playlistId
+                matches =
+                    (try? decoder.decode(RemoveItemsPayload.self, from: mutation.payload))?.playlistId == playlistId
             }
             if matches {
                 modelContext.delete(mutation)
@@ -633,7 +663,9 @@ extension MusicLibrary {
         if deleted > 0 {
             persistChanges()
             #if DEBUG
-            print("MusicLibrary.compactPendingForDeletedPlaylist: \(playlistId) — dropped \(deleted) pending mutation(s); pendingCreate=\(foundPendingCreate)")
+            print(
+                "MusicLibrary.compactPendingForDeletedPlaylist: \(playlistId) — dropped \(deleted) pending mutation(s); pendingCreate=\(foundPendingCreate)"
+            )
             #endif
         }
         return foundPendingCreate
@@ -694,7 +726,9 @@ extension MusicLibrary {
         if stripped > 0 || deletedMutations > 0 {
             persistChanges()
             #if DEBUG
-            print("MusicLibrary.compactPendingForRemovedItems: stripped \(stripped) entr(ies); dropped \(deletedMutations) empty mutation(s); absorbed \(foundInPendingAdds.count) temp id(s)")
+            print(
+                "MusicLibrary.compactPendingForRemovedItems: stripped \(stripped) entr(ies); dropped \(deletedMutations) empty mutation(s); absorbed \(foundInPendingAdds.count) temp id(s)"
+            )
             #endif
         }
         return foundInPendingAdds

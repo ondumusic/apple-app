@@ -61,12 +61,16 @@ final class AuthService {
         defer { isRestoringSession = false }
 
         guard let serverURLString = storedServerURL,
-              let serverURL = URL(string: serverURLString) else { return }
+            let serverURL = URL(string: serverURLString)
+        else { return }
 
         let key = Keys.sessionToken
-        let outcome = await Task.detached(priority: .userInitiated, operation: {
-            KeychainHelper.loadOutcome(key: key)
-        }).value
+        let outcome = await Task.detached(
+            priority: .userInitiated,
+            operation: {
+                KeychainHelper.loadOutcome(key: key)
+            }
+        ).value
 
         let token: String
         switch outcome {
@@ -85,9 +89,12 @@ final class AuthService {
         }
 
         // Re-save to upgrade Keychain accessibility if needed (kSecAttrAccessibleAfterFirstUnlock)
-        await Task.detached(priority: .utility, operation: {
-            KeychainHelper.save(token, for: key)
-        }).value
+        await Task.detached(
+            priority: .utility,
+            operation: {
+                KeychainHelper.save(token, for: key)
+            }
+        ).value
 
         // Optimistically set up the API service — UI renders immediately
         #if DEBUG
@@ -143,8 +150,9 @@ final class AuthService {
     /// Re-authenticate with a user-provided password.
     func reAuthenticate(password: String) async -> Bool {
         guard let serverURLString = storedServerURL,
-              let serverURL = URL(string: serverURLString),
-              let username = storedUsername else {
+            let serverURL = URL(string: serverURLString),
+            let username = storedUsername
+        else {
             return false
         }
 

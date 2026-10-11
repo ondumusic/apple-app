@@ -1,28 +1,35 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
-private func track(_ name: String, artist artistName: String, albumArtist: String? = nil,
-                   album albumName: String = "Album", year: Int? = nil,
-                   disc: Int = 1, number: Int = 1, duration: Double = 100,
-                   plays: Int = 0, lastPlayed: Date? = nil) -> Track {
+private func track(
+    _ name: String, artist artistName: String, albumArtist: String? = nil,
+    album albumName: String = "Album", year: Int? = nil,
+    disc: Int = 1, number: Int = 1, duration: Double = 100,
+    plays: Int = 0, lastPlayed: Date? = nil
+) -> Track {
     let artist = Artist(id: UUID(), name: artistName, sortName: artistName, slug: "a")
     let albumArtistName = albumArtist ?? artistName
-    return Track(id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
-                 artist: artist, albumArtistName: albumArtistName,
-                 albumArtistSortName: albumArtistName,
-                 album: Track.TrackAlbum(id: UUID(), name: albumName, artworkUrl: nil,
-                                         releaseYear: year),
-                 name: name, disc: disc, number: number, duration: duration,
-                 mimetype: "audio/mp4", streamUrl: "/s", playCount: plays, lastPlayedAt: lastPlayed)
+    return Track(
+        id: UUID(), artistId: artist.id, albumArtistId: artist.id, albumId: UUID(),
+        artist: artist, albumArtistName: albumArtistName,
+        albumArtistSortName: albumArtistName,
+        album: Track.TrackAlbum(
+            id: UUID(), name: albumName, artworkUrl: nil,
+            releaseYear: year),
+        name: name, disc: disc, number: number, duration: duration,
+        mimetype: "audio/mp4", streamUrl: "/s", playCount: plays, lastPlayedAt: lastPlayed)
 }
 
 struct TrackSortTests {
 
     /// The Artist column shows the album artist, so that's what a click on it sorts by.
     @Test func sortsByTheAlbumArtistTheColumnShows() {
-        let tracks = [track("T1", artist: "Lin-Manuel Miranda", albumArtist: "Original Cast"),
-                      track("T2", artist: "Zoo", albumArtist: "A Camp")]
+        let tracks = [
+            track("T1", artist: "Lin-Manuel Miranda", albumArtist: "Original Cast"),
+            track("T2", artist: "Zoo", albumArtist: "A Camp"),
+        ]
         let sorted = TrackSort(column: .artist, ascending: true).sorted(tracks)
         #expect(sorted.map(\.albumArtistName) == ["A Camp", "Original Cast"])
     }
@@ -63,7 +70,7 @@ struct TrackSortTests {
             track("Late", artist: "A", album: "Second", disc: 1, number: 2),
             track("Early", artist: "A", album: "First", disc: 1, number: 2),
             track("First track", artist: "A", album: "First", disc: 1, number: 1),
-            track("Disc two", artist: "A", album: "First", disc: 2, number: 1)
+            track("Disc two", artist: "A", album: "First", disc: 2, number: 1),
         ]
         let sorted = TrackSort(column: .artist, ascending: true).sorted(tracks)
         #expect(sorted.map(\.name) == ["First track", "Early", "Disc two", "Late"])
@@ -75,7 +82,7 @@ struct TrackSortTests {
         let tracks = [
             track("A1", artist: "Zoo", album: "Alpha", number: 1),
             track("A2", artist: "Zoo", album: "Alpha", number: 2),
-            track("B1", artist: "Aviary", album: "Beta", number: 1)
+            track("B1", artist: "Aviary", album: "Beta", number: 1),
         ]
         let sorted = TrackSort(column: .artist, ascending: false).sorted(tracks)
         #expect(sorted.map(\.name) == ["A1", "A2", "B1"])
@@ -102,17 +109,21 @@ extension TrackSortTests {
     /// worse answer than "which of these did I hear recently".
     @Test func breaksPlayCountTiesByMostRecent() {
         let now = Date()
-        let tracks = [track("Older", artist: "A", plays: 1, lastPlayed: now.addingTimeInterval(-86_400)),
-                      track("Newer", artist: "A", plays: 1, lastPlayed: now),
-                      track("Most", artist: "A", plays: 9, lastPlayed: now.addingTimeInterval(-99_999))]
+        let tracks = [
+            track("Older", artist: "A", plays: 1, lastPlayed: now.addingTimeInterval(-86_400)),
+            track("Newer", artist: "A", plays: 1, lastPlayed: now),
+            track("Most", artist: "A", plays: 9, lastPlayed: now.addingTimeInterval(-99_999)),
+        ]
         let sorted = TrackSort(column: .plays, ascending: false).sorted(tracks)
         #expect(sorted.map(\.name) == ["Most", "Newer", "Older"])
     }
 
     @Test func sortsByPlayCount() {
-        let tracks = [track("Rarely", artist: "A", plays: 2),
-                      track("Often", artist: "A", plays: 40),
-                      track("Never", artist: "A", plays: 0)]
+        let tracks = [
+            track("Rarely", artist: "A", plays: 2),
+            track("Often", artist: "A", plays: 40),
+            track("Never", artist: "A", plays: 0),
+        ]
         let sorted = TrackSort(column: .plays, ascending: false).sorted(tracks)
         #expect(sorted.map(\.name) == ["Often", "Rarely", "Never"])
     }
@@ -134,9 +145,11 @@ extension TrackSortTests {
 
     @Test func sortsByWhenItWasLastPlayed() {
         let now = Date()
-        let tracks = [track("Old", artist: "A", lastPlayed: now.addingTimeInterval(-86_400)),
-                      track("Recent", artist: "A", lastPlayed: now),
-                      track("Never", artist: "A", lastPlayed: nil)]
+        let tracks = [
+            track("Old", artist: "A", lastPlayed: now.addingTimeInterval(-86_400)),
+            track("Recent", artist: "A", lastPlayed: now),
+            track("Never", artist: "A", lastPlayed: nil),
+        ]
         let sorted = TrackSort(column: .lastPlayed, ascending: false).sorted(tracks)
         #expect(sorted.map(\.name) == ["Recent", "Old", "Never"])
     }
@@ -144,8 +157,10 @@ extension TrackSortTests {
     /// Never played is longest-ago rather than newest, so it sits at the bottom of a
     /// recently-played list instead of on top of it.
     @Test func neverPlayedSortsAsLongestAgo() {
-        let tracks = [track("Never", artist: "A", lastPlayed: nil),
-                      track("Played", artist: "A", lastPlayed: Date())]
+        let tracks = [
+            track("Never", artist: "A", lastPlayed: nil),
+            track("Played", artist: "A", lastPlayed: Date()),
+        ]
         let ascending = TrackSort(column: .lastPlayed, ascending: true).sorted(tracks)
         #expect(ascending.map(\.name) == ["Never", "Played"])
     }

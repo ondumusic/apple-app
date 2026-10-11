@@ -14,7 +14,6 @@ struct PlayerBar: View {
     @Binding var showQueue: Bool
     var showsDivider = true
 
-
     /// Measured from Music.app at four window widths: its LCD is 40% of the content
     /// column, capped at 900, and its centre sits a constant 22.5pt left of the column's
     /// centre at every width — 1199/337/480, 1799/517/720, 2399/727/900, 2607/831/900.
@@ -69,7 +68,9 @@ struct PlayerBar: View {
             HStack(spacing: 2) {
                 VolumeSlider()
                 AirPlayControl()
-                Button { showQueue.toggle() } label: {
+                Button {
+                    showQueue.toggle()
+                } label: {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 14))
                         .frame(width: playerControlSize, height: playerControlSize)

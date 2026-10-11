@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 // MARK: - AuthService State Tests
@@ -145,15 +146,15 @@ import Testing
 
     @Test func decodesSuccessfulLogin() throws {
         let json = """
-        {
-            "ok": true,
-            "session_token": "abc123",
-            "current_user": {
-                "id": "11111111-1111-1111-1111-111111111111",
-                "username": "testuser"
+            {
+                "ok": true,
+                "session_token": "abc123",
+                "current_user": {
+                    "id": "11111111-1111-1111-1111-111111111111",
+                    "username": "testuser"
+                }
             }
-        }
-        """
+            """
         let response = try decoder.decode(APIService.LoginResponse.self, from: Data(json.utf8))
         #expect(response.ok)
         #expect(response.sessionToken == "abc123")
@@ -163,13 +164,13 @@ import Testing
 
     @Test func decodesFailedLogin() throws {
         let json = """
-        {
-            "ok": false,
-            "fields": {
-                "password": { "message": "Invalid password" }
+            {
+                "ok": false,
+                "fields": {
+                    "password": { "message": "Invalid password" }
+                }
             }
-        }
-        """
+            """
         let response = try decoder.decode(APIService.LoginResponse.self, from: Data(json.utf8))
         #expect(!response.ok)
         #expect(response.sessionToken == nil)
@@ -179,8 +180,8 @@ import Testing
 
     @Test func decodesFailedLoginWithoutFields() throws {
         let json = """
-        { "ok": false }
-        """
+            { "ok": false }
+            """
         let response = try decoder.decode(APIService.LoginResponse.self, from: Data(json.utf8))
         #expect(!response.ok)
         #expect(response.fields == nil)

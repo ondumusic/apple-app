@@ -1,12 +1,14 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 struct ServerCompatibilityTests {
 
     private func compare(server: Int, supported: Int = 1) -> ServerCompatibility {
-        ServerCompatibility.compare(serverAPIVersion: server, serverVersion: "1.3.0",
-                                    supported: supported)
+        ServerCompatibility.compare(
+            serverAPIVersion: server, serverVersion: "1.3.0",
+            supported: supported)
     }
 
     @Test func matchingVersionsAreFine() {

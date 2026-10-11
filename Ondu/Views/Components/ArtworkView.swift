@@ -1,6 +1,6 @@
-import SwiftUI
 import Nuke
 import NukeUI
+import SwiftUI
 
 /// How large a piece of artwork is going to be drawn.
 ///

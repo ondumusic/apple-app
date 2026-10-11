@@ -29,26 +29,26 @@ struct SongsViewMac: View {
                 }
                 .padding(.top, topInset)
             } else {
-            TracksTable(
-                tracks: tracks,
-                selection: $selection,
-                onPlay: playTrack(at:),
-                actions: trackActions,
-                showArtist: true,
-                showAlbum: true,
-                isOffline: !network.isOnline,
-                sort: sort,
-                onSortChange: { newSort in
-                    storedSort = newSort?.rawValue ?? ""
-                },
-                columnPreferenceKey: "songs",
-                accent: settings.resolvedAccentColor,
-                currentlyPlayingTrackId: player.currentTrack?.id,
-                isPlaying: player.isPlaying,
-                rowHeight: DetailPageMetrics.trackRowHeight,
-                claimsKeyboardFocus: true,
-                topContentInset: topInset
-            )
+                TracksTable(
+                    tracks: tracks,
+                    selection: $selection,
+                    onPlay: playTrack(at:),
+                    actions: trackActions,
+                    showArtist: true,
+                    showAlbum: true,
+                    isOffline: !network.isOnline,
+                    sort: sort,
+                    onSortChange: { newSort in
+                        storedSort = newSort?.rawValue ?? ""
+                    },
+                    columnPreferenceKey: "songs",
+                    accent: settings.resolvedAccentColor,
+                    currentlyPlayingTrackId: player.currentTrack?.id,
+                    isPlaying: player.isPlaying,
+                    rowHeight: DetailPageMetrics.trackRowHeight,
+                    claimsKeyboardFocus: true,
+                    topContentInset: topInset
+                )
             }
         }
         .onChange(of: musicLibrary.revision, initial: true) { reload() }

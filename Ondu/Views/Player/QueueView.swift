@@ -104,7 +104,9 @@ struct QueueView: View {
         }
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 0) {
-                Button { player.toggleShuffle() } label: {
+                Button {
+                    player.toggleShuffle()
+                } label: {
                     Label("Shuffle", systemImage: "shuffle")
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(player.isShuffled ? .accentColor : .secondary)
@@ -113,7 +115,9 @@ struct QueueView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button { player.cycleRepeatMode() } label: {
+                Button {
+                    player.cycleRepeatMode()
+                } label: {
                     Label(
                         player.repeatMode == .one ? "Repeat One" : "Repeat",
                         systemImage: player.repeatMode == .one ? "repeat.1" : "repeat"

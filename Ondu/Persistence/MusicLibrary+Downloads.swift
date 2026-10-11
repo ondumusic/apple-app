@@ -16,26 +16,30 @@ extension MusicLibrary {
 
     func isDownloaded(trackId: UUID) -> Bool {
         _ = downloadChanged
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == trackId && $0.isDownloaded == true })
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.serverId == trackId && $0.isDownloaded == true })
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
     func downloadedTrackCount(albumId: UUID) -> Int {
         _ = downloadChanged
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         return (try? modelContext.fetchCount(descriptor)) ?? 0
     }
 
     func isAlbumDownloaded(albumId: UUID) -> Bool {
         _ = downloadChanged
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
     func isAlbumFullyDownloaded(albumId: UUID) -> Bool {
         _ = downloadChanged
         let allDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId })
-        let downloadedDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
+        let downloadedDescriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         let total = (try? modelContext.fetchCount(allDescriptor)) ?? 0
         let downloaded = (try? modelContext.fetchCount(downloadedDescriptor)) ?? 0
         return total > 0 && total == downloaded
@@ -43,14 +47,16 @@ extension MusicLibrary {
 
     func isArtistDownloaded(artistId: UUID) -> Bool {
         _ = downloadChanged
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
     func isArtistFullyDownloaded(artistId: UUID) -> Bool {
         _ = downloadChanged
         let allDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId })
-        let downloadedDescriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
+        let downloadedDescriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         let total = (try? modelContext.fetchCount(allDescriptor)) ?? 0
         let downloaded = (try? modelContext.fetchCount(downloadedDescriptor)) ?? 0
         return total > 0 && total == downloaded
@@ -65,18 +71,20 @@ extension MusicLibrary {
 
     func downloadedSize(artistId: UUID) -> Int64 {
         _ = downloadChanged
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         let tracks = (try? modelContext.fetch(descriptor)) ?? []
         return tracks.reduce(0) { $0 + $1.downloadedFileSize }
     }
 
     func localURL(for trackId: UUID) -> URL? {
         _ = downloadChanged
-        var descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.serverId == trackId && $0.isDownloaded == true })
+        var descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.serverId == trackId && $0.isDownloaded == true })
         descriptor.fetchLimit = 1
         guard let track = try? modelContext.fetch(descriptor).first,
-              let url = track.resolvedFileURL,
-              FileManager.default.fileExists(atPath: url.path)
+            let url = track.resolvedFileURL,
+            FileManager.default.fileExists(atPath: url.path)
         else { return nil }
         return url
     }
@@ -107,8 +115,9 @@ extension MusicLibrary {
         let artistMap = buildArtistMapForIds(artistIds)
         let artists = artistIds.compactMap { id -> Artist? in
             guard let la = artistMap[id] else { return nil }
-            return Artist(id: la.serverId, name: la.name, sortName: la.sortName,
-                          slug: la.slug, albumCount: artistAlbumIds[id]?.count ?? 0)
+            return Artist(
+                id: la.serverId, name: la.name, sortName: la.sortName,
+                slug: la.slug, albumCount: artistAlbumIds[id]?.count ?? 0)
         }.sorted { $0.sortName.localizedStandardCompare($1.sortName) == .orderedAscending }
 
         return DownloadedSummary(artists: artists, totalSize: totalSize, artistSizes: artistSizes)
@@ -124,8 +133,9 @@ extension MusicLibrary {
         return artistIds.compactMap { id in
             guard let la = artistMap[id] else { return nil }
             let downloadedAlbumIds = Set(downloaded.filter { $0.albumArtistId == id }.map(\.albumId))
-            return Artist(id: la.serverId, name: la.name, sortName: la.sortName,
-                          slug: la.slug, albumCount: downloadedAlbumIds.count)
+            return Artist(
+                id: la.serverId, name: la.name, sortName: la.sortName,
+                slug: la.slug, albumCount: downloadedAlbumIds.count)
         }.sorted { $0.sortName.localizedStandardCompare($1.sortName) == .orderedAscending }
     }
 
@@ -154,12 +164,14 @@ extension MusicLibrary {
         }
         let artistMap = buildArtistMap()
         let albums = (try? modelContext.fetch(FetchDescriptor<LibraryAlbum>())) ?? []
-        return albums
+        return
+            albums
             .filter { counts[$0.serverId] != nil }
             .map {
-                DownloadedAlbumEntry(album: toAlbum($0, artistMap: artistMap),
-                                     trackCount: counts[$0.serverId] ?? 0,
-                                     size: sizes[$0.serverId] ?? 0)
+                DownloadedAlbumEntry(
+                    album: toAlbum($0, artistMap: artistMap),
+                    trackCount: counts[$0.serverId] ?? 0,
+                    size: sizes[$0.serverId] ?? 0)
             }
             .sorted { a, b in
                 let aArtist = a.album.artistSortName ?? a.album.artistName ?? ""
@@ -188,7 +200,8 @@ extension MusicLibrary {
         let libTracks = (try? modelContext.fetch(descriptor)) ?? []
         let artistMap = buildArtistMap()
         let albumMap = buildAlbumMap()
-        return libTracks
+        return
+            libTracks
             .map { buildTrack($0, artistMap: artistMap, album: albumMap[$0.albumId]) }
             .sorted { a, b in
                 let aSortName = artistMap[a.albumArtistId]?.sortName ?? ""
@@ -205,7 +218,8 @@ extension MusicLibrary {
     /// Returns albums for an artist that have at least one downloaded track.
     func downloadedAlbumsForArtist(_ artistId: UUID) -> [Album] {
         _ = downloadChanged
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.isDownloaded == true && $0.albumArtistId == artistId })
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.isDownloaded == true && $0.albumArtistId == artistId })
         let downloaded = (try? modelContext.fetch(descriptor)) ?? []
         let albumIds = Set(downloaded.map(\.albumId))
         let artistMap = buildArtistMapForIds([artistId])
@@ -273,7 +287,8 @@ extension MusicLibrary {
     }
 
     func markAlbumUndownloaded(albumId: UUID) {
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return }
         var changed: [UUID: Bool] = [:]
         for track in tracks {
@@ -289,7 +304,8 @@ extension MusicLibrary {
     }
 
     func markArtistUndownloaded(artistId: UUID) {
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return }
         var changed: [UUID: Bool] = [:]
         for track in tracks {
@@ -326,13 +342,15 @@ extension MusicLibrary {
     }
 
     func downloadedFileURLs(albumId: UUID) -> [URL] {
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.albumId == albumId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return [] }
         return tracks.compactMap(\.resolvedFileURL)
     }
 
     func downloadedFileURLs(artistId: UUID) -> [URL] {
-        let descriptor = FetchDescriptor<LibraryTrack>(predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
+        let descriptor = FetchDescriptor<LibraryTrack>(
+            predicate: #Predicate { $0.albumArtistId == artistId && $0.isDownloaded == true })
         guard let tracks = try? modelContext.fetch(descriptor) else { return [] }
         return tracks.compactMap(\.resolvedFileURL)
     }
@@ -355,9 +373,10 @@ extension MusicLibrary {
     func reconcileDownloadedFiles() {
         let fm = FileManager.default
         guard let manifestURL = Self.reconciliationManifestURL,
-              fm.fileExists(atPath: manifestURL.path),
-              let data = try? Data(contentsOf: manifestURL),
-              let entries = try? JSONDecoder().decode([DownloadManifestEntry].self, from: data) else {
+            fm.fileExists(atPath: manifestURL.path),
+            let data = try? Data(contentsOf: manifestURL),
+            let entries = try? JSONDecoder().decode([DownloadManifestEntry].self, from: data)
+        else {
             return
         }
 
@@ -370,7 +389,8 @@ extension MusicLibrary {
         var matched: [UUID: Bool] = [:]
         var reclaimed = 0
         for entry in entries {
-            let fileExists = appSupport
+            let fileExists =
+                appSupport
                 .map { fm.fileExists(atPath: $0.appendingPathComponent(entry.relativePath).path) } ?? false
             if let track = tracksById[entry.trackId], fileExists {
                 track.isDownloaded = true

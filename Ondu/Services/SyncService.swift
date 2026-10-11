@@ -87,7 +87,7 @@ nonisolated struct SyncAlbum: Sendable {
 extension SyncAlbum: Decodable {
     nonisolated enum CodingKeys: String, CodingKey {
         case id, artistId, name, sortName, slug, releaseYear, artworkUrl, artwork,
-             isUnknown, trackCount, insertedAt, loudness
+            isUnknown, trackCount, insertedAt, loudness
     }
 
     init(from decoder: Decoder) throws {
@@ -134,8 +134,8 @@ nonisolated struct SyncTrack: Sendable {
 extension SyncTrack: Decodable {
     nonisolated enum CodingKeys: String, CodingKey {
         case id, artistId, albumArtistId, albumId, name, disc, number,
-             duration, mimetype, streamUrl, downloadUrl, insertedAt, loudness,
-             playCount, lastPlayedAt
+            duration, mimetype, streamUrl, downloadUrl, insertedAt, loudness,
+            playCount, lastPlayedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -262,7 +262,10 @@ final class SyncService {
         set { UserDefaults.standard.set(newValue, forKey: "syncCursor") }
     }
 
-    init(api: APIService, musicLibrary: MusicLibrary, settings: SettingsStore? = nil, downloadService: DownloadService? = nil, outbox: OutboxService? = nil) {
+    init(
+        api: APIService, musicLibrary: MusicLibrary, settings: SettingsStore? = nil,
+        downloadService: DownloadService? = nil, outbox: OutboxService? = nil
+    ) {
         self.api = api
         self.musicLibrary = musicLibrary
         self.settings = settings
@@ -335,12 +338,15 @@ final class SyncService {
                 let response = try await api.fetchSync(cursor: cursor)
 
                 #if DEBUG
-                print("SyncService: page \(pageCount) — \(response.artists.count) artists, \(response.albums.count) albums, \(response.tracks.count) tracks, \(response.deletions.count) deletions, complete: \(response.complete)")
+                print(
+                    "SyncService: page \(pageCount) — \(response.artists.count) artists, \(response.albums.count) albums, \(response.tracks.count) tracks, \(response.deletions.count) deletions, complete: \(response.complete)"
+                )
                 #endif
 
                 if !response.artists.isEmpty || !response.albums.isEmpty
                     || !response.tracks.isEmpty || !response.playlists.isEmpty
-                    || !response.playlistItems.isEmpty || !response.deletions.isEmpty {
+                    || !response.playlistItems.isEmpty || !response.deletions.isEmpty
+                {
                     changedAnything = true
                 }
                 musicLibrary.upsertArtists(response.artists)
@@ -373,7 +379,9 @@ final class SyncService {
                     UserDefaults.standard.set(lastSyncDate, forKey: "lastSyncDate")
                     hasCompletedInitialSync = true
                     #if DEBUG
-                    print("SyncService: sync complete — \(syncProgress?.artistCount ?? 0) artists, \(syncProgress?.albumCount ?? 0) albums, \(syncProgress?.trackCount ?? 0) tracks total")
+                    print(
+                        "SyncService: sync complete — \(syncProgress?.artistCount ?? 0) artists, \(syncProgress?.albumCount ?? 0) albums, \(syncProgress?.trackCount ?? 0) tracks total"
+                    )
                     #endif
                     // Rebuild download state from on-disk manifest if a prior store reset left one behind.
                     musicLibrary.reconcileDownloadedFiles()
@@ -386,7 +394,7 @@ final class SyncService {
             print("SyncService: sync failed with auth error")
             #endif
             NotificationCenter.default.post(name: .sessionExpired, object: nil)
-        } catch where Self.isCancellation(error) {
+        } catch  where Self.isCancellation(error) {
             // Not a failure to report: the view that started this went away, which at
             // launch is just the progress screen handing over to the library. The next
             // sync picks up from the same cursor.
@@ -426,7 +434,8 @@ final class SyncService {
             // never on an initial sync. A rebuild or a fresh login reinserts the whole
             // library, and "new tracks" means ones added on the server since last time,
             // not every track there is.
-            let globalAutoIds: Set<UUID> = (settings?.autoDownloadNewTracks == true && !isInitialSync)
+            let globalAutoIds: Set<UUID> =
+                (settings?.autoDownloadNewTracks == true && !isInitialSync)
                 ? newTrackIds : []
             if !globalAutoIds.isEmpty {
                 #if DEBUG

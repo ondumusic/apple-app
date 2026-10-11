@@ -48,8 +48,10 @@ final class OutboxService {
     // MARK: - Enqueue
 
     func enqueueCreatePlaylist(tempId: UUID, name: String, parentId: UUID? = nil) {
-        enqueue(.createPlaylist, payload: CreatePlaylistPayload(
-            tempPlaylistId: tempId, name: name, isFolder: false, parentId: parentId))
+        enqueue(
+            .createPlaylist,
+            payload: CreatePlaylistPayload(
+                tempPlaylistId: tempId, name: name, isFolder: false, parentId: parentId))
     }
 
     func enqueueRenamePlaylist(_ id: UUID, name: String) {
@@ -65,8 +67,10 @@ final class OutboxService {
     }
 
     func enqueueCreateFolder(tempId: UUID, name: String, parentId: UUID?) {
-        enqueue(.createPlaylist, payload: CreatePlaylistPayload(
-            tempPlaylistId: tempId, name: name, isFolder: true, parentId: parentId))
+        enqueue(
+            .createPlaylist,
+            payload: CreatePlaylistPayload(
+                tempPlaylistId: tempId, name: name, isFolder: true, parentId: parentId))
     }
 
     func enqueueAddItems(playlistId: UUID, entries: [AddItemsPayload.Entry]) {
@@ -134,7 +138,9 @@ final class OutboxService {
             } else if let batch = collectBatch(from: musicLibrary.pendingMutations()) {
                 #if DEBUG
                 if batch.consumed.count > 1 {
-                    print("OutboxService: batched \(batch.summary) — \(batch.consumed.count) mutations, \(batch.operationCount) ops")
+                    print(
+                        "OutboxService: batched \(batch.summary) — \(batch.consumed.count) mutations, \(batch.operationCount) ops"
+                    )
                 }
                 #endif
                 consumed = batch.consumed
@@ -154,7 +160,9 @@ final class OutboxService {
         switch outcome {
         case .success:
             #if DEBUG
-            print("OutboxService: \(head.kind) succeeded (\(consumedOnSuccess.count) mutation\(consumedOnSuccess.count == 1 ? "" : "s"))")
+            print(
+                "OutboxService: \(head.kind) succeeded (\(consumedOnSuccess.count) mutation\(consumedOnSuccess.count == 1 ? "" : "s"))"
+            )
             #endif
             for mutation in consumedOnSuccess {
                 musicLibrary.deletePendingMutation(mutation)
@@ -227,8 +235,9 @@ final class OutboxService {
     /// know that id yet), or a non-batchable kind.
     private func collectBatch(from mutations: [PendingMutation]) -> Batch? {
         guard let head = mutations.first,
-              let headKind = OutboxKind(rawValue: head.kind),
-              isBatchableKind(headKind) else { return nil }
+            let headKind = OutboxKind(rawValue: head.kind),
+            isBatchableKind(headKind)
+        else { return nil }
 
         let decoder = JSONDecoder()
         var consumed: [PendingMutation] = []
@@ -282,8 +291,9 @@ final class OutboxService {
         }
 
         guard !consumed.isEmpty, let pid = playlistId else { return nil }
-        return Batch(playlistId: pid, consumed: consumed,
-                     addEntries: addEntries, moveEntries: moveEntries, removeIds: removeIds)
+        return Batch(
+            playlistId: pid, consumed: consumed,
+            addEntries: addEntries, moveEntries: moveEntries, removeIds: removeIds)
     }
 
     private func isBatchableKind(_ kind: OutboxKind) -> Bool {
@@ -397,7 +407,9 @@ final class OutboxService {
                 return .discard("Some playlist items couldn't be updated — server rejected them.")
             }
             #if DEBUG
-            print("OutboxService: dropped \(moveEntries.count - filteredMoves.count) move(s) and \(removeIds.count - filteredRemoves.count) remove(s) referencing unknown items; retrying")
+            print(
+                "OutboxService: dropped \(moveEntries.count - filteredMoves.count) move(s) and \(removeIds.count - filteredRemoves.count) remove(s) referencing unknown items; retrying"
+            )
             #endif
             return await executeItemOps(
                 playlistId: playlistId,
@@ -420,7 +432,9 @@ final class OutboxService {
                 return .discard("A move and remove collided, but we couldn't identify which.")
             }
             #if DEBUG
-            print("OutboxService: move_remove_conflict — dropping \(moveEntries.count - filteredMoves.count) conflicting move(s); retrying")
+            print(
+                "OutboxService: move_remove_conflict — dropping \(moveEntries.count - filteredMoves.count) conflicting move(s); retrying"
+            )
             #endif
             return await executeItemOps(
                 playlistId: playlistId,
@@ -436,7 +450,8 @@ final class OutboxService {
             // playlist-wide rebalance to fix properly. Discard rather than masking the bug
             // by silently regenerating; surface so we can investigate.
             #if DEBUG
-            print("OutboxService: invalid_positions — server rejected \(badPositions.count) position(s): \(badPositions)")
+            print(
+                "OutboxService: invalid_positions — server rejected \(badPositions.count) position(s): \(badPositions)")
             #endif
             return .discard("Some playlist positions were rejected by the server.")
 
@@ -487,13 +502,16 @@ final class OutboxService {
                 let server = try await api.createPlaylist(
                     name: p.name, isFolder: p.isFolder, parentId: p.parentId)
                 #if DEBUG
-                print("OutboxService: create_playlist OK — temp=\(p.tempPlaylistId) → real=\(server.id) (isFolder=\(p.isFolder))")
+                print(
+                    "OutboxService: create_playlist OK — temp=\(p.tempPlaylistId) → real=\(server.id) (isFolder=\(p.isFolder))"
+                )
                 #endif
                 musicLibrary.remapPlaylistId(from: p.tempPlaylistId, to: server)
                 musicLibrary.remapQueuedPlaylistId(from: p.tempPlaylistId, to: server.id)
                 return .success
             } catch APIError.httpError(422) {
-                return .discard("Couldn't create \(p.isFolder ? "folder" : "playlist") “\(p.name)” — the name is invalid.")
+                return .discard(
+                    "Couldn't create \(p.isFolder ? "folder" : "playlist") “\(p.name)” — the name is invalid.")
             } catch {
                 return classify(error)
             }
@@ -556,18 +574,20 @@ final class OutboxService {
                 return .discard("Malformed add_items payload")
             }
             if musicLibrary.playlist(p.playlistId) == nil { return .success }
-            return await executeItemOps(playlistId: p.playlistId,
-                                         addEntries: p.items, moveEntries: [], removeIds: [],
-                                         depth: 0)
+            return await executeItemOps(
+                playlistId: p.playlistId,
+                addEntries: p.items, moveEntries: [], removeIds: [],
+                depth: 0)
 
         case .moveItems:
             guard let p = try? decoder.decode(MoveItemsPayload.self, from: mutation.payload) else {
                 return .discard("Malformed move_items payload")
             }
             if musicLibrary.playlist(p.playlistId) == nil { return .success }
-            return await executeItemOps(playlistId: p.playlistId,
-                                         addEntries: [], moveEntries: p.items, removeIds: [],
-                                         depth: 0)
+            return await executeItemOps(
+                playlistId: p.playlistId,
+                addEntries: [], moveEntries: p.items, removeIds: [],
+                depth: 0)
 
         case .recordPlays:
             guard let p = try? decoder.decode(RecordPlayPayload.self, from: mutation.payload) else {
@@ -580,16 +600,19 @@ final class OutboxService {
                 return .discard("Malformed remove_items payload")
             }
             if musicLibrary.playlist(p.playlistId) == nil { return .success }
-            return await executeItemOps(playlistId: p.playlistId,
-                                         addEntries: [], moveEntries: [], removeIds: p.itemIds,
-                                         depth: 0)
+            return await executeItemOps(
+                playlistId: p.playlistId,
+                addEntries: [], moveEntries: [], removeIds: p.itemIds,
+                depth: 0)
         }
     }
 
     /// Every play waiting at the head of the queue, in one request. Plays carry no
     /// ordering or conflict rules — unlike playlist ops, nothing here can reference
     /// something a later call creates — so the only cap is request size.
-    private func collectPlays(from pending: [PendingMutation]) -> (consumed: [PendingMutation], payloads: [RecordPlayPayload])? {
+    private func collectPlays(from pending: [PendingMutation]) -> (
+        consumed: [PendingMutation], payloads: [RecordPlayPayload]
+    )? {
         guard pending.first?.kind == OutboxKind.recordPlays.rawValue else { return nil }
         let decoder = JSONDecoder()
         var consumed: [PendingMutation] = []

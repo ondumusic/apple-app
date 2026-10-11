@@ -36,13 +36,15 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    init(id: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
-         artist: Artist, albumArtistName: String? = nil, albumArtistSortName: String,
-         album: TrackAlbum? = nil,
-         name: String, disc: Int, number: Int?, duration: Double,
-         mimetype: String, streamUrl: String, downloadUrl: String = "",
-         isDownloaded: Bool = false, lufs: Double? = nil,
-         playCount: Int = 0, lastPlayedAt: Date? = nil) {
+    init(
+        id: UUID, artistId: UUID, albumArtistId: UUID, albumId: UUID,
+        artist: Artist, albumArtistName: String? = nil, albumArtistSortName: String,
+        album: TrackAlbum? = nil,
+        name: String, disc: Int, number: Int?, duration: Double,
+        mimetype: String, streamUrl: String, downloadUrl: String = "",
+        isDownloaded: Bool = false, lufs: Double? = nil,
+        playCount: Int = 0, lastPlayedAt: Date? = nil
+    ) {
         self.id = id
         self.artistId = artistId
         self.albumArtistId = albumArtistId
@@ -72,7 +74,8 @@ nonisolated struct Track: Codable, Identifiable, Sendable, Hashable {
         albumId = try container.decode(UUID.self, forKey: .albumId)
         artist = try container.decode(Artist.self, forKey: .artist)
         albumArtistName = try container.decodeIfPresent(String.self, forKey: .albumArtistName) ?? artist.name
-        albumArtistSortName = try container.decodeIfPresent(String.self, forKey: .albumArtistSortName) ?? artist.sortName
+        albumArtistSortName =
+            try container.decodeIfPresent(String.self, forKey: .albumArtistSortName) ?? artist.sortName
         album = try container.decodeIfPresent(TrackAlbum.self, forKey: .album)
         name = try container.decode(String.self, forKey: .name)
         disc = try container.decodeIfPresent(Int.self, forKey: .disc) ?? 1

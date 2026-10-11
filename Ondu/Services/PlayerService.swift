@@ -223,8 +223,10 @@ final class PlayerService {
 
     // MARK: - Init
 
-    init(api: APIService, settings: SettingsStore, musicLibrary: MusicLibrary? = nil,
-         playbackCache: PlaybackCache? = nil, stateStore: PlaybackStateStore = PlaybackStateStore()) {
+    init(
+        api: APIService, settings: SettingsStore, musicLibrary: MusicLibrary? = nil,
+        playbackCache: PlaybackCache? = nil, stateStore: PlaybackStateStore = PlaybackStateStore()
+    ) {
         self.api = api
         self.settings = settings
         self.musicLibrary = musicLibrary
@@ -714,8 +716,9 @@ final class PlayerService {
             observeStatus(of: item)
             primaryPlayer.insert(item, after: nil)
             if resumeTime > 0 {
-                await primaryPlayer.seek(to: CMTime(seconds: resumeTime, preferredTimescale: 600),
-                                         toleranceBefore: .zero, toleranceAfter: .zero)
+                await primaryPlayer.seek(
+                    to: CMTime(seconds: resumeTime, preferredTimescale: 600),
+                    toleranceBefore: .zero, toleranceAfter: .zero)
             }
             primaryGain = normalizationGain(for: track)
             primaryPlayer.volume = Float(volume) * primaryGain
@@ -761,8 +764,9 @@ final class PlayerService {
                     self.stallWatchdog?.cancel()
                     self.stallWatchdog = nil
                 case .failed:
-                    self.failPlayback(observed.error?.localizedDescription
-                        ?? String(localized: "This track couldn't be played."))
+                    self.failPlayback(
+                        observed.error?.localizedDescription
+                            ?? String(localized: "This track couldn't be played."))
                 default:
                     break
                 }
@@ -808,8 +812,9 @@ final class PlayerService {
             return offlineURL
         }
         if queue.indices.contains(queueIndex),
-           let cached = queue[queueIndex].playbackURL,
-           !cached.isFileURL || FileManager.default.fileExists(atPath: cached.path) {
+            let cached = queue[queueIndex].playbackURL,
+            !cached.isFileURL || FileManager.default.fileExists(atPath: cached.path)
+        {
             return cached
         }
         if let cachedURL = playbackCache?.cachedURL(for: track.id) {
@@ -893,16 +898,19 @@ final class PlayerService {
 
     private func isNextTrackSequential() -> Bool {
         guard let next = nextTrackInfo(),
-              let currentTrackItem = currentQueueItem?.track,
-              let nextTrack = item(at: next.effectiveIndex)?.track else { return false }
+            let currentTrackItem = currentQueueItem?.track,
+            let nextTrack = item(at: next.effectiveIndex)?.track
+        else { return false }
         guard currentTrackItem.albumId == nextTrack.albumId else { return false }
 
         if let currentNumber = currentTrackItem.number, let nextNumber = nextTrack.number,
-           nextTrack.disc == currentTrackItem.disc && nextNumber == currentNumber + 1 {
+            nextTrack.disc == currentTrackItem.disc && nextNumber == currentNumber + 1
+        {
             return true
         }
         if let nextNumber = nextTrack.number,
-           nextTrack.disc == currentTrackItem.disc + 1 && nextNumber == 1 {
+            nextTrack.disc == currentTrackItem.disc + 1 && nextNumber == 1
+        {
             return true
         }
         return false
@@ -1087,7 +1095,8 @@ final class PlayerService {
         if let crossfadeObserver { primaryPlayer.removeTimeObserver(crossfadeObserver) }
 
         let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
-        crossfadeObserver = primaryPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+        crossfadeObserver = primaryPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
+            [weak self] time in
             guard let self else { return }
             guard let item = self.primaryPlayer.currentItem else { return }
 
@@ -1131,7 +1140,8 @@ final class PlayerService {
                     self.secondaryGain = self.normalizationGain(for: nextTrack)
                     crossfadePlayer.volume = 0
                     crossfadePlayer.play()
-                    self.startVolumeRamp(fadeDuration: min(fadeDuration, remaining), nextIndex: nextIdx, nextTrack: nextTrack)
+                    self.startVolumeRamp(
+                        fadeDuration: min(fadeDuration, remaining), nextIndex: nextIdx, nextTrack: nextTrack)
                 }
             } catch {
                 #if DEBUG
@@ -1231,12 +1241,13 @@ final class PlayerService {
     /// memory otherwise. Call whenever the queue or the current index changes.
     func savePlaybackState() {
         guard !queue.isEmpty else { return }
-        stateStore.save(PlaybackState(
-            trackIds: queue.map(\.track.id),
-            currentIndex: currentIndex,
-            shuffledIndices: shuffledIndices,
-            isUserModified: isQueueUserModified
-        ))
+        stateStore.save(
+            PlaybackState(
+                trackIds: queue.map(\.track.id),
+                currentIndex: currentIndex,
+                shuffledIndices: shuffledIndices,
+                isUserModified: isQueueUserModified
+            ))
         savePlaybackPosition()
     }
 
@@ -1312,7 +1323,8 @@ final class PlayerService {
         ) { [weak self] notification in
             guard let self else { return }
             guard let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-                  let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+                let type = AVAudioSession.InterruptionType(rawValue: typeValue)
+            else { return }
             switch type {
             case .began:
                 self.isPlaying = false
@@ -1338,7 +1350,8 @@ final class PlayerService {
         ) { [weak self] notification in
             guard let self else { return }
             guard let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
-                  let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
+                let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue)
+            else { return }
             if reason == .oldDeviceUnavailable {
                 self.primaryPlayer.pause()
                 self.isPlaying = false
@@ -1367,7 +1380,8 @@ final class PlayerService {
         if let artworkURL, artworkURL == nowPlayingArtworkURL, let artwork = nowPlayingArtwork {
             info[MPMediaItemPropertyArtwork] = artwork
         } else if let artworkURL,
-                  let cached = ImagePipeline.shared.cache.cachedImage(for: ImageRequest(url: artworkURL)) {
+            let cached = ImagePipeline.shared.cache.cachedImage(for: ImageRequest(url: artworkURL))
+        {
             let artwork = MPMediaItemArtwork(boundsSize: cached.image.size) { _ in cached.image }
             nowPlayingArtwork = artwork
             nowPlayingArtworkURL = artworkURL

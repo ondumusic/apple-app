@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 // MARK: - Sync Response Decoding Tests
@@ -15,46 +16,46 @@ import Testing
 
     @Test func decodesFullSyncResponse() throws {
         let json = """
-        {
-            "artists": [{
-                "id": "11111111-1111-1111-1111-111111111111",
-                "name": "Radiohead",
-                "sort_name": "Radiohead",
-                "slug": "radiohead",
-                "album_count": 9,
-                "inserted_at": "2025-01-01T00:00:00Z"
-            }],
-            "albums": [{
-                "id": "22222222-2222-2222-2222-222222222222",
-                "artist_id": "11111111-1111-1111-1111-111111111111",
-                "name": "OK Computer",
-                "sort_name": "OK Computer",
-                "slug": "ok-computer",
-                "release_year": 1997,
-                "artwork_url": "https://example.com/art.jpg",
-                "is_unknown": false,
-                "track_count": 12,
-                "inserted_at": "2025-01-01T00:00:00Z"
-            }],
-            "tracks": [{
-                "id": "33333333-3333-3333-3333-333333333333",
-                "artist_id": "11111111-1111-1111-1111-111111111111",
-                "album_artist_id": "11111111-1111-1111-1111-111111111111",
-                "album_id": "22222222-2222-2222-2222-222222222222",
-                "name": "Paranoid Android",
-                "disc": 1,
-                "number": 2,
-                "duration": 384.0,
-                "mimetype": "audio/flac",
-                "stream_url": "/tracks/33333333/stream",
-                "download_url": "/tracks/33333333/download",
-                "inserted_at": "2025-01-01T00:00:00Z"
-            }],
-            "deletions": [],
-            "cursor": "cursor_abc",
-            "complete": true
-        }
-        """
+            {
+                "artists": [{
+                    "id": "11111111-1111-1111-1111-111111111111",
+                    "name": "Radiohead",
+                    "sort_name": "Radiohead",
+                    "slug": "radiohead",
+                    "album_count": 9,
+                    "inserted_at": "2025-01-01T00:00:00Z"
+                }],
+                "albums": [{
+                    "id": "22222222-2222-2222-2222-222222222222",
+                    "artist_id": "11111111-1111-1111-1111-111111111111",
+                    "name": "OK Computer",
+                    "sort_name": "OK Computer",
+                    "slug": "ok-computer",
+                    "release_year": 1997,
+                    "artwork_url": "https://example.com/art.jpg",
+                    "is_unknown": false,
+                    "track_count": 12,
+                    "inserted_at": "2025-01-01T00:00:00Z"
+                }],
+                "tracks": [{
+                    "id": "33333333-3333-3333-3333-333333333333",
+                    "artist_id": "11111111-1111-1111-1111-111111111111",
+                    "album_artist_id": "11111111-1111-1111-1111-111111111111",
+                    "album_id": "22222222-2222-2222-2222-222222222222",
+                    "name": "Paranoid Android",
+                    "disc": 1,
+                    "number": 2,
+                    "duration": 384.0,
+                    "mimetype": "audio/flac",
+                    "stream_url": "/tracks/33333333/stream",
+                    "download_url": "/tracks/33333333/download",
+                    "inserted_at": "2025-01-01T00:00:00Z"
+                }],
+                "deletions": [],
+                "cursor": "cursor_abc",
+                "complete": true
+            }
+            """
         let response = try decoder.decode(SyncResponse.self, from: Data(json.utf8))
         #expect(response.artists.count == 1)
         #expect(response.artists[0].name == "Radiohead")
@@ -73,61 +74,61 @@ import Testing
 
     @Test func artistSortNameDefaultsToName() throws {
         let json = """
-        {
-            "id": "11111111-1111-1111-1111-111111111111",
-            "name": "The Beatles",
-            "slug": "the-beatles",
-            "album_count": 13,
-            "inserted_at": "2025-01-01T00:00:00Z"
-        }
-        """
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "name": "The Beatles",
+                "slug": "the-beatles",
+                "album_count": 13,
+                "inserted_at": "2025-01-01T00:00:00Z"
+            }
+            """
         let artist = try decoder.decode(SyncArtist.self, from: Data(json.utf8))
         #expect(artist.sortName == "The Beatles")
     }
 
     @Test func artistSortNameUsedWhenProvided() throws {
         let json = """
-        {
-            "id": "11111111-1111-1111-1111-111111111111",
-            "name": "The Beatles",
-            "sort_name": "Beatles, The",
-            "slug": "the-beatles",
-            "album_count": 13,
-            "inserted_at": "2025-01-01T00:00:00Z"
-        }
-        """
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "name": "The Beatles",
+                "sort_name": "Beatles, The",
+                "slug": "the-beatles",
+                "album_count": 13,
+                "inserted_at": "2025-01-01T00:00:00Z"
+            }
+            """
         let artist = try decoder.decode(SyncArtist.self, from: Data(json.utf8))
         #expect(artist.sortName == "Beatles, The")
     }
 
     @Test func albumSortNameDefaultsToName() throws {
         let json = """
-        {
-            "id": "22222222-2222-2222-2222-222222222222",
-            "artist_id": "11111111-1111-1111-1111-111111111111",
-            "name": "A Moon Shaped Pool",
-            "slug": "a-moon-shaped-pool",
-            "is_unknown": false,
-            "track_count": 11,
-            "inserted_at": "2025-01-01T00:00:00Z"
-        }
-        """
+            {
+                "id": "22222222-2222-2222-2222-222222222222",
+                "artist_id": "11111111-1111-1111-1111-111111111111",
+                "name": "A Moon Shaped Pool",
+                "slug": "a-moon-shaped-pool",
+                "is_unknown": false,
+                "track_count": 11,
+                "inserted_at": "2025-01-01T00:00:00Z"
+            }
+            """
         let album = try decoder.decode(SyncAlbum.self, from: Data(json.utf8))
         #expect(album.sortName == "A Moon Shaped Pool")
     }
 
     @Test func albumOptionalFieldsNilWhenMissing() throws {
         let json = """
-        {
-            "id": "22222222-2222-2222-2222-222222222222",
-            "artist_id": "11111111-1111-1111-1111-111111111111",
-            "name": "Album",
-            "slug": "album",
-            "is_unknown": false,
-            "track_count": 1,
-            "inserted_at": "2025-01-01T00:00:00Z"
-        }
-        """
+            {
+                "id": "22222222-2222-2222-2222-222222222222",
+                "artist_id": "11111111-1111-1111-1111-111111111111",
+                "name": "Album",
+                "slug": "album",
+                "is_unknown": false,
+                "track_count": 1,
+                "inserted_at": "2025-01-01T00:00:00Z"
+            }
+            """
         let album = try decoder.decode(SyncAlbum.self, from: Data(json.utf8))
         #expect(album.releaseYear == nil)
         #expect(album.artworkUrl == nil)
@@ -135,15 +136,15 @@ import Testing
 
     @Test func decodesEmptySyncResponse() throws {
         let json = """
-        {
-            "artists": [],
-            "albums": [],
-            "tracks": [],
-            "deletions": [],
-            "cursor": "empty_cursor",
-            "complete": true
-        }
-        """
+            {
+                "artists": [],
+                "albums": [],
+                "tracks": [],
+                "deletions": [],
+                "cursor": "empty_cursor",
+                "complete": true
+            }
+            """
         let response = try decoder.decode(SyncResponse.self, from: Data(json.utf8))
         #expect(response.artists.isEmpty)
         #expect(response.albums.isEmpty)
@@ -154,18 +155,18 @@ import Testing
 
     @Test func decodesDeletions() throws {
         let json = """
-        {
-            "artists": [],
-            "albums": [],
-            "tracks": [],
-            "deletions": [
-                { "entity_type": "track", "entity_id": "33333333-3333-3333-3333-333333333333" },
-                { "entity_type": "album", "entity_id": "22222222-2222-2222-2222-222222222222" }
-            ],
-            "cursor": "del_cursor",
-            "complete": true
-        }
-        """
+            {
+                "artists": [],
+                "albums": [],
+                "tracks": [],
+                "deletions": [
+                    { "entity_type": "track", "entity_id": "33333333-3333-3333-3333-333333333333" },
+                    { "entity_type": "album", "entity_id": "22222222-2222-2222-2222-222222222222" }
+                ],
+                "cursor": "del_cursor",
+                "complete": true
+            }
+            """
         let response = try decoder.decode(SyncResponse.self, from: Data(json.utf8))
         #expect(response.deletions.count == 2)
         #expect(response.deletions[0].entityType == "track")
@@ -174,15 +175,15 @@ import Testing
 
     @Test func decodesIncompleteResponse() throws {
         let json = """
-        {
-            "artists": [],
-            "albums": [],
-            "tracks": [],
-            "deletions": [],
-            "cursor": "page1_cursor",
-            "complete": false
-        }
-        """
+            {
+                "artists": [],
+                "albums": [],
+                "tracks": [],
+                "deletions": [],
+                "cursor": "page1_cursor",
+                "complete": false
+            }
+            """
         let response = try decoder.decode(SyncResponse.self, from: Data(json.utf8))
         #expect(!response.complete)
         #expect(response.cursor == "page1_cursor")
@@ -249,7 +250,7 @@ import Testing
         let id2 = UUID()
         progress.artistIds.insert(id1)
         progress.artistIds.insert(id2)
-        progress.artistIds.insert(id1) // duplicate
+        progress.artistIds.insert(id1)  // duplicate
         #expect(progress.artistCount == 2)
 
         progress.albumIds.insert(UUID())
@@ -294,14 +295,17 @@ import Testing
         await svc.sync()
 
         #expect(svc.syncError != nil)
-        #expect(!svc.isSyncing) // should reset after completing
+        #expect(!svc.isSyncing)  // should reset after completing
     }
 
     @Test func syncClearsLibraryOnInitialSync() async {
         let lib = try! makeInMemoryLibrary()
         let artistId = UUID()
-        lib.upsertArtists([SyncArtist(id: artistId, name: "Pre-existing", sortName: "Pre-existing",
-                                      slug: "pre", albumCount: 1, insertedAt: Date())])
+        lib.upsertArtists([
+            SyncArtist(
+                id: artistId, name: "Pre-existing", sortName: "Pre-existing",
+                slug: "pre", albumCount: 1, insertedAt: Date())
+        ])
         lib.bumpRevision()
         #expect(lib.allArtists().count == 1)
 
@@ -330,7 +334,7 @@ private func makeInMemoryLibrary() throws -> MusicLibrary {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try ModelContainer(
         for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-             LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+        LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
         configurations: config
     )
     return MusicLibrary(container: container)

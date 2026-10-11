@@ -68,7 +68,8 @@ struct AlbumActions {
             a.download = { albums in
                 for album in albums {
                     guard let full = musicLibrary.albumWithTracks(album.id) else { continue }
-                    let artist = musicLibrary.artist(album.artistId)
+                    let artist =
+                        musicLibrary.artist(album.artistId)
                         ?? Artist(id: album.artistId, name: "", sortName: "", slug: "")
                     downloadService.download(album: full, artist: artist)
                 }
@@ -78,7 +79,8 @@ struct AlbumActions {
                     musicLibrary.tracksForAlbum($0.id).filter(\.isDownloaded).map(\.id)
                 }
                 guard !ids.isEmpty else { return }
-                let subject = albums.count == 1
+                let subject =
+                    albums.count == 1
                     ? albums[0].name
                     : String(AttributedString(localized: "^[\(albums.count) album](inflect: true)").characters)
                 DownloadRemovalRequest.post(trackIds: Set(ids), subject: subject)

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+
 @testable import Ondu
 
 @Suite(.serialized)
@@ -10,7 +11,7 @@ struct DownloadAllScaleTests {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
             for: LibraryArtist.self, LibraryAlbum.self, LibraryTrack.self,
-                 LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
+            LibraryPlaylist.self, LibraryPlaylistItem.self, PendingMutation.self,
             configurations: config
         )
         let lib = MusicLibrary(container: container)
@@ -21,21 +22,27 @@ struct DownloadAllScaleTests {
         var tracks: [SyncTrack] = []
         for a in 0..<200 {
             let aid = UUID()
-            artists.append(SyncArtist(id: aid, name: "Artist \(a)", sortName: "Artist \(a)",
-                                      slug: "artist-\(a)", albumCount: 2, insertedAt: now))
+            artists.append(
+                SyncArtist(
+                    id: aid, name: "Artist \(a)", sortName: "Artist \(a)",
+                    slug: "artist-\(a)", albumCount: 2, insertedAt: now))
             for b in 0..<2 {
                 let bid = UUID()
-                albums.append(SyncAlbum(id: bid, artistId: aid, name: "Album \(a)-\(b)",
-                                        sortName: "Album \(a)-\(b)", slug: "album-\(a)-\(b)",
-                                        releaseYear: 2000, artworkUrl: nil, isUnknown: false,
-                                        trackCount: 11, insertedAt: now))
+                albums.append(
+                    SyncAlbum(
+                        id: bid, artistId: aid, name: "Album \(a)-\(b)",
+                        sortName: "Album \(a)-\(b)", slug: "album-\(a)-\(b)",
+                        releaseYear: 2000, artworkUrl: nil, isUnknown: false,
+                        trackCount: 11, insertedAt: now))
                 for t in 0..<11 {
                     let tid = UUID()
-                    tracks.append(SyncTrack(id: tid, artistId: aid, albumArtistId: aid, albumId: bid,
-                                            name: "Track \(t)", disc: 1, number: t + 1,
-                                            duration: 200, mimetype: "audio/mp4",
-                                            streamUrl: "/stream/\(tid)", downloadUrl: "/download/\(tid)",
-                                            insertedAt: now))
+                    tracks.append(
+                        SyncTrack(
+                            id: tid, artistId: aid, albumArtistId: aid, albumId: bid,
+                            name: "Track \(t)", disc: 1, number: t + 1,
+                            duration: 200, mimetype: "audio/mp4",
+                            streamUrl: "/stream/\(tid)", downloadUrl: "/download/\(tid)",
+                            insertedAt: now))
                 }
             }
         }
@@ -44,9 +51,10 @@ struct DownloadAllScaleTests {
         lib.upsertTracks(tracks)
         lib.bumpRevision()
 
-        let service = DownloadService(baseURL: URL(string: "https://example.com/api")!,
-                                      sessionToken: "test-token", musicLibrary: lib,
-                                      settings: makeTestSettings())
+        let service = DownloadService(
+            baseURL: URL(string: "https://example.com/api")!,
+            sessionToken: "test-token", musicLibrary: lib,
+            settings: makeTestSettings())
         // Isolate the enqueue path — we're measuring the scan, not URLSession.
         service.isPaused = true
 

@@ -126,7 +126,8 @@ struct AlbumListView: View {
     }
 
     private func reloadAlbums() {
-        let source = filterOption == .downloaded
+        let source =
+            filterOption == .downloaded
             ? musicLibrary.downloadedAlbums()
             : musicLibrary.allAlbums()
         albums = sortOption.sorted(source, ascending: sortAscending, playStats: playStats())
@@ -150,17 +151,19 @@ struct AlbumListView: View {
 
             ForEach(AlbumSortOption.allCases, id: \.self) { option in
                 let isActive = sortOption == option
-                Toggle(isOn: Binding(
-                    get: { isActive },
-                    set: { _ in
-                        if isActive {
-                            sortAscending.toggle()
-                        } else {
-                            sortOption = option
-                            sortAscending = option != .dateAdded && option != .releaseYear
+                Toggle(
+                    isOn: Binding(
+                        get: { isActive },
+                        set: { _ in
+                            if isActive {
+                                sortAscending.toggle()
+                            } else {
+                                sortOption = option
+                                sortAscending = option != .dateAdded && option != .releaseYear
+                            }
                         }
-                    }
-                )) {
+                    )
+                ) {
                     Text(option.rawValue)
                     if isActive {
                         Text(sortAscending ? option.ascendingLabel : option.descendingLabel)
@@ -168,7 +171,10 @@ struct AlbumListView: View {
                 }
             }
         } label: {
-            Label("Options", systemImage: filterOption == .downloaded ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+            Label(
+                "Options",
+                systemImage: filterOption == .downloaded
+                    ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
         }
     }
 
@@ -178,8 +184,10 @@ struct AlbumListView: View {
 
 extension AlbumSortOption {
     /// Shared with the macOS grid so both platforms order albums identically.
-    func sorted(_ albums: [Album], ascending: Bool,
-                playStats: [UUID: MusicLibrary.AlbumPlayStats] = [:]) -> [Album] {
+    func sorted(
+        _ albums: [Album], ascending: Bool,
+        playStats: [UUID: MusicLibrary.AlbumPlayStats] = [:]
+    ) -> [Album] {
         albums.sorted { a, b in
             let result: Bool
             switch self {

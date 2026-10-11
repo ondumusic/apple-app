@@ -1,11 +1,12 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 struct TrackTests {
 
     @Test func formattedDurationMinutesAndSeconds() {
-        let track = makeTrack(duration: 185) // 3:05
+        let track = makeTrack(duration: 185)  // 3:05
         #expect(track.formattedDuration == "3:05")
     }
 
@@ -25,7 +26,7 @@ struct TrackTests {
     }
 
     @Test func formattedDurationLong() {
-        let track = makeTrack(duration: 3661) // 61:01
+        let track = makeTrack(duration: 3661)  // 61:01
         #expect(track.formattedDuration == "61:01")
     }
 
@@ -39,16 +40,16 @@ struct ArtistTests {
 
     @Test func sortNameDefaultsToName() throws {
         let json = """
-        {"id": "00000000-0000-0000-0000-000000000001", "name": "The Beatles", "slug": "the-beatles"}
-        """
+            {"id": "00000000-0000-0000-0000-000000000001", "name": "The Beatles", "slug": "the-beatles"}
+            """
         let artist = try JSONDecoder().decode(Artist.self, from: Data(json.utf8))
         #expect(artist.sortName == "The Beatles")
     }
 
     @Test func sortNameFromJSON() throws {
         let json = """
-        {"id": "00000000-0000-0000-0000-000000000001", "name": "The Beatles", "sort_name": "Beatles, The", "slug": "the-beatles"}
-        """
+            {"id": "00000000-0000-0000-0000-000000000001", "name": "The Beatles", "sort_name": "Beatles, The", "slug": "the-beatles"}
+            """
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         let artist = try decoder.decode(Artist.self, from: Data(json.utf8))
@@ -60,8 +61,8 @@ struct AlbumTests {
 
     @Test func sortNameDefaultsToName() throws {
         let json = """
-        {"id": "00000000-0000-0000-0000-000000000001", "artist_id": "00000000-0000-0000-0000-000000000002", "name": "Abbey Road", "slug": "abbey-road", "is_unknown": false}
-        """
+            {"id": "00000000-0000-0000-0000-000000000001", "artist_id": "00000000-0000-0000-0000-000000000002", "name": "Abbey Road", "slug": "abbey-road", "is_unknown": false}
+            """
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         let album = try decoder.decode(Album.self, from: Data(json.utf8))

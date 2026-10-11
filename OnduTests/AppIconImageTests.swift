@@ -1,11 +1,13 @@
 import Foundation
 import Testing
+
+@testable import Ondu
+
 #if os(iOS)
 import UIKit
 #else
 import AppKit
 #endif
-@testable import Ondu
 
 /// The login screen's branding is an asset looked up by name, so renaming or dropping it
 /// breaks the screen silently — nothing fails to compile.

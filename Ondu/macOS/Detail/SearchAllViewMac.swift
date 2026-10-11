@@ -44,8 +44,9 @@ struct SearchAllViewMac: View {
                     tracks: tracks,
                     selection: $trackSelection,
                     onPlay: playTrack(at:),
-                    actions: .standard(player: player, musicLibrary: musicLibrary,
-                                       network: network, downloadService: downloadService),
+                    actions: .standard(
+                        player: player, musicLibrary: musicLibrary,
+                        network: network, downloadService: downloadService),
                     showArtist: true,
                     showAlbum: true,
                     isOffline: !network.isOnline,
@@ -60,8 +61,9 @@ struct SearchAllViewMac: View {
                 AlbumsGrid(
                     albums: albums,
                     selection: $albumSelection,
-                    actions: .standard(player: player, musicLibrary: musicLibrary,
-                                       network: network, downloadService: downloadService),
+                    actions: .standard(
+                        player: player, musicLibrary: musicLibrary,
+                        network: network, downloadService: downloadService),
                     accent: settings.resolvedAccentColor,
                     onOpen: { NotificationCenter.default.post(name: .navigateToAlbum, object: $0) }
                 )
@@ -163,8 +165,9 @@ struct SearchArtistCell: View {
             PasteboardDragHandle(
                 type: .onduArtists,
                 value: artist.id.uuidString,
-                dragImageRect: CGRect(x: (Self.captionWidth - Self.artworkSize) / 2, y: 0,
-                                      width: Self.artworkSize, height: Self.artworkSize),
+                dragImageRect: CGRect(
+                    x: (Self.captionWidth - Self.artworkSize) / 2, y: 0,
+                    width: Self.artworkSize, height: Self.artworkSize),
                 dragImageCornerRadius: Self.artworkSize / 2,
                 onClick: { NotificationCenter.default.post(name: .navigateToArtist, object: artist) }
             )

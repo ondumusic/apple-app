@@ -55,7 +55,10 @@ struct TrackRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.name)
-                    .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : isAvailable ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(
+                        isCurrentTrack
+                            ? AnyShapeStyle(.tint) : isAvailable ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary)
+                    )
                     .lineLimit(1)
 
                 if showArtist {

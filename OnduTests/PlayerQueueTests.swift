@@ -1,21 +1,27 @@
 import Foundation
 import Testing
+
 @testable import Ondu
 
 // MARK: - Helpers
 
 private let testArtist = Artist(id: UUID(), name: "Artist", sortName: "Artist", slug: "artist")
 
-private func makeTrack(name: String = "Track", albumId: UUID = UUID(),
-                       disc: Int = 1, number: Int = 1) -> Track {
-    Track(id: UUID(), artistId: testArtist.id, albumArtistId: testArtist.id,
-          albumId: albumId, artist: testArtist, albumArtistSortName: testArtist.sortName,
-          name: name, disc: disc, number: number, duration: 200,
-          mimetype: "audio/mp4", streamUrl: "/stream/test")
+private func makeTrack(
+    name: String = "Track", albumId: UUID = UUID(),
+    disc: Int = 1, number: Int = 1
+) -> Track {
+    Track(
+        id: UUID(), artistId: testArtist.id, albumArtistId: testArtist.id,
+        albumId: albumId, artist: testArtist, albumArtistSortName: testArtist.sortName,
+        name: name, disc: disc, number: number, duration: 200,
+        mimetype: "audio/mp4", streamUrl: "/stream/test")
 }
 
-private func makeQueueItem(name: String = "Track", albumId: UUID = UUID(),
-                           disc: Int = 1, number: Int = 1) -> QueueItem {
+private func makeQueueItem(
+    name: String = "Track", albumId: UUID = UUID(),
+    disc: Int = 1, number: Int = 1
+) -> QueueItem {
     QueueItem(track: makeTrack(name: name, albumId: albumId, disc: disc, number: number))
 }
 
@@ -170,8 +176,10 @@ struct PlayerQueueInsertTests {
 
     @Test func playNextWhileShuffledInsertsAfterCurrentInShuffleOrder() {
         let player = makePlayer()
-        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
-                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        let items = [
+            makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+            makeQueueItem(name: "C"), makeQueueItem(name: "D"),
+        ]
         player.playShuffled(queue: items)
 
         // currentIndex is 0 in shuffle order
@@ -245,7 +253,7 @@ struct PlayerNavigationTests {
         let player = makePlayer()
         let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"), makeQueueItem(name: "C")]
         player.playNow(queue: items, startingAt: 1)
-        player.progress = 1.0 // Under 3s threshold
+        player.progress = 1.0  // Under 3s threshold
 
         player.back()
 
@@ -321,8 +329,10 @@ struct PlayerQueueManipulationTests {
 
     @Test func clearUpNextWhileShuffled() {
         let player = makePlayer()
-        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
-                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        let items = [
+            makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+            makeQueueItem(name: "C"), makeQueueItem(name: "D"),
+        ]
         player.playShuffled(queue: items)
 
         let currentTrackName = player.queue[player.effectiveIndex].track.name
@@ -335,8 +345,10 @@ struct PlayerQueueManipulationTests {
 
     @Test func removeFromQueueRemovesCorrectItem() {
         let player = makePlayer()
-        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
-                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        let items = [
+            makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+            makeQueueItem(name: "C"), makeQueueItem(name: "D"),
+        ]
         player.playNow(queue: items, startingAt: 0)
 
         // Remove first item in up-next (index 0 in up-next = queue index 1)
@@ -348,8 +360,10 @@ struct PlayerQueueManipulationTests {
 
     @Test func removeFromQueueWhileShuffled() {
         let player = makePlayer()
-        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
-                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        let items = [
+            makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+            makeQueueItem(name: "C"), makeQueueItem(name: "D"),
+        ]
         player.playShuffled(queue: items)
 
         let countBefore = player.queue.count
@@ -362,8 +376,10 @@ struct PlayerQueueManipulationTests {
 
     @Test func moveQueueItemsReorders() {
         let player = makePlayer()
-        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
-                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        let items = [
+            makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+            makeQueueItem(name: "C"), makeQueueItem(name: "D"),
+        ]
         player.playNow(queue: items, startingAt: 0)
 
         // Move up-next index 2 (D) to index 0 (before B)
@@ -375,8 +391,10 @@ struct PlayerQueueManipulationTests {
 
     @Test func moveQueueItemsWhileShuffled() {
         let player = makePlayer()
-        let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
-                     makeQueueItem(name: "C"), makeQueueItem(name: "D")]
+        let items = [
+            makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+            makeQueueItem(name: "C"), makeQueueItem(name: "D"),
+        ]
         player.playShuffled(queue: items)
 
         let shuffledBefore = player.shuffledIndices!
@@ -401,7 +419,7 @@ struct PlayerCanNavigateTests {
         let player = makePlayer()
         let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B")]
         player.playNow(queue: items, startingAt: 0)
-        player.progress = 5.0 // Over 3s threshold
+        player.progress = 5.0  // Over 3s threshold
 
         #expect(player.canGoBack)
     }
@@ -626,7 +644,8 @@ struct PlayerReplaceQueueTests {
 
     @Test func reorderingMarksTheQueueHandBuilt() {
         let player = makePlayer()
-        player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"), makeQueueItem(name: "C")], startingAt: 0)
+        player.playNow(
+            queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"), makeQueueItem(name: "C")], startingAt: 0)
         #expect(!player.isQueueUserModified)
 
         player.moveQueueItems(from: IndexSet(integer: 0), to: 2)
@@ -676,9 +695,12 @@ struct PlayerUpNextTests {
 @MainActor
 private func shuffledPlayerMidway() -> PlayerService {
     let player = makePlayer()
-    player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
-                           makeQueueItem(name: "C"), makeQueueItem(name: "D")],
-                   startingAt: 0)
+    player.playNow(
+        queue: [
+            makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+            makeQueueItem(name: "C"), makeQueueItem(name: "D"),
+        ],
+        startingAt: 0)
     player.shuffledIndices = [3, 1, 0, 2]
     player.currentIndex = 2
     return player
@@ -689,9 +711,12 @@ struct PlayerHistoryTests {
 
     @Test func historyIsWhatPlayedMostRecentFirst() {
         let player = makePlayer()
-        player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
-                               makeQueueItem(name: "C"), makeQueueItem(name: "D")],
-                       startingAt: 2)
+        player.playNow(
+            queue: [
+                makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                makeQueueItem(name: "C"), makeQueueItem(name: "D"),
+            ],
+            startingAt: 2)
 
         #expect(player.historyEntries.map(\.item.track.name) == ["B", "A"])
         #expect(player.upNextEntries.map(\.item.track.name) == ["D"])
@@ -707,9 +732,12 @@ struct PlayerHistoryTests {
     /// History reads in the order the shuffle actually played, not queue order.
     @Test func historyFollowsTheShuffleOrder() {
         let player = makePlayer()
-        player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
-                               makeQueueItem(name: "C")],
-                       startingAt: 0)
+        player.playNow(
+            queue: [
+                makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                makeQueueItem(name: "C"),
+            ],
+            startingAt: 0)
         player.shuffledIndices = [2, 0, 1]
         player.currentIndex = 2
 
@@ -718,9 +746,12 @@ struct PlayerHistoryTests {
 
     @Test func clearHistoryDropsWhatPlayedAndKeepsTheRest() {
         let player = makePlayer()
-        player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B"),
-                               makeQueueItem(name: "C")],
-                       startingAt: 2)
+        player.playNow(
+            queue: [
+                makeQueueItem(name: "A"), makeQueueItem(name: "B"),
+                makeQueueItem(name: "C"),
+            ],
+            startingAt: 2)
         player.clearHistory()
 
         #expect(player.queue.map(\.track.name) == ["C"])
@@ -792,8 +823,9 @@ struct PlayerTintTests {
         let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
         let stateURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("player-tint-tests/\(UUID().uuidString).json")
-        return PlayerService(api: api, settings: settings,
-                             stateStore: PlaybackStateStore(fileURL: stateURL))
+        return PlayerService(
+            api: api, settings: settings,
+            stateStore: PlaybackStateStore(fileURL: stateURL))
     }
 
     private func tintedSettings() -> SettingsStore {
@@ -844,8 +876,10 @@ struct PlayerStaleIndexTests {
     @Test func gaplessSetupSurvivesAShuffleOrderWiderThanTheQueue() {
         let player = makePlayer()
         let album = UUID()
-        player.queue = [makeQueueItem(name: "A", albumId: album, number: 1),
-                        makeQueueItem(name: "B", albumId: album, number: 2)]
+        player.queue = [
+            makeQueueItem(name: "A", albumId: album, number: 1),
+            makeQueueItem(name: "B", albumId: album, number: 2),
+        ]
         player.shuffledIndices = [5, 1]
         player.currentIndex = 0
 

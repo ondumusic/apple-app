@@ -38,8 +38,10 @@ struct LoginView: View {
     /// `allowingInsecure` is a parameter rather than only a build flag so both policies
     /// are testable; tests build as Debug and would otherwise never exercise the release
     /// behaviour.
-    static func resolveServerURL(_ input: String,
-                                 allowingInsecure: Bool = allowsInsecureServers) -> URL? {
+    static func resolveServerURL(
+        _ input: String,
+        allowingInsecure: Bool = allowsInsecureServers
+    ) -> URL? {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
 
@@ -65,7 +67,9 @@ struct LoginView: View {
         let text = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, resolvedURL == nil else { return nil }
         if text.lowercased().hasPrefix("http://") {
-            return String(localized: "Your server must use https. Sign-in details and your music would otherwise travel unencrypted.")
+            return String(
+                localized:
+                    "Your server must use https. Sign-in details and your music would otherwise travel unencrypted.")
         }
         return nil
     }

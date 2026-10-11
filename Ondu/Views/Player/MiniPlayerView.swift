@@ -61,7 +61,10 @@ struct MiniPlayerView: View {
 
                     Spacer(minLength: 0)
 
-                    Button { Haptics.light(); player.togglePlayPause() } label: {
+                    Button {
+                        Haptics.light()
+                        player.togglePlayPause()
+                    } label: {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                             .font(.title3)
                             .frame(width: 44, height: 44)
@@ -69,7 +72,10 @@ struct MiniPlayerView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button { Haptics.light(); player.skip() } label: {
+                    Button {
+                        Haptics.light()
+                        player.skip()
+                    } label: {
                         Image(systemName: "forward.fill")
                             .font(.callout)
                             .frame(width: 44, height: 44)
