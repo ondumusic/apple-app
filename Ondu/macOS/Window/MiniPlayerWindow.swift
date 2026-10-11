@@ -736,6 +736,7 @@ private struct CompactLayout: View {
                     Image(systemName: "backward.fill")
                         .frame(width: 26, height: 26)
                 }
+                .accessibilityLabel("Previous")
                 .disabled(track == nil || !player.canGoBack)
                 Button {
                     player.togglePlayPause()
@@ -744,6 +745,7 @@ private struct CompactLayout: View {
                         .font(.system(size: 14))
                         .frame(width: 26, height: 26)
                 }
+                .accessibilityLabel(player.isPlaying ? Text("Pause") : Text("Play"))
                 .disabled(track == nil)
                 Button {
                     player.skip()
@@ -751,6 +753,7 @@ private struct CompactLayout: View {
                     Image(systemName: "forward.fill")
                         .frame(width: 26, height: 26)
                 }
+                .accessibilityLabel("Next")
                 .disabled(track == nil || !player.canSkip)
             }
             .buttonStyle(PlayerControlButtonStyle())
@@ -804,6 +807,7 @@ private struct TransportRow: View {
                             .font(.system(size: 14))
                             .frame(width: Self.controlSize, height: Self.controlSize)
                     }
+                    .accessibilityLabel("Previous")
                     .disabled(track == nil || !player.canGoBack)
                     Button {
                         player.togglePlayPause()
@@ -812,6 +816,7 @@ private struct TransportRow: View {
                             .font(.system(size: 19))
                             .frame(width: Self.controlSize, height: Self.controlSize)
                     }
+                    .accessibilityLabel(player.isPlaying ? Text("Pause") : Text("Play"))
                     .disabled(track == nil)
                     Button {
                         player.skip()
@@ -820,6 +825,7 @@ private struct TransportRow: View {
                             .font(.system(size: 14))
                             .frame(width: Self.controlSize, height: Self.controlSize)
                     }
+                    .accessibilityLabel("Next")
                     .disabled(track == nil || !player.canSkip)
                 }
                 // Mirrors the queue toggle on the opposite side so the play button stays
@@ -844,6 +850,7 @@ private struct TransportRow: View {
                                     .fill(Color.primary.opacity(isQueueVisible ? 0.10 : 0))
                             }
                     }
+                    .accessibilityLabel("Up Next")
                     .disabled(track == nil)
                     .foregroundStyle(tintForeground.map { AnyShapeStyle($0) } ?? AnyShapeStyle(Color.primary))
                 }

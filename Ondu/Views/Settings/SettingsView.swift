@@ -194,6 +194,9 @@ struct SettingsView: View {
                                     }
                                 }
                                 .onTapGesture { settings.accentColor = accentOption }
+                                .accessibilityLabel(Text(accentOption.displayName))
+                                .accessibilityAddTraits(
+                                    settings.accentColor == accentOption ? [.isButton, .isSelected] : .isButton)
                         }
                     }
                 }
@@ -417,9 +420,14 @@ struct SettingsView: View {
                 }
             }
             .help("Choose a custom color")
+            .accessibilityLabel(Text(AccentColor.custom.displayName))
+            .accessibilityAddTraits(settings.accentColor == .custom ? [.isButton, .isSelected] : .isButton)
         #else
-        ColorPicker("", selection: customColorBinding(settings: settings), supportsOpacity: false)
-            .labelsHidden()
+        ColorPicker(
+            String(localized: AccentColor.custom.displayName), selection: customColorBinding(settings: settings),
+            supportsOpacity: false
+        )
+        .labelsHidden()
         #endif
     }
 

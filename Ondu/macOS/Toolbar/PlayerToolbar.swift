@@ -202,6 +202,8 @@ struct NowPlayingLabel: View {
             NotificationCenter.default.post(name: .switchToMiniPlayer, object: nil)
         }
         .help("Switch to Mini Player")
+        .accessibilityLabel("Switch to Mini Player")
+        .accessibilityAddTraits(.isButton)
     }
 }
 

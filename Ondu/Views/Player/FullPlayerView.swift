@@ -98,6 +98,7 @@ struct FullPlayerView: View {
                                 }
                                 .frame(width: 48, height: 48)
                         }
+                        .accessibilityLabel("Up Next")
                         .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 16)
@@ -319,6 +320,7 @@ private struct TransportControls: View {
                 Image(systemName: "backward.fill")
                     .font(.title2)
             }
+            .accessibilityLabel("Previous")
             .buttonStyle(.plain)
             .disabled(!player.canGoBack)
 
@@ -329,6 +331,7 @@ private struct TransportControls: View {
                 Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 56))
             }
+            .accessibilityLabel(player.isPlaying ? Text("Pause") : Text("Play"))
             .buttonStyle(.plain)
 
             Button {
@@ -338,6 +341,7 @@ private struct TransportControls: View {
                 Image(systemName: "forward.fill")
                     .font(.title2)
             }
+            .accessibilityLabel("Next")
             .buttonStyle(.plain)
             .disabled(!player.canSkip)
         }

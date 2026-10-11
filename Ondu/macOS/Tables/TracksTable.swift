@@ -1987,7 +1987,9 @@ private final class NumberOrSpeakerCell: NSTableCellView {
     private func applyContent() {
         if let playing = speaker {
             let symbol = playing ? "speaker.wave.2.fill" : "speaker.fill"
-            icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            icon.image = NSImage(
+                systemSymbolName: symbol,
+                accessibilityDescription: playing ? String(localized: "Playing") : String(localized: "Paused"))
             icon.isHidden = false
             label.isHidden = true
             return

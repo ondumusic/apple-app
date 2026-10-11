@@ -61,6 +61,7 @@ struct AlbumDetailView: View {
                                         .font(.system(size: 13))
                                         .frame(width: 18, height: 18)
                                 }
+                                .accessibilityLabel("Play")
                                 .disabled(!hasPlayable)
 
                                 Button {
@@ -73,6 +74,7 @@ struct AlbumDetailView: View {
                                         .font(.system(size: 13))
                                         .frame(width: 18, height: 18)
                                 }
+                                .accessibilityLabel("Shuffle")
                                 .disabled(!hasPlayable)
 
                                 if downloadService.isAlbumDownloading(albumId: album.id) {
@@ -95,6 +97,7 @@ struct AlbumDetailView: View {
                                             .font(.system(size: 13))
                                             .frame(width: 18, height: 18)
                                     }
+                                    .accessibilityLabel("Download")
                                 }
                             }
                             .buttonStyle(.bordered)
@@ -141,6 +144,7 @@ struct AlbumDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("More")
             }
         }
         .overlay {

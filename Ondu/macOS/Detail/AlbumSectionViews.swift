@@ -64,11 +64,13 @@ struct AlbumSectionHeader: View {
                 } label: {
                     Image(systemName: "play.fill")
                 }
+                .accessibilityLabel("Play")
                 Button {
                     onShuffle()
                 } label: {
                     Image(systemName: "shuffle")
                 }
+                .accessibilityLabel("Shuffle")
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.circle)

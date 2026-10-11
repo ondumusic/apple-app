@@ -306,6 +306,7 @@ struct PlaylistDetailView: View {
                             .font(.system(size: 13))
                             .frame(width: 18, height: 18)
                     }
+                    .accessibilityLabel("Play")
                     .disabled(!hasPlayable)
 
                     Button {
@@ -316,6 +317,7 @@ struct PlaylistDetailView: View {
                             .font(.system(size: 13))
                             .frame(width: 18, height: 18)
                     }
+                    .accessibilityLabel("Shuffle")
                     .disabled(!hasPlayable)
 
                     if !tracks.isEmpty {
@@ -335,6 +337,7 @@ struct PlaylistDetailView: View {
                                     .font(.system(size: 13))
                                     .frame(width: 18, height: 18)
                             }
+                            .accessibilityLabel("Download")
                         }
                     }
                 }

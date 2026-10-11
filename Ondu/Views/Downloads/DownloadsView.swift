@@ -156,6 +156,7 @@ struct DownloadsView: View {
                                 Image(systemName: "arrow.clockwise")
                                     .font(.callout)
                             }
+                            .accessibilityLabel("Retry Download")
                             .buttonStyle(.plain)
                             .foregroundStyle(.tint)
                         }

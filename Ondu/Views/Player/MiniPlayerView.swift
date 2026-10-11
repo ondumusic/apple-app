@@ -70,6 +70,7 @@ struct MiniPlayerView: View {
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
+                    .accessibilityLabel(player.isPlaying ? Text("Pause") : Text("Play"))
                     .buttonStyle(.plain)
 
                     Button {
@@ -81,6 +82,7 @@ struct MiniPlayerView: View {
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("Next")
                     .buttonStyle(.plain)
                     .disabled(!player.canSkip)
                 }

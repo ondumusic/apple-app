@@ -31,6 +31,22 @@ nonisolated enum StreamingQuality: String, CaseIterable, Sendable {
 nonisolated enum AccentColor: String, CaseIterable, Sendable {
     case blue, indigo, purple, pink, red, orange, yellow, green, teal, custom
 
+    /// What VoiceOver reads for the swatch; the colour itself says nothing to it.
+    var displayName: LocalizedStringResource {
+        switch self {
+        case .blue: "Blue"
+        case .indigo: "Indigo"
+        case .purple: "Purple"
+        case .pink: "Pink"
+        case .red: "Red"
+        case .orange: "Orange"
+        case .yellow: "Yellow"
+        case .green: "Green"
+        case .teal: "Teal"
+        case .custom: "Custom Color"
+        }
+    }
+
     /// The app icon's own blue. The system blue is lighter and greener than anything in
     /// the icon, so the default accent didn't look like it belonged to the app it was
     /// accenting.
