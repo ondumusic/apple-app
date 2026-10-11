@@ -1,6 +1,6 @@
 # Ondu
 
-SwiftUI multiplatform music streaming app (iOS 26.2+ / macOS 15.7+) connecting to a self-hosted Elixir/Phoenix server backed by SQLite. Both platforms ship in v1.0; the macOS UI is a native AppKit/SwiftUI hybrid rather than a port of the iOS one. See `TODO.md` for what remains.
+SwiftUI multiplatform music streaming app (iOS 26.2+ / macOS 15.7+) connecting to a self-hosted Elixir/Phoenix server backed by SQLite. Both platforms ship in v1.0; the macOS UI is a native AppKit/SwiftUI hybrid rather than a port of the iOS one. Deferred work is tracked in a local `TODO.md`, kept out of the repo.
 
 ## Architecture
 
@@ -108,4 +108,4 @@ After file edits, SourceKit often emits transient "Cannot find type X in scope" 
 
 ## See also
 
-- `TODO.md` — deferred work, pre-release polish, post-1.0 ideas.
+- `TODO.md` (local only, not in the repo) — deferred work, pre-release polish, post-1.0 ideas.
