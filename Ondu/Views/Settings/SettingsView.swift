@@ -43,6 +43,7 @@ struct SettingsView: View {
             downloadsSection
             librarySection
             accountSection
+            aboutSection
         }
         .navigationTitle("Settings")
         #endif
@@ -78,6 +79,7 @@ struct SettingsView: View {
             Form {
                 librarySection
                 accountSection
+                aboutSection
             }
             .formStyle(.grouped)
             .tabItem { Label("Account", systemImage: "person.crop.circle") }
@@ -322,6 +324,24 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
+    private var aboutSection: some View {
+        Section {
+            LabeledContent("Version", value: Self.appVersion)
+            Link("Website", destination: SiteLinks.website)
+            Link("Privacy Policy", destination: SiteLinks.privacyPolicy)
+        } header: {
+            Text("About")
+        }
+    }
+
+    /// Version and build, the way TestFlight lists a build, so a report can name it.
+    private static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? ""
+        let build = info?["CFBundleVersion"] as? String ?? ""
+        return "\(version) (\(build))"
+    }
+
     private var accountSection: some View {
         Section {
             if let user = auth.currentUser {

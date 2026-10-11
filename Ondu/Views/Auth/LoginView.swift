@@ -14,8 +14,6 @@ struct LoginView: View {
 
     @FocusState private var focusedField: Field?
 
-    static let serverSetupURL = URL(string: "https://ondumusic.com/setup.html")!
-
     private var resolvedURL: URL? {
         Self.resolveServerURL(serverURL)
     }
@@ -192,7 +190,7 @@ struct LoginView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 24)
 
-                Link("Don’t have a server?", destination: Self.serverSetupURL)
+                Link("Don’t have a server?", destination: SiteLinks.serverSetup)
                     .font(.footnote)
                     .padding(.top, 20)
 
