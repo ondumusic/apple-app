@@ -102,6 +102,17 @@ struct SearchHistoryTests {
         #expect(history2.items[0].name == "Persisted")
         clearHistory()
     }
+
+    /// Sign-out clears the history, and the next account's session is a new instance.
+    @Test func clearIsRememberedByTheNextInstance() {
+        clearHistory()
+        let history = SearchHistory()
+        history.add(makeItem(name: "Old account"))
+        history.clear()
+
+        #expect(SearchHistory().items.isEmpty)
+        clearHistory()
+    }
 }
 
 // MARK: - SearchHistoryItem

@@ -301,6 +301,8 @@ struct OnduApp: App {
                     musicLibrary.clearAll(includingDownloads: true)
                     downloadService.clearAuth()
                     PlaybackStateStore.clearPersisted()
+                    // Its entries point at the old library's albums and artists.
+                    searchHistory.clear()
                     player = nil
                 }
                 let newOutbox = auth.apiService.map { OutboxService(musicLibrary: musicLibrary, api: $0) }
