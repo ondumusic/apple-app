@@ -29,6 +29,10 @@ jobs:
           sudo xcode-select -s "$XCODE_APP"
           xcodebuild -version
 
+      # First, so a formatting slip fails in seconds rather than after a full build.
+      - name: Check formatting
+        run: xcrun swift-format lint --strict --recursive --parallel Ondu OnduTests
+
       - uses: actions/cache@v4
         with:
           path: ${{ env.PACKAGES_DIR }}

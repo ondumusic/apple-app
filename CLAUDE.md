@@ -62,6 +62,7 @@ Playlists shipped on `feat/playlists`. Folders are `Playlist`s with `isFolder ==
 ### Do
 
 - Follow existing patterns when in doubt — read the nearest sibling file.
+- **Format with swift-format** (config in `.swift-format`, ships with Xcode): `xcrun swift-format format -i -r --parallel Ondu OnduTests`. CI fails on anything `xcrun swift-format lint --strict -r Ondu OnduTests` reports.
 - Prefer `async` / `await` and `@MainActor` over `DispatchQueue`.
 - Keep responses concise. Terse output is preferred; trailing summaries that restate the diff are not.
 - **Maintain tests with code changes.** Add or update tests as part of the same work, not as a separate task. Test files live in `OnduTests/`.
