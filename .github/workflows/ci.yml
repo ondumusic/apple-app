@@ -11,23 +11,18 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Match what the app is developed against; the macOS 26 glass APIs need a current SDK.
-  # Check github.com/actions/runner-images for the Xcode versions an image ships.
-  XCODE_APP: /Applications/Xcode_27.0.app
   # Under build/, which is gitignored, so the package checkout can be cached by path.
   PACKAGES_DIR: build/SourcePackages
 
 jobs:
   build-and-test:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: |
-          sudo xcode-select -s "$XCODE_APP"
-          xcodebuild -version
+      - name: Show Xcode
+        run: xcodebuild -version
 
       # First, so a formatting slip fails in seconds rather than after a full build.
       - name: Check formatting
