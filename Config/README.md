@@ -18,7 +18,7 @@ in Xcode.
 |            | Debug                      | Release                |
 | ---------- | -------------------------- | ---------------------- |
 | Identifier | `com.ondumusic.Player.dev` | `com.ondumusic.Player` |
-| Name       | Ondu Dev               | Ondu               |
+| Name       | Ondu Dev                   | Ondu                   |
 | Icon       | `AppIcon`                  | `AppIcon`              |
 
 Debug gets its own identifier so a build mid-migration can't damage the library you

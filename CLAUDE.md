@@ -105,7 +105,3 @@ module rebuild, and it clears once the caches are warm.
 ### SourceKit indexing noise
 
 After file edits, SourceKit often emits transient "Cannot find type X in scope" errors for types defined in the same module (`MusicLibrary`, `PlayerService`, `Track`, etc.). These are stale indexer state, not real errors. Trust `xcodebuild` over live diagnostics.
-
-## See also
-
-- `TODO.md` (local only, not in the repo) — deferred work, pre-release polish, post-1.0 ideas.
