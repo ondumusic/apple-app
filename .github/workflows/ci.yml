@@ -43,11 +43,14 @@ jobs:
 
       # Serial on purpose, as in CLAUDE.md: parallel simulator clones fail unreliably.
       # The step timeout turns a crashed test host — which hangs rather than failing —
-      # into a failed run instead of a stuck one.
+      # into a failed run instead of a stuck one. Signing stays on: the simulator's
+      # keychain refuses an unsigned app, and with no team set the build signs itself
+      # ad hoc, which needs no certificate. Diagnostics collection is off because after
+      # a failure it waited out a 600-second timeout before reporting anything.
       - name: Test on iOS Simulator
         timeout-minutes: 20
         run: >
           xcodebuild -scheme Ondu -destination 'platform=iOS Simulator,name=iPhone 17'
           -parallel-testing-enabled NO
           -clonedSourcePackagesDirPath "$PACKAGES_DIR"
-          CODE_SIGNING_ALLOWED=NO test
+          test
