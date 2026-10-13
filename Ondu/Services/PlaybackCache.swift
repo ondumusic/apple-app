@@ -82,6 +82,14 @@ final class PlaybackCache {
                 (tempURL, response) = try await URLSession.shared.download(from: streamURL)
             }
 
+            // A refused request still downloads: the error body lands in the file. Cached,
+            // it would be served as the track from then on — after signing back in too,
+            // since a cached track never goes back to the server.
+            guard Self.isCacheable(response) else {
+                try? fileManager.removeItem(at: tempURL)
+                return nil
+            }
+
             // Determine file extension from MIME type or URL
             let ext = fileExtension(from: response, url: streamURL)
             let filename = "\(trackId.uuidString).\(ext)"
@@ -113,6 +121,23 @@ final class PlaybackCache {
     /// Total size formatted for display.
     var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: currentSize, countStyle: .file)
+    }
+
+    nonisolated static func isCacheable(_ response: URLResponse) -> Bool {
+        guard let http = response as? HTTPURLResponse else { return false }
+        return (200..<300).contains(http.statusCode)
+    }
+
+    /// Drops a cached copy that turned out not to play, so the next attempt streams the
+    /// track again. A file outside the cache — a download — is left alone.
+    func discard(fileURL: URL) {
+        guard fileURL.deletingLastPathComponent().resolvingSymlinksInPath() == cacheDir.resolvingSymlinksInPath(),
+            let index = entries.firstIndex(where: { $0.filename == fileURL.lastPathComponent })
+        else { return }
+        let entry = entries.remove(at: index)
+        try? fileManager.removeItem(at: fileURL)
+        currentSize -= entry.size
+        saveMetadata()
     }
 
     /// Removes all cached files.

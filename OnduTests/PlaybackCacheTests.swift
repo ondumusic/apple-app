@@ -268,3 +268,55 @@ private func cleanup(_ dir: URL) {
         #expect(cache.currentSize == 0)
     }
 }
+
+// MARK: - Refused downloads
+
+@Suite(.serialized) struct PlaybackCacheRefusalTests {
+
+    private func response(status: Int) -> HTTPURLResponse {
+        HTTPURLResponse(
+            url: URL(string: "https://music.example.com/stream/1")!, statusCode: status,
+            httpVersion: nil, headerFields: nil)!
+    }
+
+    @Test func onlySuccessfulResponsesAreCached() {
+        #expect(PlaybackCache.isCacheable(response(status: 200)))
+        #expect(PlaybackCache.isCacheable(response(status: 206)))
+        #expect(!PlaybackCache.isCacheable(response(status: 401)))
+        #expect(!PlaybackCache.isCacheable(response(status: 404)))
+        #expect(!PlaybackCache.isCacheable(response(status: 500)))
+    }
+
+    @Test func discardRemovesAnUnplayableCopy() {
+        let dir = makeTempCacheDir()
+        defer { cleanup(dir) }
+        let id = UUID()
+        let filename = writeFakeFile(in: dir, trackId: id, size: 120)
+        let entries: [PlaybackCache.CacheEntry] = [
+            .init(trackId: id, filename: filename, size: 120, lastAccessed: Date())
+        ]
+        try! JSONEncoder().encode(entries).write(to: dir.appendingPathComponent(".cache-metadata.json"))
+        let cache = PlaybackCache(settings: SettingsStore(), cacheDir: dir)
+        let fileURL = dir.appendingPathComponent(filename)
+        #expect(cache.cachedURL(for: id) != nil)
+
+        cache.discard(fileURL: fileURL)
+
+        #expect(cache.cachedURL(for: id) == nil)
+        #expect(cache.currentSize == 0)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test func discardLeavesFilesOutsideTheCacheAlone() {
+        let (cache, dir) = makeCache()
+        defer { cleanup(dir) }
+        let elsewhere = makeTempCacheDir()
+        defer { cleanup(elsewhere) }
+        let id = UUID()
+        let download = elsewhere.appendingPathComponent(writeFakeFile(in: elsewhere, trackId: id, size: 10))
+
+        cache.discard(fileURL: download)
+
+        #expect(FileManager.default.fileExists(atPath: download.path))
+    }
+}
