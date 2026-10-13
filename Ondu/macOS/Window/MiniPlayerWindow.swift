@@ -72,7 +72,10 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
     /// where the artwork dominates and transport overlays at the bottom.
     private static let defaultFrame = NSRect(x: 0, y: 0, width: 300, height: 300)
 
-    init(player: PlayerService, settings: SettingsStore, musicLibrary: MusicLibrary, network: NetworkMonitor) {
+    init(
+        player: PlayerService, settings: SettingsStore, musicLibrary: MusicLibrary, network: NetworkMonitor,
+        auth: AuthService
+    ) {
         // Plain NSWindow with hidden title bar so the artwork extends edge-to-edge.
         // Restore the user's last frame, or fall back to the square overlay default.
         let savedFrame = Self.loadSavedFrame()
@@ -188,6 +191,7 @@ final class MiniPlayerWindowController: NSWindowController, NSWindowDelegate {
         // have to be handed these explicitly.
         .environment(musicLibrary)
         .environment(network)
+        .environment(auth)
         // Clearing the window's first responder isn't enough on its own: SwiftUI runs
         // its own focus inside the hosting view and rings whichever control it picks,
         // which is the volume button. Nothing in this HUD benefits from a focus ring.
@@ -721,12 +725,7 @@ private struct CompactLayout: View {
                 Text(track?.name ?? "Not Playing")
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
-                if let track {
-                    Text(track.artist.name)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                MiniPlayerStatusLine(track: track, font: .system(size: 11), secondary: .secondary)
             }
             Spacer(minLength: 4)
             HStack(spacing: 4) {
@@ -765,6 +764,46 @@ private struct CompactLayout: View {
     }
 }
 
+// MARK: - Status line
+
+/// The line under the title: the artist, unless something stopped playback. The mini
+/// player is often the only window open, and the main window's toolbar — the only other
+/// place this shows — went with it. An expired session alone isn't enough to show it:
+/// downloaded and cached tracks keep playing, and saying otherwise over them misleads.
+private struct MiniPlayerStatusLine: View {
+    @Environment(PlayerService.self) private var player
+    @Environment(AuthService.self) private var auth
+    let track: Track?
+    let font: Font
+    let secondary: Color
+
+    var body: some View {
+        Group {
+            if let error = player.playbackError {
+                if auth.isSessionExpired {
+                    // Signing in is the main window's sheet: opened only when asked for,
+                    // rather than popping up behind a mini player chosen on purpose.
+                    Button("Session expired — Sign In…") {
+                        MainWindowNavigation.request(.showSignIn)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.orange)
+                    .help(error)
+                } else {
+                    Text(error)
+                        .foregroundStyle(secondary)
+                        .help(error)
+                }
+            } else if let track {
+                Text(track.artist.name)
+                    .foregroundStyle(secondary)
+            }
+        }
+        .font(font)
+        .lineLimit(1)
+    }
+}
+
 // MARK: - Transport row (used by standard + expanded layouts)
 
 private struct TransportRow: View {
@@ -784,12 +823,9 @@ private struct TransportRow: View {
                 Text(track?.name ?? "Not Playing")
                     .font(.headline)
                     .lineLimit(1)
-                if let track {
-                    Text(track.artist.name)
-                        .font(.subheadline)
-                        .foregroundStyle(tintForeground.map { $0.opacity(0.85) } ?? Color.secondary)
-                        .lineLimit(1)
-                }
+                MiniPlayerStatusLine(
+                    track: track, font: .subheadline,
+                    secondary: tintForeground.map { $0.opacity(0.85) } ?? Color.secondary)
             }
             .foregroundStyle(tintForeground ?? Color.primary)
 

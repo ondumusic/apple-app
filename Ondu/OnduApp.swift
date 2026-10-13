@@ -281,7 +281,7 @@ struct OnduApp: App {
             Haptics.isEnabled = enabled
         }
         .modelContainer(musicLibrary.modelContainer)
-        .onChange(of: auth.apiService.map(ObjectIdentifier.init)) { _, _ in
+        .onChange(of: auth.apiService.map(ObjectIdentifier.init)) { previous, _ in
             if let api = auth.apiService {
                 downloadService.configure(baseURL: api.baseURL, sessionToken: api.sessionToken)
                 // If downloads were paused due to a prior 401, let them resume under the new token.
@@ -318,7 +318,13 @@ struct OnduApp: App {
             playlistController = newOutbox.map {
                 PlaylistController(musicLibrary: musicLibrary, outbox: $0, downloadService: downloadService)
             }
-            if newOutbox != nil {
+            if let syncService, previous != nil {
+                // One session replacing another is signing back in after an expiry. Every
+                // sync that would have run in the meantime failed, so the library can be
+                // well behind. A first sign-in gets its sync from the progress screen.
+                // sync() sends the outbox first.
+                Task { await syncService.sync() }
+            } else if newOutbox != nil {
                 Task { await newOutbox?.flush() }
             }
         }

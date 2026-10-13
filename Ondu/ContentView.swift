@@ -5,6 +5,9 @@ extension Notification.Name {
     static let navigateToArtist = Notification.Name("Ondu.navigateToArtist")
     static let navigateToAlbum = Notification.Name("Ondu.navigateToAlbum")
     static let sessionExpired = Notification.Name("Ondu.sessionExpired")
+    /// Asks the main window to show the sign-in sheet. Sent through MainWindowNavigation,
+    /// since the mini player can ask for it while the main window is closed.
+    static let showSignIn = Notification.Name("Ondu.showSignIn")
     /// Posted with `object: [UUID]` — the track ids to be added.
     static let requestAddToPlaylist = Notification.Name("Ondu.requestAddToPlaylist")
     static let focusSearch = Notification.Name("Ondu.focusSearch")

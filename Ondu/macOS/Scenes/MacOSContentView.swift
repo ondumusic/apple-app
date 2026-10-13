@@ -13,8 +13,10 @@ struct MacOSContentView: View {
     @Environment(NetworkMonitor.self) private var network
     @Environment(PlaylistController.self) private var playlistController
     @Environment(DownloadService.self) private var downloadService
+    @Environment(AuthService.self) private var auth
 
     @State private var showQueue = false
+    @State private var showSignIn = false
     @State private var chromeHeight = PlayerBar.height
     /// Restored from the last session — reopening on Artists every time loses your place.
     @State private var sidebarSelection: SidebarSelection? = MacOSContentView.restoredSelection()
@@ -160,6 +162,9 @@ struct MacOSContentView: View {
     private var chrome: some View {
         VStack(spacing: 0) {
             PlayerBar(showQueue: $showQueue, showsDivider: !Self.floatsChrome)
+            if auth.isSessionExpired {
+                SessionExpiredNotice { showSignIn = true }
+            }
             ServerNoticesView()
             if syncService.compatibility.shouldShow(dismissedVersion: dismissedServerVersion) {
                 ServerVersionNotice(compatibility: syncService.compatibility) {
@@ -211,6 +216,11 @@ struct MacOSContentView: View {
 
     private var splitViewChrome: some View {
         splitViewWithPlayer
+            .sheet(isPresented: $showSignIn) { ReAuthView() }
+            // Shown when the session expires, as on iOS, and taken down once signing in
+            // clears it. The row under the player brings it back after Not Now.
+            .onChange(of: auth.isSessionExpired, initial: true) { _, expired in showSignIn = expired }
+            .onReceive(NotificationCenter.default.publisher(for: .showSignIn)) { _ in showSignIn = true }
             .onReceive(NotificationCenter.default.publisher(for: .toggleUpNext)) { _ in
                 guard let key = NSApp.keyWindow, MacOSAppDelegate.isMainWindow(key) else { return }
                 showQueue.toggle()
@@ -292,7 +302,8 @@ struct MacOSContentView: View {
                     let mp =
                         miniPlayer
                         ?? MiniPlayerWindowController(
-                            player: player, settings: settings, musicLibrary: musicLibrary, network: network)
+                            player: player, settings: settings, musicLibrary: musicLibrary, network: network, auth: auth
+                        )
                     miniPlayer = mp
                     mp.restoreAtLaunch()
                     // Quit with only the mini player showing and that's what comes back. The
@@ -462,7 +473,7 @@ struct MacOSContentView: View {
         let mp =
             miniPlayer
             ?? MiniPlayerWindowController(
-                player: player, settings: settings, musicLibrary: musicLibrary, network: network)
+                player: player, settings: settings, musicLibrary: musicLibrary, network: network, auth: auth)
         miniPlayer = mp
         mp.showWindow(nil)
         UserDefaults.standard.set(true, forKey: MiniPlayerWindowController.visibleDefaultsKey)
@@ -474,7 +485,7 @@ struct MacOSContentView: View {
             mp.toggle()
         } else {
             let mp = MiniPlayerWindowController(
-                player: player, settings: settings, musicLibrary: musicLibrary, network: network)
+                player: player, settings: settings, musicLibrary: musicLibrary, network: network, auth: auth)
             miniPlayer = mp
             mp.showWindow(nil)
             UserDefaults.standard.set(true, forKey: MiniPlayerWindowController.visibleDefaultsKey)

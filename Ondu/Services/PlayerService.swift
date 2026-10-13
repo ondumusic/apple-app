@@ -175,7 +175,7 @@ final class PlayerService {
     /// Tracks whether AVQueuePlayer has a queued next item for gapless playback
     @ObservationIgnored private var hasQueuedGaplessItem: Bool = false
     /// The AVPlayerItem currently playing — used to filter endObserver notifications
-    @ObservationIgnored private var currentPlayerItem: AVPlayerItem?
+    @ObservationIgnored var currentPlayerItem: AVPlayerItem?
     /// The AVPlayerItem queued for gapless playback
     @ObservationIgnored private var gaplessPlayerItem: AVPlayerItem?
 
@@ -284,7 +284,17 @@ final class PlayerService {
         self.api = api
         // Any item already queued for gapless carries the old bearer token.
         invalidateGaplessState()
+        // Signing back in is asking to keep listening, when the expiry is what stopped it.
+        if resumesAfterSignIn {
+            resumesAfterSignIn = false
+            Task { await loadAndPlayCurrent() }
+        }
     }
+
+    /// Set only while an expired session is what stopped playback. Anything else that
+    /// stops it — another failure, starting something, clearing the queue — means the
+    /// user wasn't left mid-listen by the expiry, and signing in shouldn't start playback.
+    @ObservationIgnored private(set) var resumesAfterSignIn = false
 
     deinit {
         stallWatchdog?.cancel()
@@ -515,6 +525,7 @@ final class PlayerService {
     /// Stop needs it because there is otherwise no way back to an empty player: Clear
     /// deliberately spares the current track, and pausing leaves it loaded.
     func stopAndClear() {
+        resumesAfterSignIn = false
         primaryPlayer.pause()
         primaryPlayer.removeAllItems()
         tearDownCrossfade()
@@ -670,6 +681,7 @@ final class PlayerService {
     // MARK: - Playback Engine
 
     private func loadAndPlayCurrent() async {
+        resumesAfterSignIn = false
         let idx = effectiveIndex
         guard idx >= 0 && idx < queue.count else { return }
         let track = queue[idx].track
@@ -739,8 +751,7 @@ final class PlayerService {
             #if DEBUG
             print("PlayerService: playback failed — session expired")
             #endif
-            failPlayback(String(localized: "Your session expired. Sign in again to keep listening."))
-            NotificationCenter.default.post(name: .sessionExpired, object: nil)
+            reportSessionExpired()
         } catch {
             #if DEBUG
             print("PlayerService: failed to load track: \(error)")
@@ -764,9 +775,16 @@ final class PlayerService {
                     self.stallWatchdog?.cancel()
                     self.stallWatchdog = nil
                 case .failed:
-                    self.failPlayback(
+                    let message =
                         observed.error?.localizedDescription
-                            ?? String(localized: "This track couldn't be played."))
+                        ?? String(localized: "This track couldn't be played.")
+                    let url = (observed.asset as? AVURLAsset)?.url
+                    if let url, !url.isFileURL {
+                        await self.failStream(observed, message: message)
+                    } else {
+                        if let url { self.forgetUnplayableCopy(at: url) }
+                        self.failPlayback(message)
+                    }
                 default:
                     break
                 }
@@ -782,11 +800,57 @@ final class PlayerService {
             try? await Task.sleep(for: .seconds(Self.stallTimeout))
             guard !Task.isCancelled, let self else { return }
             guard let item = currentPlayerItem, item.status != .readyToPlay else { return }
-            failPlayback(String(localized: "Couldn't reach the server to play this track."))
+            await failStream(item, message: String(localized: "Couldn't reach the server to play this track."))
         }
     }
 
+    /// AVFoundation reports a stream the server refused as a generic failure with no status
+    /// code — "Cannot Open" — so an expired session looked like a broken track, and nothing
+    /// asked the user to sign in. One request to the API tells the two apart.
+    func failStream(_ item: AVPlayerItem, message: String) async {
+        let rejected = await isSessionRejected()
+        // The answer can come back after the user has moved on to another track.
+        guard item === currentPlayerItem else { return }
+        if rejected {
+            reportSessionExpired()
+        } else {
+            failPlayback(message)
+        }
+    }
+
+    /// Replaces the session check, so tests can answer it without a server.
+    @ObservationIgnored var sessionCheckOverride: (() async -> Bool)?
+
+    private func isSessionRejected() async -> Bool {
+        if let sessionCheckOverride { return await sessionCheckOverride() }
+        do {
+            _ = try await api.fetchCurrentUser()
+            return false
+        } catch APIError.unauthorized {
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// A cached copy that won't play is replaced by streaming the track on the next try,
+    /// rather than failing the same way every time. Copies cached before the cache checked
+    /// for refused downloads are the case this recovers: an error body saved as the track.
+    func forgetUnplayableCopy(at url: URL) {
+        playbackCache?.discard(fileURL: url)
+        for index in queue.indices where queue[index].playbackURL == url {
+            queue[index].playbackURL = nil
+        }
+    }
+
+    private func reportSessionExpired() {
+        failPlayback(String(localized: "Your session expired. Sign in again to keep listening."))
+        resumesAfterSignIn = true
+        NotificationCenter.default.post(name: .sessionExpired, object: nil)
+    }
+
     private func failPlayback(_ message: String) {
+        resumesAfterSignIn = false
         stallWatchdog?.cancel()
         stallWatchdog = nil
         isLoadingTrack = false

@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 
@@ -589,6 +590,96 @@ struct PlayerPlaybackFailureTests {
         // Resuming would flip isPlaying synchronously; retrying goes through an async
         // reload instead, leaving it false at this point.
         #expect(!player.isPlaying)
+    }
+
+    /// AVFoundation's own message for a stream it couldn't open, which is what a refused
+    /// token produces.
+    private static let streamFailure = "Cannot Open"
+
+    private func failingStream(_ player: PlayerService) -> AVPlayerItem {
+        let item = AVPlayerItem(url: URL(string: "https://music.example.com/stream/1")!)
+        player.currentPlayerItem = item
+        return item
+    }
+
+    @Test func aRefusedStreamWithAnExpiredSessionAsksToSignIn() async {
+        let player = makePlayer()
+        player.sessionCheckOverride = { true }
+        var expiries = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: .sessionExpired, object: nil, queue: nil
+        ) { _ in expiries += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        await player.failStream(failingStream(player), message: Self.streamFailure)
+
+        #expect(player.playbackError == "Your session expired. Sign in again to keep listening.")
+        #expect(expiries == 1)
+    }
+
+    @Test func signingBackInResumesWhatTheExpiryStopped() async {
+        let player = makePlayer()
+        player.queue = [makeQueueItem(name: "A")]
+        player.sessionCheckOverride = { true }
+        await player.failStream(failingStream(player), message: Self.streamFailure)
+        #expect(player.resumesAfterSignIn)
+
+        player.update(api: APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "new"))
+
+        #expect(!player.resumesAfterSignIn)
+    }
+
+    @Test func signingInAfterAnUnrelatedFailureDoesNotStartPlayback() async {
+        let player = makePlayer()
+        player.queue = [makeQueueItem(name: "A")]
+        player.sessionCheckOverride = { false }
+
+        await player.failStream(failingStream(player), message: Self.streamFailure)
+
+        #expect(!player.resumesAfterSignIn)
+    }
+
+    @Test func clearingTheQueueAfterAnExpiryCancelsTheResume() async {
+        let player = makePlayer()
+        player.queue = [makeQueueItem(name: "A")]
+        player.sessionCheckOverride = { true }
+        await player.failStream(failingStream(player), message: Self.streamFailure)
+
+        player.stopAndClear()
+
+        #expect(!player.resumesAfterSignIn)
+    }
+
+    @Test func aRefusedStreamWithAValidSessionKeepsItsOwnMessage() async {
+        let player = makePlayer()
+        player.sessionCheckOverride = { false }
+
+        await player.failStream(failingStream(player), message: Self.streamFailure)
+
+        #expect(player.playbackError == Self.streamFailure)
+    }
+
+    @Test func anAnswerForATrackSinceSkippedChangesNothing() async {
+        let player = makePlayer()
+        player.sessionCheckOverride = { true }
+        let stale = failingStream(player)
+        _ = failingStream(player)
+
+        await player.failStream(stale, message: Self.streamFailure)
+
+        #expect(player.playbackError == nil)
+    }
+
+    @Test func anUnplayableCachedCopyIsForgottenSoTheRetryStreams() {
+        let player = makePlayer()
+        let bad = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).m4a")
+        var item = makeQueueItem(name: "A")
+        item.playbackURL = bad
+        player.queue = [item, makeQueueItem(name: "B")]
+
+        player.forgetUnplayableCopy(at: bad)
+
+        #expect(player.queue[0].playbackURL == nil)
     }
 
     @Test func pausingAWorkingTrackStillResumes() {
