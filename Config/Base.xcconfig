@@ -8,14 +8,14 @@
 // Defaults
 // ---------------------------------------------------------------------------
 
-ONDU_BUNDLE_ID = com.ondumusic.Player
+ONDU_BUNDLE_ID = com.ondumusic.ondu
 ONDU_APP_NAME = Ondu
 ONDU_APPICON = AppIcon
 
 // Debug installs alongside release by default, so a build that's mid-migration can't
 // touch the library you actually listen to. Separate identifier means a separate
 // container: its own database, downloads and keychain login.
-ONDU_DEBUG_BUNDLE_ID = com.ondumusic.Player.dev
+ONDU_DEBUG_BUNDLE_ID = com.ondumusic.ondu.dev
 ONDU_DEBUG_APP_NAME = Ondu Dev
 // Point at a second icon set once one exists, so the two are distinguishable on a home
 // screen rather than only by name.

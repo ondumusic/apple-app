@@ -17,7 +17,7 @@ in Xcode.
 
 |            | Debug                      | Release                |
 | ---------- | -------------------------- | ---------------------- |
-| Identifier | `com.ondumusic.Player.dev` | `com.ondumusic.Player` |
+| Identifier | `com.ondumusic.ondu.dev`   | `com.ondumusic.ondu`   |
 | Name       | Ondu Dev                   | Ondu                   |
 | Icon       | `AppIcon`                  | `AppIcon`              |
 
@@ -29,8 +29,7 @@ exists; give Debug its own and the two become distinguishable on a home screen.
 **Keeping your existing container.** A Debug build with a new identifier starts empty:
 full re-sync, nothing downloaded, signed out. If you'd rather not pay that yet,
 uncomment the two `ONDU_DEBUG_*` lines in `Local.example.xcconfig` to pin Debug to
-the release identifier. The natural moment to stop doing that is the rename to the real
-identifier, which resets the container anyway.
+the release identifier — at the cost of Debug and release sharing one library again.
 
 ## If a setting here seems to do nothing
 
