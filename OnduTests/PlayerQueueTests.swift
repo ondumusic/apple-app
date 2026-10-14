@@ -682,6 +682,16 @@ struct PlayerPlaybackFailureTests {
         #expect(player.queue[0].playbackURL == nil)
     }
 
+    @Test func aTranscodedStreamsEstimateDoesNotReplaceTheTracksDuration() {
+        #expect(PlayerService.measuredDuration(0.4, known: 245) == nil)
+    }
+
+    @Test func theItemsDurationFillsInWhenTheTrackHasNone() {
+        #expect(PlayerService.measuredDuration(245, known: 0) == 245)
+        #expect(PlayerService.measuredDuration(245, known: nil) == 245)
+        #expect(PlayerService.measuredDuration(.nan, known: 0) == nil)
+    }
+
     @Test func pausingAWorkingTrackStillResumes() {
         let player = makePlayer()
         player.playNow(queue: [makeQueueItem(name: "A")], startingAt: 0)

@@ -388,7 +388,8 @@ private struct CustomSlider: View {
     private var fraction: Double {
         let span = range.upperBound - range.lowerBound
         guard span > 0 else { return 0 }
-        return (value - range.lowerBound) / span
+        // A value past the range drew the fill beyond the track's edge.
+        return min(max((value - range.lowerBound) / span, 0), 1)
     }
 
     var body: some View {

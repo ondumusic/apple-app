@@ -1056,15 +1056,23 @@ final class PlayerService {
             if seconds.isFinite {
                 self.progress = seconds
             }
-            if let item = self.primaryPlayer.currentItem {
-                let dur = item.duration.seconds
-                if dur.isFinite && dur > 0 {
-                    self.duration = dur
-                }
+            if let item = self.primaryPlayer.currentItem,
+                let measured = Self.measuredDuration(item.duration.seconds, known: self.currentTrack?.duration)
+            {
+                self.duration = measured
             }
             self.accumulateListening(to: seconds)
             self.savePositionIfDue()
         }
+    }
+
+    /// AVFoundation's duration for an item, when the track's own isn't known. Only then: a
+    /// stream transcoded as it's served has no length up front and no duration in the
+    /// format, so AVFoundation estimates one from the bytes received so far — under a
+    /// second early on, which showed as 0:00 with the progress far past the end.
+    nonisolated static func measuredDuration(_ itemDuration: Double, known: Double?) -> Double? {
+        guard (known ?? 0) <= 0, itemDuration.isFinite, itemDuration > 0 else { return nil }
+        return itemDuration
     }
 
     private var playThreshold: Double {
