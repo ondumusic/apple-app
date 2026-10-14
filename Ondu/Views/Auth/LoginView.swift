@@ -131,7 +131,7 @@ struct LoginView: View {
                             .onSubmit { submit() }
                     }
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
+                    .fieldRowHeight()
                     .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 10))
                 }
                 .autocorrectionDisabled()
@@ -241,7 +241,7 @@ struct LoginView: View {
                 .onSubmit { advanceFocus(from: field) }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .fieldRowHeight()
         .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 10))
     }
 
@@ -266,5 +266,18 @@ struct LoginView: View {
                 }
             }
         }
+    }
+}
+
+extension View {
+    /// A fixed height on iOS: sized by padding around the field, the row followed the
+    /// field's own height, which the username field changed on its first focus.
+    @ViewBuilder
+    fileprivate func fieldRowHeight() -> some View {
+        #if os(iOS)
+        frame(height: 44)
+        #else
+        padding(.vertical, 11)
+        #endif
     }
 }
