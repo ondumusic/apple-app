@@ -1183,6 +1183,14 @@ private final class KeyAwareTableView: NSTableView {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        // A press on a header row's background — anywhere its own controls don't take the
+        // click — started drag-selection from that row, and the header's hosted content
+        // vanished, leaving only its space, until the page was rebuilt. Headers have
+        // nothing to select or drag.
+        let pressedRow = row(at: point)
+        if pressedRow >= 0, delegate?.tableView?(self, isGroupRow: pressedRow) == true {
+            return
+        }
         let clicked = column(at: point)
         if event.clickCount == 1, clicked >= 0,
             tableColumns[clicked].identifier.rawValue == "number",
