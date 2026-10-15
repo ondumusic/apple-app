@@ -182,11 +182,14 @@ struct TrackContextMenuItems: View {
 
             Divider()
 
-            Button {
-                let target = artist ?? track.artist
-                NotificationCenter.default.post(name: .navigateToArtist, object: target)
-            } label: {
-                Label("Go to Artist", systemImage: "music.mic")
+            // The album artist, as on the Mac: a track's own artist — a featuring, say —
+            // has no albums of its own, so its page came up looking broken.
+            if let target = artist ?? musicLibrary.artist(track.albumArtistId) {
+                Button {
+                    NotificationCenter.default.post(name: .navigateToArtist, object: target)
+                } label: {
+                    Label("Go to Artist", systemImage: "music.mic")
+                }
             }
 
             if let resolvedAlbum = album ?? musicLibrary.album(track.albumId) {

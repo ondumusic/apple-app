@@ -184,14 +184,16 @@ struct FullPlayerView: View {
 
                     Divider()
 
-                    Button {
-                        let artist = track.artist
-                        dismiss()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            NotificationCenter.default.post(name: .navigateToArtist, object: artist)
+                    // The album artist; see TrackContextMenuItems.
+                    if let artist = musicLibrary.artist(track.albumArtistId) {
+                        Button {
+                            dismiss()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                NotificationCenter.default.post(name: .navigateToArtist, object: artist)
+                            }
+                        } label: {
+                            Label("Go to Artist", systemImage: "music.mic")
                         }
-                    } label: {
-                        Label("Go to Artist", systemImage: "music.mic")
                     }
 
                     if let trackAlbum = track.album {
