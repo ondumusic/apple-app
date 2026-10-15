@@ -19,6 +19,12 @@ struct AlbumDetailView: View {
     private var discs: [Int] { Array(Set(tracks.map(\.disc))).sorted() }
     private var hasMultipleDiscs: Bool { discs.count > 1 }
 
+    /// A compilation or a split release: the album's artist says nothing about who's on
+    /// each track, so the rows say it themselves. Same rule as the Mac's album page.
+    private var hasMultipleArtists: Bool {
+        Set(tracks.map(\.artist.id)).count > 1
+    }
+
     var body: some View {
         List {
             // Album header
@@ -116,7 +122,7 @@ struct AlbumDetailView: View {
                 Section {
                     let discTracks = tracks.filter { $0.disc == disc }
                     ForEach(discTracks) { track in
-                        TrackRow(track: track, album: album) {
+                        TrackRow(track: track, album: album, showArtist: hasMultipleArtists) {
                             let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
                             if let index = available.firstIndex(where: { $0.id == track.id }) {
                                 player.requestPlay {
