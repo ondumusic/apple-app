@@ -717,6 +717,30 @@ struct PlayerPlaybackFailureTests {
         #expect(!PlayerService.isEffectivelyFinished(remaining: 60))
     }
 
+    @Test func stopLeavesNothingLoaded() {
+        let player = makePlayer()
+        let album = UUID()
+        player.queue = [
+            makeQueueItem(name: "A", albumId: album, number: 1),
+            makeQueueItem(name: "B", albumId: album, number: 2),
+        ]
+        player.currentPlayerItem = AVPlayerItem(url: URL(string: "https://music.example.com/stream/1")!)
+
+        player.stopAndClear()
+
+        #expect(player.currentPlayerItem == nil)
+        #expect(player.queue.isEmpty)
+    }
+
+    @Test func playPauseDoesNothingWithAnEmptyQueue() {
+        let player = makePlayer()
+        player.stopAndClear()
+
+        player.togglePlayPause()
+
+        #expect(!player.isPlaying)
+    }
+
     @Test func pausingAWorkingTrackStillResumes() {
         let player = makePlayer()
         player.playNow(queue: [makeQueueItem(name: "A")], startingAt: 0)

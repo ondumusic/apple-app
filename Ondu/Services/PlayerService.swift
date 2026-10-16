@@ -488,6 +488,8 @@ final class PlayerService {
     }
 
     func togglePlayPause() {
+        // Nothing to play: after Stop, or before anything was queued.
+        guard isPlaying || !queue.isEmpty else { return }
         if isPlaying {
             primaryPlayer.pause()
             isPlaying = false
@@ -534,7 +536,12 @@ final class PlayerService {
         primaryPlayer.pause()
         primaryPlayer.removeAllItems()
         tearDownCrossfade()
-        invalidateGaplessState()
+        // Not invalidateGaplessState(): that re-queues the next track for the queue as it
+        // still is at this point, so Stop left it loaded and paused — and space played it
+        // with nothing shown.
+        hasQueuedGaplessItem = false
+        gaplessPlayerItem = nil
+        currentPlayerItem = nil
         queue = []
         shuffledIndices = nil
         currentIndex = 0
