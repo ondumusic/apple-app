@@ -376,6 +376,9 @@ struct OnduApp: App {
         // 28pt band above the player row or grew the content past the window's top edge
         // and clipped it.
         .windowStyle(.hiddenTitleBar)
+        // The content's minimum was all it had, so a first launch opened at 900 × 600.
+        // Only applies with no saved frame; the system shrinks it to fit a smaller screen.
+        .defaultSize(width: 1240, height: 760)
         .commandsRemoved()
         .commands {
             // .commandsRemoved() above strips this group wholesale, which took Cut,
