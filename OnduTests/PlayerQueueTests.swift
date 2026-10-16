@@ -692,6 +692,31 @@ struct PlayerPlaybackFailureTests {
         #expect(PlayerService.measuredDuration(.nan, known: 0) == nil)
     }
 
+    @Test func aGaplessAdvanceTheAppDidNotFollowIsCaught() {
+        let previous = AVPlayerItem(url: URL(string: "https://music.example.com/stream/1")!)
+        let queued = AVPlayerItem(url: URL(string: "https://music.example.com/stream/2")!)
+
+        #expect(PlayerService.hasMissedGaplessAdvance(playing: queued, tracked: previous, queued: queued))
+    }
+
+    @Test func aFollowedOrUnqueuedItemIsNotAMissedAdvance() {
+        let previous = AVPlayerItem(url: URL(string: "https://music.example.com/stream/1")!)
+        let queued = AVPlayerItem(url: URL(string: "https://music.example.com/stream/2")!)
+
+        // Still on the previous track, as before the boundary.
+        #expect(!PlayerService.hasMissedGaplessAdvance(playing: previous, tracked: previous, queued: queued))
+        // The app followed: the queued item is now the tracked one.
+        #expect(!PlayerService.hasMissedGaplessAdvance(playing: queued, tracked: queued, queued: queued))
+        // Nothing queued for gapless.
+        #expect(!PlayerService.hasMissedGaplessAdvance(playing: queued, tracked: previous, queued: nil))
+    }
+
+    @Test func aStreamCutOffInItsLastSecondsCountsAsFinished() {
+        #expect(PlayerService.isEffectivelyFinished(remaining: 2))
+        #expect(PlayerService.isEffectivelyFinished(remaining: 0))
+        #expect(!PlayerService.isEffectivelyFinished(remaining: 60))
+    }
+
     @Test func pausingAWorkingTrackStillResumes() {
         let player = makePlayer()
         player.playNow(queue: [makeQueueItem(name: "A")], startingAt: 0)

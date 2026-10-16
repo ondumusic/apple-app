@@ -136,6 +136,7 @@ final class PlayerService {
     @ObservationIgnored private var crossfadeObserver: Any?
     @ObservationIgnored private var crossfadeTimer: Timer?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
+    @ObservationIgnored private var failedToEndObserver: NSObjectProtocol?
     @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
     @ObservationIgnored private var routeChangeObserver: NSObjectProtocol?
     @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
@@ -178,6 +179,9 @@ final class PlayerService {
     @ObservationIgnored var currentPlayerItem: AVPlayerItem?
     /// The AVPlayerItem queued for gapless playback
     @ObservationIgnored private var gaplessPlayerItem: AVPlayerItem?
+    /// The next track's URL is being resolved for the gapless queue. Without it, two calls
+    /// before the first finished each inserted the track.
+    @ObservationIgnored private var isResolvingGaplessItem = false
 
     // MARK: - Computed
 
@@ -302,6 +306,7 @@ final class PlayerService {
         if let timeObserver { primaryPlayer.removeTimeObserver(timeObserver) }
         if let crossfadeObserver { primaryPlayer.removeTimeObserver(crossfadeObserver) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        if let failedToEndObserver { NotificationCenter.default.removeObserver(failedToEndObserver) }
         if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
         if let routeChangeObserver { NotificationCenter.default.removeObserver(routeChangeObserver) }
         crossfadeTimer?.invalidate()
@@ -993,6 +998,15 @@ final class PlayerService {
 
     /// Invalidates gapless/crossfade state when queue changes. Re-evaluates what to do.
     private func invalidateGaplessState() {
+        // At a boundary the player can already be on the queued item before its end has
+        // been handled. Keeping "the current item" would then keep that one, and queueing
+        // the next track from the stale state would queue the same song a second time.
+        if Self.hasMissedGaplessAdvance(
+            playing: primaryPlayer.currentItem, tracked: currentPlayerItem, queued: gaplessPlayerItem)
+        {
+            logTransition("caught a gapless advance before rebuilding the queue")
+            advanceAfterGapless()
+        }
         // Remove any queued gapless item from AVQueuePlayer
         if hasQueuedGaplessItem {
             // AVQueuePlayer: remove all items after current
@@ -1011,7 +1025,7 @@ final class PlayerService {
     /// Inserts the next track into AVQueuePlayer for native gapless playback.
     /// Assumes prefetch has already resolved the URL.
     private func enqueueNextForGapless() {
-        guard !hasQueuedGaplessItem else { return }
+        guard !hasQueuedGaplessItem, !isResolvingGaplessItem else { return }
         guard let next = nextTrackInfo() else { return }
         let nextEffective = next.effectiveIndex
         guard let nextItem = item(at: nextEffective) else { return }
@@ -1020,14 +1034,21 @@ final class PlayerService {
         guard let url = nextItem.playbackURL else {
             // Fallback: resolve async if prefetch somehow missed it
             let nextTrack = nextItem.track
+            isResolvingGaplessItem = true
             Task {
+                defer { self.isResolvingGaplessItem = false }
                 do {
                     let url = try resolvePlaybackURL(for: nextTrack, queueIndex: nextEffective)
+                    // The queue or the current track can have moved on meanwhile.
+                    guard !self.hasQueuedGaplessItem,
+                        self.nextTrackInfo()?.effectiveIndex == nextEffective
+                    else { return }
                     let item = self.makePlayerItem(url: url)
                     if self.primaryPlayer.canInsert(item, after: self.primaryPlayer.items().last) {
                         self.primaryPlayer.insert(item, after: self.primaryPlayer.items().last)
                         self.gaplessPlayerItem = item
                         self.hasQueuedGaplessItem = true
+                        self.logTransition("queued \(nextTrack.name) for gapless")
                     }
                 } catch {
                     #if DEBUG
@@ -1043,6 +1064,7 @@ final class PlayerService {
             primaryPlayer.insert(item, after: primaryPlayer.items().last)
             gaplessPlayerItem = item
             hasQueuedGaplessItem = true
+            logTransition("queued \(nextItem.track.name) for gapless")
         }
     }
 
@@ -1052,6 +1074,17 @@ final class PlayerService {
         let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
         timeObserver = primaryPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self, !self.isSeeking, !self.isLoadingTrack else { return }
+            // At a gapless boundary the state moves on only when the finished item's end
+            // notification is handled. Missed, the next song played under the last one's
+            // title and duration, and at its end the queue played it again. Following the
+            // item that's actually playing bounds that to one tick.
+            if Self.hasMissedGaplessAdvance(
+                playing: self.primaryPlayer.currentItem, tracked: self.currentPlayerItem,
+                queued: self.gaplessPlayerItem)
+            {
+                self.logTransition("caught a missed gapless advance")
+                self.advanceAfterGapless()
+            }
             let seconds = time.seconds
             if seconds.isFinite {
                 self.progress = seconds
@@ -1119,13 +1152,58 @@ final class PlayerService {
                 } else {
                     self.skip()
                 }
+            } else if item === self.primaryPlayer.currentItem || item === self.gaplessPlayerItem {
+                self.logTransition("ignored the end of an item that isn't the current one")
             }
             // Ignore notifications from stale/unknown items
         }
+        // A stream that breaks off posts this instead of the end above, and the queue
+        // player still moves on to a queued item — so nothing told the state to follow.
+        failedToEndObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self, let item = notification.object as? AVPlayerItem, item === self.currentPlayerItem
+            else { return }
+            let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+            self.logTransition(
+                "\(self.currentTrack?.name ?? "item") stopped before its end: "
+                    + (error?.localizedDescription ?? "no error given"))
+            self.handleStoppedBeforeEnd(error: error)
+        }
+    }
+
+    private func removeEndObservers() {
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = nil
+        if let failedToEndObserver { NotificationCenter.default.removeObserver(failedToEndObserver) }
+        failedToEndObserver = nil
+    }
+
+    /// Near the end it's as good as finished — a stream cut short in its last seconds — so
+    /// playback moves on. Earlier, moving on would skip most of a song, and with the network
+    /// gone fail on the next one too, so it stops with the error and play retries it.
+    private func handleStoppedBeforeEnd(error: Error?) {
+        let remaining = (currentTrack?.duration ?? 0) - progress
+        if Self.isEffectivelyFinished(remaining: remaining) {
+            if hasQueuedGaplessItem {
+                advanceAfterGapless()
+            } else {
+                skip()
+            }
+        } else {
+            failPlayback(error?.localizedDescription ?? String(localized: "This track couldn't be played."))
+        }
+    }
+
+    nonisolated static func isEffectivelyFinished(remaining: Double) -> Bool {
+        remaining < 5
     }
 
     /// Called when AVQueuePlayer auto-advances to the queued gapless item.
     private func advanceAfterGapless() {
+        logTransition("gapless advance from \(currentTrack?.name ?? "nothing")")
         hasQueuedGaplessItem = false
         // The gapless item is now the active item
         currentPlayerItem = gaplessPlayerItem
@@ -1153,6 +1231,21 @@ final class PlayerService {
             await prefetchNextTrackAsync()
             setupGaplessOrCrossfade()
         }
+    }
+
+    /// The player is on the item queued for gapless, but the app still tracks the one
+    /// before it.
+    nonisolated static func hasMissedGaplessAdvance(
+        playing: AVPlayerItem?, tracked: AVPlayerItem?, queued: AVPlayerItem?
+    ) -> Bool {
+        guard let playing, let queued else { return false }
+        return playing === queued && playing !== tracked
+    }
+
+    private func logTransition(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        print("PlayerService: \(message())")
+        #endif
     }
 
     // MARK: - Crossfade
@@ -1195,10 +1288,7 @@ final class PlayerService {
             primaryPlayer.removeTimeObserver(crossfadeObserver)
             self.crossfadeObserver = nil
         }
-        if let endObserver {
-            NotificationCenter.default.removeObserver(endObserver)
-            self.endObserver = nil
-        }
+        removeEndObservers()
 
         let nextTrack = queue[nextEffective].track
 
@@ -1249,8 +1339,7 @@ final class PlayerService {
         timeObserver = nil
         if let crossfadeObserver { primaryPlayer.removeTimeObserver(crossfadeObserver) }
         crossfadeObserver = nil
-        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-        endObserver = nil
+        removeEndObservers()
 
         primaryPlayer.pause()
         primaryPlayer.removeAllItems()
