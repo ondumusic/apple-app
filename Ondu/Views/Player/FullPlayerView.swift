@@ -288,23 +288,17 @@ private struct PlayerScrubber: View {
             .frame(height: 32)
 
             HStack {
-                Text(formatTime(currentValue))
+                Text(DurationFormat.string(currentValue))
                     .font(.caption)
                     .foregroundStyle(isDragging ? .primary : .secondary)
                     .monospacedDigit()
                 Spacer()
-                Text("-" + formatTime(max(0, player.duration - currentValue)))
+                Text("-" + DurationFormat.string(max(0, player.duration - currentValue)))
                     .font(.caption)
                     .foregroundStyle(isDragging ? .primary : .secondary)
                     .monospacedDigit()
             }
         }
-    }
-
-    private func formatTime(_ seconds: Double) -> String {
-        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
-        let total = Int(seconds)
-        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }
 

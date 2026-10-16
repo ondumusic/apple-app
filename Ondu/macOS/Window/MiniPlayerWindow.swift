@@ -997,9 +997,9 @@ private struct MiniScrubber: View {
         let labelColor: Color = tint?.opacity(0.85) ?? Color.secondary
         VStack(spacing: 2) {
             HStack(spacing: 0) {
-                Text(format(isScrubbing ? scrubValue : player.progress))
+                Text(DurationFormat.string(isScrubbing ? scrubValue : player.progress))
                 Spacer()
-                Text(format(player.duration))
+                Text(DurationFormat.string(player.duration))
             }
             .font(.caption2.monospacedDigit())
             .foregroundStyle(labelColor)
@@ -1019,12 +1019,6 @@ private struct MiniScrubber: View {
             )
             .frame(height: 10)
         }
-    }
-
-    private func format(_ time: Double) -> String {
-        guard time.isFinite, time >= 0 else { return "0:00" }
-        let total = Int(time.rounded())
-        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }
 

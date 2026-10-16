@@ -313,7 +313,7 @@ struct ScrubberView: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text(format(isScrubbing ? scrubValue : player.progress))
+            Text(DurationFormat.string(isScrubbing ? scrubValue : player.progress))
                 .font(.system(size: 9).monospacedDigit())
                 .foregroundStyle(.secondary)
             ProgressTrack(
@@ -329,16 +329,10 @@ struct ScrubberView: View {
                 }
             )
             .frame(height: 8)
-            Text(format(player.duration))
+            Text(DurationFormat.string(player.duration))
                 .font(.system(size: 9).monospacedDigit())
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private func format(_ time: Double) -> String {
-        guard time.isFinite, time >= 0 else { return "0:00" }
-        let total = Int(time.rounded())
-        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }
 
