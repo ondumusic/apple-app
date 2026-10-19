@@ -52,6 +52,11 @@ nonisolated enum KeychainHelper {
         return query
     }
 
+    /// Readable from the first unlock on, so background downloads can still authenticate,
+    /// but never carried in a backup to another device: the token signs in as the user,
+    /// and a new device signing in again costs only a password.
+    private static let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
     /// Updates in place rather than deleting and re-adding, and doesn't ignore the result:
     /// deleting first and ignoring both results is how a refused save left the old token
     /// behind with nothing to show for it.
@@ -59,11 +64,14 @@ nonisolated enum KeychainHelper {
         guard let data = value.data(using: .utf8) else { return }
         let query = baseQuery(for: key)
 
-        var status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: accessibility,
+        ]
+        var status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if status == errSecItemNotFound {
             var item = query
-            item[kSecValueData as String] = data
-            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            item.merge(attributes) { _, new in new }
             status = SecItemAdd(item as CFDictionary, nil)
         }
         #if DEBUG
