@@ -566,6 +566,23 @@ struct MacOSContentView: View {
             guard !available.isEmpty else { return }
             player.requestPlay { player.playShuffled(tracks: available) }
         }
+        a.playSongs = { shuffled in
+            let library =
+                libraryFilter == .downloaded
+                ? musicLibrary.downloadedTracks()
+                : (musicLibrary.cachedAllTracks ?? musicLibrary.allTracks())
+            let sort = TrackSort(rawValue: UserDefaults.standard.string(forKey: TrackSort.songsKey) ?? "")
+            let tracks = sort.map { $0.sorted(library) } ?? library
+            let available = musicLibrary.availableTracks(tracks, isOnline: network.isOnline)
+            guard !available.isEmpty else { return }
+            player.requestPlay {
+                if shuffled {
+                    player.playShuffled(tracks: available)
+                } else {
+                    player.playNow(tracks: available)
+                }
+            }
+        }
         a.renamePlaylist = { playlist, newName in
             playlistController.renamePlaylist(playlist.id, name: newName)
         }

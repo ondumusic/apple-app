@@ -9,6 +9,8 @@ import Foundation
 struct SidebarActions {
     var playPlaylist: (Playlist) -> Void = { _ in }
     var shufflePlaylist: (Playlist) -> Void = { _ in }
+    /// The Songs list as it's sorted there — or only what's downloaded, under that filter.
+    var playSongs: (_ shuffled: Bool) -> Void = { _ in }
     /// Commit a rename. Inline edit fires this when the user presses Enter / blurs the
     /// inline text field with a non-empty value different from the current name.
     var renamePlaylist: (Playlist, String) -> Void = { _, _ in }

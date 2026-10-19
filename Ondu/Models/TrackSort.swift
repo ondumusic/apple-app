@@ -92,6 +92,9 @@ nonisolated enum TrackSortKey: Sendable {
 }
 
 nonisolated struct TrackSort: Equatable, Sendable, RawRepresentable {
+    /// Where the Songs view keeps its sort, read too by the sidebar's Play on that row.
+    static let songsKey = "songsSort"
+
     var column: TrackSortColumn
     var ascending: Bool
 

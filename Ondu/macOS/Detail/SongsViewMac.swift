@@ -13,7 +13,7 @@ struct SongsViewMac: View {
     /// which is what keeps an album's tracks together instead of interleaving them. No
     /// column expresses it, so a header click is an override, not a replacement, and the
     /// header menu's Default Order is the way back.
-    @AppStorage("songsSort") private var storedSort: String = ""
+    @AppStorage(TrackSort.songsKey) private var storedSort: String = ""
     @State private var tracks: [Track] = []
     @State private var selection: Set<UUID> = []
 

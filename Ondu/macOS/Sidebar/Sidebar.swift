@@ -986,10 +986,42 @@ extension SidebarViewController: NSMenuDelegate {
                 addCreateItems(to: menu, parentId: playlist.id)
             }
         } else {
-            // Empty space, section header, or library category — offer to create at
-            // root.
-            addCreateItems(to: menu, parentId: nil)
+            let node = row >= 0 ? outlineView.item(atRow: row) as? SidebarNode : nil
+            switch node?.kind {
+            case .category(let category):
+                // Songs is all the music, so it's the one row a quick play or shuffle
+                // belongs on; Artists and Albums would offer the same tracks again. Nothing
+                // to create belongs on any library row.
+                if category == .songs {
+                    addSongsPlayItems(to: menu)
+                }
+            case .section:
+                if node === playlistsSection {
+                    addCreateItems(to: menu, parentId: nil)
+                }
+            case .playlist, nil:
+                // Empty space below the list.
+                addCreateItems(to: menu, parentId: nil)
+            }
         }
+    }
+
+    private func addSongsPlayItems(to menu: NSMenu) {
+        let play = NSMenuItem(title: "Play", action: #selector(menuPlaySongs), keyEquivalent: "")
+        play.target = self
+        menu.addItem(play)
+
+        let shuffle = NSMenuItem(title: "Shuffle", action: #selector(menuShuffleSongs), keyEquivalent: "")
+        shuffle.target = self
+        menu.addItem(shuffle)
+    }
+
+    @objc private func menuPlaySongs(_ sender: NSMenuItem) {
+        actions.playSongs(false)
+    }
+
+    @objc private func menuShuffleSongs(_ sender: NSMenuItem) {
+        actions.playSongs(true)
     }
 
     private func addCreateItems(to menu: NSMenu, parentId: UUID?) {
