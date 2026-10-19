@@ -10,6 +10,22 @@ final class APIService: Sendable {
         self.sessionToken = sessionToken
     }
 
+    /// Whether `url` may carry the session token. Stream and download URLs arrive in the
+    /// server's own data; one pointing at another host is requested without the token
+    /// rather than handing it to that host.
+    func mayReceiveToken(_ url: URL) -> Bool {
+        Self.isSameOrigin(url, as: baseURL)
+    }
+
+    /// Same scheme, host and port — a default port counting the same as one spelled out.
+    nonisolated static func isSameOrigin(_ url: URL, as base: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), scheme == base.scheme?.lowercased(),
+            let host = url.host()?.lowercased(), host == base.host()?.lowercased()
+        else { return false }
+        let defaultPort = ["https": 443, "http": 80][scheme]
+        return (url.port ?? defaultPort) == (base.port ?? defaultPort)
+    }
+
     // MARK: - Generic Fetch
 
     private func request(for endpoint: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {

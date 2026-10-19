@@ -160,9 +160,12 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     private var authorizedRequest: (URL) -> URLRequest? {
         { [weak self] url in
-            guard let token = self?.sessionToken else { return nil }
+            guard let self, let token = self.sessionToken else { return nil }
             var req = URLRequest(url: url)
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            // Only to the server signed in to; see APIService.mayReceiveToken.
+            if let baseURL = self.baseURL, APIService.isSameOrigin(url, as: baseURL) {
+                req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
             req.timeoutInterval = 300
             return req
         }

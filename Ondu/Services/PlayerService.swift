@@ -918,15 +918,16 @@ final class PlayerService {
         if let cache = playbackCache {
             let cacheURL = streamURL
             Task.detached {
-                let _ = await cache.cacheTrack(trackId: track.id, from: cacheURL, sessionToken: self.api.sessionToken)
+                let token = self.api.mayReceiveToken(cacheURL) ? self.api.sessionToken : nil
+                let _ = await cache.cacheTrack(trackId: track.id, from: cacheURL, sessionToken: token)
             }
         }
         return streamURL
     }
 
-    /// Creates an AVPlayerItem, attaching Bearer auth headers for remote URLs.
+    /// Creates an AVPlayerItem, attaching Bearer auth headers for URLs on the server.
     private func makePlayerItem(url: URL) -> AVPlayerItem {
-        if url.isFileURL {
+        if url.isFileURL || !api.mayReceiveToken(url) {
             return AVPlayerItem(url: url)
         }
         let headers = ["Authorization": "Bearer \(api.sessionToken)"]
