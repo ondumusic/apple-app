@@ -431,6 +431,10 @@ struct OnduApp: App {
                 }
                 .keyboardShortcut("l", modifiers: [.command, .option])
             }
+            // .commandsRemoved() takes About with the rest.
+            CommandGroup(replacing: .appInfo) {
+                AboutButton()
+            }
             // Beside About rather than in File: this is the app catching up with the
             // server, which is the same kind of thing as Check for Updates.
             CommandGroup(after: .appInfo) {
