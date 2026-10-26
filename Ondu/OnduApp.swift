@@ -313,7 +313,7 @@ struct OnduApp: App {
             syncService = auth.apiService.map {
                 SyncService(
                     api: $0, musicLibrary: musicLibrary, settings: settings, downloadService: downloadService,
-                    outbox: newOutbox)
+                    outbox: newOutbox, network: networkMonitor)
             }
             playlistController = newOutbox.map {
                 PlaylistController(musicLibrary: musicLibrary, outbox: $0, downloadService: downloadService)
@@ -327,6 +327,9 @@ struct OnduApp: App {
             } else if newOutbox != nil {
                 Task { await newOutbox?.flush() }
             }
+        }
+        .onChange(of: networkMonitor.isUnmetered) { _, unmetered in
+            if unmetered { syncService?.preloadDeferredArtwork() }
         }
         .onChange(of: networkMonitor.isOnline) { _, online in
             if online {

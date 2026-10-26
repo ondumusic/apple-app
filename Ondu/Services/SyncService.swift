@@ -251,6 +251,9 @@ final class SyncService {
     @ObservationIgnored private var downloadService: DownloadService?
     @ObservationIgnored private weak var outbox: OutboxService?
     @ObservationIgnored private var artworkPrefetcher: ImagePrefetcher?
+    @ObservationIgnored private let network: NetworkMonitor?
+    /// Artwork a sync brought in while the network was metered, waiting for one that isn't.
+    @ObservationIgnored private var deferredArtworkURLs: [URL] = []
     @ObservationIgnored private var isSessionExpired = false
     @ObservationIgnored private var hasCheckedCompatibility = false
     @ObservationIgnored private var syncRun = 0
@@ -264,8 +267,9 @@ final class SyncService {
 
     init(
         api: APIService, musicLibrary: MusicLibrary, settings: SettingsStore? = nil,
-        downloadService: DownloadService? = nil, outbox: OutboxService? = nil
+        downloadService: DownloadService? = nil, outbox: OutboxService? = nil, network: NetworkMonitor? = nil
     ) {
+        self.network = network
         self.api = api
         self.musicLibrary = musicLibrary
         self.settings = settings
@@ -419,14 +423,8 @@ final class SyncService {
             Task { [musicLibrary] in await musicLibrary.prepareAllTracks() }
         }
 
-        // Prefetch artwork — detached to avoid slowing sync, stored to prevent deallocation
         if !artworkURLs.isEmpty {
-            let urls = artworkURLs
-            Task.detached(priority: .utility) { @MainActor [weak self] in
-                let prefetcher = ImagePrefetcher()
-                self?.artworkPrefetcher = prefetcher
-                prefetcher.startPrefetching(with: urls)
-            }
+            preloadArtwork(artworkURLs)
         }
 
         if let downloadService {
@@ -484,6 +482,33 @@ final class SyncService {
         if error is CancellationError { return true }
         if let urlError = error as? URLError, urlError.code == .cancelled { return true }
         return false
+    }
+
+    private func preloadArtwork(_ urls: [URL]) {
+        let decision = ArtworkPreload.decision(
+            count: urls.count, isExpensive: network?.isExpensive ?? false,
+            isConstrained: network?.isConstrained ?? false)
+        switch decision {
+        case .now:
+            // Detached so it doesn't slow the sync; kept so it isn't deallocated mid-run.
+            Task.detached(priority: .utility) { @MainActor [weak self] in
+                let prefetcher = ImagePrefetcher()
+                self?.artworkPrefetcher = prefetcher
+                prefetcher.startPrefetching(with: urls)
+            }
+        case .later:
+            deferredArtworkURLs += urls
+        case .never:
+            break
+        }
+    }
+
+    /// Called when the network stops being metered.
+    func preloadDeferredArtwork() {
+        guard !deferredArtworkURLs.isEmpty else { return }
+        let urls = deferredArtworkURLs
+        deferredArtworkURLs = []
+        preloadArtwork(urls)
     }
 
     func syncIfNeeded() async {
