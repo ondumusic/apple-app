@@ -16,6 +16,7 @@ struct SettingsView: View {
     #endif
 
     @State private var showClearCacheConfirmation = false
+    @State private var artworkCacheSize: Int64?
     @State private var showLogoutConfirmation = false
     @State private var showRebuildConfirmation = false
 
@@ -39,6 +40,7 @@ struct SettingsView: View {
             appearanceSection
             accentColorSection
             cacheSection
+            artworkCacheSection
             qualitySection
             downloadsSection
             librarySection
@@ -71,6 +73,7 @@ struct SettingsView: View {
 
             Form {
                 cacheSection
+                artworkCacheSection
                 downloadsSection
             }
             .formStyle(.grouped)
@@ -203,6 +206,30 @@ struct SettingsView: View {
             }
             .padding(.vertical, 4)
         }
+    }
+
+    @ViewBuilder
+    private var artworkCacheSection: some View {
+        Section {
+            HStack {
+                Text("Cache Size")
+                Spacer()
+                Text(artworkCacheSize.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "…")
+                    .foregroundStyle(.secondary)
+            }
+            Button("Clear Cache", role: .destructive) {
+                ArtworkCache.clear()
+                artworkCacheSize = 0
+            }
+            .disabled(artworkCacheSize == 0)
+        } header: {
+            Text("Artwork Cache")
+        } footer: {
+            Text(
+                "Album covers and artist photos, kept so browsing is instant and works offline. Cleared artwork downloads again as you browse."
+            )
+        }
+        .task { artworkCacheSize = await ArtworkCache.size() }
     }
 
     @ViewBuilder

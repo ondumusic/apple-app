@@ -220,7 +220,7 @@ struct OnduApp: App {
     @AppStorage("libraryFilter") private var libraryFilter: LibraryFilter = .all
 
     init() {
-        ImagePipeline.shared = ImagePipeline(configuration: .withDataCache)
+        ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(sizeLimit: ArtworkCache.sizeLimit))
         #if os(macOS)
         // Disable window-tab grouping (the macOS feature that lets multiple windows
         // join into Safari-style tabs). Ondu is single-window.
