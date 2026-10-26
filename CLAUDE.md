@@ -32,7 +32,7 @@ Base URL ends in `/api` (set during login). All bodies send lowercase UUID strin
 - `GET /sync?cursor=`
 - `POST /playlists`, `PATCH /playlists/{id}`, `DELETE /playlists/{id}`
 - `PATCH /playlists/{id}/items` — batched add/move/remove (mixed). 422 returns the discriminated `PlaylistItemsError` union.
-- `GET /tracks/{id}/transcode` — SSE prepare stream.
+- Transcoding presets: `TranscodePreset` asks for `default_ogg`/`mobile_ogg` (Opus in Ogg: gapless, seekable, sized up front, so a transcoded download is a plain GET).
 - Streaming: `track.streamUrl + ?token=`.
 
 ### Playlists

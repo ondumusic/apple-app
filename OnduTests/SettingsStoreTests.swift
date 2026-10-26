@@ -116,17 +116,17 @@ struct SettingsStoreTests {
     @Test func downloadQualityPersists() {
         let defaults = isolatedDefaults()
         let store = SettingsStore(defaults: defaults)
-        store.downloadQuality = .mobileAAC
+        store.downloadQuality = .mobile
         let store2 = SettingsStore(defaults: defaults)
-        #expect(store2.downloadQuality == .mobileAAC)
+        #expect(store2.downloadQuality == .mobile)
     }
 
     @Test func streamingQualityPersists() {
         let defaults = isolatedDefaults()
         let store = SettingsStore(defaults: defaults)
-        store.streamingQuality = .mobileADTS
+        store.streamingQuality = .mobile
         let store2 = SettingsStore(defaults: defaults)
-        #expect(store2.streamingQuality == .mobileADTS)
+        #expect(store2.streamingQuality == .mobile)
     }
 
     @Test func artworkTintedPlayerPersists() {

@@ -185,7 +185,7 @@ final class APIService: Sendable {
     /// The API generation this build is written against. The server bumps its own only
     /// when it changes the API in a way that breaks existing clients, so any difference
     /// means one side can't talk to the other.
-    nonisolated static let supportedAPIVersion = 1
+    nonisolated static let supportedAPIVersion = 2
 
     nonisolated struct ServerInfo: Decodable, Sendable {
         let version: String

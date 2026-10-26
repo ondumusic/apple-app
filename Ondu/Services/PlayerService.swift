@@ -900,11 +900,8 @@ final class PlayerService {
         guard var streamURL = URL(string: track.streamUrl) else {
             throw URLError(.badURL)
         }
-        // Determine streaming preset: user setting, or force transcode for unsupported formats
-        let streamingQuality = settings.streamingQuality
-        let needsTranscode = streamingQuality != .original || !AudioFormat.isAVPlayerSupported(track.mimetype)
-        let preset = streamingQuality != .original ? streamingQuality.rawValue : "default_adts"
-        if needsTranscode {
+        let preset = TranscodePreset.forStreaming(quality: settings.streamingQuality, mimetype: track.mimetype)
+        if let preset {
             if var comps = URLComponents(url: streamURL, resolvingAgainstBaseURL: false) {
                 var queryItems = comps.queryItems ?? []
                 queryItems.append(URLQueryItem(name: "transcode", value: "1"))

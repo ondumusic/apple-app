@@ -4,23 +4,24 @@ import Testing
 
 struct DownloadQualityTests {
 
-    @Test func rawValuesMatchServerPresets() {
+    /// Levels, not server presets: the preset is picked per device, see TranscodePreset.
+    @Test func rawValuesAreLevels() {
         #expect(DownloadQuality.original.rawValue == "original")
-        #expect(DownloadQuality.defaultAAC.rawValue == "default_aac")
-        #expect(DownloadQuality.mobileAAC.rawValue == "mobile_aac")
+        #expect(DownloadQuality.high.rawValue == "high")
+        #expect(DownloadQuality.mobile.rawValue == "mobile")
     }
 
     @Test func displayNames() {
         #expect(DownloadQuality.original.displayName == "Original")
-        #expect(DownloadQuality.defaultAAC.displayName == "Default (256kbps)")
-        #expect(DownloadQuality.mobileAAC.displayName == "Mobile (128kbps)")
+        #expect(DownloadQuality.high.displayName == "High")
+        #expect(DownloadQuality.mobile.displayName == "Mobile")
     }
 
     @Test func initFromRawValue() {
-        #expect(DownloadQuality(rawValue: "default_aac") == .defaultAAC)
-        #expect(DownloadQuality(rawValue: "mobile_aac") == .mobileAAC)
+        #expect(DownloadQuality(rawValue: "high") == .high)
+        #expect(DownloadQuality(rawValue: "mobile") == .mobile)
         #expect(DownloadQuality(rawValue: "original") == .original)
-        #expect(DownloadQuality(rawValue: "invalid") == nil)
+        #expect(DownloadQuality(rawValue: "default_aac") == nil)
     }
 
     @Test func allCasesCount() {
@@ -30,23 +31,23 @@ struct DownloadQualityTests {
 
 struct StreamingQualityTests {
 
-    @Test func rawValuesMatchServerPresets() {
+    @Test func rawValuesAreLevels() {
         #expect(StreamingQuality.original.rawValue == "original")
-        #expect(StreamingQuality.defaultADTS.rawValue == "default_adts")
-        #expect(StreamingQuality.mobileADTS.rawValue == "mobile_adts")
+        #expect(StreamingQuality.high.rawValue == "high")
+        #expect(StreamingQuality.mobile.rawValue == "mobile")
     }
 
     @Test func displayNames() {
         #expect(StreamingQuality.original.displayName == "Original")
-        #expect(StreamingQuality.defaultADTS.displayName == "Default (256kbps)")
-        #expect(StreamingQuality.mobileADTS.displayName == "Mobile (128kbps)")
+        #expect(StreamingQuality.high.displayName == "High")
+        #expect(StreamingQuality.mobile.displayName == "Mobile")
     }
 
     @Test func initFromRawValue() {
-        #expect(StreamingQuality(rawValue: "default_adts") == .defaultADTS)
-        #expect(StreamingQuality(rawValue: "mobile_adts") == .mobileADTS)
+        #expect(StreamingQuality(rawValue: "high") == .high)
+        #expect(StreamingQuality(rawValue: "mobile") == .mobile)
         #expect(StreamingQuality(rawValue: "original") == .original)
-        #expect(StreamingQuality(rawValue: "invalid") == nil)
+        #expect(StreamingQuality(rawValue: "default_adts") == nil)
     }
 
     @Test func allCasesCount() {

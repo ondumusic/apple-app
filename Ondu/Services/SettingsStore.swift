@@ -1,29 +1,27 @@
 import SwiftUI
 
+/// A level rather than a server preset: which preset a level maps to depends on what
+/// the server offers, see `TranscodePreset`.
 nonisolated enum DownloadQuality: String, CaseIterable, Sendable {
-    case original
-    case defaultAAC = "default_aac"
-    case mobileAAC = "mobile_aac"
+    case original, high, mobile
 
     var displayName: String {
         switch self {
         case .original: "Original"
-        case .defaultAAC: "Default (256kbps)"
-        case .mobileAAC: "Mobile (128kbps)"
+        case .high: "High"
+        case .mobile: "Mobile"
         }
     }
 }
 
 nonisolated enum StreamingQuality: String, CaseIterable, Sendable {
-    case original
-    case defaultADTS = "default_adts"
-    case mobileADTS = "mobile_adts"
+    case original, high, mobile
 
     var displayName: String {
         switch self {
         case .original: "Original"
-        case .defaultADTS: "Default (256kbps)"
-        case .mobileADTS: "Mobile (128kbps)"
+        case .high: "High"
+        case .mobile: "Mobile"
         }
     }
 }
