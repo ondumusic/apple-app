@@ -257,3 +257,27 @@ struct SyncFailureMessageTests {
         #expect(ErrorMessages.sync(for: APIError.httpError(500)) != ErrorMessages.sync(for: APIError.httpError(404)))
     }
 }
+
+// MARK: - Local Network Permission
+
+struct LocalNetworkDeniedTests {
+    private func failure(path: String?) -> URLError {
+        var info: [String: Any] = [NSURLErrorFailingURLErrorKey: URL(string: "https://music.local/api/auth/login")!]
+        if let path { info["_NSURLErrorNWPathKey"] = path }
+        return URLError(.notConnectedToInternet, userInfo: info)
+    }
+
+    @Test func aPathTheUserDeniedIsNamedAsSuch() {
+        let denied = failure(path: "unsatisfied (Local network prohibited), interface: en0")
+        #expect(ErrorMessages.isLocalNetworkDenied(denied))
+        #expect(ErrorMessages.login(for: denied).contains("Local Network"))
+        #expect(ErrorMessages.sync(for: denied) == ErrorMessages.login(for: denied))
+    }
+
+    @Test func beingOfflineStillSaysOffline() {
+        let offline = failure(path: "unsatisfied (No network route)")
+        #expect(!ErrorMessages.isLocalNetworkDenied(offline))
+        #expect(!ErrorMessages.isLocalNetworkDenied(failure(path: nil)))
+        #expect(ErrorMessages.login(for: offline).contains("offline"))
+    }
+}

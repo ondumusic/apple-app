@@ -29,6 +29,19 @@ nonisolated enum ErrorMessages {
 
     private static func connection(for error: Error) -> String? {
         if let urlError = error as? URLError {
+            if isLocalNetworkDenied(urlError) {
+                #if os(macOS)
+                return String(
+                    localized:
+                        "Ondu isn’t allowed to reach your local network. Turn it on in System Settings ▸ Privacy & Security ▸ Local Network."
+                )
+                #else
+                return String(
+                    localized:
+                        "Ondu isn’t allowed to reach your local network. Turn it on in Settings ▸ Privacy & Security ▸ Local Network."
+                )
+                #endif
+            }
             switch urlError.code {
             case .notConnectedToInternet:
                 return String(localized: "You’re offline. Check your connection and try again.")
@@ -48,5 +61,14 @@ nonisolated enum ErrorMessages {
             return String(localized: "The server ran into a problem. Try again in a moment.")
         }
         return nil
+    }
+
+    /// A server on the local network after the user declined the local network prompt. The
+    /// request fails as if the device were offline, so without this it read "You're
+    /// offline" — on a device that plainly isn't. The network path attached to the error
+    /// names the reason; it isn't public API, so its absence just falls through.
+    static func isLocalNetworkDenied(_ error: URLError) -> Bool {
+        guard let path = error.userInfo["_NSURLErrorNWPathKey"] else { return false }
+        return String(describing: path).localizedCaseInsensitiveContains("Local network prohibited")
     }
 }
