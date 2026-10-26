@@ -19,13 +19,19 @@ struct LoadingWave: View {
             Canvas { graphics, size in
                 graphics.scaleBy(x: size.width / Self.boxWidth, y: size.width / Self.boxWidth)
                 let back = Self.path { x in
-                    3 * Self.drift(t, period: 2.9, amount: 0.5) * Self.envelope(x, t) * Self.wave(x, -t, wavelength: 14, period: 1.2)
+                    3 * Self.drift(t, period: 2.9, amount: 0.5) * Self.envelope(x, t)
+                        * Self.wave(x, -t, wavelength: 14, period: 1.2)
                 }
                 let front = Self.path { x in
-                    4.5 * Self.drift(t, period: 3.7, amount: 0.3) * Self.envelope(x, t) * Self.wave(x, t, wavelength: 10, period: 0.8)
+                    4.5 * Self.drift(t, period: 3.7, amount: 0.3) * Self.envelope(x, t)
+                        * Self.wave(x, t, wavelength: 10, period: 0.8)
                 }
-                graphics.stroke(back, with: .color(.accentColor.opacity(0.3)), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                graphics.stroke(front, with: .color(.accentColor), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                graphics.stroke(
+                    back, with: .color(.accentColor.opacity(0.3)),
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                graphics.stroke(
+                    front, with: .color(.accentColor),
+                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
             }
         }
         .frame(width: width, height: width / 3)
