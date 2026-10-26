@@ -106,8 +106,7 @@ private struct SyncProgressView: View {
                 }
                 .padding(.top, 4)
             } else {
-                ProgressView()
-                    .controlSize(.large)
+                LoadingWave()
                 VStack(spacing: 4) {
                     Text("Getting your library ready")
                         .font(.headline)
