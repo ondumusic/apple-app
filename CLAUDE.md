@@ -89,7 +89,7 @@ xcodebuild -scheme Ondu -destination 'platform=iOS Simulator,name=iPhone 17' \
 A test run that hangs with no output usually means the test host crashed: the bundle
 aborts mid-run and leaves `/usr/libexec/testmanagerd` orphaned, which then wedges the
 *next* run too. Killing `xcodebuild` doesn't clear it — `killall -9 testmanagerd` does.
-Look for a crash report in `~/Library/Logs/DiagnosticReports/Ondu*.ips` (Debug builds are `Ondu Dev-…`) and for a
+Look for a crash report in `~/Library/Logs/DiagnosticReports/Ondu*.ips` and for a
 failing test in the same area before blaming the simulator.
 
 Parallel testing is off deliberately. The iOS 27 simulator runtime clones unreliably —

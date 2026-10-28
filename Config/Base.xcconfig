@@ -47,27 +47,24 @@ EFFECTIVE_APP_NAME[config=Debug] = $(ONDU_DEBUG_APP_NAME)
 EFFECTIVE_APPICON = $(ONDU_APPICON)
 EFFECTIVE_APPICON[config=Debug] = $(ONDU_DEBUG_APPICON)
 
-// The app's user-facing name, not its target name: macOS names an app after its file
-// (Dock, Finder, Spotlight) and CFBundleName (menu bar, About), not CFBundleDisplayName,
-// so this is what makes a Debug build "Ondu Dev" there — and stops it replacing a
-// release copy of the same file name. The test target sets its own. The module keeps the
-// target name, which is what `@testable import Ondu` needs. Lives here rather than on
-// the target: it was deleted from the target by accident while clearing the other
-// overrides.
-PRODUCT_NAME = $(EFFECTIVE_APP_NAME)
+// The file name on disk, the same in every configuration. The name people see comes
+// from CFBundleName and CFBundleDisplayName in the Info.plists, which use
+// EFFECTIVE_APP_NAME, so a Debug build still reads "Ondu Dev" on the home screen, in
+// the Dock, menu bar and About window. Keeping this constant keeps the product reference
+// in the project file from changing with the active configuration. The test target
+// sets its own. The module keeps the target name, which is what `@testable import Ondu`
+// needs.
+PRODUCT_NAME = $(ONDU_APP_NAME)
 PRODUCT_MODULE_NAME = $(TARGET_NAME)
 
 PRODUCT_BUNDLE_IDENTIFIER = $(EFFECTIVE_BUNDLE_ID)
-INFOPLIST_KEY_CFBundleDisplayName = $(EFFECTIVE_APP_NAME)
-INFOPLIST_KEY_NSHumanReadableCopyright = $(ONDU_COPYRIGHT)
 ASSETCATALOG_COMPILER_APPICON_NAME = $(EFFECTIVE_APPICON)
 
-// Only HTTPS to the user's own server, so no encryption beyond what the OS provides and
-// the app is exempt. Without this, every App Store upload asks the question again.
-INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
-
-// Shown on the store listing and used by the OS to group the app.
-INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.music
+// Everything else about the bundle is in the hand-written Info.plist for each platform
+// (Ondu/Info-iOS.plist, Ondu/Info-macOS.plist), which reference the settings above. The target does not
+// generate one from INFOPLIST_KEY_* settings: Xcode's target editor owns those and
+// rewrites them as literals for the active configuration whenever it is shown, which is
+// how a Release archive once shipped as "Ondu Dev".
 DEVELOPMENT_TEAM = $(LOCAL_DEVELOPMENT_TEAM)
 CODE_SIGN_IDENTITY[sdk=macosx*] = $(LOCAL_MACOS_CODE_SIGN_IDENTITY)
 
