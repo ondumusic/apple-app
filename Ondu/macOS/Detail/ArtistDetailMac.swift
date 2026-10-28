@@ -296,14 +296,16 @@ struct ArtistDetailMac: View {
         }
     }
 
+    /// Plays the track's own album from that track, as opening the album on iOS does — not
+    /// the artist's whole discography, which the table only happens to list in one piece.
     private func playTrack(at index: Int) {
         guard allTracks.indices.contains(index) else { return }
         let target = allTracks[index]
-        let available = musicLibrary.availableTracks(allTracks, isOnline: network.isOnline)
+        guard let album = albums.first(where: { $0.id == target.albumId }) else { return }
+        let available = musicLibrary.availableTracks(album.tracks ?? [], isOnline: network.isOnline)
         guard let queueIndex = available.firstIndex(where: { $0.id == target.id }) else { return }
-        let artwork = albums.first { $0.id == target.albumId }?.artworkUrl
         player.requestPlay {
-            player.playNow(tracks: available, startingAt: queueIndex, artworkURL: artwork)
+            player.playNow(tracks: available, startingAt: queueIndex, artworkURL: album.artworkUrl)
         }
     }
 
