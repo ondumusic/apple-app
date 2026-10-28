@@ -488,8 +488,6 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
 
     /// Creates and resumes a URLSession download task.
     private func startTask(info: DownloadInfo) {
-        let quality = settings.downloadQuality
-
         inFlightCount += 1
         activeDownloads[info.track.id] = DownloadState(
             trackName: info.track.name,
@@ -500,7 +498,7 @@ final class DownloadService: NSObject, URLSessionDownloadDelegate {
         progressValues[info.track.id] = 0
         startProgressTimerIfNeeded()
 
-        let preset = TranscodePreset.forDownload(quality: quality, mimetype: info.track.mimetype)
+        let preset = settings.downloadPreset(for: info.track.mimetype)?.id
 
         guard let downloadURL = URL(string: info.track.downloadUrl),
             var comps = URLComponents(url: downloadURL, resolvingAgainstBaseURL: false)

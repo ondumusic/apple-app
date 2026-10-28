@@ -263,20 +263,29 @@ struct SettingsView: View {
         }
     }
 
+    /// A stored id the server no longer lists still gets a row, so the picker shows what
+    /// is set rather than nothing; playback uses the server's default meanwhile.
+    @ViewBuilder
+    private func qualityOptions(selected: TranscodeQuality) -> some View {
+        Text("Original").tag(TranscodeQuality.original)
+        ForEach(settings.serverPresets.presets) { preset in
+            Text(verbatim: preset.name).tag(TranscodeQuality.preset(preset.id))
+        }
+        if case .preset(let id) = selected, !settings.serverPresets.presets.contains(where: { $0.id == id }) {
+            Text("\(id) (unavailable)").tag(selected)
+        }
+    }
+
     @ViewBuilder
     private var qualitySection: some View {
         @Bindable var settings = settings
         if SettingsStore.enableDownloadQuality {
             Section {
                 Picker("Streaming Quality", selection: $settings.streamingQuality) {
-                    ForEach(StreamingQuality.allCases, id: \.self) { quality in
-                        Text(quality.displayName).tag(quality)
-                    }
+                    qualityOptions(selected: settings.streamingQuality)
                 }
                 Picker("Download Quality", selection: $settings.downloadQuality) {
-                    ForEach(DownloadQuality.allCases, id: \.self) { quality in
-                        Text(quality.displayName).tag(quality)
-                    }
+                    qualityOptions(selected: settings.downloadQuality)
                 }
             } header: {
                 Text("Quality")

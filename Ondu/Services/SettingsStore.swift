@@ -1,31 +1,5 @@
 import SwiftUI
 
-/// A level rather than a server preset: which preset a level maps to depends on what
-/// the server offers, see `TranscodePreset`.
-nonisolated enum DownloadQuality: String, CaseIterable, Sendable {
-    case original, high, mobile
-
-    var displayName: String {
-        switch self {
-        case .original: "Original"
-        case .high: "High"
-        case .mobile: "Mobile"
-        }
-    }
-}
-
-nonisolated enum StreamingQuality: String, CaseIterable, Sendable {
-    case original, high, mobile
-
-    var displayName: String {
-        switch self {
-        case .original: "Original"
-        case .high: "High"
-        case .mobile: "Mobile"
-        }
-    }
-}
-
 nonisolated enum AccentColor: String, CaseIterable, Sendable {
     case blue, indigo, purple, pink, red, orange, yellow, green, teal, custom
 
@@ -135,12 +109,27 @@ final class SettingsStore {
         didSet { defaults.set(playbackCacheLimit, forKey: "playbackCacheLimit") }
     }
 
-    var downloadQuality: DownloadQuality {
+    var downloadQuality: TranscodeQuality {
         didSet { defaults.set(downloadQuality.rawValue, forKey: "downloadQuality") }
     }
 
-    var streamingQuality: StreamingQuality {
+    var streamingQuality: TranscodeQuality {
         didSet { defaults.set(streamingQuality.rawValue, forKey: "streamingQuality") }
+    }
+
+    /// The presets the server last reported. Kept here, beside the two choices that are
+    /// ids into it, and persisted so Settings and playback have it before the first
+    /// `/info` of a session and when there's no network at all.
+    var serverPresets: TranscodePresetList {
+        didSet { defaults.set(try? JSONEncoder().encode(serverPresets), forKey: "serverPresets") }
+    }
+
+    func streamingPreset(for mimetype: String) -> TranscodePreset? {
+        serverPresets.resolve(streamingQuality, mimetype: mimetype)
+    }
+
+    func downloadPreset(for mimetype: String) -> TranscodePreset? {
+        serverPresets.resolve(downloadQuality, mimetype: mimetype)
     }
 
     var artworkTintedPlayer: Bool {
@@ -203,9 +192,13 @@ final class SettingsStore {
         self.repeatMode = RepeatMode(rawValue: defaults.string(forKey: "repeatMode") ?? "") ?? .off
         // 2 GB default
         self.playbackCacheLimit = defaults.object(forKey: "playbackCacheLimit") as? Int64 ?? (2 * 1024 * 1024 * 1024)
-        self.downloadQuality = DownloadQuality(rawValue: defaults.string(forKey: "downloadQuality") ?? "") ?? .original
-        self.streamingQuality =
-            StreamingQuality(rawValue: defaults.string(forKey: "streamingQuality") ?? "") ?? .original
+        self.downloadQuality = Self.storedQuality(defaults.string(forKey: "downloadQuality"))
+        self.streamingQuality = Self.storedQuality(defaults.string(forKey: "streamingQuality"))
+        self.serverPresets =
+            defaults.data(forKey: "serverPresets").flatMap {
+                try? JSONDecoder().decode(TranscodePresetList.self, from: $0)
+            }
+            ?? .builtIn
         self.artworkTintedPlayer = defaults.object(forKey: "artworkTintedPlayer") as? Bool ?? true
         self.miniPlayerAlwaysOnTop = defaults.object(forKey: "miniPlayerAlwaysOnTop") as? Bool ?? false
         self.accentColor = AccentColor(rawValue: defaults.string(forKey: "accentColor") ?? "") ?? .blue
@@ -214,5 +207,16 @@ final class SettingsStore {
         self.customAccentBlue = defaults.object(forKey: "customAccentBlue") as? Double ?? 0.0
         self.hapticsEnabled = defaults.object(forKey: "hapticsEnabled") as? Bool ?? true
         self.autoDownloadNewTracks = defaults.bool(forKey: "autoDownloadNewTracks")
+    }
+
+    /// "high" and "mobile" are what earlier builds stored, when the choice was a level
+    /// the app mapped to a preset itself.
+    private static func storedQuality(_ raw: String?) -> TranscodeQuality {
+        switch raw {
+        case nil, "original": .original
+        case "high": .preset("default_ogg")
+        case "mobile": .preset("mobile_ogg")
+        case let id?: .preset(id)
+        }
     }
 }

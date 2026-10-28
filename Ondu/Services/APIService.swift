@@ -190,6 +190,14 @@ final class APIService: Sendable {
     nonisolated struct ServerInfo: Decodable, Sendable {
         let version: String
         let apiVersion: Int
+        /// Absent from servers that predate listing presets.
+        let defaultPreset: String?
+        let presets: [TranscodePreset]?
+
+        var presetList: TranscodePresetList? {
+            guard let defaultPreset, let presets, !presets.isEmpty else { return nil }
+            return TranscodePresetList(defaultId: defaultPreset, presets: presets)
+        }
     }
 
     func fetchServerInfo() async throws -> ServerInfo {

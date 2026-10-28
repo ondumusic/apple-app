@@ -903,7 +903,7 @@ final class PlayerService {
         guard var streamURL = URL(string: track.streamUrl) else {
             throw URLError(.badURL)
         }
-        let preset = TranscodePreset.forStreaming(quality: settings.streamingQuality, mimetype: track.mimetype)
+        let preset = settings.streamingPreset(for: track.mimetype)?.id
         if let preset {
             if var comps = URLComponents(url: streamURL, resolvingAgainstBaseURL: false) {
                 var queryItems = comps.queryItems ?? []

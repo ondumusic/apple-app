@@ -226,9 +226,8 @@ final class SyncService {
     var lastSyncDate: Date?
     var syncProgress: SyncProgress?
     var syncError: String?
-    /// Whether this build and the server agree about the API. Checked once per launch,
-    /// off the back of a sync — it changes when one side is updated, which can't happen
-    /// while the app is running.
+    /// Whether this build and the server agree about the API. Checked off the back of
+    /// every sync, since the server can be updated while the app is running.
     var compatibility: ServerCompatibility = .ok
     /// What the server is currently reporting. Replaced by every sync, so one the server
     /// has cleared disappears without the client doing anything.
@@ -255,7 +254,6 @@ final class SyncService {
     /// Artwork a sync brought in while the network was metered, waiting for one that isn't.
     @ObservationIgnored private var deferredArtworkURLs: [URL] = []
     @ObservationIgnored private var isSessionExpired = false
-    @ObservationIgnored private var hasCheckedCompatibility = false
     @ObservationIgnored private var syncRun = 0
     /// Long enough to register as "it synced" rather than as a flicker.
     @ObservationIgnored static let minimumVisibleDuration: TimeInterval = 0.6
@@ -290,7 +288,7 @@ final class SyncService {
             return
         }
 
-        await checkCompatibilityIfNeeded()
+        await checkServerInfo()
 
         // Drain any queued playlist mutations first so the server's view reflects them before
         // we pull its state back down.
@@ -465,16 +463,19 @@ final class SyncService {
 
     /// A failure here is left alone: /info needs a session, and a server that can't
     /// answer it has bigger problems that the sync itself will report.
-    private func checkCompatibilityIfNeeded() async {
-        guard !hasCheckedCompatibility else { return }
+    private func checkServerInfo() async {
         guard let info = try? await api.fetchServerInfo() else { return }
-        hasCheckedCompatibility = true
+        apply(info)
+    }
+
+    func apply(_ info: APIService.ServerInfo) {
         compatibility = ServerCompatibility.compare(
             serverAPIVersion: info.apiVersion,
             serverVersion: info.version,
             supported: APIService.supportedAPIVersion
         )
         serverVersion = info.version
+        settings?.serverPresets = info.presetList ?? .builtIn
     }
 
     /// Whether a thrown error means "someone stopped this", rather than that it failed.

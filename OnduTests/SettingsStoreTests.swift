@@ -116,17 +116,52 @@ struct SettingsStoreTests {
     @Test func downloadQualityPersists() {
         let defaults = isolatedDefaults()
         let store = SettingsStore(defaults: defaults)
-        store.downloadQuality = .mobile
+        store.downloadQuality = .preset("mobile_ogg")
         let store2 = SettingsStore(defaults: defaults)
-        #expect(store2.downloadQuality == .mobile)
+        #expect(store2.downloadQuality == .preset("mobile_ogg"))
     }
 
     @Test func streamingQualityPersists() {
         let defaults = isolatedDefaults()
         let store = SettingsStore(defaults: defaults)
-        store.streamingQuality = .mobile
+        store.streamingQuality = .preset("mobile_ogg")
         let store2 = SettingsStore(defaults: defaults)
-        #expect(store2.streamingQuality == .mobile)
+        #expect(store2.streamingQuality == .preset("mobile_ogg"))
+    }
+
+    /// Earlier builds stored a level and mapped it to a preset themselves; the mapping
+    /// they used is what those values mean now.
+    @Test func legacyQualityLevelsBecomeTheirPresets() {
+        let defaults = isolatedDefaults()
+        defaults.set("high", forKey: "streamingQuality")
+        defaults.set("mobile", forKey: "downloadQuality")
+        let store = SettingsStore(defaults: defaults)
+        #expect(store.streamingQuality == .preset("default_ogg"))
+        #expect(store.downloadQuality == .preset("mobile_ogg"))
+    }
+
+    @Test func serverPresetsStartAsTheBuiltInList() {
+        #expect(SettingsStore(defaults: isolatedDefaults()).serverPresets == .builtIn)
+    }
+
+    @Test func serverPresetsPersist() {
+        let defaults = isolatedDefaults()
+        let list = TranscodePresetList(
+            defaultId: "hq",
+            presets: [
+                TranscodePreset(
+                    id: "hq", name: "HQ", codec: "opus", container: "ogg", mimetype: "audio/ogg",
+                    fileExtension: "opus", bitrate: 256)
+            ])
+        SettingsStore(defaults: defaults).serverPresets = list
+        #expect(SettingsStore(defaults: defaults).serverPresets == list)
+    }
+
+    @Test func qualityResolvesAgainstTheStoredServerList() {
+        let store = SettingsStore(defaults: isolatedDefaults())
+        store.streamingQuality = .preset("mobile_ogg")
+        #expect(store.streamingPreset(for: "audio/flac")?.id == "mobile_ogg")
+        #expect(store.downloadPreset(for: "audio/flac") == nil)
     }
 
     @Test func artworkTintedPlayerPersists() {
