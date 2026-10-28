@@ -93,9 +93,9 @@ struct PlaybackStateStoreTests {
         let store = makeStore()
         store.save(PlaybackState(trackIds: [UUID()], currentIndex: 0, shuffledIndices: nil))
         store.savePosition(PlaybackPosition(trackId: UUID(), elapsed: 10))
-        // Without the flush the queued write can land after the clear and recreate it.
-        await store.flush()
+        // No flush between: the clear must land after the queued save, not race it.
         store.clear()
+        await store.flush()
 
         #expect(store.load() == nil)
         #expect(store.loadPosition() == nil)
@@ -106,6 +106,26 @@ struct PlaybackStateStoreTests {
 
 @Suite(.serialized)
 struct PlayerStateRestoreTests {
+
+    @Test func stopDoesNotComeBackOnTheNextLaunch() async throws {
+        let lib = try makeTestLibrary()
+        let ids = seedTracks(lib, count: 3)
+        let store = makeStore()
+        store.save(PlaybackState(trackIds: ids, currentIndex: 1, shuffledIndices: nil))
+        store.savePosition(PlaybackPosition(trackId: ids[1], elapsed: 30))
+        await store.flush()
+        let player = makePlayer(library: lib, store: store)
+        await player.restoreTask?.value
+
+        player.stopAndClear()
+        await store.flush()
+
+        let relaunched = makePlayer(library: lib, store: store)
+        await relaunched.restoreTask?.value
+        #expect(relaunched.queue.isEmpty)
+        #expect(relaunched.currentTrack == nil)
+        #expect(store.loadPosition() == nil)
+    }
 
     @Test func restoresQueueAndPositionOnLaunch() async throws {
         let lib = try makeTestLibrary()

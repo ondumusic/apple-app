@@ -551,6 +551,9 @@ final class PlayerService {
         progress = 0
         duration = 0
         playbackError = nil
+        // savePlaybackState() skips an empty queue, so without this the old snapshot
+        // outlives Stop and the next launch restores what was just cleared.
+        stateStore.clear()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         MPNowPlayingInfoCenter.default().playbackState = .stopped
     }

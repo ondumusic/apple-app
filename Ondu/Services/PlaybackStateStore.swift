@@ -97,10 +97,18 @@ final class PlaybackStateStore {
 
     // MARK: - Lifecycle
 
+    /// Chained after any queued save so a snapshot written moments earlier cannot land
+    /// after the clear and bring the queue back on the next launch.
     func clear() {
-        try? fileManager.removeItem(at: fileURL)
-        defaults.removeObject(forKey: Keys.positionTrackId)
-        defaults.removeObject(forKey: Keys.positionElapsed)
+        let url = fileURL
+        let defaults = defaults
+        let previous = pendingWrite
+        pendingWrite = Task.detached(priority: .utility) {
+            await previous?.value
+            try? FileManager.default.removeItem(at: url)
+            defaults.removeObject(forKey: Keys.positionTrackId)
+            defaults.removeObject(forKey: Keys.positionElapsed)
+        }
     }
 
     /// Wipes both halves without a live player — used on logout, where the player is torn down.
