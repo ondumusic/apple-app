@@ -692,6 +692,17 @@ struct PlayerPlaybackFailureTests {
         #expect(PlayerService.measuredDuration(.nan, known: 0) == nil)
     }
 
+    @Test func theFadeStartsInsideItsWindowAndNotBefore() {
+        #expect(PlayerService.crossfadeRemaining(duration: 200, current: 180, fadeDuration: 12) == nil)
+        #expect(PlayerService.crossfadeRemaining(duration: 200, current: 190, fadeDuration: 12) == 10)
+        #expect(PlayerService.crossfadeRemaining(duration: 200, current: 200.5, fadeDuration: 12) == nil)
+    }
+
+    @Test func theFadeWaitsForADurationItCanTrust() {
+        #expect(PlayerService.crossfadeRemaining(duration: 0, current: 5, fadeDuration: 12) == nil)
+        #expect(PlayerService.crossfadeRemaining(duration: .nan, current: 5, fadeDuration: 12) == nil)
+    }
+
     @Test func aGaplessAdvanceTheAppDidNotFollowIsCaught() {
         let previous = AVPlayerItem(url: URL(string: "https://music.example.com/stream/1")!)
         let queued = AVPlayerItem(url: URL(string: "https://music.example.com/stream/2")!)

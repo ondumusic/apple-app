@@ -1271,17 +1271,23 @@ final class PlayerService {
         crossfadeObserver = primaryPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
             [weak self] time in
             guard let self else { return }
-            guard let item = self.primaryPlayer.currentItem else { return }
-
-            let dur = item.duration.seconds
-            let current = time.seconds
-
-            guard dur.isFinite && current.isFinite else { return }
-            let remaining = dur - current
-            if remaining <= fadeDuration && remaining > 0 {
+            guard self.primaryPlayer.currentItem != nil else { return }
+            if let remaining = Self.crossfadeRemaining(
+                duration: self.duration, current: time.seconds, fadeDuration: fadeDuration)
+            {
                 self.beginCrossfade(fadeDuration: fadeDuration, remaining: remaining)
             }
         }
+    }
+
+    /// How long is left once the fade should be under way, measured against the duration
+    /// the app shows rather than the item's. AVFoundation's duration for an Ogg transcode
+    /// is a guess from the file size, and the server pads transcodes well past their
+    /// audio, so by that clock the fade window was never reached and the track just ended.
+    nonisolated static func crossfadeRemaining(duration: Double, current: Double, fadeDuration: Double) -> Double? {
+        guard duration.isFinite, current.isFinite, duration > 0 else { return nil }
+        let remaining = duration - current
+        return remaining <= fadeDuration && remaining > 0 ? remaining : nil
     }
 
     private func beginCrossfade(fadeDuration: Double, remaining: Double) {
