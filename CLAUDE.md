@@ -6,7 +6,7 @@ SwiftUI multiplatform music streaming app (iOS 26.2+ / macOS 15.7+) connecting t
 
 ### Sync-based library
 
-The full library metadata (artists, albums, tracks, playlists) is synced to on-device SwiftData via `GET /sync?cursor=`. **All browsing is local** — there is no API pagination for browse views. The opaque cursor is persisted in `UserDefaults`.
+The full library metadata (artists, albums, tracks, playlists) is synced to on-device SwiftData via `GET /sync?cursor=&schemaVersion=`. **All browsing is local** — there is no API pagination for browse views. The opaque cursor is persisted in `UserDefaults`. Bump `APIService.syncSchemaVersion` when the app starts reading an entity field it used to ignore; the server then resends every entity on the next sync, so rows it already sent pick the field up.
 
 ### Key services
 
@@ -29,7 +29,7 @@ The full library metadata (artists, albums, tracks, playlists) is synced to on-d
 Base URL ends in `/api` (set during login). All bodies send lowercase UUID strings; the server normalizes.
 
 - `POST /auth/login`, `GET /auth/me`, `GET /auth/playtoken`, `DELETE /auth/session`
-- `GET /sync?cursor=`
+- `GET /sync?cursor=&schemaVersion=`
 - `POST /playlists`, `PATCH /playlists/{id}`, `DELETE /playlists/{id}`
 - `PATCH /playlists/{id}/items` — batched add/move/remove (mixed). 422 returns the discriminated `PlaylistItemsError` union.
 - Transcoding presets: `TranscodePreset` asks for `default_ogg`/`mobile_ogg` (Opus in Ogg: gapless, seekable, sized up front, so a transcoded download is a plain GET).

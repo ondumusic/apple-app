@@ -99,12 +99,23 @@ final class APIService: Sendable {
 
     // MARK: - Sync
 
+    /// Which shape of the entities this build reads. Bump it when the app starts using a
+    /// field it used to ignore: the server then sends every entity again instead of only
+    /// what changed since the cursor, so rows it already sent pick the field up too. Any
+    /// change in either side's number triggers the resend, so it never needs to match
+    /// the server's.
+    nonisolated static let syncSchemaVersion = 1
+
     func fetchSync(cursor: String? = nil) async throws -> SyncResponse {
-        var queryItems: [URLQueryItem] = []
+        try await fetch("/sync", queryItems: Self.syncQueryItems(cursor: cursor))
+    }
+
+    nonisolated static func syncQueryItems(cursor: String?) -> [URLQueryItem] {
+        var queryItems = [URLQueryItem(name: "schemaVersion", value: String(syncSchemaVersion))]
         if let cursor {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
-        return try await fetch("/sync", queryItems: queryItems)
+        return queryItems
     }
 
     // MARK: - Artist Artwork

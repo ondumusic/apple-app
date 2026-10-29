@@ -337,7 +337,18 @@ final class SyncService {
             var pageCount = 0
             while true {
                 pageCount += 1
-                let response = try await api.fetchSync(cursor: cursor)
+                let response: SyncResponse
+                do {
+                    response = try await api.fetchSync(cursor: cursor)
+                } catch APIError.httpError(400) where cursor != nil {
+                    // The server refuses a cursor it can't read rather than ignoring it,
+                    // and a stored one that never gets replaced would fail every sync
+                    // from here on. Paging from the start again is all upserts, so the
+                    // library stays usable while it happens.
+                    cursor = nil
+                    syncCursor = nil
+                    continue
+                }
 
                 #if DEBUG
                 print(
