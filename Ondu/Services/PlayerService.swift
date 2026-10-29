@@ -135,6 +135,28 @@ final class PlayerService {
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var crossfadeObserver: Any?
     @ObservationIgnored private var crossfadeTimer: Timer?
+    @ObservationIgnored private var crossfadeRamp: CrossfadeRamp?
+
+    /// A fade in progress, measured in time spent playing rather than time since it
+    /// began, so pausing freezes it where it is and resuming picks it up from there.
+    nonisolated struct CrossfadeRamp: Sendable {
+        let fadeDuration: Double
+        let nextIndex: Int
+        let nextTrack: Track
+        private(set) var elapsed: Double = 0
+
+        init(fadeDuration: Double, nextIndex: Int, nextTrack: Track) {
+            self.fadeDuration = fadeDuration
+            self.nextIndex = nextIndex
+            self.nextTrack = nextTrack
+        }
+
+        /// 0 at the start of the fade, 1 once it's done.
+        var fraction: Float { min(Float(elapsed / fadeDuration), 1) }
+        var isComplete: Bool { elapsed >= fadeDuration }
+
+        mutating func advance(by seconds: Double) { elapsed += max(0, seconds) }
+    }
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var failedToEndObserver: NSObjectProtocol?
     @ObservationIgnored private var interruptionObserver: NSObjectProtocol?
@@ -491,7 +513,7 @@ final class PlayerService {
         // Nothing to play: after Stop, or before anything was queued.
         guard isPlaying || !queue.isEmpty else { return }
         if isPlaying {
-            primaryPlayer.pause()
+            pauseTransport()
             isPlaying = false
             let currentTime = primaryPlayer.currentTime().seconds
             if currentTime.isFinite {
@@ -503,11 +525,28 @@ final class PlayerService {
             Task { await loadAndPlayCurrent() }
             return
         } else {
-            primaryPlayer.play()
+            resumeTransport()
             isPlaying = true
         }
         updateNowPlayingPlaybackState()
         savePlaybackPosition()
+    }
+
+    /// Both players and the fade between them: pausing only the one in front left the
+    /// incoming track audibly playing on and the fade finishing by itself.
+    private func pauseTransport() {
+        primaryPlayer.pause()
+        secondaryPlayer?.pause()
+        crossfadeTimer?.invalidate()
+        crossfadeTimer = nil
+    }
+
+    private func resumeTransport() {
+        primaryPlayer.play()
+        secondaryPlayer?.play()
+        if crossfadeRamp != nil, crossfadeTimer == nil {
+            runVolumeRamp()
+        }
     }
 
     /// Resume only if paused. The remote `play` command arrives while playing more often
@@ -559,6 +598,16 @@ final class PlayerService {
     }
 
     func seek(to time: Double) {
+        // A fade under way runs on its own clock, so dragging back out of the window
+        // would still hand over to the next track seconds later.
+        if secondaryPlayer != nil || crossfadeTimer != nil,
+            Self.crossfadeRemaining(duration: duration, current: time, fadeDuration: settings.crossfadeDuration)
+                == nil
+        {
+            tearDownCrossfade()
+            applyVolume()
+            setupCrossfadeObserverIfNeeded()
+        }
         isSeeking = true
         progress = time
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
@@ -1329,21 +1378,31 @@ final class PlayerService {
     }
 
     private func startVolumeRamp(fadeDuration: Double, nextIndex: Int, nextTrack: Track) {
-        let startTime = Date()
+        crossfadeRamp = CrossfadeRamp(fadeDuration: fadeDuration, nextIndex: nextIndex, nextTrack: nextTrack)
+        runVolumeRamp()
+    }
+
+    private func runVolumeRamp() {
+        var lastTick = Date()
         crossfadeTimer?.invalidate()
         crossfadeTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
-            guard let self, let secondary = self.secondaryPlayer else {
+            guard let self, let secondary = self.secondaryPlayer, var ramp = self.crossfadeRamp else {
                 timer.invalidate()
                 return
             }
-            let elapsed = Date().timeIntervalSince(startTime)
-            let progress = min(Float(elapsed / fadeDuration), 1.0)
+            let now = Date()
+            ramp.advance(by: now.timeIntervalSince(lastTick))
+            lastTick = now
+            self.crossfadeRamp = ramp
+            let progress = ramp.fraction
             self.primaryPlayer.volume = Float(self.volume) * self.primaryGain * cos(progress * .pi * 0.5)
             secondary.volume = Float(self.volume) * self.secondaryGain * sin(progress * .pi * 0.5)
 
-            if progress >= 1.0 {
+            if ramp.isComplete {
                 timer.invalidate()
-                self.completeCrossfade(nextIndex: nextIndex, nextTrack: nextTrack)
+                self.crossfadeTimer = nil
+                self.crossfadeRamp = nil
+                self.completeCrossfade(nextIndex: ramp.nextIndex, nextTrack: ramp.nextTrack)
             }
         }
     }
@@ -1393,6 +1452,7 @@ final class PlayerService {
     private func tearDownCrossfade() {
         crossfadeTimer?.invalidate()
         crossfadeTimer = nil
+        crossfadeRamp = nil
         if let crossfadeObserver {
             primaryPlayer.removeTimeObserver(crossfadeObserver)
             self.crossfadeObserver = nil
@@ -1502,13 +1562,14 @@ final class PlayerService {
             else { return }
             switch type {
             case .began:
+                self.pauseTransport()
                 self.isPlaying = false
                 self.updateNowPlayingPlaybackState()
             case .ended:
                 if let optionsValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt {
                     let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
                     if options.contains(.shouldResume) {
-                        self.primaryPlayer.play()
+                        self.resumeTransport()
                         self.isPlaying = true
                         self.updateNowPlayingPlaybackState()
                     }
@@ -1528,7 +1589,7 @@ final class PlayerService {
                 let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue)
             else { return }
             if reason == .oldDeviceUnavailable {
-                self.primaryPlayer.pause()
+                self.pauseTransport()
                 self.isPlaying = false
                 self.updateNowPlayingPlaybackState()
             }

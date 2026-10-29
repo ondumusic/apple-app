@@ -703,6 +703,18 @@ struct PlayerPlaybackFailureTests {
         #expect(PlayerService.crossfadeRemaining(duration: .nan, current: 5, fadeDuration: 12) == nil)
     }
 
+    /// Only time spent playing counts: a pause in the middle of a fade must not finish it.
+    @Test func aFadeOnlyAdvancesWhilePlaying() {
+        var ramp = PlayerService.CrossfadeRamp(
+            fadeDuration: 12, nextIndex: 1, nextTrack: makeQueueItem(name: "B").track)
+        ramp.advance(by: 3)
+        #expect(ramp.fraction == 0.25)
+        #expect(!ramp.isComplete)
+        ramp.advance(by: 9)
+        #expect(ramp.fraction == 1)
+        #expect(ramp.isComplete)
+    }
+
     @Test func aGaplessAdvanceTheAppDidNotFollowIsCaught() {
         let previous = AVPlayerItem(url: URL(string: "https://music.example.com/stream/1")!)
         let queued = AVPlayerItem(url: URL(string: "https://music.example.com/stream/2")!)
