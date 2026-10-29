@@ -293,7 +293,7 @@ private struct PlayerScrubber: View {
                     .foregroundStyle(isDragging ? .primary : .secondary)
                     .monospacedDigit()
                 Spacer()
-                Text("-" + DurationFormat.string(max(0, player.duration - currentValue)))
+                Text(DurationFormat.remaining(player.duration - currentValue))
                     .font(.caption)
                     .foregroundStyle(isDragging ? .primary : .secondary)
                     .monospacedDigit()

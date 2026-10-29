@@ -25,6 +25,21 @@ struct DurationFormatTests {
         #expect(DurationFormat.string(3725) == "62:05")
     }
 
+    /// Truncating the other way left "-0:00" on screen for the whole last second, which
+    /// read as the song having ended while it was still playing.
+    @Test func remainingTimeRoundsUp() {
+        #expect(DurationFormat.remaining(0.4) == "-0:01")
+        #expect(DurationFormat.remaining(1.0) == "-0:01")
+        #expect(DurationFormat.remaining(1.2) == "-0:02")
+        #expect(DurationFormat.remaining(125.6) == "-2:06")
+    }
+
+    @Test func nothingLeftReadsAsZero() {
+        #expect(DurationFormat.remaining(0) == "-0:00")
+        #expect(DurationFormat.remaining(-0.3) == "-0:00")
+        #expect(DurationFormat.remaining(.nan) == "-0:00")
+    }
+
     @Test func nonsenseReadsAsZero() {
         #expect(DurationFormat.string(.nan) == "0:00")
         #expect(DurationFormat.string(.infinity) == "0:00")

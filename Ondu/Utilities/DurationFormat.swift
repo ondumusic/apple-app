@@ -11,4 +11,11 @@ nonisolated enum DurationFormat {
         let total = Int(seconds)
         return String(format: "%d:%02d", total / 60, total % 60)
     }
+
+    /// Time left, rounded up: "-0:01" through the last second rather than "-0:00" with
+    /// the music still going, and "-0:00" only once nothing is left.
+    static func remaining(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds > 0 else { return "-0:00" }
+        return "-" + string(seconds.rounded(.up))
+    }
 }
