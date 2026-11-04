@@ -83,8 +83,13 @@ xcodebuild -scheme Ondu -destination 'platform=iOS Simulator,name=iPhone 17' -qu
 
 # Run unit tests (~1 min)
 xcodebuild -scheme Ondu -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -parallel-testing-enabled NO test
+  -parallel-testing-enabled NO -collect-test-diagnostics never test
 ```
+
+`-collect-test-diagnostics never` (two arguments; the `=never` form is ignored) stops
+xcodebuild running `simctl diagnose` after the suite, which on Xcode 26+ stalls for its
+full 600 s timeout before reporting success, on passing runs too. Results are unchanged;
+only the sysdiagnose in the xcresult bundle goes.
 
 A test run that hangs with no output usually means the test host crashed: the bundle
 aborts mid-run and leaves `/usr/libexec/testmanagerd` orphaned, which then wedges the
