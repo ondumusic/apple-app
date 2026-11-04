@@ -50,6 +50,10 @@ nonisolated enum AccentColor: String, CaseIterable, Sendable {
 
 @Observable
 final class SettingsStore {
+    /// The app's store. App Intents and quick actions run without a view hierarchy to
+    /// hand them one, and the session they set has to be the one the player reads.
+    static let shared = SettingsStore()
+
     // MARK: - Feature flags
 
     /// Set to true to show the download quality (transcode) option.
@@ -85,6 +89,48 @@ final class SettingsStore {
     /// other clients keep counting.
     var recordPlays: Bool {
         didSet { defaults.set(recordPlays, forKey: "recordPlays") }
+    }
+
+    // MARK: - Private session
+
+    /// How long a private session outlives the last thing played. Long enough to span a
+    /// break between sets; short enough that half an hour of silence, which almost always
+    /// means the workout is over, ends it before the drive home gets swallowed too.
+    static let privateSessionIdleWindow: TimeInterval = 30 * 60
+
+    /// When the running private session lapses; nil with none running. Pushed forward
+    /// while music plays, so the session ends after the music does, not at a fixed time.
+    var privateSessionEndsAt: Date? {
+        didSet { defaults.set(privateSessionEndsAt, forKey: "privateSessionEndsAt") }
+    }
+
+    /// This device records no plays while true. Derived rather than stored, so a session
+    /// that lapsed while the app was closed is simply over on the next launch.
+    var isPrivateSession: Bool {
+        guard let privateSessionEndsAt else { return false }
+        return privateSessionEndsAt > now()
+    }
+
+    func startPrivateSession() {
+        privateSessionEndsAt = now().addingTimeInterval(Self.privateSessionIdleWindow)
+    }
+
+    func endPrivateSession() {
+        privateSessionEndsAt = nil
+    }
+
+    func togglePrivateSession() {
+        if isPrivateSession { endPrivateSession() } else { startPrivateSession() }
+    }
+
+    /// Fed by playback progress. Writes only once the deadline has drifted a minute: the
+    /// player ticks twice a second, and each write here is a defaults write and an
+    /// observation change for every view showing the session.
+    func extendPrivateSession() {
+        guard let privateSessionEndsAt, isPrivateSession else { return }
+        let target = now().addingTimeInterval(Self.privateSessionIdleWindow)
+        guard target.timeIntervalSince(privateSessionEndsAt) >= 60 else { return }
+        self.privateSessionEndsAt = target
     }
 
     /// Scale playback so every track lands near the same loudness. See
@@ -179,15 +225,20 @@ final class SettingsStore {
     /// `UserDefaults.standard` across tests running in parallel meant they wrote each
     /// other's volume, shuffle flag and repeat mode out from under themselves.
     @ObservationIgnored private let defaults: UserDefaults
+    /// The clock the private session is measured against; injectable so a test can let
+    /// one lapse without waiting an hour.
+    @ObservationIgnored private let now: () -> Date
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, now: @escaping () -> Date = { Date() }) {
         self.defaults = defaults
+        self.now = now
         self.volume = defaults.object(forKey: "volume") as? Double ?? 1.0
         self.crossfadeDuration = defaults.object(forKey: "crossfadeDuration") as? Double ?? 1.0
         self.maxConcurrentDownloads = defaults.object(forKey: "maxConcurrentDownloads") as? Int ?? 3
         self.isShuffled = defaults.bool(forKey: "isShuffled")
         self.normalizeVolume = defaults.object(forKey: "normalizeVolume") as? Bool ?? true
         self.recordPlays = defaults.object(forKey: "recordPlays") as? Bool ?? true
+        self.privateSessionEndsAt = defaults.object(forKey: "privateSessionEndsAt") as? Date
         self.showArtistArtwork = defaults.object(forKey: "showArtistArtwork") as? Bool ?? true
         self.repeatMode = RepeatMode(rawValue: defaults.string(forKey: "repeatMode") ?? "") ?? .off
         // 2 GB default

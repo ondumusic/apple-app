@@ -134,9 +134,25 @@ struct SettingsView: View {
         @Bindable var settings = settings
         Section {
             Toggle("Record Plays", isOn: $settings.recordPlays)
+            Toggle(
+                isOn: Binding(
+                    get: { settings.isPrivateSession },
+                    set: { $0 ? settings.startPrivateSession() : settings.endPrivateSession() }
+                )
+            ) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Private Session")
+                    if settings.isPrivateSession, let endsAt = settings.privateSessionEndsAt {
+                        Text("Ends in \(Text(endsAt, style: .relative)) if nothing plays")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .disabled(!settings.recordPlays)
         } footer: {
             Text(
-                "Counts a track as played once you've heard most of it, and tells your server. Turning this off stops this device counting; plays already recorded are kept, and your other devices carry on."
+                "Counts a track as played once you've heard most of it, and tells your server. Turning this off stops this device counting; plays already recorded are kept, and your other devices carry on. A private session stops counting on this device for now, and ends itself half an hour after the music stops."
             )
         }
     }

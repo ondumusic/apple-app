@@ -773,6 +773,7 @@ private struct CompactLayout: View {
 private struct MiniPlayerStatusLine: View {
     @Environment(PlayerService.self) private var player
     @Environment(AuthService.self) private var auth
+    @Environment(SettingsStore.self) private var settings
     let track: Track?
     let font: Font
     let secondary: Color
@@ -795,8 +796,15 @@ private struct MiniPlayerStatusLine: View {
                         .help(error)
                 }
             } else if let track {
-                Text(track.artist.name)
-                    .foregroundStyle(secondary)
+                // The one line this window has for status, so the session shares it
+                // with the artist rather than taking a strip of its own.
+                if settings.isPrivateSession {
+                    Text("\(track.artist.name) · Private session")
+                        .foregroundStyle(secondary)
+                } else {
+                    Text(track.artist.name)
+                        .foregroundStyle(secondary)
+                }
             }
         }
         .font(font)

@@ -166,6 +166,7 @@ struct MacOSContentView: View {
                 SessionExpiredNotice { showSignIn = true }
             }
             ServerNoticesView()
+            PrivateSessionNotice()
             if syncService.compatibility.shouldShow(dismissedVersion: dismissedServerVersion) {
                 ServerVersionNotice(compatibility: syncService.compatibility) {
                     dismissedServerVersion = syncService.compatibility.serverVersion ?? ""

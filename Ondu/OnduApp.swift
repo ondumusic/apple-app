@@ -17,6 +17,16 @@ class BackgroundSessionDelegate: NSObject, UIApplicationDelegate {
     }
 
     static var pendingCompletionHandler: (() -> Void)?
+
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = QuickActionSceneDelegate.self
+        return configuration
+    }
 }
 #endif
 
@@ -206,7 +216,7 @@ struct OnduApp: App {
 
     @State private var auth: AuthService
     @State private var musicLibrary: MusicLibrary
-    @State private var settings = SettingsStore()
+    @State private var settings: SettingsStore
     @State private var player: PlayerService?
     /// Long-lived — survives login/logout cycles so the background URLSession identifier
     /// stays bound to a single instance (creating a second session with the same id crashes).
@@ -229,7 +239,7 @@ struct OnduApp: App {
 
         let auth = AuthService()
         auth.observeSessionExpiration()
-        let settings = SettingsStore()
+        let settings = SettingsStore.shared
         let musicLibrary = try! MusicLibrary()
         let playbackCache = PlaybackCache(settings: settings)
         _auth = State(initialValue: auth)
@@ -337,9 +347,14 @@ struct OnduApp: App {
             }
         }
         #if os(iOS)
+        .onChange(of: settings.isPrivateSession, initial: true) { PrivateSessionQuickAction.refresh(from: settings) }
+        .onChange(of: settings.recordPlays) { PrivateSessionQuickAction.refresh(from: settings) }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
             playbackCache.flushMetadataIfNeeded()
             player?.savePlaybackState()
+            // The session can lapse while the app is away, and the icon menu is read
+            // next from exactly there.
+            PrivateSessionQuickAction.refresh(from: settings)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             if !auth.isLoggedIn {
@@ -566,6 +581,18 @@ struct OnduApp: App {
                     Text("All").tag(RepeatMode.all)
                     Text("One").tag(RepeatMode.one)
                 }
+
+                Divider()
+
+                Toggle(
+                    "Private Session",
+                    isOn: Binding(
+                        get: { settings.isPrivateSession },
+                        set: { $0 ? settings.startPrivateSession() : settings.endPrivateSession() }
+                    )
+                )
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .disabled(!settings.recordPlays)
             }
         }
 

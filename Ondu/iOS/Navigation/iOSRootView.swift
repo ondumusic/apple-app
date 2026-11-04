@@ -54,6 +54,7 @@ struct iOSRootView: View {
             }
 
             ServerNoticesView()
+            PrivateSessionNotice()
 
             if syncService.compatibility.shouldShow(dismissedVersion: dismissedServerVersion) {
                 ServerVersionNotice(compatibility: syncService.compatibility) {

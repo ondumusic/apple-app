@@ -15,6 +15,8 @@ struct FullPlayerView: View {
     }
     @State private var showQueue = false
     @State private var audioRouteName: String?
+    @State private var sessionHint: LocalizedStringResource?
+    @State private var sessionHintTask: Task<Void, Never>?
 
     /// The blurred cover is the tint now, so "do we have artwork" is the only question
     /// — no need to decode one to find out.
@@ -86,12 +88,14 @@ struct FullPlayerView: View {
                         #endif
 
                         Spacer()
+                        PrivateSessionToggle(isTinted: isTinted)
+                        Spacer()
 
                         Button {
                             showQueue = true
                         } label: {
                             Image(systemName: "list.bullet")
-                                .font(.title)
+                                .font(.title2)
                                 .foregroundStyle(.secondary)
                                 .overlay(alignment: .topTrailing) {
                                     queueBadge
@@ -121,6 +125,24 @@ struct FullPlayerView: View {
             }
             .foregroundStyle(isTinted ? .white : .primary)
             .tint(isTinted ? .white : .accentColor)
+            // The root views' queue toast sits under this sheet, so the one answer to
+            // "what did that just do" has to be in here.
+            .overlay(alignment: .bottom) {
+                if let sessionHint {
+                    Text(sessionHint)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.black.opacity(0.75), in: Capsule())
+                        .padding(.bottom, 72)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .allowsHitTesting(false)
+                }
+            }
+            .onChange(of: settings.isPrivateSession) { _, isOn in
+                showSessionHint(isOn ? "Play history paused" : "Play history resumed")
+            }
             #if os(iOS)
             .onAppear { updateAudioRoute() }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { _ in
@@ -153,6 +175,20 @@ struct FullPlayerView: View {
         }
         audioRouteName = externalOutput.portName
         #endif
+    }
+
+    private func showSessionHint(_ hint: LocalizedStringResource) {
+        sessionHintTask?.cancel()
+        withAnimation(.easeOut(duration: 0.2)) {
+            sessionHint = hint
+        }
+        sessionHintTask = Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.3)) {
+                sessionHint = nil
+            }
+        }
     }
 
     // MARK: - Track Info
@@ -340,6 +376,46 @@ private struct TransportControls: View {
             .accessibilityLabel("Next")
             .buttonStyle(.plain)
             .disabled(!player.canSkip)
+        }
+    }
+}
+
+// MARK: - Private Session
+
+/// Words rather than a symbol: no glyph says "not counted", and the row has the room.
+/// Outlined when off, filled when on. Absent entirely with Record Plays off, when there
+/// is nothing to be private from.
+private struct PrivateSessionToggle: View {
+    @Environment(SettingsStore.self) private var settings
+    var isTinted: Bool
+
+    private var accent: Color { isTinted ? .white : settings.resolvedAccentColor }
+
+    var body: some View {
+        if settings.recordPlays {
+            let isOn = settings.isPrivateSession
+            Button {
+                Haptics.light()
+                settings.togglePrivateSession()
+            } label: {
+                Text("Private Session")
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(1)
+                    .foregroundStyle(isOn ? (isTinted ? Color.black : Color.white) : Color.secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background {
+                        Capsule().fill(isOn ? accent : .clear)
+                    }
+                    .overlay {
+                        Capsule().strokeBorder(isOn ? .clear : Color.secondary.opacity(0.5), lineWidth: 1)
+                    }
+                    .frame(minHeight: 48)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Private Session")
+            .accessibilityValue(isOn ? "On" : "Off")
         }
     }
 }
