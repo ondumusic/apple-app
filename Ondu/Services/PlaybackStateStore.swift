@@ -6,9 +6,18 @@ import Foundation
 nonisolated struct PlaybackState: Codable, Sendable, Equatable {
     var trackIds: [UUID]
     var currentIndex: Int
-    var shuffledIndices: [Int]?
+    var playOrder: [Int]?
     /// Optional so snapshots written before this existed still decode.
     var isUserModified: Bool?
+    /// Nil in a snapshot written before shuffle and play order were told apart.
+    var isShuffled: Bool?
+
+    /// The play order keeps the key it had when it only ever meant a shuffle, so older
+    /// snapshots still decode.
+    private enum CodingKeys: String, CodingKey {
+        case trackIds, currentIndex, isUserModified, isShuffled
+        case playOrder = "shuffledIndices"
+    }
 }
 
 /// Where playback had got to. Carries the track id so a stale position — written moments before

@@ -19,7 +19,11 @@ final class PlayerService {
     /// linear scan either way, and this way the answer is ready when a track starts.
     @ObservationIgnored private var queueIsSingleAlbum = false
     var currentIndex: Int = 0
-    var shuffledIndices: [Int]? = nil
+    /// Queue indices in the order they play; nil when that is simply queue order. Not the
+    /// same as being shuffled: turning shuffle off keeps what already played where it is,
+    /// so the order can stay rearranged with shuffle off.
+    var playOrder: [Int]? = nil
+    var isShuffled = false
     var repeatMode: RepeatMode = .off
     var isPlaying: Bool = false
     var currentTrack: Track? = nil {
@@ -81,8 +85,6 @@ final class PlayerService {
         pendingPlayAction = nil
     }
 
-    var isShuffled: Bool { shuffledIndices != nil }
-
     /// Everything queued after the current track, in the order it will actually play —
     /// which is the shuffled order when shuffle is on. Walking the raw queue and
     /// comparing against `effectiveIndex` instead drops whatever shuffle placed earlier
@@ -93,7 +95,7 @@ final class PlayerService {
         guard !queue.isEmpty, currentIndex > 0 else { return [] }
         return (0..<currentIndex).reversed().compactMap { position in
             let effective: Int
-            if let shuffled = shuffledIndices, position < shuffled.count {
+            if let shuffled = playOrder, position < shuffled.count {
                 effective = shuffled[position]
             } else {
                 effective = position
@@ -109,7 +111,7 @@ final class PlayerService {
         guard start < queue.count else { return [] }
         return (start..<queue.count).compactMap { position in
             let effective: Int
-            if let shuffled = shuffledIndices, position < shuffled.count {
+            if let shuffled = playOrder, position < shuffled.count {
                 effective = shuffled[position]
             } else {
                 effective = position
@@ -221,7 +223,7 @@ final class PlayerService {
     }
 
     var effectiveIndex: Int {
-        if let shuffled = shuffledIndices {
+        if let shuffled = playOrder {
             guard currentIndex >= 0 && currentIndex < shuffled.count else { return 0 }
             return shuffled[currentIndex]
         }
@@ -338,7 +340,8 @@ final class PlayerService {
 
     func playNow(tracks: [Track], startingAt index: Int = 0, artworkURL: URL? = nil) {
         queue = tracks.map { QueueItem(track: $0, artworkURL: artworkURL ?? $0.album?.artworkUrl) }
-        shuffledIndices = nil
+        playOrder = nil
+        isShuffled = false
         currentIndex = index
         isQueueUserModified = false
         savePlaybackState()
@@ -347,7 +350,8 @@ final class PlayerService {
 
     func playNow(queue items: [QueueItem], startingAt index: Int = 0) {
         queue = items
-        shuffledIndices = nil
+        playOrder = nil
+        isShuffled = false
         currentIndex = index
         isQueueUserModified = false
         savePlaybackState()
@@ -362,7 +366,8 @@ final class PlayerService {
     func playShuffled(queue items: [QueueItem]) {
         guard !items.isEmpty else { return }
         queue = items
-        shuffledIndices = SmartShuffle.shuffledIndices(for: items)
+        playOrder = SmartShuffle.shuffledIndices(for: items)
+        isShuffled = true
         currentIndex = 0
         isQueueUserModified = false
         savePlaybackState()
@@ -380,17 +385,9 @@ final class PlayerService {
             playNow(queue: items)
             return
         }
-        let insertIndex = min(effectiveIndex + 1, queue.count)
-        queue.insert(contentsOf: items, at: insertIndex)
-        if var shuffled = shuffledIndices {
-            // Shift existing indices that are at or past the insert point
-            shuffled = shuffled.map { $0 >= insertIndex ? $0 + items.count : $0 }
-            // Insert new indices right after current position in shuffle order
-            let newIndices = items.indices.map { insertIndex + $0 }
-            let shuffleInsertPos = currentIndex + 1
-            shuffled.insert(contentsOf: newIndices, at: shuffleInsertPos)
-            shuffledIndices = shuffled
-        }
+        // In queue order they go before whatever is still to play, so turning shuffle off
+        // leaves them first in line, where they were put.
+        insert(items, queueIndex: upcomingQueueIndices.min() ?? queue.count, position: currentIndex + 1)
         isQueueUserModified = true
         queueConfirmation = .playNext(items.count)
         invalidateGaplessState()
@@ -409,20 +406,19 @@ final class PlayerService {
             return
         }
         let nextBefore = upcomingTrackId
-        let slot = max(0, min(position, upNextEntries.count))
-
-        if var shuffled = shuffledIndices {
-            // Shuffled: the new items go on the end of `queue` and their positions are
-            // spliced into the shuffle order, since that's what decides play order.
-            let appendIndex = queue.count
-            queue.append(contentsOf: items)
-            let newIndices = items.indices.map { appendIndex + $0 }
-            shuffled.insert(contentsOf: newIndices, at: min(currentIndex + 1 + slot, shuffled.count))
-            shuffledIndices = shuffled
+        let upcoming = upcomingQueueIndices
+        let slot = max(0, min(position, upcoming.count))
+        // Unshuffled, what's to come is in queue order, so the slot on screen is a place in
+        // the queue too. Shuffled, a place in the queue means nothing yet; the end will do.
+        let queueIndex: Int
+        if isShuffled {
+            queueIndex = queue.count
+        } else if slot < upcoming.count {
+            queueIndex = upcoming[slot]
         } else {
-            let insertIndex = min(currentIndex + 1 + slot, queue.count)
-            queue.insert(contentsOf: items, at: insertIndex)
+            queueIndex = upcoming.last.map { $0 + 1 } ?? queue.count
         }
+        insert(items, queueIndex: queueIndex, position: currentIndex + 1 + slot)
 
         isQueueUserModified = true
         if upcomingTrackId != nextBefore { invalidateGaplessState() }
@@ -440,26 +436,17 @@ final class PlayerService {
             playNow(queue: items)
             return
         }
-        let startIndex = queue.count
-        queue.append(contentsOf: items)
-        if var shuffled = shuffledIndices {
-            let newIndices = items.indices.map { startIndex + $0 }
-            shuffled += newIndices
-            shuffledIndices = shuffled
-        }
+        insert(items, queueIndex: queue.count, position: queue.count)
         isQueueUserModified = true
         queueConfirmation = .addedToQueue(items.count)
         savePlaybackState()
     }
 
+    /// Repeat one is for a track that ends by itself (see `trackEnded()`); asking to skip
+    /// still moves on.
     func skip() {
         let count = queue.count
         guard count > 0 else { return }
-
-        if repeatMode == .one {
-            Task { await loadAndPlayCurrent() }
-            return
-        }
 
         let nextIndex = currentIndex + 1
         if nextIndex < count {
@@ -488,6 +475,18 @@ final class PlayerService {
         }
     }
 
+    /// The current track finished by itself, as opposed to the user skipping it.
+    private func trackEnded() {
+        if repeatMode == .one {
+            Task { await loadAndPlayCurrent() }
+        } else {
+            skip()
+        }
+    }
+
+    /// `queueIndex` is a place in the play order. Back into history rewinds to it, leaving
+    /// what came after to play again. Forward, the tracks in between go to history, as if
+    /// skipped one by one: nothing is lost to a stray tap in up next.
     func skipTo(queueIndex: Int) {
         guard queueIndex >= 0 && queueIndex < queue.count else { return }
         currentIndex = queueIndex
@@ -582,7 +581,8 @@ final class PlayerService {
         gaplessPlayerItem = nil
         currentPlayerItem = nil
         queue = []
-        shuffledIndices = nil
+        playOrder = nil
+        isShuffled = false
         currentIndex = 0
         currentTrack = nil
         isPlaying = false
@@ -618,68 +618,27 @@ final class PlayerService {
     }
 
     func clearUpNext() {
-        let keep = currentIndex + 1
-        if let shuffled = shuffledIndices {
-            let keptRealIndices = Array(shuffled.prefix(keep))
-            let sortedKept = keptRealIndices.sorted()
-            var oldToNew: [Int: Int] = [:]
-            for (newIdx, oldIdx) in sortedKept.enumerated() {
-                oldToNew[oldIdx] = newIdx
-            }
-            queue = sortedKept.map { queue[$0] }
-            shuffledIndices = keptRealIndices.map { oldToNew[$0]! }
-        } else {
-            queue = Array(queue.prefix(keep))
-        }
+        removeQueueIndices(Set(upcomingQueueIndices))
         isQueueUserModified = true
         invalidateGaplessState()
         savePlaybackState()
     }
 
-    /// Drops everything before the current track. Mirrors clearUpNext from the other
-    /// side, including the shuffle map rebuild — the played entries have to come out of
-    /// `queue` itself, not just out of the map, or they'd come back on the next shuffle.
+    /// Drops everything before the current track. The played entries come out of `queue`
+    /// itself, not just out of the play order, or they'd come back on the next shuffle.
     func clearHistory() {
         guard currentIndex > 0 else { return }
-        if let shuffled = shuffledIndices {
-            let keptRealIndices = Array(shuffled.dropFirst(currentIndex))
-            let sortedKept = keptRealIndices.sorted()
-            var oldToNew: [Int: Int] = [:]
-            for (newIdx, oldIdx) in sortedKept.enumerated() {
-                oldToNew[oldIdx] = newIdx
-            }
-            queue = sortedKept.map { queue[$0] }
-            shuffledIndices = keptRealIndices.map { oldToNew[$0]! }
-        } else {
-            queue = Array(queue.dropFirst(currentIndex))
-        }
+        removeQueueIndices(Set(order.prefix(currentIndex)))
         currentIndex = 0
         isQueueUserModified = true
         savePlaybackState()
     }
 
     func removeFromQueue(at offsets: IndexSet) {
-        let upNextStart = currentIndex + 1
-        let realOffsets = IndexSet(offsets.map { upNextStart + $0 })
-        let effectiveOffsets: [Int]
-        if let shuffled = shuffledIndices {
-            effectiveOffsets = realOffsets.compactMap { idx in
-                idx < shuffled.count ? shuffled[idx] : nil
-            }
-        } else {
-            effectiveOffsets = Array(realOffsets)
-        }
-        for idx in effectiveOffsets.sorted().reversed() {
-            guard idx < queue.count else { continue }
-            queue.remove(at: idx)
-            if var shuffled = shuffledIndices {
-                shuffled = shuffled.compactMap { i in
-                    if i == idx { return nil }
-                    return i > idx ? i - 1 : i
-                }
-                shuffledIndices = shuffled
-            }
-        }
+        let upcoming = upcomingQueueIndices
+        let removed = Set(offsets.compactMap { upcoming.indices.contains($0) ? upcoming[$0] : nil })
+        guard !removed.isEmpty else { return }
+        removeQueueIndices(removed)
         isQueueUserModified = true
         invalidateGaplessState()
         savePlaybackState()
@@ -687,15 +646,19 @@ final class PlayerService {
 
     func moveQueueItems(from source: IndexSet, to destination: Int) {
         let nextBefore = upcomingTrackId
-        let upNextStart = currentIndex + 1
-        if let shuffled = shuffledIndices {
-            var upNextIndices = Array(shuffled[upNextStart...])
-            upNextIndices.move(fromOffsets: source, toOffset: destination)
-            shuffledIndices = Array(shuffled[..<upNextStart]) + upNextIndices
+        let upcoming = upcomingQueueIndices
+        var moved = upcoming
+        moved.move(fromOffsets: source, toOffset: destination)
+        if isShuffled {
+            playOrder = Self.orNilIfQueueOrder(Array(order.prefix(currentIndex + 1)) + moved)
         } else {
-            let sourceReal = IndexSet(source.map { $0 + upNextStart })
-            let destReal = destination + upNextStart
-            queue.move(fromOffsets: sourceReal, toOffset: destReal)
+            // The order on screen is the queue order, so the queue itself is rearranged: the
+            // moved items take over the slots what's to come already holds, which stay in order.
+            var rearranged = queue
+            for (slot, from) in zip(upcoming, moved) {
+                rearranged[slot] = queue[from]
+            }
+            queue = rearranged
         }
         isQueueUserModified = true
         if upcomingTrackId != nextBefore { invalidateGaplessState() }
@@ -707,26 +670,53 @@ final class PlayerService {
     private var upcomingTrackId: UUID? {
         let next = currentIndex + 1
         guard next < queue.count else { return nil }
-        let effective = shuffledIndices.map { next < $0.count ? $0[next] : next } ?? next
+        let effective = playOrder.map { next < $0.count ? $0[next] : next } ?? next
         return queue.indices.contains(effective) ? queue[effective].track.id : nil
     }
 
     // MARK: - Shuffle
 
-    func toggleShuffle() {
-        if shuffledIndices != nil {
-            let realIndex = effectiveIndex
-            shuffledIndices = nil
-            currentIndex = realIndex
-        } else {
-            let realIndex = effectiveIndex
-            var indices = SmartShuffle.shuffledIndices(for: queue)
-            if let pos = indices.firstIndex(of: realIndex), pos != 0 {
-                indices.swapAt(0, pos)
-            }
-            shuffledIndices = indices
-            currentIndex = 0
+    /// Queue indices in the order they play.
+    private var order: [Int] { playOrder ?? Array(queue.indices) }
+
+    /// Queue indices still to play, in the order they will.
+    private var upcomingQueueIndices: [Int] { Array(order.dropFirst(currentIndex + 1)) }
+
+    nonisolated private static func orNilIfQueueOrder(_ order: [Int]) -> [Int]? {
+        order.enumerated().allSatisfy { $0.offset == $0.element } ? nil : order
+    }
+
+    /// Puts `items`, in their own order, at `queueIndex` in the queue and at `position` in
+    /// the play order.
+    private func insert(_ items: [QueueItem], queueIndex: Int, position: Int) {
+        var shifted = order.map { $0 >= queueIndex ? $0 + items.count : $0 }
+        shifted.insert(contentsOf: items.indices.map { queueIndex + $0 }, at: max(0, min(position, shifted.count)))
+        queue.insert(contentsOf: items, at: queueIndex)
+        playOrder = Self.orNilIfQueueOrder(shifted)
+    }
+
+    /// Takes `indices` out of the queue and the play order, renumbering what's left.
+    private func removeQueueIndices(_ indices: Set<Int>) {
+        guard !indices.isEmpty else { return }
+        let removed = indices.sorted()
+        let kept = order.filter { !indices.contains($0) }.map { index in
+            index - removed.prefix { $0 < index }.count
         }
+        queue = queue.enumerated().filter { !indices.contains($0.offset) }.map(\.element)
+        playOrder = Self.orNilIfQueueOrder(kept)
+    }
+
+    /// Only what's still to play changes: shuffle on shuffles it, shuffle off puts it back
+    /// in queue order. What played stays where it is, so nothing heard comes round again
+    /// and history doesn't rewrite itself.
+    func toggleShuffle() {
+        isShuffled.toggle()
+        let upcoming = upcomingQueueIndices
+        let reordered =
+            isShuffled
+            ? SmartShuffle.shuffledIndices(for: upcoming.map { queue[$0] }).map { upcoming[$0] }
+            : upcoming.sorted()
+        playOrder = Self.orNilIfQueueOrder(Array(order.prefix(currentIndex + 1)) + reordered)
         settings.isShuffled = isShuffled
         invalidateGaplessState()
         savePlaybackState()
@@ -1012,7 +1002,7 @@ final class PlayerService {
             return nil
         }
         let eff: Int
-        if let shuffled = shuffledIndices {
+        if let shuffled = playOrder {
             guard resolvedIdx < shuffled.count else { return nil }
             eff = shuffled[resolvedIdx]
         } else {
@@ -1208,7 +1198,7 @@ final class PlayerService {
                 if self.hasQueuedGaplessItem {
                     self.advanceAfterGapless()
                 } else {
-                    self.skip()
+                    self.trackEnded()
                 }
             } else if item === self.primaryPlayer.currentItem || item === self.gaplessPlayerItem {
                 self.logTransition("ignored the end of an item that isn't the current one")
@@ -1248,7 +1238,7 @@ final class PlayerService {
             if hasQueuedGaplessItem {
                 advanceAfterGapless()
             } else {
-                skip()
+                trackEnded()
             }
         } else {
             failPlayback(error?.localizedDescription ?? String(localized: "This track couldn't be played."))
@@ -1481,8 +1471,9 @@ final class PlayerService {
             PlaybackState(
                 trackIds: queue.map(\.track.id),
                 currentIndex: currentIndex,
-                shuffledIndices: shuffledIndices,
-                isUserModified: isQueueUserModified
+                playOrder: playOrder,
+                isUserModified: isQueueUserModified,
+                isShuffled: isShuffled
             ))
         savePlaybackPosition()
     }
@@ -1510,9 +1501,11 @@ final class PlayerService {
         guard tracks.count == state.trackIds.count else { return }
 
         queue = tracks.map { QueueItem(track: $0, artworkURL: $0.album?.artworkUrl) }
-        if let shuffled = state.shuffledIndices, shuffled.count == queue.count {
-            shuffledIndices = shuffled
+        if let order = state.playOrder, order.count == queue.count {
+            playOrder = order
         }
+        // Saved before shuffle and play order were told apart, a play order meant shuffled.
+        isShuffled = state.isShuffled ?? (playOrder != nil)
         currentIndex = min(max(state.currentIndex, 0), queue.count - 1)
         // A hand-built queue keeps its protection across a restart.
         isQueueUserModified = state.isUserModified ?? false
@@ -1520,7 +1513,8 @@ final class PlayerService {
         let idx = effectiveIndex
         guard idx < queue.count else {
             queue = []
-            shuffledIndices = nil
+            playOrder = nil
+            isShuffled = false
             currentIndex = 0
             return
         }

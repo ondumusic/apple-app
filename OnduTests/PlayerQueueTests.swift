@@ -46,7 +46,7 @@ struct PlayerPlayNowTests {
 
         #expect(player.queue.count == 3)
         #expect(player.currentIndex == 1)
-        #expect(player.shuffledIndices == nil)
+        #expect(player.playOrder == nil)
     }
 
     @Test func playNowClearsShuffle() {
@@ -54,11 +54,11 @@ struct PlayerPlayNowTests {
         let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B")]
         // First shuffle
         player.playShuffled(queue: items)
-        #expect(player.shuffledIndices != nil)
+        #expect(player.playOrder != nil)
 
         // Then play now — should clear shuffle
         player.playNow(queue: [makeQueueItem(name: "C")], startingAt: 0)
-        #expect(player.shuffledIndices == nil)
+        #expect(player.playOrder == nil)
     }
 }
 
@@ -72,8 +72,8 @@ struct PlayerShuffleTests {
         player.playShuffled(queue: items)
 
         #expect(player.queue.count == 10)
-        #expect(player.shuffledIndices != nil)
-        #expect(player.shuffledIndices?.count == 10)
+        #expect(player.playOrder != nil)
+        #expect(player.playOrder?.count == 10)
         #expect(player.currentIndex == 0)
     }
 
@@ -82,7 +82,7 @@ struct PlayerShuffleTests {
         let items = (0..<10).map { makeQueueItem(name: "T\($0)") }
         player.playShuffled(queue: items)
 
-        let indices = player.shuffledIndices!
+        let indices = player.playOrder!
         #expect(Set(indices) == Set(0..<10))
     }
 
@@ -94,10 +94,10 @@ struct PlayerShuffleTests {
         player.toggleShuffle()
 
         #expect(player.isShuffled)
-        #expect(player.shuffledIndices != nil)
-        // Current track should be at position 0 in shuffled order
-        #expect(player.currentIndex == 0)
-        #expect(player.shuffledIndices?[0] == 2)
+        // What played and what's playing stay put; only what's to come is shuffled.
+        #expect(player.currentIndex == 2)
+        #expect(player.currentQueueItem?.track.name == "T2")
+        #expect(player.historyEntries.map(\.item.track.name) == ["T1", "T0"])
     }
 
     @Test func toggleShuffleOff() {
@@ -110,7 +110,7 @@ struct PlayerShuffleTests {
         player.toggleShuffle()
 
         #expect(!player.isShuffled)
-        #expect(player.shuffledIndices == nil)
+        #expect(player.playOrder == nil)
         #expect(player.currentIndex == realIndex)
     }
 
@@ -119,7 +119,7 @@ struct PlayerShuffleTests {
         player.playShuffled(queue: [])
 
         #expect(player.queue.isEmpty)
-        #expect(player.shuffledIndices == nil)
+        #expect(player.playOrder == nil)
     }
 }
 
@@ -183,20 +183,13 @@ struct PlayerQueueInsertTests {
         ]
         player.playShuffled(queue: items)
 
-        // currentIndex is 0 in shuffle order
-        let shuffledBefore = player.shuffledIndices!
-        let currentReal = shuffledBefore[0]
+        let current = player.currentQueueItem?.id
 
         player.playNext(queue: [makeQueueItem(name: "X")])
 
         #expect(player.queue.count == 5)
-        let shuffled = player.shuffledIndices!
-        #expect(shuffled.count == 5)
-        // Current track should still be at position 0
-        #expect(shuffled[0] == currentReal)
-        // The inserted track should be at position 1 in shuffle order (plays next)
-        let nextRealIndex = shuffled[1]
-        #expect(player.queue[nextRealIndex].track.name == "X")
+        #expect(player.currentQueueItem?.id == current)
+        #expect(player.upNextEntries.first?.item.track.name == "X")
     }
 
     @Test func playNextWhileShuffledMultipleItemsInsertInOrder() {
@@ -207,10 +200,7 @@ struct PlayerQueueInsertTests {
         player.playNext(queue: [makeQueueItem(name: "X"), makeQueueItem(name: "Y")])
 
         #expect(player.queue.count == 5)
-        let shuffled = player.shuffledIndices!
-        // X and Y should be at positions 1 and 2 in shuffle order
-        #expect(player.queue[shuffled[1]].track.name == "X")
-        #expect(player.queue[shuffled[2]].track.name == "Y")
+        #expect(player.upNextEntries.prefix(2).map(\.item.track.name) == ["X", "Y"])
     }
 }
 
@@ -268,7 +258,7 @@ struct PlayerNavigationTests {
 
         player.skipTo(queueIndex: 2)
 
-        #expect(player.currentIndex == 2)
+        #expect(player.currentQueueItem?.track.name == "C")
     }
 
     @Test func skipToOutOfBoundsNoOp() {
@@ -341,7 +331,7 @@ struct PlayerQueueManipulationTests {
 
         #expect(player.queue.count == 1)
         #expect(player.queue[0].track.name == currentTrackName)
-        #expect(player.shuffledIndices == [0])
+        #expect(player.currentQueueItem?.track.name == currentTrackName)
     }
 
     @Test func removeFromQueueRemovesCorrectItem() {
@@ -367,12 +357,14 @@ struct PlayerQueueManipulationTests {
         ]
         player.playShuffled(queue: items)
 
-        let countBefore = player.queue.count
+        let current = player.currentQueueItem?.id
+        let expected = player.upNextEntries.dropFirst().map(\.item.id)
         // Remove the first up-next item
         player.removeFromQueue(at: IndexSet(integer: 0))
 
-        #expect(player.queue.count == countBefore - 1)
-        #expect(player.shuffledIndices?.count == countBefore - 1)
+        #expect(player.queue.count == 3)
+        #expect(player.currentQueueItem?.id == current)
+        #expect(player.upNextEntries.map(\.item.id) == expected)
     }
 
     @Test func moveQueueItemsReorders() {
@@ -398,17 +390,14 @@ struct PlayerQueueManipulationTests {
         ]
         player.playShuffled(queue: items)
 
-        let shuffledBefore = player.shuffledIndices!
-        let currentReal = shuffledBefore[0]
+        let current = player.currentQueueItem?.id
+        let upNext = player.upNextEntries.map(\.item.id)
 
         // Move up-next index 2 to index 0
         player.moveQueueItems(from: IndexSet(integer: 2), to: 0)
 
-        let shuffledAfter = player.shuffledIndices!
-        // Current track should still be first
-        #expect(shuffledAfter[0] == currentReal)
-        // Shuffle order should be rearranged in the up-next portion
-        #expect(shuffledAfter.count == 4)
+        #expect(player.currentQueueItem?.id == current)
+        #expect(player.upNextEntries.map(\.item.id) == [upNext[2], upNext[0], upNext[1]])
     }
 }
 
@@ -476,7 +465,7 @@ struct PlayerEffectiveIndexTests {
         player.playNow(queue: items, startingAt: 1)
         player.toggleShuffle()
 
-        // After toggle, currentIndex=0, shuffledIndices[0]=1 (the real index)
+        // Shuffling leaves the current track where it is.
         #expect(player.effectiveIndex == 1)
     }
 }
@@ -499,7 +488,8 @@ struct PlayerRepeatModeTests {
         #expect(player.repeatMode == .off)
     }
 
-    @Test func skipWithRepeatOneReplays() {
+    /// Repeat one is for a track that ends by itself; asking to skip still moves on.
+    @Test func skipWithRepeatOneMovesOn() {
         let player = makePlayer()
         let items = [makeQueueItem(name: "A"), makeQueueItem(name: "B")]
         player.playNow(queue: items, startingAt: 0)
@@ -507,8 +497,8 @@ struct PlayerRepeatModeTests {
 
         player.skip()
 
-        // Repeat one: index stays the same
-        #expect(player.currentIndex == 0)
+        #expect(player.currentIndex == 1)
+        #expect(player.repeatMode == .one)
     }
 }
 
@@ -845,7 +835,7 @@ struct PlayerUpNextTests {
         let player = makePlayer()
         let items = (1...5).map { makeQueueItem(name: "T\($0)") }
         player.playNow(queue: items, startingAt: 0)
-        player.shuffledIndices = [3, 0, 4, 1, 2]
+        player.playOrder = [3, 0, 4, 1, 2]
         player.currentIndex = 0
 
         // Everything after position 0 in play order — not queue positions after index 3.
@@ -874,7 +864,7 @@ private func shuffledPlayerMidway() -> PlayerService {
             makeQueueItem(name: "C"), makeQueueItem(name: "D"),
         ],
         startingAt: 0)
-    player.shuffledIndices = [3, 1, 0, 2]
+    player.playOrder = [3, 1, 0, 2]
     player.currentIndex = 2
     return player
 }
@@ -911,7 +901,7 @@ struct PlayerHistoryTests {
                 makeQueueItem(name: "C"),
             ],
             startingAt: 0)
-        player.shuffledIndices = [2, 0, 1]
+        player.playOrder = [2, 0, 1]
         player.currentIndex = 2
 
         #expect(player.historyEntries.map(\.item.track.name) == ["A", "C"])
@@ -944,7 +934,7 @@ struct PlayerHistoryTests {
         let player = shuffledPlayerMidway()
         player.clearHistory()
         #expect(player.currentIndex == 0)
-        #expect(player.shuffledIndices?.count == 2)
+        #expect(player.currentQueueItem?.track.name == "A")
     }
 
     @Test func clearHistoryKeepsWhatComesNext() {
@@ -980,9 +970,11 @@ struct PlayerStopTests {
     @Test func dropsShuffle() {
         let player = makePlayer()
         player.playNow(queue: [makeQueueItem(name: "A"), makeQueueItem(name: "B")])
-        player.shuffledIndices = [1, 0]
+        player.playOrder = [1, 0]
+        player.isShuffled = true
         player.stopAndClear()
-        #expect(player.shuffledIndices == nil)
+        #expect(player.playOrder == nil)
+        #expect(!player.isShuffled)
     }
 }
 
@@ -1053,7 +1045,7 @@ struct PlayerStaleIndexTests {
             makeQueueItem(name: "A", albumId: album, number: 1),
             makeQueueItem(name: "B", albumId: album, number: 2),
         ]
-        player.shuffledIndices = [5, 1]
+        player.playOrder = [5, 1]
         player.currentIndex = 0
 
         player.cycleRepeatMode()
@@ -1064,7 +1056,7 @@ struct PlayerStaleIndexTests {
     @Test func nowPlayingSurvivesAShuffleOrderWiderThanTheQueue() {
         let player = makePlayer()
         player.queue = [makeQueueItem(name: "A")]
-        player.shuffledIndices = [7]
+        player.playOrder = [7]
         player.currentIndex = 0
 
         #expect(player.currentArtworkURL == nil)

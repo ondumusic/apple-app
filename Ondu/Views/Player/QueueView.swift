@@ -14,8 +14,8 @@ struct QueueView: View {
         if let current = player.currentTrack { collected.append(current) }
         for i in (player.currentIndex + 1)..<count {
             let effective: Int
-            if let shuffled = player.shuffledIndices, i < shuffled.count {
-                effective = shuffled[i]
+            if let order = player.playOrder, i < order.count {
+                effective = order[i]
             } else {
                 effective = i
             }

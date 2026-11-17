@@ -58,7 +58,7 @@ struct LoudnessWiringTests {
                 .appendingPathComponent("loudness-wiring/\(UUID().uuidString).json"),
             defaults: UserDefaults(suiteName: "loudness-wiring.\(UUID().uuidString)")!
         )
-        store.save(PlaybackState(trackIds: ids, currentIndex: 0, shuffledIndices: nil))
+        store.save(PlaybackState(trackIds: ids, currentIndex: 0, playOrder: nil))
         await store.flush()
         let api = APIService(baseURL: URL(string: "http://localhost")!, sessionToken: "test")
         let player = PlayerService(api: api, settings: settings, musicLibrary: lib, stateStore: store)
