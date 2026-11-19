@@ -101,8 +101,16 @@ final class SettingsStore {
     /// When the running private session lapses; nil with none running. Pushed forward
     /// while music plays, so the session ends after the music does, not at a fixed time.
     var privateSessionEndsAt: Date? {
-        didSet { defaults.set(privateSessionEndsAt, forKey: "privateSessionEndsAt") }
+        didSet {
+            defaults.set(privateSessionEndsAt, forKey: "privateSessionEndsAt")
+            scheduleLapse()
+        }
     }
+
+    /// Clears the session once its time is up. `isPrivateSession` would already read
+    /// false by then, but nothing observed changes when the clock passes the deadline,
+    /// so every view showing the session would keep showing it.
+    @ObservationIgnored private var lapseTask: Task<Void, Never>?
 
     /// This device records no plays while true. Derived rather than stored, so a session
     /// that lapsed while the app was closed is simply over on the next launch.
@@ -121,6 +129,23 @@ final class SettingsStore {
 
     func togglePrivateSession() {
         if isPrivateSession { endPrivateSession() } else { startPrivateSession() }
+    }
+
+    /// For when the app comes back: a suspended app's timer can't have fired on time.
+    func endPrivateSessionIfLapsed() {
+        guard privateSessionEndsAt != nil, !isPrivateSession else { return }
+        endPrivateSession()
+    }
+
+    private func scheduleLapse() {
+        lapseTask?.cancel()
+        guard let privateSessionEndsAt else { return }
+        let remaining = privateSessionEndsAt.timeIntervalSince(now())
+        lapseTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, remaining)))
+            guard !Task.isCancelled else { return }
+            self?.endPrivateSessionIfLapsed()
+        }
     }
 
     /// Fed by playback progress. Writes only once the deadline has drifted a minute: the
@@ -258,6 +283,8 @@ final class SettingsStore {
         self.customAccentBlue = defaults.object(forKey: "customAccentBlue") as? Double ?? 0.0
         self.hapticsEnabled = defaults.object(forKey: "hapticsEnabled") as? Bool ?? true
         self.autoDownloadNewTracks = defaults.bool(forKey: "autoDownloadNewTracks")
+        // didSet doesn't run in init, and a session restored at launch still has to lapse.
+        scheduleLapse()
     }
 
     /// "high" and "mobile" are what earlier builds stored, when the choice was a level

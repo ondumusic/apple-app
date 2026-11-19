@@ -366,6 +366,7 @@ struct OnduApp: App {
             Task { await outboxService?.flush() }
             Task { await syncService?.syncIfNeeded() }
             downloadService.resumeOnForeground()
+            settings.endPrivateSessionIfLapsed()
         }
         #endif
         #if os(macOS)
@@ -377,6 +378,7 @@ struct OnduApp: App {
             Task { await outboxService?.flush() }
             Task { await syncService?.syncIfNeeded() }
             downloadService.resumeOnForeground()
+            settings.endPrivateSessionIfLapsed()
         }
         #endif
     }

@@ -546,6 +546,20 @@ private struct VolumeSlider: View {
                 .frame(width: 0, height: 0)
                 .opacity(0)
         }
+        // The observer only hears changes while the app runs. Volume changed while it was
+        // suspended, or moving to a route with its own level, would otherwise leave the
+        // slider showing the old one.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            refreshFromSystem()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { _ in
+            refreshFromSystem()
+        }
+    }
+
+    private func refreshFromSystem() {
+        guard !isDragging else { return }
+        volume = Double(AVAudioSession.sharedInstance().outputVolume)
     }
 
     private func setSystemVolume(_ value: Float) {

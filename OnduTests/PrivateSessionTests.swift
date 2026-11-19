@@ -94,4 +94,30 @@ struct PrivateSessionTests {
         now += window + 1
         #expect(SettingsStore(defaults: defaults, now: { now }).isPrivateSession == false)
     }
+
+    /// Views only redraw on an observed change, and the clock passing the deadline isn't
+    /// one: clearing the date is what lets them show the session has ended.
+    @Test func endingIfLapsedClearsALapsedSession() {
+        var now = Date()
+        let store = SettingsStore(defaults: isolatedDefaults(), now: { now })
+        store.startPrivateSession()
+        now += window + 1
+
+        store.endPrivateSessionIfLapsed()
+
+        #expect(store.privateSessionEndsAt == nil)
+    }
+
+    @Test func endingIfLapsedLeavesARunningSessionAlone() {
+        var now = Date()
+        let store = SettingsStore(defaults: isolatedDefaults(), now: { now })
+        store.startPrivateSession()
+        let endsAt = store.privateSessionEndsAt
+        now += window / 2
+
+        store.endPrivateSessionIfLapsed()
+
+        #expect(store.privateSessionEndsAt == endsAt)
+        #expect(store.isPrivateSession)
+    }
 }
